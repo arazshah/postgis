@@ -59,3 +59,20 @@ jobs:
             -e DJANGO_SECRET_KEY=ci -e DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1 geopaygah:ci
           for i in $(seq 1 30); do curl -fsS http://localhost:8000/healthz && exit 0; sleep 2; done
           docker logs app; exit 1
+      - name: Coolify compose stack (web + panel-db)
+        env:
+          SERVICE_PASSWORD_POSTGRES: ci-panel-pass
+          DJANGO_SECRET_KEY: ci-secret
+          CREDENTIALS_ENCRYPTION_KEY: ci-enc
+          DJANGO_SUPERUSER_PASSWORD: Ci-Admin-Pass-123
+        run: |
+          docker compose -f docker-compose.yml up -d --build
+          for i in $(seq 1 40); do
+            if docker compose -f docker-compose.yml exec -T web curl -fsS http://127.0.0.1:8000/healthz; then
+              docker compose -f docker-compose.yml exec -T web python manage.py shell -c \
+                "from accounts.models import User; assert User.objects.filter(username='admin', is_superuser=True).exists(); print('admin ok')"
+              exit 0
+            fi
+            sleep 3
+          done
+          docker compose -f docker-compose.yml logs; exit 1

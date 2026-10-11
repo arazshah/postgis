@@ -1,4 +1,4 @@
-# اجرای محلی کامل: پنل + یک سرور PostGIS آزمایشی برای مشتریان
+# فقط برای اجرای محلی روی لپ‌تاپ: docker compose -f compose.local.yml up --build (در Coolify استفاده نشود)
 services:
   tenant-pg:
     image: postgis/postgis:16-3.4
