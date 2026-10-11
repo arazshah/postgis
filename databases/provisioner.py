@@ -60,6 +60,8 @@ class ServerInfo:
     can_create_role: bool = False
     available_extensions: list[str] = field(default_factory=list)
     password_encryption: str = ""
+    ssl_enabled: bool = False
+    hardened: bool = False
 
 
 class Provisioner:
@@ -99,6 +101,9 @@ class Provisioner:
                 pg_row = cur.execute(
                     "SELECT default_version FROM pg_available_extensions WHERE name='postgis'").fetchone()
                 pwenc = cur.execute("SHOW password_encryption").fetchone()[0]
+                ssl_on = cur.execute("SHOW ssl").fetchone()[0] == "on"
+                public_can_connect = cur.execute(
+                    "SELECT has_database_privilege('public', %s, 'CONNECT')", (self.admin_db,)).fetchone()[0]
         except ProvisionError as exc:
             return ServerInfo(ok=False, message=str(exc))
         info = ServerInfo(
@@ -110,6 +115,8 @@ class Provisioner:
             can_create_role=bool(row and (row[0] or row[2])),
             available_extensions=exts,
             password_encryption=pwenc,
+            ssl_enabled=ssl_on,
+            hardened=not public_can_connect,
         )
         problems = []
         if not info.postgis_version:
@@ -118,8 +125,37 @@ class Provisioner:
             problems.append("کاربر ادمین superuser نیست؛ نصب PostGIS و اعمال محدودیت‌ها ممکن است شکست بخورد")
         if pwenc != "scram-sha-256":
             problems.append("password_encryption روی scram-sha-256 نیست")
+        if not ssl_on:
+            problems.append("SSL روی سرور فعال نیست؛ حالت SSL کاربران را روی prefer یا disable بگذارید یا SSL را فعال کنید")
+        if not info.hardened:
+            problems.append("دسترسی عمومی به دیتابیس‌های سیستمی هنوز بسته نشده (اقدام «ایمن‌سازی سرور» را اجرا کنید)")
         info.message = "اتصال برقرار است." + (" هشدار: " + "؛ ".join(problems) if problems else "")
         return info
+
+    def harden(self) -> list[str]:
+        """
+        ایمن‌سازی سرور تازه: کاربران مشتری نباید به دیتابیس‌های سیستمی وصل شوند یا در آن‌ها چیزی بسازند.
+        چندباره اجراشدنی است.
+        """
+        done = []
+        with self.connect() as conn:
+            cur = conn.cursor()
+            for db in ("postgres", "template1", self.admin_db):
+                if cur.execute("SELECT 1 FROM pg_database WHERE datname=%s", (db,)).fetchone():
+                    cur.execute(sql.SQL("REVOKE CONNECT, TEMPORARY ON DATABASE {} FROM PUBLIC").format(sql.Identifier(db)))
+                    done.append(f"REVOKE CONNECT ON {db}")
+            if cur.execute("SHOW password_encryption").fetchone()[0] != "scram-sha-256":
+                cur.execute("ALTER SYSTEM SET password_encryption = 'scram-sha-256'")
+                cur.execute("SELECT pg_reload_conf()")
+                done.append("password_encryption=scram-sha-256")
+        for db in {"postgres", self.admin_db}:
+            try:
+                with self.connect(dbname=db) as conn:
+                    conn.execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
+                    done.append(f"REVOKE CREATE ON {db}.public")
+            except ProvisionError:
+                pass
+        return done
 
     # ------------------------------------------------------------------ ساخت
     def create_tenant(self, name: str, password: str, extensions: list[str], limits: TenantLimits) -> list[str]:

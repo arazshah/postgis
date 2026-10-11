@@ -73,6 +73,16 @@ class ProvisionerIntegrationTests(SimpleTestCase):
         self.p.drop_tenant(self.name)
         self.assertEqual(self.p.database_sizes([self.name]), {})
 
+    def test_harden(self):
+        done = self.p.harden()
+        self.assertTrue(any("postgres" in d for d in done))
+        self.assertTrue(self.p.check().hardened)
+        self.p.create_tenant(self.name, self.pw, [], TenantLimits())
+        with self.assertRaises(psycopg.OperationalError):
+            self.tenant_conn(dbname="postgres")  # کاربر مشتری به دیتابیس سیستمی راه ندارد
+        with self.tenant_conn() as c:
+            self.assertEqual(c.execute("SELECT 1").fetchone()[0], 1)
+
     def test_rollback_on_bad_extension(self):
         with self.assertRaises(ProvisionError):
             self.p.create_tenant(self.name, self.pw, ["postgis", "does_not_exist_ext"], TenantLimits())

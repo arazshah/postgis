@@ -266,7 +266,18 @@ def process_expiry() -> dict:
     return stats
 
 
-def refresh_server(server: DatabaseServer):
+def harden_server(server: DatabaseServer) -> list[str]:
+    done = provisioner_for(server).harden()
+    logevent("server", f"ایمن‌سازی {server.name}: {', '.join(done)}")
+    return done
+
+
+def refresh_server(server: DatabaseServer, harden: bool = False):
+    if harden:
+        try:
+            harden_server(server)
+        except ProvisionError:
+            pass  # پیام خطای اتصال در check گزارش می‌شود
     info = provisioner_for(server).check()
     server.last_check_at = timezone.now()
     server.last_check_ok = info.ok

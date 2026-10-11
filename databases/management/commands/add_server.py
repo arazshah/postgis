@@ -36,5 +36,5 @@ class Command(BaseCommand):
         server.is_default = o["default"] or not DatabaseServer.objects.exclude(pk=server.pk).exists()
         server.set_admin_password(password)
         server.save()
-        info = services.refresh_server(server)
+        info = services.refresh_server(server, harden=True)
         self.stdout.write(("OK " if info.ok else "FAIL ") + info.message)
