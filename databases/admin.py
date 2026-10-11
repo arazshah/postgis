@@ -38,7 +38,7 @@ class DatabaseServerAdmin(admin.ModelAdmin):
     list_display = ["name", "public_host", "health", "usage", "is_active", "is_default", "server_version",
                     "postgis_version", "last_check_at"]
     list_filter = ["is_active"]
-    actions = ["test_connection"]
+    actions = ["test_connection", "harden"]
     readonly_fields = ["last_check_at", "last_check_ok", "last_check_message", "server_version", "postgis_version",
                        "created_at", "updated_at"]
     fieldsets = (
@@ -73,9 +73,19 @@ class DatabaseServerAdmin(admin.ModelAdmin):
             extra = f" | PostgreSQL {info.server_version} | PostGIS {info.postgis_version or 'ندارد'}" if info.ok else ""
             self.message_user(request, f"{server.name}: {info.message}{extra}", level)
 
+    @admin.action(description="ایمن‌سازی سرورهای انتخاب‌شده")
+    def harden(self, request, queryset):
+        for server in queryset:
+            try:
+                done = services.harden_server(server)
+                services.refresh_server(server)
+                self.message_user(request, f"{server.name}: ایمن شد ({len(done)} تغییر).", messages.SUCCESS)
+            except ProvisionError as exc:
+                self.message_user(request, f"{server.name}: {exc}", messages.ERROR)
+
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
-        info = services.refresh_server(obj)
+        info = services.refresh_server(obj, harden=True)
         self.message_user(request, f"بررسی خودکار اتصال: {info.message}",
                           messages.SUCCESS if info.ok else messages.WARNING)
 
