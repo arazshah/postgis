@@ -104,6 +104,23 @@
     });
   }
 
+  // شمارش معکوس ارسال دوباره کد
+  const resend = document.querySelector("form.resend");
+  if (resend) {
+    const btn = resend.querySelector(".resend-btn");
+    const timer = resend.querySelector(".resend-timer");
+    let left = parseInt(resend.getAttribute("data-wait") || "0", 10);
+    const fa = (n) => String(n).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
+    const tick = () => {
+      if (left > 0) {
+        btn.disabled = true; btn.style.opacity = ".5";
+        timer.textContent = `(${fa(left)} ثانیه)`;
+        left -= 1; setTimeout(tick, 1000);
+      } else { btn.disabled = false; btn.style.opacity = ""; timer.textContent = ""; }
+    };
+    tick();
+  }
+
   // تأیید فرم‌های خطرناک
   document.querySelectorAll("form[data-confirm]").forEach((f) => {
     f.addEventListener("submit", (e) => { if (!confirm(f.getAttribute("data-confirm"))) e.preventDefault(); });

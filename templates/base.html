@@ -26,8 +26,7 @@
         {% if user.is_staff %}<a href="{% url 'admin:index' %}">مدیریت</a>{% endif %}
         <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="linkbtn" type="submit">خروج</button></form>
       {% else %}
-        <a href="{% url 'accounts:login' %}" {% if u == 'login' %}aria-current="page"{% endif %}>ورود</a>
-        <a class="btn sm" href="{% url 'accounts:signup' %}">ساخت حساب رایگان</a>
+        <a class="btn sm" href="{% url 'accounts:login' %}">ورود / ثبت‌نام</a>
       {% endif %}
       {% endwith %}
     </nav>

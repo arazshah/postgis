@@ -1,45 +1,107 @@
 from django.contrib import messages
-from django.contrib.auth import login, update_session_auth_hash
-from django.contrib.auth import views as auth_views
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
-from django.views.decorators.http import require_http_methods
+from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_http_methods, require_POST
 
-from .forms import FaPasswordChangeForm, LoginForm, ProfileForm, SignupForm
+from . import otp
+from .forms import PhoneForm, ProfileForm, VerifyForm
+from .models import User
+
+SESSION_PHONE = "otp_phone"
+SESSION_NEXT = "otp_next"
+
+
+def _safe_next(request, value):
+    if value and url_has_allowed_host_and_scheme(value, allowed_hosts={request.get_host()},
+                                                 require_https=request.is_secure()):
+        return value
+    return None
 
 
 @require_http_methods(["GET", "POST"])
-def signup(request):
+def login_start(request):
+    """قدم اول ورود یا ثبت‌نام: گرفتن شماره موبایل و ارسال کد."""
     if request.user.is_authenticated:
         return redirect("databases:dashboard")
-    form = SignupForm(request.POST or None)
+    nxt = _safe_next(request, request.GET.get("next") or request.POST.get("next"))
+    form = PhoneForm(request.POST or None, initial={"phone": request.session.get(SESSION_PHONE, "")})
     if request.method == "POST" and form.is_valid():
-        user = form.save()
-        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-        messages.success(request, "حساب شما ساخته شد. حالا اولین پایگاه داده مکانی خود را بسازید.")
-        return redirect("databases:create")
-    return render(request, "accounts/signup.html", {"form": form})
+        phone = form.cleaned_data["phone"]
+        result = otp.request_code(phone, otp.client_ip(request))
+        if result.ok or result.wait_seconds:
+            request.session[SESSION_PHONE] = phone
+            if nxt:
+                request.session[SESSION_NEXT] = nxt
+            if result.ok:
+                messages.success(request, result.message)
+                if result.debug_code:
+                    messages.info(request, f"حالت توسعه: کد {result.debug_code}")
+            return redirect("accounts:verify")
+        messages.error(request, result.message)
+    return render(request, "accounts/login.html", {"form": form, "next": nxt or ""})
 
 
-class LoginView(auth_views.LoginView):
-    template_name = "accounts/login.html"
-    authentication_form = LoginForm
-    redirect_authenticated_user = True
+@require_http_methods(["GET", "POST"])
+def verify(request):
+    """قدم دوم: بررسی کد؛ برای کاربر جدید نام و پذیرش قوانین هم گرفته می‌شود."""
+    phone = request.session.get(SESSION_PHONE)
+    if not phone:
+        return redirect("accounts:login")
+    user = User.objects.filter(phone=phone).first()
+    new_user = user is None
+    form = VerifyForm(request.POST or None, new_user=new_user)
+
+    if request.method == "POST" and form.is_valid():
+        ok, error = otp.verify_code(phone, form.cleaned_data["code"])
+        if not ok:
+            form.add_error("code", error)
+        else:
+            if new_user:
+                user = User.objects.create_user(
+                    phone, full_name=form.cleaned_data["full_name"],
+                    organization=form.cleaned_data.get("organization", ""),
+                    phone_verified_at=timezone.now())
+            elif not user.is_active:
+                messages.error(request, "این حساب غیرفعال شده است. با پشتیبانی تماس بگیرید.")
+                return redirect("accounts:login")
+            else:
+                user.phone_verified_at = user.phone_verified_at or timezone.now()
+                user.save(update_fields=["phone_verified_at"])
+            request.session.pop(SESSION_PHONE, None)
+            nxt = request.session.pop(SESSION_NEXT, None)
+            login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+            if new_user:
+                messages.success(request, "حساب شما ساخته شد. حالا اولین پایگاه داده مکانی خود را بسازید.")
+                return redirect("databases:create")
+            return redirect(nxt or "databases:dashboard")
+
+    return render(request, "accounts/verify.html", {
+        "form": form, "phone": phone, "new_user": new_user,
+        "wait": otp.seconds_until_resend(phone),
+    })
+
+
+@require_POST
+def resend(request):
+    phone = request.session.get(SESSION_PHONE)
+    if not phone:
+        return redirect("accounts:login")
+    result = otp.request_code(phone, otp.client_ip(request))
+    (messages.success if result.ok else messages.error)(request, result.message)
+    if result.debug_code:
+        messages.info(request, f"حالت توسعه: کد {result.debug_code}")
+    return redirect("accounts:verify")
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
 def profile(request):
-    form = ProfileForm(request.POST or None, instance=request.user, prefix="p")
-    pform = FaPasswordChangeForm(request.user, request.POST or None, prefix="pw")
-    if request.method == "POST":
-        if "save_profile" in request.POST and form.is_valid():
-            form.save()
-            messages.success(request, "اطلاعات حساب ذخیره شد.")
-            return redirect("accounts:profile")
-        if "change_password" in request.POST and pform.is_valid():
-            user = pform.save()
-            update_session_auth_hash(request, user)
-            messages.success(request, "رمز عبور حساب تغییر کرد.")
-            return redirect("accounts:profile")
-    return render(request, "accounts/profile.html", {"form": form, "pform": pform})
+    form = ProfileForm(request.POST or None, instance=request.user)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "اطلاعات حساب ذخیره شد.")
+        return redirect("accounts:profile")
+    return render(request, "accounts/profile.html", {"form": form})

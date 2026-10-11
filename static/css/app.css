@@ -303,3 +303,6 @@ details.danger-zone summary{cursor:pointer;color:var(--red);font-weight:700}
 @media (max-width:640px){.btn.menu-toggle{display:inline-flex}}
 .field .ext-choice{display:flex;font-weight:400;margin:0}
 .field label.check{display:flex}
+.field input.otp-input{font-size:1.6rem;letter-spacing:.5em;text-align:center;min-height:56px}
+.resend{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.auth h1{font-size:1.8rem}
