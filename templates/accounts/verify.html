@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}کد تأیید — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <div class="auth">
+    <h1>{% if new_user %}ساخت حساب{% else %}ورود{% endif %}</h1>
+    <p class="muted">کد تأیید به <b class="ltr mono">{{ phone }}</b> پیامک شد. <a href="{% url 'accounts:login' %}">شماره را تغییر دهید</a></p>
+    <form method="post" class="panel" novalidate>
+      {% csrf_token %}
+      {% include "partials/form_errors.html" %}
+      {% include "partials/field.html" with field=form.code %}
+      {% if new_user %}
+        <p class="small muted" style="margin-top:-8px">این شماره هنوز حساب ندارد؛ با تکمیل این فرم حساب شما ساخته می‌شود.</p>
+        {% include "partials/field.html" with field=form.full_name %}
+        {% include "partials/field.html" with field=form.organization %}
+        <div class="field{% if form.accept_terms.errors %} has-error{% endif %}">
+          <label class="check" style="font-weight:400">{{ form.accept_terms }}<span><a href="{% url 'core:terms' %}" target="_blank">قوانین استفاده</a> را خوانده‌ام و می‌پذیرم.</span></label>
+          {% if form.accept_terms.errors %}<ul class="errorlist">{% for e in form.accept_terms.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+      {% endif %}
+      <button class="btn" type="submit" style="width:100%">{% if new_user %}ساخت حساب و ورود{% else %}ورود{% endif %}</button>
+    </form>
+    <form method="post" action="{% url 'accounts:resend' %}" style="margin-top:16px" class="resend" data-wait="{{ wait }}">
+      {% csrf_token %}
+      <span class="muted small">کد را دریافت نکردید؟</span>
+      <button class="linkbtn resend-btn" type="submit" style="color:var(--teal)">ارسال دوباره کد</button>
+      <span class="muted small resend-timer" aria-live="polite"></span>
+    </form>
+  </div>
+</div>
+{% endblock %}

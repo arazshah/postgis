@@ -39,7 +39,7 @@ class DatabaseServer(models.Model):
     sslmode = models.CharField("حالت SSL اتصال پنل", max_length=20, choices=SSL_CHOICES, default="prefer")
 
     public_host = models.CharField("آدرس عمومی برای کاربران", max_length=255,
-                                   help_text="آدرسی که در رشته اتصال به کاربر نشان داده می‌شود، مثل db1.araz.me")
+                                   help_text="آدرسی که در رشته اتصال به کاربر نشان داده می‌شود، مثل db1.postgis.ir")
     public_port = models.PositiveIntegerField("پورت عمومی", default=5432)
     public_sslmode = models.CharField("حالت SSL پیشنهادی به کاربران", max_length=20, choices=SSL_CHOICES,
                                       default="require")

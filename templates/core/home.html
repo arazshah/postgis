@@ -10,24 +10,24 @@
           <a class="btn" href="{% url 'databases:create' %}">ساخت پایگاه داده</a>
           <a class="btn ghost" href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a>
         {% else %}
-          <a class="btn" href="{% url 'accounts:signup' %}">ساخت حساب رایگان</a>
+          <a class="btn" href="{% url 'accounts:login' %}">ساخت حساب رایگان</a>
           <a class="btn ghost" href="{% url 'core:doc' 'start' %}">ببینید چطور کار می‌کند</a>
         {% endif %}
       </div>
-      <p class="note">رایگان برای دانشجوها و تازه‌کارها؛ بدون نیاز به کارت بانکی.</p>
+      <p class="note">رایگان برای دانشجوها و تازه‌کارها؛ ورود فقط با شماره موبایل.</p>
     </div>
 
     <figure class="conn" aria-label="نمونه اطلاعات اتصالی که تحویل می‌گیرید" style="margin:0">
       <div class="conn-head"><span class="dot" aria-hidden="true"></span>پایگاه داده شما آماده است</div>
       <dl>
-        <dt>میزبان</dt><dd>db.araz.me</dd>
+        <dt>میزبان</dt><dd>db.postgis.ir</dd>
         <dt>پورت</dt><dd>5432</dd>
         <dt>پایگاه داده</dt><dd>gp_tehran_parcels</dd>
         <dt>نام کاربری</dt><dd>gp_tehran_parcels</dd>
         <dt>SSL</dt><dd>require</dd>
         <dt>افزونه‌ها</dt><dd>postgis · pgrouting</dd>
       </dl>
-      <div class="uri">postgresql://gp_tehran_parcels:<b>••••••••</b>@db.araz.me:5432/gp_tehran_parcels?sslmode=require</div>
+      <div class="uri">postgresql://gp_tehran_parcels:<b>••••••••</b>@db.postgis.ir:5432/gp_tehran_parcels?sslmode=require</div>
     </figure>
   </div>
 </section>
@@ -39,7 +39,7 @@
       <p class="muted">همه کارهای سخت سمت سرور انجام می‌شود؛ شما فقط داده مکانی خود را وارد می‌کنید.</p>
     </div>
     <ol class="steps">
-      <li><h3>حساب بسازید</h3><p>با ایمیل ثبت‌نام کنید. اطلاعات بانکی لازم نیست.</p></li>
+      <li><h3>حساب بسازید</h3><p>شماره موبایل را وارد کنید و کد پیامک‌شده را بزنید. رمز عبور لازم نیست.</p></li>
       <li><h3>پایگاه داده را بسازید</h3><p>یک نام و رمز انتخاب کنید و افزونه‌های مکانی مورد نیازتان را تیک بزنید.</p></li>
       <li><h3>وصل شوید</h3><p>اطلاعات اتصال آماده را در QGIS، GeoServer یا Python کپی کنید و Shapefile خود را وارد کنید.</p></li>
     </ol>
@@ -69,7 +69,7 @@
       <h2>رایگان، با محدودیت‌های روشن</h2>
       <p class="muted">این سرویس برای یادگیری، پایان‌نامه و پروژه‌های کوچک WebGIS ساخته شده است. محدودیت‌ها از اول مشخص‌اند تا سرور برای همه سریع بماند.</p>
       <p class="muted">بکاپ روزانه گرفته می‌شود، اما برای داده‌های مهم همیشه نسخه‌ای هم نزد خودتان نگه دارید.</p>
-      <a class="btn" href="{% if user.is_authenticated %}{% url 'databases:create' %}{% else %}{% url 'accounts:signup' %}{% endif %}">شروع رایگان</a>
+      <a class="btn" href="{% if user.is_authenticated %}{% url 'databases:create' %}{% else %}{% url 'accounts:login' %}{% endif %}">شروع رایگان</a>
     </div>
     {% for p in plans %}
     <div class="legend" aria-label="مشخصات پلن {{ p.name }}">

@@ -133,7 +133,7 @@ if EMAIL_HOST:
     EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@araz.me")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@postgis.ir")
 
 # پشت پراکسی Coolify (Traefik/Caddy)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -156,3 +156,23 @@ LOGGING = {
 MAX_DATABASES_PER_USER = int(os.environ.get("MAX_DATABASES_PER_USER", "1"))
 # پیشوند نام نقش/دیتابیس مشتریان روی سرور دیتابیس
 TENANT_PREFIX = os.environ.get("TENANT_PREFIX", "gp_")
+
+# ---------------- پیامک و رمز یک‌بار مصرف ----------------
+# SMS_BACKEND: "smsir" در تولید، "console" در توسعه (کد در لاگ چاپ می‌شود)
+SMS_BACKEND = os.environ.get("SMS_BACKEND", "console" if (DEBUG or os.environ.get("DJANGO_TESTING")) else "smsir")
+SMSIR_API_KEY = os.environ.get("SMSIR_API_KEY", "")
+SMSIR_TEMPLATE_ID = os.environ.get("SMSIR_TEMPLATE_ID", "")
+SMSIR_CODE_PARAM = os.environ.get("SMSIR_CODE_PARAM", "CODE")
+SMSIR_LINE_NUMBER = os.environ.get("SMSIR_LINE_NUMBER", "")  # اختیاری، برای پیامک‌های اطلاع‌رسانی
+SMS_TIMEOUT = int(os.environ.get("SMS_TIMEOUT", "10"))
+
+OTP_LENGTH = int(os.environ.get("OTP_LENGTH", "5"))
+OTP_TTL_SECONDS = int(os.environ.get("OTP_TTL_SECONDS", "120"))
+OTP_RESEND_SECONDS = int(os.environ.get("OTP_RESEND_SECONDS", "60"))
+OTP_MAX_ATTEMPTS = int(os.environ.get("OTP_MAX_ATTEMPTS", "5"))
+OTP_MAX_PER_PHONE_HOUR = int(os.environ.get("OTP_MAX_PER_PHONE_HOUR", "5"))
+OTP_MAX_PER_IP_HOUR = int(os.environ.get("OTP_MAX_PER_IP_HOUR", "20"))
+# تعداد پراکسی‌های قابل اعتماد جلوی برنامه (Traefik در Coolify = ۱)
+TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "1"))
+# در حالت console و DEBUG کد روی صفحه هم نمایش داده شود (فقط برای توسعه)
+OTP_SHOW_IN_DEBUG = DEBUG and SMS_BACKEND == "console"

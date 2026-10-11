@@ -41,11 +41,11 @@ class BaseCase(TestCase):
         patcher = mock.patch.object(services, "provisioner_for", return_value=self.fake)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.server = DatabaseServer(name="s1", host="10.0.0.5", public_host="db.araz.me", is_default=True)
+        self.server = DatabaseServer(name="s1", host="10.0.0.5", public_host="db.postgis.ir", is_default=True)
         self.server.set_admin_password("secret")
         self.server.save()
         self.plan = Plan.objects.get(slug="free")  # از مایگریشن seed
-        self.user = User.objects.create_user("u@example.com", "Passw0rd!xyz")
+        self.user = User.objects.create_user("09120000001")
 
 
 class CryptoTests(TestCase):
@@ -148,7 +148,7 @@ class QuotaExpiryTests(BaseCase):
                              "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}})
 class ViewTests(BaseCase):
     def test_public_pages(self):
-        for url in ["/", "/docs/", "/docs/qgis/", "/docs/srid/", "/terms/", "/accounts/login/", "/accounts/signup/"]:
+        for url in ["/", "/docs/", "/docs/qgis/", "/docs/srid/", "/terms/", "/accounts/login/"]:
             self.assertEqual(self.client.get(url).status_code, 200, url)
         self.assertEqual(self.client.get("/docs/nope/").status_code, 404)
         self.assertEqual(self.client.get("/healthz").json(), {"status": "ok"})
@@ -158,10 +158,13 @@ class ViewTests(BaseCase):
         self.assertEqual(r.status_code, 302)
 
     def test_signup_then_create_flow(self):
-        r = self.client.post(reverse("accounts:signup"), {
-            "full_name": "سارا", "email": "Sara@Example.com", "organization": "",
-            "password1": "SaraPass1234!", "password2": "SaraPass1234!", "accept_terms": "on"})
-        self.assertRedirects(r, reverse("databases:create"))
+        self.client.post(reverse("accounts:login"), {"phone": "۰۹۱۲۳۴۵۶۷۸۹"})
+        from accounts.models import OTPCode
+        otp = OTPCode.objects.get(phone="09123456789")
+        with mock.patch("accounts.models._hash_code", return_value=otp.code_hash):
+            r = self.client.post(reverse("accounts:verify"), {"code": "11111", "full_name": "سارا",
+                                                              "accept_terms": "on"})
+        self.assertRedirects(r, reverse("databases:create"), fetch_redirect_response=False)
         pg = Extension.objects.get(name="postgis")
         r = self.client.post(reverse("databases:create"), {
             "label": "my_proj", "password": "Abcdefgh1234", "extensions": [pg.pk]})
@@ -182,7 +185,7 @@ class ViewTests(BaseCase):
 
     def test_other_users_db_hidden(self):
         db = services.create_database(self.user, "mine", "Abcdefgh123", [])
-        other = User.objects.create_user("o@example.com", "Passw0rd!xyz")
+        other = User.objects.create_user("09120000002")
         self.client.force_login(other)
         self.assertEqual(self.client.get(reverse("databases:detail", args=[db.pk])).status_code, 404)
         self.client.post(reverse("databases:delete", args=[db.pk]), {"confirm": "mine"})
@@ -200,7 +203,7 @@ class ViewTests(BaseCase):
         self.assertEqual(db.status, UserDatabase.Status.DELETED)
 
     def test_admin_server_pages(self):
-        admin = User.objects.create_superuser("a@example.com", "Passw0rd!xyz")
+        admin = User.objects.create_superuser("09120000003")
         self.client.force_login(admin)
         self.assertEqual(self.client.get("/manage/databases/databaseserver/").status_code, 200)
         self.assertEqual(self.client.get(f"/manage/databases/databaseserver/{self.server.pk}/change/").status_code, 200)

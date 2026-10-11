@@ -1,18 +1,19 @@
 {% extends "base.html" %}
-{% block title %}ورود — {{ SITE_NAME }}{% endblock %}
+{% block title %}ورود و ثبت‌نام — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page">
   <div class="auth">
-    <h1>ورود</h1>
+    <h1>ورود یا ثبت‌نام</h1>
+    <p class="muted">شماره موبایل خود را وارد کنید تا کد تأیید برایتان پیامک شود. اگر حساب ندارید، با همین کد ساخته می‌شود.</p>
     <form method="post" class="panel" novalidate>
       {% csrf_token %}
       {% include "partials/form_errors.html" %}
-      {% include "partials/field.html" with field=form.username %}
-      {% include "partials/field.html" with field=form.password %}
-      <input type="hidden" name="next" value="{{ next }}">
-      <button class="btn" type="submit" style="width:100%">ورود</button>
+      {% include "partials/field.html" with field=form.phone %}
+      {{ form.website }}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <button class="btn" type="submit" style="width:100%">دریافت کد تأیید</button>
     </form>
-    <p class="muted" style="margin-top:16px">حساب ندارید؟ <a href="{% url 'accounts:signup' %}">یک حساب رایگان بسازید</a></p>
+    <p class="muted small" style="margin-top:16px">با ورود، <a href="{% url 'core:terms' %}">قوانین استفاده</a> را می‌پذیرید.</p>
   </div>
 </div>
 {% endblock %}

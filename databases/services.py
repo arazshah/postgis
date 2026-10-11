@@ -163,10 +163,18 @@ def set_status(db: UserDatabase, status: str, actor=None):
 
 
 def _notify(user, subject, body):
+    """اطلاع‌رسانی: پیامک (اگر خط اطلاع‌رسانی تنظیم شده) و ایمیل (اگر کاربر ایمیل دارد)."""
+    from accounts.sms import send_text
+
     try:
-        send_mail(f"[{settings.SITE_NAME}] {subject}", body, None, [user.email], fail_silently=True)
+        send_text(user.phone, f"{settings.SITE_NAME}: {body}")
     except Exception:  # noqa: BLE001
-        log.exception("email failed")
+        log.exception("sms notify failed")
+    if user.email:
+        try:
+            send_mail(f"[{settings.SITE_NAME}] {subject}", body, None, [user.email], fail_silently=True)
+        except Exception:  # noqa: BLE001
+            log.exception("email failed")
 
 
 def check_quotas() -> dict:
