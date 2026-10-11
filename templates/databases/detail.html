@@ -117,11 +117,19 @@ print(gpd.read_postgis("SELECT * FROM parcels LIMIT 5", engine, geom_col="geomet
           <tr><th>اعتبار تا</th><td class="rtl">{{ db.expires_at|jdate }}{% if db.days_left is not None %} ({{ db.days_left|fanum }} روز){% endif %}</td></tr>
           <tr><th>اتصال همزمان</th><td class="rtl">{{ db.plan.max_connections|fanum }}</td></tr>
         </table>
-        {% if db.can_renew %}
-        <form method="post" action="{% url 'databases:renew' db.pk %}" style="margin-top:12px">{% csrf_token %}
-          <button class="btn sm" type="submit">تمدید رایگان {{ db.plan.duration_days|fanum }} روزه</button>
-        </form>
-        {% else %}<p class="small muted" style="margin:12px 0 0">تمدید از ۳۰ روز مانده به پایان اعتبار فعال می‌شود.</p>{% endif %}
+        {% if db.plan.is_free %}
+          {% if db.can_renew %}
+          <form method="post" action="{% url 'databases:renew' db.pk %}" style="margin-top:12px">{% csrf_token %}
+            <button class="btn sm" type="submit">تمدید رایگان {{ db.plan.duration_days|fanum }} روزه</button>
+          </form>
+          {% else %}<p class="small muted" style="margin:12px 0 0">تمدید رایگان نزدیک پایان اعتبار فعال می‌شود.</p>{% endif %}
+        {% endif %}
+        {% if SITE.pay_enabled and db.status != 'suspended' %}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          {% if not db.plan.is_free %}<a class="btn sm" href="{% url 'billing:plans' %}?plan={{ db.plan.slug }}&db={{ db.pk }}">تمدید پلن</a>{% endif %}
+          <a class="btn ghost sm" href="{% url 'billing:plans' %}?db={{ db.pk }}">ارتقای پلن</a>
+        </div>
+        {% endif %}
       </section>
 
       <section class="panel">

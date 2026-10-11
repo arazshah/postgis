@@ -55,10 +55,12 @@ def pick_server() -> DatabaseServer | None:
     return None
 
 
-def user_can_create(user) -> tuple[bool, str]:
+def user_can_create(user, ignore_limit: bool = False) -> tuple[bool, str]:
     c = conf()
     if not c.allow_new_databases:
         return False, "ساخت پایگاه داده جدید موقتاً غیرفعال است. کمی بعد دوباره سر بزنید."
+    if ignore_limit:
+        return True, ""
     count = user.databases.exclude(status__in=UserDatabase.GONE_STATUSES).count()
     if count >= c.max_databases_per_user:
         return False, f"هر کاربر حداکثر {c.max_databases_per_user} پایگاه داده می‌تواند داشته باشد."
@@ -66,11 +68,15 @@ def user_can_create(user) -> tuple[bool, str]:
 
 
 def create_database(user, label: str, password: str, extension_names: list[str], plan: Plan | None = None,
-                    username: str | None = None) -> UserDatabase:
+                    username: str | None = None, voucher=None) -> UserDatabase:
+    if voucher is not None:
+        if voucher.user_id != user.pk or voucher.used_by_id:
+            raise ServiceError("این اعتبار قابل استفاده نیست.")
+        plan = voucher.plan
     plan = plan or default_plan()
     if plan is None:
         raise ServiceError("هنوز هیچ پلنی تعریف نشده است. لطفاً بعداً تلاش کنید.")
-    ok, reason = user_can_create(user)
+    ok, reason = user_can_create(user, ignore_limit=voucher is not None)
     if not ok:
         raise ServiceError(reason)
     server = pick_server()
@@ -113,6 +119,10 @@ def create_database(user, label: str, password: str, extension_names: list[str],
             db.save(update_fields=["size_bytes", "size_checked_at"])
     except ProvisionError:
         pass
+    if voucher is not None:
+        voucher.used_by = db
+        voucher.used_at = timezone.now()
+        voucher.save(update_fields=["used_by", "used_at"])
     logevent("create", f"ساخته شد روی {server.name} با افزونه‌های {', '.join(installed) or '-'}", user=user, database=db)
     return db
 
@@ -148,6 +158,8 @@ def delete_database(db: UserDatabase, actor=None, reason="درخواست کار�
 
 
 def renew(db: UserDatabase, actor=None):
+    if not db.plan.is_free:
+        raise ServiceError("تمدید پلن پولی از طریق پرداخت انجام می‌شود.")
     if not db.can_renew_within(conf().renew_window_days):
         raise ServiceError("تمدید برای این پایگاه داده در حال حاضر ممکن نیست.")
     if db.status == UserDatabase.Status.EXPIRED:

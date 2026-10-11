@@ -72,7 +72,7 @@
     <div class="plans">
     {% for p in plans %}
     <div class="legend" aria-label="مشخصات پلن {{ p.name }}">
-      <div class="legend-title"><h3>{{ p.name }}</h3><span class="price">{% if p.is_free %}رایگان{% else %}{{ p.price_toman|intcomma|fanum }} <small>تومان</small>{% endif %}</span></div>
+      <div class="legend-title"><h3>{{ p.name }}</h3><span class="price">{% if p.is_free %}رایگان{% else %}{{ p.price_toman|money }} <small>تومان</small>{% endif %}</span></div>
       {% if p.description %}<p class="small muted">{{ p.description }}</p>{% endif %}
       <ul>
         <li><span class="sym fill"></span><span>حجم پایگاه داده</span><strong>{{ p.quota_display|fanum }}</strong></li>
@@ -86,9 +86,10 @@
       {% if p.is_free %}
         <a class="btn" href="{% if user.is_authenticated %}{% url 'databases:create' %}{% else %}{% url 'accounts:login' %}{% endif %}">شروع رایگان</a>
       {% else %}
-        {% if SITE.support_telegram %}<a class="btn ghost" href="https://t.me/{{ SITE.support_telegram }}" rel="noopener">درخواست از پشتیبانی</a>
+        {% if SITE.pay_enabled %}<a class="btn" href="{% url 'billing:plans' %}?plan={{ p.slug }}">خرید</a>
+        {% elif SITE.support_telegram %}<a class="btn ghost" href="https://t.me/{{ SITE.support_telegram }}" rel="noopener">درخواست از پشتیبانی</a>
         {% elif SITE.support_phone %}<a class="btn ghost" href="tel:{{ SITE.support_phone }}">تماس با پشتیبانی</a>
-        {% else %}<span class="small muted">برای ارتقا با پشتیبانی تماس بگیرید.</span>{% endif %}
+        {% else %}<span class="small muted">به‌زودی</span>{% endif %}
       {% endif %}
       </div>
     </div>

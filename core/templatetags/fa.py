@@ -50,3 +50,13 @@ def pct_width(value):
         return f"{min(float(value), 100):.1f}"
     except (TypeError, ValueError):
         return "0"
+
+
+@register.filter
+def money(value):
+    """۱۴۹٬۰۰۰ — جداکننده هزارگان فارسی با ارقام فارسی."""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return value
+    return f"{n:,}".replace(",", "٬").translate(_FA_DIGITS)

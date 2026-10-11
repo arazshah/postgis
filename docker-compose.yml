@@ -24,6 +24,9 @@ services:
       - SMS_BACKEND=${SMS_BACKEND:-smsir}
       - TENANT_PREFIX=${TENANT_PREFIX:-gp_}
       - WEB_CONCURRENCY=${WEB_CONCURRENCY:-3}
+      - MEDIA_ROOT=/app/media
+    volumes:
+      - panel-media:/app/media
     networks:
       - default
       - coolify
@@ -51,6 +54,7 @@ services:
 
 volumes:
   panel-db-data:
+  panel-media:
 
 networks:
   coolify:

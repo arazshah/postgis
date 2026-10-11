@@ -16,6 +16,10 @@ class SiteSettingsForm(forms.ModelForm):
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
         help_text="فقط هنگام تغییر وارد کنید. رمزنگاری‌شده ذخیره می‌شود و دوباره نمایش داده نمی‌شود.")
     clear_smsir_api_key = forms.BooleanField(label="حذف کلید API فعلی", required=False)
+    aban_api_key = forms.CharField(
+        label="کلید API آبان گیت وی", required=False,
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
+        help_text="فقط هنگام تغییر وارد کنید؛ رمزنگاری‌شده ذخیره می‌شود.")
 
     class Meta:
         model = SiteSettings
@@ -27,6 +31,8 @@ class SiteSettingsForm(forms.ModelForm):
             obj.smsir_api_key_encrypted = ""
         elif self.cleaned_data.get("smsir_api_key"):
             obj.set_smsir_api_key(self.cleaned_data["smsir_api_key"].strip())
+        if self.cleaned_data.get("aban_api_key"):
+            obj.set_aban_api_key(self.cleaned_data["aban_api_key"].strip())
         if commit:
             obj.save()
         return obj
@@ -35,12 +41,20 @@ class SiteSettingsForm(forms.ModelForm):
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
     form = SiteSettingsForm
-    readonly_fields = ["api_key_status", "sms_tools", "updated_at"]
+    readonly_fields = ["api_key_status", "aban_key_status", "sms_tools", "updated_at"]
     fieldsets = (
         ("سایت", {"fields": ("site_name", "tagline", "announcement", "announcement_level")}),
         ("پشتیبانی", {"fields": ("support_phone", "support_telegram", "support_email")}),
         ("کاربران و سرویس", {"fields": ("signup_open", "allow_new_databases", "max_databases_per_user",
                                          "renew_window_days", "expiry_warning_days", "expired_grace_days")}),
+        ("پرداخت و فروش پلن‌ها", {
+            "fields": ("pay_enabled", "invoice_ttl_minutes",
+                       "pay_aban_enabled", "aban_key_status", "aban_api_key", "aban_api_base", "aban_create_path",
+                       "aban_status_path",
+                       "pay_manual_enabled", "pay_card_number", "pay_card_holder", "pay_bank_name",
+                       "pay_manual_note"),
+            "description": "قیمت پلن‌ها را از بخش «پلن‌ها» تعیین کنید. پرداخت‌های منتظر تأیید در بخش «فاکتورها» هستند.",
+        }),
         ("نقشه مرورگر پایگاه داده", {"fields": ("map_tile_url", "map_tile_attribution")}),
         ("پنل پیامک (sms.ir)", {
             "fields": ("sms_backend", "api_key_status", "smsir_api_key", "clear_smsir_api_key",
@@ -67,6 +81,12 @@ class SiteSettingsAdmin(admin.ModelAdmin):
     @admin.display(description="وضعیت کلید API")
     def api_key_status(self, obj):
         if obj.has_smsir_api_key:
+            return format_html('<b style="color:#1a7f4b">ذخیره شده</b>')
+        return format_html('<b style="color:#b42318">وارد نشده</b>')
+
+    @admin.display(description="وضعیت کلید آبان")
+    def aban_key_status(self, obj):
+        if obj.aban_api_key_encrypted:
             return format_html('<b style="color:#1a7f4b">ذخیره شده</b>')
         return format_html('<b style="color:#b42318">وارد نشده</b>')
 

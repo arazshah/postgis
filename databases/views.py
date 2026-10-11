@@ -29,14 +29,27 @@ def dashboard(request):
     dbs = (request.user.databases.exclude(status=UserDatabase.Status.DELETED)
            .select_related("server", "plan").prefetch_related("extensions"))
     can_create, reason = services.user_can_create(request.user)
-    return render(request, "databases/dashboard.html", {"dbs": dbs, "can_create": can_create, "reason": reason})
+    from billing.services import unused_vouchers
+
+    return render(request, "databases/dashboard.html", {"dbs": dbs, "can_create": can_create, "reason": reason,
+                                                        "vouchers": unused_vouchers(request.user)})
 
 
 @site_user_required
 @require_http_methods(["GET", "POST"])
 def create(request):
-    plan = services.default_plan()
-    can_create, reason = services.user_can_create(request.user)
+    from billing.models import PlanVoucher
+
+    voucher = None
+    voucher_id = request.GET.get("voucher") or request.POST.get("voucher")
+    if voucher_id:
+        voucher = PlanVoucher.objects.filter(pk=voucher_id if str(voucher_id).isdigit() else 0, user=request.user,
+                                             used_by__isnull=True).select_related("plan").first()
+        if voucher is None:
+            messages.error(request, "این اعتبار پیدا نشد یا قبلاً استفاده شده است.")
+            return redirect("databases:dashboard")
+    plan = voucher.plan if voucher else services.default_plan()
+    can_create, reason = services.user_can_create(request.user, ignore_limit=voucher is not None)
     if not can_create:
         messages.warning(request, reason)
         return redirect("databases:dashboard")
@@ -47,7 +60,7 @@ def create(request):
             db = services.create_database(
                 request.user, form.cleaned_data["label"], form.cleaned_data["password"],
                 [e.name for e in form.cleaned_data["extensions"]], plan,
-                username=form.cleaned_data["username"])
+                username=form.cleaned_data["username"], voucher=voucher)
         except services.ServiceError as exc:
             messages.error(request, str(exc))
         else:
@@ -59,7 +72,7 @@ def create(request):
     else:
         selected = {str(e.pk) for e in form.initial.get("extensions", [])}
     return render(request, "databases/create.html", {
-        "form": form, "plan": plan, "selected": selected, "prefix": settings.TENANT_PREFIX})
+        "form": form, "plan": plan, "selected": selected, "prefix": settings.TENANT_PREFIX, "voucher": voucher})
 
 
 @site_user_required

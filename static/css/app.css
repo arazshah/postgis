@@ -366,3 +366,18 @@ details.danger-zone summary{cursor:pointer;color:var(--red);font-weight:700}
 .ltr-table .data-table th,.ltr-table .data-table td{text-align:left;unicode-bidi:plaintext}
 .ltr-table .data-table th:not(.ltr){font-family:var(--f-body)}
 .table-scroll .data-table{width:max-content;min-width:100%}
+
+/* ---------- پرداخت ---------- */
+.buy-card.is-selected{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+.field select{width:100%;min-height:44px;padding:0 var(--s3);border:1.5px solid var(--line);border-radius:var(--r-sm);background:#fff;font:inherit}
+.inv-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s3)}
+.inv-amount{display:flex;justify-content:space-between;align-items:baseline;margin:var(--s5) 0;padding:var(--s4);
+  background:var(--paper-2);border-radius:var(--r-sm)}
+.inv-amount b{font-family:var(--f-display);font-size:1.6rem}
+.inv-amount small{font-size:.85rem;font-weight:500}
+.pay-option{border-top:1px solid var(--line);padding-top:var(--s4);margin-top:var(--s4)}
+.pay-option h2{font-size:1.1rem}
+details.pay-option summary{cursor:pointer}
+.badge.inv-paid{background:var(--green-soft);color:var(--green)}
+.badge.inv-pending,.badge.inv-review{background:var(--ochre-soft);color:#7a5200}
+.badge.inv-rejected,.badge.inv-expired,.badge.inv-cancelled{background:var(--red-soft);color:var(--red)}

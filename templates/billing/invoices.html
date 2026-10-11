@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load fa humanize %}
+{% block title %}صورتحساب‌ها — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <div class="page-head"><h1>صورتحساب‌های من</h1><a class="btn sm" href="{% url 'billing:plans' %}">خرید پلن</a></div>
+  {% if invoices %}
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead><tr><th>شماره</th><th>شرح</th><th>مبلغ (تومان)</th><th>وضعیت</th><th>تاریخ</th></tr></thead>
+    <tbody>{% for i in invoices %}
+      <tr><td><a class="ltr mono" href="{% url 'billing:invoice' i.number %}">{{ i.number }}</a></td><td>{{ i.title }}</td>
+        <td>{{ i.amount_toman|money }}</td><td><span class="badge inv-{{ i.status }}">{{ i.get_status_display }}</span></td>
+        <td>{{ i.created_at|jdate }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty"><h2>هنوز صورتحسابی ندارید</h2><a class="btn" href="{% url 'billing:plans' %}">مشاهده پلن‌ها</a></div>
+  {% endif %}
+</div>
+{% endblock %}
