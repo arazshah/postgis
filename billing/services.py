@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
@@ -69,49 +70,91 @@ def create_invoice(user, kind: str, plan: Plan, database: UserDatabase | None = 
 
 
 # ---------------------------------------------------------------------- آبان گیت وی
+def _callback_url(inv: Invoice, request) -> str:
+    url = request.build_absolute_uri(reverse("billing:callback", args=[inv.number]))
+    if url.startswith("http://") and not settings.DEBUG:
+        url = "https://" + url[len("http://"):]
+    return url
+
+
 def start_aban(inv: Invoice, request) -> str:
     if inv.status != Invoice.Status.PENDING or inv.is_expired_now:
         raise BillingError("این فاکتور دیگر قابل پرداخت نیست.")
     if inv.method == Invoice.Method.ABAN and inv.pay_url:
         return inv.pay_url
-    callback = request.build_absolute_uri(reverse("billing:callback", args=[inv.number]))
+    minutes = int((inv.expires_at - timezone.now()).total_seconds() // 60)
     try:
-        result = AbanClient().create(amount_rial=inv.amount_rial, order_id=inv.number, callback_url=callback,
-                                     description=inv.title)
+        result = AbanClient().create(amount_rial=inv.amount_rial, order_id=inv.number,
+                                     callback_url=_callback_url(inv, request), description=inv.title,
+                                     expiry_minutes=max(minutes, 5), metadata={"invoice": inv.number})
     except AbanError as exc:
         log.warning("aban create failed for %s: %s", inv.number, exc)
-        db_services.logevent("payment", f"{inv.number}: {exc}", user=inv.user, database=inv.database, success=False)
-        raise BillingError("اتصال به درگاه پرداخت ممکن نشد. چند دقیقه دیگر تلاش کنید یا از پرداخت با رسید استفاده کنید.") from exc
+        detail = f"{exc}" + (f" — {exc.hint}" if exc.hint else "")
+        db_services.logevent("payment", f"{inv.number}: {detail}"[:500], user=inv.user, database=inv.database,
+                             success=False)
+        msg = "اتصال به درگاه پرداخت ممکن نشد. چند دقیقه دیگر تلاش کنید یا از پرداخت با رسید استفاده کنید."
+        if exc.code:
+            msg += f" (کد خطا: {exc.code})"
+        raise BillingError(msg) from exc
     inv.method = Invoice.Method.ABAN
     inv.provider_id = result.id
     inv.pay_url = result.pay_url
     inv.provider_status = result.status
-    inv.save(update_fields=["method", "provider_id", "pay_url", "provider_status"])
+    if result.payable_rial:
+        inv.note = (inv.note + f"\nمبلغ قابل پرداخت در آبان: {result.payable_rial} ریال").strip()
+    inv.save(update_fields=["method", "provider_id", "pay_url", "provider_status", "note"])
     return inv.pay_url
 
 
 def check_aban(inv: Invoice) -> Invoice:
-    """وضعیت را مستقیم از آبان استعلام می‌کند؛ تنها راه تأیید پرداخت آبان."""
+    """وضعیت را مستقیم از آبان استعلام و در صورت پرداخت، verify می‌کند؛ تنها راه تأیید پرداخت آبان."""
     if inv.method != Invoice.Method.ABAN or not inv.provider_id or inv.status == Invoice.Status.PAID:
         return inv
     try:
-        result = AbanClient().get(inv.provider_id)
+        client = AbanClient()
+        result = client.get(inv.provider_id)
+        inv.provider_status = result.status
+        inv.save(update_fields=["provider_status"])
+        if result.status in PAID_STATUSES:
+            if result.amount_rial is not None and result.amount_rial != inv.amount_rial:
+                return _to_review(inv, f"مبلغ فاکتور آبان ({result.amount_rial} ریال) با فاکتور سایت برابر نیست.")
+            v = client.verify(inv.provider_id)
+            if not v.verified:
+                return inv
+            if v.amount_rial is not None and v.amount_rial != inv.amount_rial:
+                return _to_review(inv, f"مبلغ تأییدشده آبان ({v.amount_rial} ریال) با فاکتور برابر نیست.")
+            mark_paid(inv)
+            inv.refresh_from_db()
+        elif result.status in FAILED_STATUSES and inv.status == Invoice.Status.PENDING:
+            inv.status = Invoice.Status.EXPIRED if "expire" in result.status else Invoice.Status.CANCELLED
+            inv.save(update_fields=["status"])
     except AbanError as exc:
-        log.warning("aban status failed for %s: %s", inv.number, exc)
-        return inv
-    inv.provider_status = result.status
-    inv.save(update_fields=["provider_status"])
-    if result.status in PAID_STATUSES:
-        if result.paid_rial is not None and result.paid_rial < inv.amount_rial:
-            inv.note = (inv.note + f"\nمبلغ پرداخت‌شده ({result.paid_rial} ریال) کمتر از فاکتور است.").strip()
-            inv.status = Invoice.Status.REVIEW
-            inv.save(update_fields=["note", "status"])
-            return inv
-        mark_paid(inv)
-    elif result.status in FAILED_STATUSES and inv.status == Invoice.Status.PENDING:
-        inv.status = Invoice.Status.EXPIRED if "expire" in result.status else Invoice.Status.CANCELLED
-        inv.save(update_fields=["status"])
+        log.warning("aban check failed for %s: %s", inv.number, exc)
     return inv
+
+
+def _to_review(inv: Invoice, why: str) -> Invoice:
+    inv.note = (inv.note + "\n" + why).strip()
+    inv.status = Invoice.Status.REVIEW
+    inv.save(update_fields=["note", "status"])
+    return inv
+
+
+def cancel_invoice(inv: Invoice) -> None:
+    if inv.status != Invoice.Status.PENDING:
+        return
+    if inv.method == Invoice.Method.ABAN and inv.provider_id:
+        try:
+            AbanClient().cancel(inv.provider_id)
+        except AbanError as exc:
+            if exc.http_status == 409:  # احتمالاً همین الان پرداخت شده
+                check_aban(inv)
+                inv.refresh_from_db()
+                if inv.status != Invoice.Status.PENDING:
+                    return
+            log.warning("aban cancel failed for %s: %s", inv.number, exc)
+    inv.status = Invoice.Status.CANCELLED
+    inv.save(update_fields=["status"])
 
 
 # ---------------------------------------------------------------------- پرداخت دستی

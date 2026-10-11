@@ -49,7 +49,7 @@ class SiteSettings(models.Model):
     pay_aban_enabled = models.BooleanField("پرداخت با آبان گیت وی (تأیید خودکار)", default=False)
     aban_api_key_encrypted = models.TextField(blank=True, editable=False)
     aban_api_base = models.URLField("آدرس API آبان گیت وی", blank=True,
-                                    help_text="از مستندات API در پنل آبان گیت وی، مثلاً https://.../api/v1")
+                                    help_text="خالی بگذارید تا آدرس پیش‌فرض https://abangateway.ir/api/v1 استفاده شود.")
     aban_create_path = models.CharField("مسیر ساخت فاکتور", max_length=200, default="/invoices")
     aban_status_path = models.CharField("مسیر استعلام فاکتور", max_length=200, default="/invoices/{id}",
                                         help_text="{id} با شناسه فاکتور آبان جایگزین می‌شود.")
@@ -162,7 +162,7 @@ class SiteSettings(models.Model):
 
     @property
     def aban_ready(self) -> bool:
-        return bool(self.pay_aban_enabled and self.aban_api_base and self.aban_api_key_encrypted)
+        return bool(self.pay_aban_enabled and self.aban_api_key_encrypted)
 
     @property
     def manual_ready(self) -> bool:

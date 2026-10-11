@@ -3,6 +3,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt
@@ -79,17 +80,28 @@ def pay_aban(request, number):
     return redirect(url)
 
 
-@login_required
+@csrf_exempt
 def callback(request, number):
-    """برگشت از صفحه پرداخت آبان. نتیجه فقط با استعلام مستقیم از API تعیین می‌شود."""
-    inv = get_object_or_404(Invoice, number=number)
+    """
+    دو کاربرد دارد:
+    - POST: وب‌هوک آبان (callback_url). به بدنه اعتماد نمی‌کنیم؛ فقط استعلام مستقیم از API.
+    - GET: برگشت خریدار به سایت.
+    """
+    if request.method == "POST":
+        inv = Invoice.objects.filter(number=number, method=Invoice.Method.ABAN).first()
+        if inv:
+            services.check_aban(inv)
+        return HttpResponse("ok")
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
+    inv = get_object_or_404(Invoice, number=number, user=request.user)
     inv = services.check_aban(inv)
-    if inv.user_id != request.user.pk:
-        raise Http404
     if inv.status == Invoice.Status.PAID:
         messages.success(request, "پرداخت شما تأیید شد و پلن فعال شد.")
     elif inv.status == Invoice.Status.PENDING:
-        messages.info(request, "پرداخت هنوز تأیید نشده است. اگر واریز کرده‌اید، چند ثانیه دیگر صفحه را تازه کنید.")
+        messages.info(request, "پرداخت هنوز تأیید نشده است. اگر واریز کرده‌اید، چند ثانیه صبر کنید؛ این صفحه خودکار به‌روز می‌شود.")
+    elif inv.status == Invoice.Status.REVIEW:
+        messages.info(request, "پرداخت دریافت شد و برای بررسی نهایی نزد پشتیبانی است.")
     else:
         messages.error(request, "پرداخت تأیید نشد. اگر مبلغی از حسابتان کم شده، با پشتیبانی تماس بگیرید.")
     return redirect("billing:invoice", number=inv.number)
@@ -143,9 +155,12 @@ def receipt(request, number):
 def cancel(request, number):
     inv = _user_invoice(request, number)
     if inv.status == Invoice.Status.PENDING:
-        inv.status = Invoice.Status.CANCELLED
-        inv.save(update_fields=["status"])
-        messages.info(request, "فاکتور لغو شد.")
+        services.cancel_invoice(inv)
+        inv.refresh_from_db()
+        if inv.status == Invoice.Status.CANCELLED:
+            messages.info(request, "فاکتور لغو شد.")
+        else:
+            messages.info(request, f"فاکتور لغو نشد؛ وضعیت فعلی: {inv.get_status_display()}")
     return redirect("billing:invoices")
 
 

@@ -1,5 +1,6 @@
 {% extends "base.html" %}{% load fa humanize %}
 {% block title %}فاکتور {{ inv.number }} — {{ SITE_NAME }}{% endblock %}
+{% block head %}{% if inv.status == Status.PENDING and inv.method == "aban" and inv.provider_id %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
 {% block content %}
 <div class="wrap page">
   <p class="small"><a href="{% url 'billing:invoices' %}">صورتحساب‌های من</a></p>
@@ -26,8 +27,9 @@
             <h2>پرداخت آنلاین کارت به کارت <span class="chip">تأیید خودکار</span></h2>
             <p class="small muted">به صفحه پرداخت منتقل می‌شوید، مبلغ نمایش‌داده‌شده را با اپ بانکی کارت به کارت می‌کنید و چند ثانیه بعد پرداخت خودکار تأیید می‌شود.</p>
             <form method="post" action="{% url 'billing:pay_aban' inv.number %}">{% csrf_token %}
-              <button class="btn" type="submit">پرداخت {{ inv.amount_toman|money }} تومان</button>
+              <button class="btn" type="submit">{% if inv.pay_url %}ادامه پرداخت در آبان گیت وی{% else %}پرداخت {{ inv.amount_toman|money }} تومان{% endif %}</button>
             </form>
+            <p class="small muted" style="margin-top:8px">در صفحه پرداخت، <b>دقیقاً همان مبلغی را که آبان نشان می‌دهد</b> (چند ریال بیشتر از مبلغ فاکتور) واریز کنید تا پرداخت خودکار شناسایی شود.{% if inv.pay_url %} بعد از واریز، این صفحه خودکار به‌روز می‌شود.{% endif %}</p>
           </div>
           {% endif %}
 
