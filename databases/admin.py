@@ -4,7 +4,7 @@ from django.template.defaultfilters import filesizeformat
 from django.utils.html import format_html
 
 from . import services
-from .models import ActivityLog, DatabaseServer, Extension, Plan, UserDatabase
+from .models import ActivityLog, DatabaseServer, Extension, Plan, UserDatabase, parse_postgres_url, validate_host
 from .provisioner import ProvisionError
 
 
@@ -17,14 +17,51 @@ class DatabaseServerForm(forms.ModelForm):
         model = DatabaseServer
         fields = "__all__"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["host"].help_text = (
+            "نام میزبان یا IP. می‌توانید «Postgres URL (internal)» کامل Coolify را هم اینجا بچسبانید؛ "
+            "پورت، کاربر، رمز و دیتابیس از آن خوانده می‌شود.")
+        self._parsed_password = None
+
+    def clean_host(self):
+        value = (self.cleaned_data.get("host") or "").strip()
+        parsed = parse_postgres_url(value)
+        if parsed:
+            self._parsed = parsed
+            value = parsed["host"]
+        validate_host(value)
+        return value
+
+    def clean_public_host(self):
+        value = (self.cleaned_data.get("public_host") or "").strip()
+        parsed = parse_postgres_url(value)
+        if parsed:
+            value = parsed["host"]
+        value = value.split("://", 1)[-1].split("/", 1)[0]
+        validate_host(value)
+        return value
+
     def clean(self):
         cleaned = super().clean()
+        parsed = getattr(self, "_parsed", None)
+        if parsed:
+            if parsed["port"]:
+                cleaned["port"] = parsed["port"]
+            if parsed["user"]:
+                cleaned["admin_user"] = parsed["user"]
+            if parsed["dbname"]:
+                cleaned["admin_database"] = parsed["dbname"]
+            if parsed["password"] and not cleaned.get("admin_password"):
+                cleaned["admin_password"] = parsed["password"]
         if not self.instance.pk and not cleaned.get("admin_password"):
             self.add_error("admin_password", "برای سرور جدید رمز ادمین الزامی است.")
         return cleaned
 
     def save(self, commit=True):
         obj = super().save(commit=False)
+        for field in ("port", "admin_user", "admin_database"):
+            setattr(obj, field, self.cleaned_data.get(field, getattr(obj, field)))
         if self.cleaned_data.get("admin_password"):
             obj.set_admin_password(self.cleaned_data["admin_password"])
         if commit:
@@ -85,6 +122,9 @@ class DatabaseServerAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
+        if getattr(form, "_parsed", None):
+            self.message_user(request, "آدرس کامل تشخیص داده شد؛ میزبان، پورت، کاربر، رمز و دیتابیس از آن پر شد.",
+                              messages.INFO)
         info = services.refresh_server(obj, harden=True)
         self.message_user(request, f"بررسی خودکار اتصال: {info.message}",
                           messages.SUCCESS if info.ok else messages.WARNING)

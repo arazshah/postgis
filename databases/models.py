@@ -19,6 +19,41 @@ RESERVED_NAMES = {
 }
 
 
+HOST_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9\-\.]{0,251}[A-Za-z0-9])?$|^\[?[0-9a-fA-F:\.]+\]?$")
+
+
+def parse_postgres_url(value: str) -> dict | None:
+    """
+    اگر رشته کامل مثل postgres://user:pass@host:5432/db باشد، اجزای آن را برمی‌گرداند.
+    کاربر Coolify معمولاً همین «Postgres URL» را کپی می‌کند.
+    """
+    from urllib.parse import unquote, urlsplit
+
+    value = (value or "").strip()
+    if "://" not in value:
+        return None
+    parts = urlsplit(value)
+    if parts.scheme not in ("postgres", "postgresql") or not parts.hostname:
+        return None
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    return {
+        "host": parts.hostname,
+        "port": port,
+        "user": unquote(parts.username) if parts.username else None,
+        "password": unquote(parts.password) if parts.password else None,
+        "dbname": parts.path.lstrip("/") or None,
+    }
+
+
+def validate_host(value: str):
+    if not HOST_RE.match(value or ""):
+        raise ValidationError("فقط نام میزبان یا IP را وارد کنید (بدون postgres://، رمز یا پورت)، "
+                              "مثلاً db.postgis.ir یا abc123xyz.")
+
+
 class DatabaseServer(models.Model):
     """یک سرور PostgreSQL/PostGIS که دیتابیس مشتریان روی آن ساخته می‌شود. فقط ادمین مدیریت می‌کند."""
 
