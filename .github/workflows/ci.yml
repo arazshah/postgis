@@ -66,6 +66,7 @@ jobs:
           CREDENTIALS_ENCRYPTION_KEY: ci-enc
           DJANGO_SUPERUSER_PASSWORD: Ci-Admin-Pass-123
         run: |
+          docker network create coolify || true
           docker compose -f docker-compose.yml up -d --build
           for i in $(seq 1 40); do
             if docker compose -f docker-compose.yml exec -T web curl -fsS http://127.0.0.1:8000/healthz; then
