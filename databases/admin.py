@@ -7,10 +7,6 @@ from . import services
 from .models import ActivityLog, DatabaseServer, Extension, Plan, UserDatabase
 from .provisioner import ProvisionError
 
-admin.site.site_header = "مدیریت ژئوپایگاه"
-admin.site.site_title = "ژئوپایگاه"
-admin.site.index_title = "پنل مدیریت"
-
 
 class DatabaseServerForm(forms.ModelForm):
     admin_password = forms.CharField(
@@ -93,7 +89,17 @@ class ExtensionAdmin(admin.ModelAdmin):
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
     list_display = ["name", "slug", "quota_mb", "max_connections", "duration_days", "price_toman", "is_free",
-                    "is_public", "is_default"]
+                    "is_public", "is_default", "order"]
+    list_editable = ["price_toman", "is_public", "order"]
+    fieldsets = (
+        (None, {"fields": ("name", "slug", "description", "order")}),
+        ("منابع", {"fields": ("quota_mb", "max_connections", "statement_timeout_s", "temp_file_limit_mb",
+                               "backup_retention_days", "allowed_extensions")}),
+        ("مدت و قیمت", {"fields": ("duration_days", "price_toman", "is_free", "is_renewable"),
+                        "description": "درگاه پرداخت فعلاً فعال نیست؛ پلن‌های پولی در سایت با دکمه «درخواست از پشتیبانی» "
+                                       "نمایش داده می‌شوند و شما پلن پایگاه داده کاربر را از همین پنل تغییر می‌دهید."}),
+        ("نمایش", {"fields": ("is_public", "is_default")}),
+    )
     prepopulated_fields = {"slug": ("name",)}
     filter_horizontal = ["allowed_extensions"]
 
@@ -133,6 +139,16 @@ class UserDatabaseAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False  # ساخت فقط از طریق پنل کاربری تا روی سرور هم ساخته شود
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if change and "plan" in form.changed_data and obj.is_live:
+            try:
+                services.provisioner_for(obj.server).apply_limits(obj.role_name, services.limits_for(obj.plan))
+                services.logevent("plan", f"پلن به «{obj.plan.name}» تغییر کرد", user=request.user, database=obj)
+                self.message_user(request, "محدودیت‌های پلن جدید روی سرور اعمال شد.", messages.SUCCESS)
+            except ProvisionError as exc:
+                self.message_user(request, f"پلن ذخیره شد ولی اعمال روی سرور ناموفق بود: {exc}", messages.ERROR)
 
     def _run(self, request, queryset, fn, ok_text):
         done = 0

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ SITE_NAME }} — پایگاه داده مکانی PostGIS آماده{% endblock %}</title>
-  <meta name="description" content="{% block description %}پایگاه داده PostGIS آماده برای WebGIS، QGIS و GeoServer؛ در سه دقیقه، بدون نصب و دردسر سرور.{% endblock %}">
+  <meta name="description" content="{% block description %}{% if SITE.tagline %}{{ SITE.tagline }}. {% endif %}پایگاه داده PostGIS آماده برای WebGIS، QGIS و GeoServer؛ در سه دقیقه، بدون نصب و دردسر سرور.{% endblock %}">
   <meta name="theme-color" content="#0F5C59">
   <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
   <link rel="preload" href="{% static 'fonts/vazirmatn-arabic-400-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
@@ -20,10 +20,12 @@
     <nav class="nav" id="mainnav" aria-label="منوی اصلی">
       {% with u=request.resolver_match.url_name ns=request.resolver_match.namespace %}
       <a href="{% url 'core:docs' %}" {% if ns == 'core' and u == 'docs' or u == 'doc' %}aria-current="page"{% endif %}>آموزش</a>
-      {% if user.is_authenticated %}
+      {% if user.is_authenticated and user.is_staff %}
+        <a href="{% url 'admin:index' %}">پنل مدیریت</a>
+        <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="linkbtn" type="submit">خروج</button></form>
+      {% elif user.is_authenticated %}
         <a href="{% url 'databases:dashboard' %}" {% if ns == 'databases' %}aria-current="page"{% endif %}>پایگاه‌های داده من</a>
         <a href="{% url 'accounts:profile' %}" {% if u == 'profile' %}aria-current="page"{% endif %}>حساب</a>
-        {% if user.is_staff %}<a href="{% url 'admin:index' %}">مدیریت</a>{% endif %}
         <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="linkbtn" type="submit">خروج</button></form>
       {% else %}
         <a class="btn sm" href="{% url 'accounts:login' %}">ورود / ثبت‌نام</a>
@@ -33,6 +35,7 @@
   </div>
 </header>
 
+{% if SITE.announcement %}<div class="announce {{ SITE.announcement_level }}" role="note"><div class="wrap">{{ SITE.announcement|linebreaksbr }}</div></div>{% endif %}
 <main id="main">
   {% if messages %}
   <div class="wrap" style="padding-top:24px">
@@ -48,6 +51,7 @@
     <div style="display:flex;gap:16px;flex-wrap:wrap">
       <a href="{% url 'core:docs' %}">آموزش</a>
       <a href="{% url 'core:terms' %}">قوانین استفاده</a>
+      {% if SITE.support_phone %}<span>پشتیبانی: <span class="ltr">{{ SITE.support_phone }}</span></span>{% endif %}
       {% if SUPPORT_TELEGRAM %}<a href="https://t.me/{{ SUPPORT_TELEGRAM }}" rel="noopener">پشتیبانی در تلگرام</a>{% endif %}
       {% if SUPPORT_EMAIL %}<a href="mailto:{{ SUPPORT_EMAIL }}">{{ SUPPORT_EMAIL }}</a>{% endif %}
     </div>

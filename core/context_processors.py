@@ -1,10 +1,14 @@
 from django.conf import settings
 
+from .models import SiteSettings
+
 
 def site(request):
+    conf = SiteSettings.get()
     return {
-        "SITE_NAME": settings.SITE_NAME,
+        "SITE": conf,
+        "SITE_NAME": conf.site_name,
         "SITE_URL": settings.SITE_URL,
-        "SUPPORT_TELEGRAM": settings.SUPPORT_TELEGRAM,
-        "SUPPORT_EMAIL": settings.SUPPORT_EMAIL,
+        "SUPPORT_TELEGRAM": conf.support_telegram,
+        "SUPPORT_EMAIL": conf.support_email,
     }

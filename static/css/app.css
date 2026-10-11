@@ -306,3 +306,10 @@ details.danger-zone summary{cursor:pointer;color:var(--red);font-weight:700}
 .field input.otp-input{font-size:1.6rem;letter-spacing:.5em;text-align:center;min-height:56px}
 .resend{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .auth h1{font-size:1.8rem}
+.announce{padding:10px 0;font-size:.95rem;border-bottom:1px solid var(--line)}
+.announce.info{background:var(--teal-soft)}
+.announce.warning{background:var(--ochre-soft)}
+.announce.success{background:var(--green-soft)}
+.plans{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--s5)}
+.plans .legend{max-width:none}
+.legend-title .price small{font-size:.8rem;font-weight:500}

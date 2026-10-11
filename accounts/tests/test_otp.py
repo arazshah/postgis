@@ -3,13 +3,14 @@ from datetime import timedelta
 from unittest import mock
 
 from django.core.exceptions import ValidationError
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from accounts import otp as otp_mod
 from accounts import sms
 from accounts.models import OTPCode, User, normalize_mobile
+from core.models import SiteSettings
 
 
 class CaptureCodes:
@@ -36,6 +37,7 @@ class NormalizeTests(TestCase):
 
 class OTPFlowTests(TestCase):
     def setUp(self):
+        SiteSettings.get()
         self.cap = CaptureCodes()
         p = mock.patch.object(otp_mod, "send_otp", self.cap)
         p.start()
@@ -104,9 +106,9 @@ class OTPFlowTests(TestCase):
         self.assertEqual(OTPCode.objects.count(), 5)  # سقف ساعتی
 
     def test_ip_limit(self):
-        with override_settings(OTP_MAX_PER_IP_HOUR=2, OTP_RESEND_SECONDS=0):
-            for i in range(4):
-                self.client.post(reverse("accounts:login"), {"phone": f"0912000000{i}"}, REMOTE_ADDR="5.5.5.5")
+        SiteSettings.objects.filter(pk=1).update(otp_max_per_ip_hour=2, otp_resend_seconds=0)
+        for i in range(4):
+            self.client.post(reverse("accounts:login"), {"phone": f"0912000000{i}"}, REMOTE_ADDR="5.5.5.5")
         self.assertEqual(OTPCode.objects.count(), 2)
 
     def test_client_ip_behind_proxy(self):
@@ -122,9 +124,13 @@ class OTPFlowTests(TestCase):
         self.assertContains(r, "ارسال پیامک ممکن نشد")
         self.assertFalse(OTPCode.objects.get().sent_ok)
 
-    def test_admin_login_redirects_to_otp(self):
-        r = self.client.get("/manage/login/")
-        self.assertRedirects(r, "/accounts/login/?next=/manage/", fetch_redirect_response=False)
+    def test_signup_closed(self):
+        SiteSettings.objects.filter(pk=1).update(signup_open=False)
+        r = self.start()
+        self.assertContains(r, "ثبت‌نام کاربر جدید فعلاً بسته است")
+        self.assertFalse(OTPCode.objects.exists())  # پیامک هدر نمی‌رود
+        User.objects.create_user("09121234567")
+        self.assertRedirects(self.start(), reverse("accounts:verify"))  # کاربر قبلی هنوز وارد می‌شود
 
     def test_code_not_stored_plain(self):
         self.start()
@@ -132,8 +138,15 @@ class OTPFlowTests(TestCase):
         self.assertNotIn(code, OTPCode.objects.get().code_hash)
 
 
-@override_settings(SMS_BACKEND="smsir", SMSIR_API_KEY="k123", SMSIR_TEMPLATE_ID="456789", SMSIR_CODE_PARAM="CODE")
 class SmsIrTests(TestCase):
+    def setUp(self):
+        conf = SiteSettings.get()
+        conf.sms_backend = "smsir"
+        conf.smsir_template_id = "456789"
+        conf.smsir_code_param = "CODE"
+        conf.set_smsir_api_key("k123")
+        conf.save()
+
     def fake_urlopen(self, status=1):
         captured = {}
 
@@ -168,7 +181,7 @@ class SmsIrTests(TestCase):
         with mock.patch("urllib.request.urlopen", opener), self.assertRaises(sms.SMSError):
             sms.send_otp("09121234567", "12345")
 
-    @override_settings(SMSIR_TEMPLATE_ID="")
     def test_missing_config(self):
+        SiteSettings.objects.filter(pk=1).update(smsir_template_id="")
         with self.assertRaises(sms.SMSError):
             sms.send_otp("09121234567", "12345")

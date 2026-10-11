@@ -1,0 +1,12 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="content-main">
+  <p>یک کد آزمایشی (12345) با همان قالبی که برای ورود کاربران استفاده می‌شود ارسال می‌شود.</p>
+  <form method="post">{% csrf_token %}
+    <fieldset class="module aligned">
+      <div class="form-row">{{ form.phone.errors }}{{ form.phone.label_tag }} {{ form.phone }}</div>
+    </fieldset>
+    <div class="submit-row"><input type="submit" class="default" value="ارسال"></div>
+  </form>
+</div>
+{% endblock %}

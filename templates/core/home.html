@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "base.html" %}{% load fa humanize %}
 {% block content %}
 <section class="hero">
   <div class="wrap">
@@ -63,27 +63,37 @@
   </div>
 </section>
 
-<section class="section">
-  <div class="wrap plan-wrap">
-    <div>
-      <h2>رایگان، با محدودیت‌های روشن</h2>
-      <p class="muted">این سرویس برای یادگیری، پایان‌نامه و پروژه‌های کوچک WebGIS ساخته شده است. محدودیت‌ها از اول مشخص‌اند تا سرور برای همه سریع بماند.</p>
-      <p class="muted">بکاپ روزانه گرفته می‌شود، اما برای داده‌های مهم همیشه نسخه‌ای هم نزد خودتان نگه دارید.</p>
-      <a class="btn" href="{% if user.is_authenticated %}{% url 'databases:create' %}{% else %}{% url 'accounts:login' %}{% endif %}">شروع رایگان</a>
+<section class="section" id="plans">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>پلن‌ها</h2>
+      <p class="muted">محدودیت‌ها از اول مشخص‌اند تا سرور برای همه سریع بماند. بکاپ روزانه گرفته می‌شود، اما برای داده‌های مهم همیشه نسخه‌ای هم نزد خودتان نگه دارید.</p>
     </div>
+    <div class="plans">
     {% for p in plans %}
     <div class="legend" aria-label="مشخصات پلن {{ p.name }}">
-      <div class="legend-title"><h3>پلن {{ p.name }}</h3><span class="price">{% if p.is_free %}رایگان{% else %}{{ p.price_toman|fanum }} تومان{% endif %}</span></div>
+      <div class="legend-title"><h3>{{ p.name }}</h3><span class="price">{% if p.is_free %}رایگان{% else %}{{ p.price_toman|intcomma|fanum }} <small>تومان</small>{% endif %}</span></div>
+      {% if p.description %}<p class="small muted">{{ p.description }}</p>{% endif %}
       <ul>
         <li><span class="sym fill"></span><span>حجم پایگاه داده</span><strong>{{ p.quota_display|fanum }}</strong></li>
         <li><span class="sym line"></span><span>اتصال همزمان</span><strong>{{ p.max_connections|fanum }}</strong></li>
-        <li><span class="sym dash"></span><span>اعتبار، قابل تمدید رایگان</span><strong>{{ p.duration_days|fanum }} روز</strong></li>
+        <li><span class="sym dash"></span><span>مدت اعتبار{% if p.is_renewable and p.is_free %}، قابل تمدید رایگان{% endif %}</span><strong>{{ p.duration_days|fanum }} روز</strong></li>
         <li><span class="sym pt"></span><span>حداکثر زمان هر کوئری</span><strong>{{ p.statement_timeout_s|fanum }} ثانیه</strong></li>
         <li><span class="sym hatch"></span><span>نگهداری بکاپ روزانه</span><strong>{{ p.backup_retention_days|fanum }} روز</strong></li>
         <li><span class="sym ring"></span><span>اتصال رمزنگاری‌شده SSL</span><strong>دارد</strong></li>
       </ul>
+      <div style="margin-top:16px">
+      {% if p.is_free %}
+        <a class="btn" href="{% if user.is_authenticated %}{% url 'databases:create' %}{% else %}{% url 'accounts:login' %}{% endif %}">شروع رایگان</a>
+      {% else %}
+        {% if SITE.support_telegram %}<a class="btn ghost" href="https://t.me/{{ SITE.support_telegram }}" rel="noopener">درخواست از پشتیبانی</a>
+        {% elif SITE.support_phone %}<a class="btn ghost" href="tel:{{ SITE.support_phone }}">تماس با پشتیبانی</a>
+        {% else %}<span class="small muted">برای ارتقا با پشتیبانی تماس بگیرید.</span>{% endif %}
+      {% endif %}
+      </div>
     </div>
     {% endfor %}
+    </div>
   </div>
 </section>
 

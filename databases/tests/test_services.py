@@ -137,7 +137,7 @@ class QuotaExpiryTests(BaseCase):
 
     def test_deleted_after_grace(self):
         self.db.status = UserDatabase.Status.EXPIRED
-        self.db.expires_at = timezone.now() - timedelta(days=services.EXPIRED_GRACE_DAYS + 1)
+        self.db.expires_at = timezone.now() - timedelta(days=services.conf().expired_grace_days + 1)
         self.db.save()
         services.process_expiry()
         self.db.refresh_from_db()
@@ -203,7 +203,7 @@ class ViewTests(BaseCase):
         self.assertEqual(db.status, UserDatabase.Status.DELETED)
 
     def test_admin_server_pages(self):
-        admin = User.objects.create_superuser("09120000003")
+        admin = User.objects.create_admin("boss", "Adm1nPassword!")
         self.client.force_login(admin)
         self.assertEqual(self.client.get("/manage/databases/databaseserver/").status_code, 200)
         self.assertEqual(self.client.get(f"/manage/databases/databaseserver/{self.server.pk}/change/").status_code, 200)
