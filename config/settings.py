@@ -33,6 +33,35 @@ CREDENTIALS_ENCRYPTION_KEY = os.environ.get("CREDENTIALS_ENCRYPTION_KEY", "")
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 
+
+def _coolify_domains() -> list[str]:
+    """
+    دامنه‌هایی که در Coolify برای سرویس تعریف شده‌اند (مثل SERVICE_FQDN_WEB یا COOLIFY_FQDN)
+    خودکار مجاز می‌شوند؛ با افزودن دامنه جدید در Coolify نیازی به تغییر کد نیست.
+    """
+    raw = []
+    for key, value in os.environ.items():
+        if key.startswith(("SERVICE_FQDN_", "SERVICE_URL_")) or key in ("COOLIFY_FQDN", "COOLIFY_URL"):
+            raw.extend(value.split(","))
+    hosts = []
+    for item in raw:
+        item = item.strip()
+        if not item:
+            continue
+        host = item.split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0].lower()
+        if host and host not in hosts:
+            hosts.append(host)
+    return hosts
+
+
+for _host in _coolify_domains():
+    if _host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_host)
+    for _scheme in ("https", "http"):
+        _origin = f"{_scheme}://{_host}"
+        if _origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_origin)
+
 SITE_NAME = os.environ.get("SITE_NAME", "ژئوپایگاه")
 SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
 SUPPORT_TELEGRAM = os.environ.get("SUPPORT_TELEGRAM", "")

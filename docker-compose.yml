@@ -14,8 +14,8 @@ services:
       - DATABASE_URL=postgres://panel:${SERVICE_PASSWORD_POSTGRES}@panel-db:5432/panel
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
-      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-postgis.ir,www.postgis.ir}
-      - DJANGO_CSRF_TRUSTED_ORIGINS=${DJANGO_CSRF_TRUSTED_ORIGINS:-https://postgis.ir,https://www.postgis.ir}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-postgis.ir,www.postgis.ir,postgis.araz.me}
+      - DJANGO_CSRF_TRUSTED_ORIGINS=${DJANGO_CSRF_TRUSTED_ORIGINS:-https://postgis.ir,https://www.postgis.ir,https://postgis.araz.me}
       - SITE_URL=${SITE_URL:-https://postgis.ir}
       - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME:-admin}
       - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
