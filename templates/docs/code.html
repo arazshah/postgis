@@ -1,0 +1,30 @@
+{% extends "docs/_layout.html" %}
+{% block doc %}
+<h2>Python با psycopg</h2>
+<pre class="code"><code>import psycopg
+
+with psycopg.connect("host=HOST port=5432 dbname=DB user=USER password=PASS sslmode=require") as conn:
+    rows = conn.execute("SELECT name, ST_AsGeoJSON(geom) FROM places LIMIT 10").fetchall()
+    for name, geojson in rows:
+        print(name, geojson)</code></pre>
+<h2>Python با GeoPandas</h2>
+<pre class="code"><code>import geopandas as gpd
+from sqlalchemy import create_engine
+
+engine = create_engine("postgresql+psycopg2://USER:PASS@HOST:5432/DB?sslmode=require")
+gdf = gpd.read_postgis("SELECT * FROM parcels", engine, geom_col="geom")</code></pre>
+<h2>Node.js با node-postgres</h2>
+<pre class="code"><code>import pg from "pg";
+
+const pool = new pg.Pool({
+  connectionString: "postgresql://USER:PASS@HOST:5432/DB",
+  ssl: { rejectUnauthorized: false },
+  max: 3,
+});
+
+const { rows } = await pool.query(
+  "SELECT id, ST_AsGeoJSON(geom)::json AS geometry FROM places WHERE ST_DWithin(geom::geography, ST_MakePoint($1,$2)::geography, 1000)",
+  [51.389, 35.689]
+);</code></pre>
+<div class="callout">در برنامه‌های وب حتماً از connection pool با حداکثر ۳ اتصال استفاده کنید تا از سقف پلن عبور نکنید.</div>
+{% endblock %}

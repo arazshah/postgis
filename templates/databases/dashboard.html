@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}پایگاه‌های داده من — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <div class="page-head">
+    <h1>پایگاه‌های داده من</h1>
+    {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">ساخت پایگاه داده</a>{% endif %}
+  </div>
+
+  {% if dbs %}
+    {% if not can_create %}<p class="muted small">{{ reason }}</p>{% endif %}
+    <div class="db-list">
+    {% for db in dbs %}
+      <article class="db-item">
+        <div>
+          <h2><a href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a></h2>
+          <span class="badge {{ db.status }}">{{ db.get_status_display }}</span>
+          <span class="muted small" style="margin-inline-start:8px">ساخته‌شده در {{ db.created_at|jdate }}</span>
+        </div>
+        <div>
+          <div class="meter {{ db.usage_level }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ db.usage_percent|pct_width }}" aria-label="مصرف حجم"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
+          <div class="meter-label"><span>{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span>
+            <span>{% if db.days_left is not None %}{{ db.days_left|fanum }} روز اعتبار{% endif %}</span></div>
+        </div>
+        <a class="btn ghost sm" href="{% url 'databases:detail' db.pk %}">اطلاعات اتصال</a>
+      </article>
+    {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty">
+      <h2>هنوز پایگاه داده‌ای ندارید</h2>
+      <p class="muted">اولین پایگاه داده PostGIS خود را بسازید؛ کمتر از یک دقیقه طول می‌کشد.</p>
+      {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">ساخت پایگاه داده</a>{% else %}<p>{{ reason }}</p>{% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

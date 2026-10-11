@@ -1,0 +1,101 @@
+{% extends "base.html" %}{% load fa %}
+{% block content %}
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <h1>پایگاه داده PostGIS شما، سه دقیقه دیگر آماده است</h1>
+      <p class="lead">بدون نصب، بدون سرور و بدون درگیری با تنظیمات. یک نام انتخاب کنید، افزونه‌ها را تیک بزنید و اطلاعات اتصال را در QGIS، GeoServer یا کد خودتان بگذارید.</p>
+      <div class="actions">
+        {% if user.is_authenticated %}
+          <a class="btn" href="{% url 'databases:create' %}">ساخت پایگاه داده</a>
+          <a class="btn ghost" href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a>
+        {% else %}
+          <a class="btn" href="{% url 'accounts:signup' %}">ساخت حساب رایگان</a>
+          <a class="btn ghost" href="{% url 'core:doc' 'start' %}">ببینید چطور کار می‌کند</a>
+        {% endif %}
+      </div>
+      <p class="note">رایگان برای دانشجوها و تازه‌کارها؛ بدون نیاز به کارت بانکی.</p>
+    </div>
+
+    <figure class="conn" aria-label="نمونه اطلاعات اتصالی که تحویل می‌گیرید" style="margin:0">
+      <div class="conn-head"><span class="dot" aria-hidden="true"></span>پایگاه داده شما آماده است</div>
+      <dl>
+        <dt>میزبان</dt><dd>db.araz.me</dd>
+        <dt>پورت</dt><dd>5432</dd>
+        <dt>پایگاه داده</dt><dd>gp_tehran_parcels</dd>
+        <dt>نام کاربری</dt><dd>gp_tehran_parcels</dd>
+        <dt>SSL</dt><dd>require</dd>
+        <dt>افزونه‌ها</dt><dd>postgis · pgrouting</dd>
+      </dl>
+      <div class="uri">postgresql://gp_tehran_parcels:<b>••••••••</b>@db.araz.me:5432/gp_tehran_parcels?sslmode=require</div>
+    </figure>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>از ثبت‌نام تا اولین لایه روی نقشه</h2>
+      <p class="muted">همه کارهای سخت سمت سرور انجام می‌شود؛ شما فقط داده مکانی خود را وارد می‌کنید.</p>
+    </div>
+    <ol class="steps">
+      <li><h3>حساب بسازید</h3><p>با ایمیل ثبت‌نام کنید. اطلاعات بانکی لازم نیست.</p></li>
+      <li><h3>پایگاه داده را بسازید</h3><p>یک نام و رمز انتخاب کنید و افزونه‌های مکانی مورد نیازتان را تیک بزنید.</p></li>
+      <li><h3>وصل شوید</h3><p>اطلاعات اتصال آماده را در QGIS، GeoServer یا Python کپی کنید و Shapefile خود را وارد کنید.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="section alt">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>افزونه‌هایی که می‌توانید انتخاب کنید</h2>
+      <p class="muted">هر افزونه با یک تیک نصب می‌شود. بعداً هم از داشبورد می‌توانید افزونه اضافه کنید.</p>
+    </div>
+    <div class="ext-grid">
+      {% for e in extensions %}
+      <div class="ext-row">
+        <span class="tick{% if not e.is_default %} off{% endif %}" aria-hidden="true">{% if e.is_default %}✓{% endif %}</span>
+        <div><b>{{ e.title }}</b><span>{{ e.description }}</span></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap plan-wrap">
+    <div>
+      <h2>رایگان، با محدودیت‌های روشن</h2>
+      <p class="muted">این سرویس برای یادگیری، پایان‌نامه و پروژه‌های کوچک WebGIS ساخته شده است. محدودیت‌ها از اول مشخص‌اند تا سرور برای همه سریع بماند.</p>
+      <p class="muted">بکاپ روزانه گرفته می‌شود، اما برای داده‌های مهم همیشه نسخه‌ای هم نزد خودتان نگه دارید.</p>
+      <a class="btn" href="{% if user.is_authenticated %}{% url 'databases:create' %}{% else %}{% url 'accounts:signup' %}{% endif %}">شروع رایگان</a>
+    </div>
+    {% for p in plans %}
+    <div class="legend" aria-label="مشخصات پلن {{ p.name }}">
+      <div class="legend-title"><h3>پلن {{ p.name }}</h3><span class="price">{% if p.is_free %}رایگان{% else %}{{ p.price_toman|fanum }} تومان{% endif %}</span></div>
+      <ul>
+        <li><span class="sym fill"></span><span>حجم پایگاه داده</span><strong>{{ p.quota_display|fanum }}</strong></li>
+        <li><span class="sym line"></span><span>اتصال همزمان</span><strong>{{ p.max_connections|fanum }}</strong></li>
+        <li><span class="sym dash"></span><span>اعتبار، قابل تمدید رایگان</span><strong>{{ p.duration_days|fanum }} روز</strong></li>
+        <li><span class="sym pt"></span><span>حداکثر زمان هر کوئری</span><strong>{{ p.statement_timeout_s|fanum }} ثانیه</strong></li>
+        <li><span class="sym hatch"></span><span>نگهداری بکاپ روزانه</span><strong>{{ p.backup_retention_days|fanum }} روز</strong></li>
+        <li><span class="sym ring"></span><span>اتصال رمزنگاری‌شده SSL</span><strong>دارد</strong></li>
+      </ul>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="section alt">
+  <div class="wrap">
+    <div class="section-head"><h2>آموزش‌های قدم‌به‌قدم</h2></div>
+    <ul class="doc-links">
+      <li><a href="{% url 'core:doc' 'qgis' %}">اتصال از QGIS<span>افزودن اتصال PostGIS و نمایش لایه‌ها</span></a></li>
+      <li><a href="{% url 'core:doc' 'import' %}">وارد کردن Shapefile و GeoPackage<span>با DB Manager، ogr2ogr یا shp2pgsql</span></a></li>
+      <li><a href="{% url 'core:doc' 'geoserver' %}">اتصال به GeoServer<span>ساخت Store و انتشار لایه WMS/WFS</span></a></li>
+      <li><a href="{% url 'core:doc' 'srid' %}">سیستم مختصات در ایران<span>کی 4326، کی 3857 و کی UTM</span></a></li>
+    </ul>
+  </div>
+</section>
+{% endblock %}

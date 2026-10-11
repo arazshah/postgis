@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}آموزش — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <div class="section-head">
+    <h1>آموزش</h1>
+    <p class="muted">از اولین اتصال تا انتشار لایه در GeoServer. اگر تازه شروع کرده‌اید، به ترتیب جلو بروید.</p>
+  </div>
+  <ul class="doc-links">
+    {% for d in docs %}<li><a href="{% url 'core:doc' d.0 %}">{{ d.1 }}<span>{{ d.2 }}</span></a></li>{% endfor %}
+  </ul>
+</div>
+{% endblock %}

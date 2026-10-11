@@ -1,0 +1,25 @@
+{% extends "docs/_layout.html" %}
+{% block doc %}
+<h2>ساخت جدول مکانی</h2>
+<pre class="code"><code>CREATE TABLE schools (
+  id    serial PRIMARY KEY,
+  name  text NOT NULL,
+  geom  geometry(Point, 4326)
+);
+CREATE INDEX schools_geom_idx ON schools USING gist (geom);
+
+INSERT INTO schools (name, geom)
+VALUES ('مدرسه نمونه', ST_SetSRID(ST_MakePoint(51.3890, 35.6892), 4326));</code></pre>
+<h2>نزدیک‌ترین عوارض به یک نقطه</h2>
+<pre class="code"><code>SELECT name, ST_Distance(geom::geography, ST_MakePoint(51.42, 35.70)::geography) AS meters
+FROM schools
+ORDER BY geom &lt;-&gt; ST_SetSRID(ST_MakePoint(51.42, 35.70), 4326)
+LIMIT 5;</code></pre>
+<h2>عوارض داخل یک محدوده</h2>
+<pre class="code"><code>SELECT s.name, d.name AS district
+FROM schools s
+JOIN districts d ON ST_Intersects(s.geom, d.geom);</code></pre>
+<h2>بافر ۵۰۰ متری</h2>
+<pre class="code"><code>SELECT id, ST_Buffer(geom::geography, 500)::geometry AS buffer_geom FROM schools;</code></pre>
+<div class="callout">اگر کوئری با خطای statement timeout متوقف شد، اول بررسی کنید نمایه gist ساخته شده باشد، سپس با <code>EXPLAIN</code> مسیر اجرا را ببینید.</div>
+{% endblock %}

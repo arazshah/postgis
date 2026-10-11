@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}حساب کاربری — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page narrow">
+  <h1>حساب کاربری</h1>
+  <p class="muted">{{ user.email }} · عضو از {{ user.date_joined|jdate }}</p>
+  <div class="stack">
+    <form method="post" class="panel">
+      {% csrf_token %}
+      <h2>اطلاعات شما</h2>
+      {% for field in form %}{% include "partials/field.html" %}{% endfor %}
+      <button class="btn" name="save_profile" type="submit">ذخیره تغییرات</button>
+    </form>
+    <form method="post" class="panel">
+      {% csrf_token %}
+      <h2>تغییر رمز ورود به سایت</h2>
+      <p class="muted small">این رمز ورود به همین سایت است، نه رمز پایگاه داده. رمز پایگاه داده را از صفحه خود آن عوض کنید.</p>
+      {% include "partials/form_errors.html" with form=pform %}
+      {% for field in pform %}{% include "partials/field.html" %}{% endfor %}
+      <button class="btn" name="change_password" type="submit">تغییر رمز</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

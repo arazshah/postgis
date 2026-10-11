@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      panel-db:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: panel
+        ports: ["5434:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DJANGO_TESTING: "1"
+      DATABASE_URL: postgres://postgres:postgres@localhost:5434/panel
+      TEST_PG_HOST: localhost
+      TEST_PG_PORT: "5432"
+      TEST_PG_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Check migrations
+        run: python manage.py makemigrations --check --dry-run
+      - name: Tests (unit + PostGIS integration)
+        run: python manage.py test -v 2
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t geopaygah:ci .
+      - name: Smoke test container
+        run: |
+          docker run -d --name app -p 8000:8000 \
+            -e DJANGO_SECRET_KEY=ci -e DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1 geopaygah:ci
+          for i in $(seq 1 30); do curl -fsS http://localhost:8000/healthz && exit 0; sleep 2; done
+          docker logs app; exit 1

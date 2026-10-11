@@ -1,0 +1,17 @@
+# اجرای محلی کامل: پنل + یک سرور PostGIS آزمایشی برای مشتریان
+services:
+  tenant-pg:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_PASSWORD: devpass
+    ports: ["5433:5432"]
+  web:
+    build: .
+    environment:
+      DJANGO_DEBUG: "1"
+      DJANGO_SECRET_KEY: dev
+      DJANGO_ALLOWED_HOSTS: "*"
+      DJANGO_SUPERUSER_EMAIL: admin@example.com
+      DJANGO_SUPERUSER_PASSWORD: admin12345
+    ports: ["8000:8000"]
+    depends_on: [tenant-pg]

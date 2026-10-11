@@ -1,0 +1,20 @@
+{% extends "docs/_layout.html" %}
+{% block doc %}
+<p>SRID شماره سیستم مختصات است. اشتباه بودن آن رایج‌ترین دلیل «جابه‌جا افتادن لایه‌ها» است.</p>
+<table>
+  <tr><th>SRID</th><th>نام</th><th>کاربرد</th></tr>
+  <tr><td>4326</td><td>WGS 84 جغرافیایی</td><td>ذخیره عمومی، GPS، GeoJSON. واحد: درجه</td></tr>
+  <tr><td>3857</td><td>Web Mercator</td><td>نمایش روی نقشه‌های وب؛ برای محاسبه مساحت مناسب نیست</td></tr>
+  <tr><td>32638</td><td>UTM zone 38N</td><td>غرب ایران (حدود ۴۲ تا ۴۸ درجه طول شرقی)</td></tr>
+  <tr><td>32639</td><td>UTM zone 39N</td><td>مرکز ایران، از جمله تهران و اصفهان (۴۸ تا ۵۴ درجه)</td></tr>
+  <tr><td>32640</td><td>UTM zone 40N</td><td>شرق ایران، مشهد و کرمان (۵۴ تا ۶۰ درجه)</td></tr>
+  <tr><td>32641</td><td>UTM zone 41N</td><td>منتهی‌الیه شرق ایران (بیش از ۶۰ درجه)</td></tr>
+</table>
+<h2>تبدیل سیستم مختصات</h2>
+<pre class="code"><code>-- محاسبه مساحت به متر مربع در تهران
+SELECT id, ST_Area(ST_Transform(geom, 32639)) AS area_m2 FROM parcels;
+
+-- اصلاح SRID اشتباه (فقط برچسب را عوض می‌کند، مختصات را نه)
+SELECT UpdateGeometrySRID('parcels', 'geom', 32639);</code></pre>
+<div class="callout">قاعده ساده: داده را با SRID اصلی‌اش ذخیره کنید، برای محاسبه فاصله و مساحت به UTM ببرید، و برای نمایش وب به 3857 یا 4326.</div>
+{% endblock %}

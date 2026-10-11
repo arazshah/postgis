@@ -1,0 +1,23 @@
+{% extends "docs/_layout.html" %}
+{% block doc %}
+<h2>افزودن اتصال</h2>
+<ol>
+  <li>QGIS را باز کنید (نسخه ۳٫۲۸ یا جدیدتر پیشنهاد می‌شود).</li>
+  <li>در پنل <span class="ltr">Browser</span> روی <span class="ltr">PostgreSQL</span> راست‌کلیک کنید و <span class="ltr">New Connection…</span> را بزنید.</li>
+  <li>در فیلد <span class="ltr">Name</span> یک نام دلخواه بنویسید.</li>
+  <li><span class="ltr">Host</span>، <span class="ltr">Port</span> و <span class="ltr">Database</span> را از صفحه پایگاه داده خود کپی کنید.</li>
+  <li><span class="ltr">SSL mode</span> را روی <span class="ltr">require</span> بگذارید.</li>
+  <li>در بخش <span class="ltr">Authentication</span> زبانه <span class="ltr">Basic</span> را باز کنید، نام کاربری و رمز را وارد و تیک <span class="ltr">Store</span> را بزنید.</li>
+  <li><span class="ltr">Test Connection</span> را بزنید. اگر پیام موفقیت آمد، <span class="ltr">OK</span>.</li>
+</ol>
+<h2>نمایش لایه</h2>
+<p>اتصال جدید را در Browser باز کنید، روی schema به نام <code>public</code> بروید و جدول را روی نقشه بکشید.</p>
+<h2>خطاهای رایج</h2>
+<table>
+  <tr><th>پیام خطا</th><th>علت و راه‌حل</th></tr>
+  <tr><td class="ltr">password authentication failed</td><td>رمز اشتباه است. از صفحه پایگاه داده رمز جدید بسازید.</td></tr>
+  <tr><td class="ltr">no pg_hba.conf entry … SSL off</td><td>SSL mode را روی require بگذارید.</td></tr>
+  <tr><td class="ltr">too many connections for role</td><td>اتصال‌های باز زیاد شده؛ QGIS یا GeoServer اضافه را ببندید.</td></tr>
+  <tr><td class="ltr">canceling statement due to statement timeout</td><td>کوئری از سقف زمان پلن طولانی‌تر شد؛ نمایه مکانی بسازید یا داده را فیلتر کنید.</td></tr>
+</table>
+{% endblock %}

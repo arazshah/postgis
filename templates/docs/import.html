@@ -1,0 +1,18 @@
+{% extends "docs/_layout.html" %}
+{% block doc %}
+<h2>روش ۱: DB Manager در QGIS (ساده‌ترین)</h2>
+<ol>
+  <li>لایه Shapefile یا GeoPackage را در QGIS باز کنید.</li>
+  <li>از منوی <span class="ltr">Database › DB Manager</span> اتصال خود را انتخاب کنید.</li>
+  <li>دکمه <span class="ltr">Import Layer/File</span> را بزنید، لایه را انتخاب و نام جدول را بنویسید.</li>
+  <li>تیک‌های <span class="ltr">Create spatial index</span> و <span class="ltr">Convert field names to lowercase</span> را بزنید.</li>
+  <li>اگر داده فارسی است، Encoding را روی <span class="ltr">UTF-8</span> یا <span class="ltr">windows-1256</span> بگذارید.</li>
+</ol>
+<h2>روش ۲: ogr2ogr (برای فایل‌های بزرگ)</h2>
+<pre class="code"><code>ogr2ogr -f PostgreSQL PG:"host=HOST port=5432 dbname=DB user=USER password=PASS sslmode=require" \
+  roads.shp -nln roads -nlt PROMOTE_TO_MULTI -lco GEOMETRY_NAME=geom -t_srs EPSG:4326 -progress</code></pre>
+<p>دستور دقیق با اطلاعات خودتان در زبانه «ورود Shapefile» صفحه پایگاه داده آماده است.</p>
+<h2>روش ۳: shp2pgsql</h2>
+<pre class="code"><code>shp2pgsql -s 32639 -I -W UTF-8 parcels.shp public.parcels | psql "host=HOST dbname=DB user=USER sslmode=require"</code></pre>
+<div class="callout">بعد از وارد کردن داده، اگر نمایه مکانی نساخته‌اید حتماً بسازید؛ بدون آن کوئری‌ها کند می‌شوند:<br><code>CREATE INDEX ON parcels USING gist (geom);</code></div>
+{% endblock %}

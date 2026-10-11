@@ -1,0 +1,15 @@
+{% extends "docs/_layout.html" %}
+{% block doc %}
+<h2>ساخت Store</h2>
+<ol>
+  <li>در GeoServer به <span class="ltr">Stores › Add new Store</span> بروید و <span class="ltr">PostGIS</span> را انتخاب کنید.</li>
+  <li>یک Workspace انتخاب و برای Store نام بگذارید.</li>
+  <li>مقادیر host، port، database، user و passwd را از زبانه GeoServer صفحه پایگاه داده کپی کنید. schema را <code>public</code> بگذارید.</li>
+  <li><span class="ltr">SSL mode</span> را روی <span class="ltr">REQUIRE</span> بگذارید.</li>
+  <li><span class="ltr">max connections</span> را ۳ و <span class="ltr">min connections</span> را ۱ بگذارید تا از سقف اتصال پلن عبور نکنید.</li>
+  <li><span class="ltr">Save</span> را بزنید.</li>
+</ol>
+<h2>انتشار لایه</h2>
+<p>بعد از ذخیره Store، فهرست جدول‌ها نمایش داده می‌شود. کنار جدول <span class="ltr">Publish</span> را بزنید، در بخش <span class="ltr">Bounding Boxes</span> روی <span class="ltr">Compute from data</span> کلیک و ذخیره کنید. لایه حالا از طریق WMS و WFS در دسترس است.</p>
+<div class="callout">برای WebGIS پرترافیک، کش کاشی (GeoWebCache) را فعال کنید تا هر بار به پایگاه داده درخواست نرود.</div>
+{% endblock %}

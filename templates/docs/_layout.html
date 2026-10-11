@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.1 }} — آموزش {{ SITE_NAME }}{% endblock %}
+{% block description %}{{ doc.2 }}{% endblock %}
+{% block content %}
+<div class="wrap page docs-layout">
+  <nav class="docs-nav" aria-label="فهرست آموزش‌ها">
+    <p class="small muted" style="margin-bottom:4px"><a href="{% url 'core:docs' %}">همه آموزش‌ها</a></p>
+    <ol>{% for d in docs %}<li><a href="{% url 'core:doc' d.0 %}" {% if d.0 == doc.0 %}aria-current="page"{% endif %}>{{ d.1 }}</a></li>{% endfor %}</ol>
+  </nav>
+  <article class="prose">
+    <h1>{{ doc.1 }}</h1>
+    <p class="muted">{{ doc.2 }}</p>
+    {% block doc %}{% endblock %}
+    <nav class="pager" aria-label="آموزش قبلی و بعدی">
+      <span>{% if prev %}<a href="{% url 'core:doc' prev.0 %}">قبلی: {{ prev.1 }}</a>{% endif %}</span>
+      <span>{% if next %}<a href="{% url 'core:doc' next.0 %}">بعدی: {{ next.1 }}</a>{% endif %}</span>
+    </nav>
+  </article>
+</div>
+{% endblock %}

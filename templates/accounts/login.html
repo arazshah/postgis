@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}ورود — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <div class="auth">
+    <h1>ورود</h1>
+    <form method="post" class="panel" novalidate>
+      {% csrf_token %}
+      {% include "partials/form_errors.html" %}
+      {% include "partials/field.html" with field=form.username %}
+      {% include "partials/field.html" with field=form.password %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn" type="submit" style="width:100%">ورود</button>
+    </form>
+    <p class="muted" style="margin-top:16px">حساب ندارید؟ <a href="{% url 'accounts:signup' %}">یک حساب رایگان بسازید</a></p>
+  </div>
+</div>
+{% endblock %}

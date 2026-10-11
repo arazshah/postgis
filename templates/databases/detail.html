@@ -1,0 +1,174 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}{{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+{% firstof once_password "YOUR_PASSWORD" as pw %}
+<div class="wrap page">
+  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a></p>
+  <div class="page-head">
+    <h1 class="ltr" style="font-family:var(--f-mono)">{{ db.db_name }}</h1>
+    <span class="badge {{ db.status }}">{{ db.get_status_display }}</span>
+  </div>
+
+  {% if db.status == 'readonly' %}<div class="msg warning">حجم این پایگاه داده پر شده و فعلاً فقط‌خواندنی است. خواندن داده‌ها و اتصال QGIS و GeoServer کار می‌کند. برای آزاد کردن فضا به پشتیبانی پیام دهید و بگویید کدام جدول‌ها حذف شوند؛ وقتی حجم به زیر ۹۵٪ برسد، خودکار دوباره قابل نوشتن می‌شود.</div>{% endif %}
+  {% if db.status == 'expired' %}<div class="msg error">اعتبار این پایگاه داده تمام شده و اتصال غیرفعال است. با تمدید رایگان، دوباره فعال می‌شود.</div>{% endif %}
+  {% if db.status == 'suspended' %}<div class="msg error">این پایگاه داده توسط مدیریت معلق شده است. برای اطلاع از علت با پشتیبانی تماس بگیرید.</div>{% endif %}
+  {% if db.status == 'error' %}<div class="msg error">ساخت این پایگاه داده کامل نشد. آن را حذف کنید و دوباره بسازید؛ اگر تکرار شد به پشتیبانی خبر دهید.</div>{% endif %}
+
+  <div class="detail-grid">
+    <div class="stack">
+      {% if once_password %}
+      <section class="once" aria-labelledby="once-title">
+        <h2 id="once-title">رمز پایگاه داده را همین حالا ذخیره کنید</h2>
+        <p class="small" style="margin:0">این رمز فقط همین یک بار نمایش داده می‌شود و ما نسخه‌ای از آن نگه نمی‌داریم. اگر گم شد، از همین صفحه رمز جدید بسازید.</p>
+        <div class="secret"><code id="once-pw">{{ once_password }}</code><button class="copy" data-copy-target="#once-pw">کپی</button></div>
+      </section>
+      {% endif %}
+
+      <section class="panel" aria-labelledby="conn-title">
+        <h2 id="conn-title">اطلاعات اتصال</h2>
+        <table class="kv">
+          <tr><th>میزبان (Host)</th><td><span id="v-host">{{ db.host }}</span> <button class="copy" data-copy="{{ db.host }}">کپی</button></td></tr>
+          <tr><th>پورت (Port)</th><td>{{ db.port }} <button class="copy" data-copy="{{ db.port }}">کپی</button></td></tr>
+          <tr><th>پایگاه داده (Database)</th><td>{{ db.db_name }} <button class="copy" data-copy="{{ db.db_name }}">کپی</button></td></tr>
+          <tr><th>نام کاربری (User)</th><td>{{ db.role_name }} <button class="copy" data-copy="{{ db.role_name }}">کپی</button></td></tr>
+          <tr><th>رمز عبور</th><td>{% if once_password %}{{ once_password }}{% else %}<span style="font-family:var(--f-body)">همان رمزی که هنگام ساخت انتخاب کردید</span>{% endif %}</td></tr>
+          <tr><th>SSL Mode</th><td>{{ db.sslmode }}</td></tr>
+        </table>
+      </section>
+
+      <section class="panel" aria-labelledby="howto-title">
+        <h2 id="howto-title">اتصال از نرم‌افزار شما</h2>
+        <div class="tabs" role="tablist" aria-label="روش اتصال">
+          <button role="tab" id="t-qgis" aria-controls="p-qgis" aria-selected="true">QGIS</button>
+          <button role="tab" id="t-gs" aria-controls="p-gs" aria-selected="false" tabindex="-1">GeoServer</button>
+          <button role="tab" id="t-uri" aria-controls="p-uri" aria-selected="false" tabindex="-1">رشته اتصال</button>
+          <button role="tab" id="t-py" aria-controls="p-py" aria-selected="false" tabindex="-1">Python</button>
+          <button role="tab" id="t-ogr" aria-controls="p-ogr" aria-selected="false" tabindex="-1">ورود Shapefile</button>
+          <button role="tab" id="t-psql" aria-controls="p-psql" aria-selected="false" tabindex="-1">psql</button>
+        </div>
+
+        <div class="tabpanel" role="tabpanel" id="p-qgis" aria-labelledby="t-qgis">
+          <ol class="steps-mini">
+            <li>در QGIS از پنل Browser روی <b class="ltr">PostgreSQL</b> راست‌کلیک کنید و <b class="ltr">New Connection…</b> را بزنید.</li>
+            <li>Name را دلخواه بگذارید. Host، Port و Database را از جدول بالا کپی کنید.</li>
+            <li>SSL mode را روی <b class="ltr">{{ db.sslmode }}</b> بگذارید.</li>
+            <li>در بخش Authentication زبانه Basic را باز کنید و User و Password را وارد کنید، سپس <b class="ltr">Test Connection</b> را بزنید.</li>
+          </ol>
+          <a class="small" href="{% url 'core:doc' 'qgis' %}">آموزش کامل با تصویر</a>
+        </div>
+
+        <div class="tabpanel" role="tabpanel" id="p-gs" aria-labelledby="t-gs" hidden>
+          <p class="small">در GeoServer: Stores ← Add new Store ← <b class="ltr">PostGIS</b> و این مقادیر را وارد کنید:</p>
+<pre class="code"><button class="copy" data-copy>کپی</button><code>host:     {{ db.host }}
+port:     {{ db.port }}
+database: {{ db.db_name }}
+schema:   public
+user:     {{ db.role_name }}
+passwd:   {{ pw }}
+SSL mode: {{ db.sslmode|upper }}
+max connections: 3</code></pre>
+          <p class="small muted">حداکثر اتصال GeoServer را کمتر از سقف پلن ({{ db.plan.max_connections|fanum }}) بگذارید تا QGIS هم بتواند وصل شود.</p>
+        </div>
+
+        <div class="tabpanel" role="tabpanel" id="p-uri" aria-labelledby="t-uri" hidden>
+<pre class="code"><button class="copy" data-copy>کپی</button><code>{{ db.uri }}</code></pre>
+          <p class="small muted">به‌جای YOUR_PASSWORD رمز خود را بگذارید. اگر رمز نماد دارد، آن را URL-encode کنید.</p>
+        </div>
+
+        <div class="tabpanel" role="tabpanel" id="p-py" aria-labelledby="t-py" hidden>
+<pre class="code"><button class="copy" data-copy>کپی</button><code># pip install geopandas sqlalchemy psycopg2-binary
+import geopandas as gpd
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    "postgresql+psycopg2://{{ db.role_name }}:{{ pw }}@{{ db.host }}:{{ db.port }}/{{ db.db_name }}?sslmode={{ db.sslmode }}"
+)
+
+gdf = gpd.read_file("parcels.shp")
+gdf.to_postgis("parcels", engine, if_exists="replace")
+
+print(gpd.read_postgis("SELECT * FROM parcels LIMIT 5", engine, geom_col="geometry"))</code></pre>
+        </div>
+
+        <div class="tabpanel" role="tabpanel" id="p-ogr" aria-labelledby="t-ogr" hidden>
+          <p class="small">با <span class="ltr">ogr2ogr</span> (همراه QGIS و GDAL نصب می‌شود):</p>
+<pre class="code"><button class="copy" data-copy>کپی</button><code>ogr2ogr -f PostgreSQL \
+  PG:"host={{ db.host }} port={{ db.port }} dbname={{ db.db_name }} user={{ db.role_name }} password={{ pw }} sslmode={{ db.sslmode }}" \
+  parcels.shp -nln parcels -nlt PROMOTE_TO_MULTI -lco GEOMETRY_NAME=geom -t_srs EPSG:4326 -progress</code></pre>
+          <p class="small muted">اگر نام فیلدها فارسی است، پیش از دستور <span class="ltr">SHAPE_ENCODING=UTF-8</span> یا <span class="ltr">CP1256</span> را تنظیم کنید.</p>
+        </div>
+
+        <div class="tabpanel" role="tabpanel" id="p-psql" aria-labelledby="t-psql" hidden>
+<pre class="code"><button class="copy" data-copy>کپی</button><code>psql "host={{ db.host }} port={{ db.port }} dbname={{ db.db_name }} user={{ db.role_name }} sslmode={{ db.sslmode }}"</code></pre>
+        </div>
+      </section>
+    </div>
+
+    <aside class="stack">
+      <section class="panel">
+        <h3>مصرف و اعتبار</h3>
+        <div class="meter {{ db.usage_level }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ db.usage_percent|pct_width }}" aria-label="مصرف حجم"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
+        <div class="meter-label"><span>{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span><span>{{ db.usage_percent|fanum }}٪</span></div>
+        <p class="small muted" style="margin-top:8px">آخرین اندازه‌گیری: {% if db.size_checked_at %}{{ db.size_checked_at|jdatetime_full }}{% else %}هنوز انجام نشده{% endif %}</p>
+        <table class="kv small">
+          <tr><th>پلن</th><td class="rtl">{{ db.plan.name }}</td></tr>
+          <tr><th>تاریخ ساخت</th><td class="rtl">{{ db.created_at|jdate }}</td></tr>
+          <tr><th>اعتبار تا</th><td class="rtl">{{ db.expires_at|jdate }}{% if db.days_left is not None %} ({{ db.days_left|fanum }} روز){% endif %}</td></tr>
+          <tr><th>اتصال همزمان</th><td class="rtl">{{ db.plan.max_connections|fanum }}</td></tr>
+        </table>
+        {% if db.can_renew %}
+        <form method="post" action="{% url 'databases:renew' db.pk %}" style="margin-top:12px">{% csrf_token %}
+          <button class="btn sm" type="submit">تمدید رایگان {{ db.plan.duration_days|fanum }} روزه</button>
+        </form>
+        {% else %}<p class="small muted" style="margin:12px 0 0">تمدید از ۳۰ روز مانده به پایان اعتبار فعال می‌شود.</p>{% endif %}
+      </section>
+
+      <section class="panel">
+        <h3>افزونه‌های نصب‌شده</h3>
+        <div class="chips">{% for e in db.extensions.all %}<span class="chip">{{ e.title }}</span>{% empty %}<span class="muted small">هیچ افزونه‌ای نصب نشده</span>{% endfor %}</div>
+        {% if db.is_live and ext_form.fields.extension.queryset.exists %}
+        <form method="post" action="{% url 'databases:add_extension' db.pk %}" style="margin-top:16px">{% csrf_token %}
+          <div class="field" style="margin-bottom:8px">{{ ext_form.extension }}</div>
+          <button class="btn ghost sm" type="submit">نصب افزونه</button>
+        </form>
+        {% endif %}
+      </section>
+
+      {% if db.is_live %}
+      <section class="panel">
+        <h3>رمز جدید</h3>
+        <p class="small muted">اگر رمز را فراموش کرده‌اید، یک رمز جدید بسازید. اتصال‌های فعلی قطع نمی‌شوند ولی اتصال بعدی رمز جدید را می‌خواهد.</p>
+        <form method="post" action="{% url 'databases:reset_password' db.pk %}">{% csrf_token %}
+          <div class="field" style="margin-bottom:8px">
+            <label for="{{ pw_form.password.id_for_label }}" class="small">رمز جدید</label>
+            <div class="inline-input">{{ pw_form.password }}<button type="button" class="btn ghost sm" data-generate="#{{ pw_form.password.id_for_label }}">تصادفی</button></div>
+          </div>
+          <button class="btn sm" type="submit">ذخیره رمز جدید</button>
+        </form>
+      </section>
+      {% endif %}
+
+      {% if logs %}
+      <section class="panel">
+        <h3>رویدادهای اخیر</h3>
+        <ul class="log">{% for l in logs %}<li class="{% if not l.success %}fail{% endif %}"><span>{{ l.message|truncatechars:60 }}</span><span class="muted">{{ l.created_at|jdate }}</span></li>{% endfor %}</ul>
+      </section>
+      {% endif %}
+
+      <section class="panel">
+        <details class="danger-zone">
+          <summary>حذف پایگاه داده</summary>
+          <p class="small" style="margin-top:12px">همه جدول‌ها و داده‌ها برای همیشه پاک می‌شوند و قابل بازگشت نیستند.</p>
+          <form method="post" action="{% url 'databases:delete' db.pk %}" data-confirm="این پایگاه داده برای همیشه حذف شود؟">{% csrf_token %}
+            <div class="field" style="margin-bottom:8px">
+              <label for="{{ delete_form.confirm.id_for_label }}" class="small">برای تأیید، <b class="ltr">{{ db.label }}</b> را تایپ کنید</label>
+              {{ delete_form.confirm }}
+            </div>
+            <button class="btn danger sm" type="submit">حذف دائمی</button>
+          </form>
+        </details>
+      </section>
+    </aside>
+  </div>
+</div>
+{% endblock %}

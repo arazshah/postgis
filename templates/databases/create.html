@@ -1,0 +1,74 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}ساخت پایگاه داده — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <div class="detail-grid">
+    <form method="post" class="panel" novalidate>
+      {% csrf_token %}
+      <h1 style="font-size:1.6rem">ساخت پایگاه داده مکانی</h1>
+      {% include "partials/form_errors.html" %}
+
+      <div class="field{% if form.label.errors %} has-error{% endif %}">
+        <label for="{{ form.label.id_for_label }}">{{ form.label.label }}</label>
+        <div class="prefix-input"><span>{{ prefix }}</span>
+          <input type="text" name="label" id="{{ form.label.id_for_label }}" value="{{ form.label.value|default_if_none:'' }}"
+                 maxlength="41" required dir="ltr" autocomplete="off" spellcheck="false" placeholder="my_gis_project"
+                 data-live-name=".live-name" data-prefix="{{ prefix }}" aria-describedby="label_help">
+        </div>
+        <small class="help" id="label_help">{{ form.label.help_text }}</small>
+        {% if form.label.errors %}<ul class="errorlist">{% for e in form.label.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+
+      <div class="field{% if form.password.errors %} has-error{% endif %}">
+        <label for="{{ form.password.id_for_label }}">{{ form.password.label }}</label>
+        <div class="inline-input">
+          {{ form.password }}
+          <button type="button" class="btn ghost" data-generate="#{{ form.password.id_for_label }}">رمز تصادفی</button>
+        </div>
+        <small class="help">{{ form.password.help_text }} این رمز را جایی امن یادداشت کنید؛ بعد از این صفحه فقط یک بار نمایش داده می‌شود.</small>
+        {% if form.password.errors %}<ul class="errorlist">{% for e in form.password.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+
+      <fieldset class="field" style="border:0;padding:0;margin-inline:0">
+        <legend style="font-weight:700;margin-bottom:8px">افزونه‌ها</legend>
+        <div class="ext-choices">
+          {% for e in form.fields.extensions.queryset %}
+          <label class="ext-choice">
+            <input type="checkbox" name="extensions" value="{{ e.pk }}" {% if e.pk|stringformat:"s" in selected %}checked{% endif %}>
+            <span><b>{{ e.title }}</b><small>{{ e.description }}</small>
+              {% if e.is_heavy %}<small class="warn">حجم پلن رایگان را سریع پر می‌کند.</small>{% endif %}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <small class="help">افزونه‌هایی که به PostGIS نیاز دارند، PostGIS را خودکار نصب می‌کنند.</small>
+      </fieldset>
+
+      <button class="btn" type="submit">ساخت پایگاه داده</button>
+    </form>
+
+    <aside class="stack">
+      <div class="conn" aria-label="پیش‌نمایش اطلاعات اتصال">
+        <div class="conn-head"><span class="dot" aria-hidden="true"></span>پیش‌نمایش اطلاعات اتصال</div>
+        <dl>
+          <dt>پایگاه داده</dt><dd class="live-name">{{ prefix }}…</dd>
+          <dt>نام کاربری</dt><dd class="live-name">{{ prefix }}…</dd>
+          <dt>پورت</dt><dd>5432</dd>
+          <dt>SSL</dt><dd>require</dd>
+        </dl>
+      </div>
+      {% if plan %}
+      <div class="panel">
+        <h3>پلن {{ plan.name }}</h3>
+        <ul class="steps-mini muted small">
+          <li>حجم: {{ plan.quota_display|fanum }}</li>
+          <li>اتصال همزمان: {{ plan.max_connections|fanum }}</li>
+          <li>اعتبار: {{ plan.duration_days|fanum }} روز، قابل تمدید رایگان</li>
+          <li>حداکثر زمان هر کوئری: {{ plan.statement_timeout_s|fanum }} ثانیه</li>
+        </ul>
+        <a class="small" href="{% url 'core:doc' 'limits' %}">جزئیات محدودیت‌ها</a>
+      </div>
+      {% endif %}
+    </aside>
+  </div>
+</div>
+{% endblock %}
