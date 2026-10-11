@@ -71,6 +71,28 @@
     update();
   }
 
+  // نام کاربری پیش‌فرض = نام پایگاه داده + _user
+  const userInput = document.querySelector("[data-live-user]");
+  if (userInput) {
+    const outs = document.querySelectorAll(userInput.getAttribute("data-live-user"));
+    const prefix = userInput.getAttribute("data-prefix") || "";
+    const label = document.querySelector("[data-live-name]");
+    const update = () => {
+      const typed = userInput.value.trim().toLowerCase();
+      const base = label && label.value.trim() ? label.value.trim().toLowerCase() + "_user" : "…_user";
+      const v = typed || base;
+      userInput.placeholder = base;
+      outs.forEach((o) => { o.textContent = prefix + v; });
+    };
+    userInput.addEventListener("input", () => {
+      const clean = userInput.value.toLowerCase().replace(/[^a-z0-9_]/g, "");
+      if (clean !== userInput.value) userInput.value = clean;
+      update();
+    });
+    if (label) label.addEventListener("input", update);
+    update();
+  }
+
   // زبانه‌ها
   document.querySelectorAll("[role=tablist]").forEach((list) => {
     const tabs = Array.from(list.querySelectorAll("[role=tab]"));
@@ -126,3 +148,11 @@
     f.addEventListener("submit", (e) => { if (!confirm(f.getAttribute("data-confirm"))) e.preventDefault(); });
   });
 })();
+
+// نمونه‌کوئری‌های کنسول SQL
+document.querySelectorAll("[data-sql]").forEach((b) => {
+  b.addEventListener("click", () => {
+    const ta = document.getElementById("sql-q");
+    if (ta) { ta.value = b.getAttribute("data-sql"); ta.focus(); }
+  });
+});

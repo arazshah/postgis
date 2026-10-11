@@ -28,6 +28,11 @@ class CreateDatabaseForm(forms.Form):
         widget=forms.TextInput(attrs={"dir": "ltr", "placeholder": "my_gis_project", "autocomplete": "off",
                                       "spellcheck": "false"}),
         help_text="حروف کوچک انگلیسی، عدد و _ ؛ با حرف شروع شود. همین نام، نام کاربری دیتابیس هم خواهد بود.")
+    username = forms.CharField(
+        label="نام کاربری دیتابیس", max_length=41, required=False, validators=[validate_db_label],
+        widget=forms.TextInput(attrs={"dir": "ltr", "placeholder": "my_gis_project_user", "autocomplete": "off",
+                                      "spellcheck": "false"}),
+        help_text="اختیاری؛ اگر خالی بماند «نام پایگاه داده + _user» گذاشته می‌شود. باید با نام پایگاه داده فرق کند.")
     password = forms.CharField(
         label="رمز عبور دیتابیس", validators=[validate_db_password], help_text=PASSWORD_HELP,
         widget=forms.TextInput(attrs={"dir": "ltr", "autocomplete": "new-password", "spellcheck": "false",
@@ -46,6 +51,23 @@ class CreateDatabaseForm(forms.Form):
         if UserDatabase.objects.filter(db_name=UserDatabase.build_identifier(label)).exists():
             raise forms.ValidationError("این نام قبلاً استفاده شده است؛ نام دیگری انتخاب کنید.")
         return label
+
+    def clean_username(self):
+        return (self.cleaned_data.get("username") or "").strip().lower()
+
+    def clean(self):
+        cleaned = super().clean()
+        label = cleaned.get("label")
+        if label:
+            username = cleaned.get("username") or f"{label}_user"
+            if len(username) > 41:
+                username = username[:41]
+            cleaned["username"] = username
+            if username == label:
+                self.add_error("username", "نام کاربری باید با نام پایگاه داده فرق داشته باشد.")
+            elif UserDatabase.objects.filter(role_name=UserDatabase.build_identifier(username)).exists():
+                self.add_error("username", "این نام کاربری قبلاً استفاده شده است.")
+        return cleaned
 
     def clean_extensions(self):
         exts = list(self.cleaned_data.get("extensions") or [])

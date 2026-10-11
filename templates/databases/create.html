@@ -19,6 +19,17 @@
         {% if form.label.errors %}<ul class="errorlist">{% for e in form.label.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
       </div>
 
+      <div class="field{% if form.username.errors %} has-error{% endif %}">
+        <label for="{{ form.username.id_for_label }}">{{ form.username.label }}</label>
+        <div class="prefix-input"><span>{{ prefix }}</span>
+          <input type="text" name="username" id="{{ form.username.id_for_label }}" value="{{ form.username.value|default_if_none:'' }}"
+                 maxlength="41" dir="ltr" autocomplete="off" spellcheck="false" placeholder="my_gis_project_user"
+                 data-live-user=".live-user" data-prefix="{{ prefix }}">
+        </div>
+        <small class="help">{{ form.username.help_text }}</small>
+        {% if form.username.errors %}<ul class="errorlist">{% for e in form.username.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+
       <div class="field{% if form.password.errors %} has-error{% endif %}">
         <label for="{{ form.password.id_for_label }}">{{ form.password.label }}</label>
         <div class="inline-input">
@@ -51,7 +62,7 @@
         <div class="conn-head"><span class="dot" aria-hidden="true"></span>پیش‌نمایش اطلاعات اتصال</div>
         <dl>
           <dt>پایگاه داده</dt><dd class="live-name">{{ prefix }}…</dd>
-          <dt>نام کاربری</dt><dd class="live-name">{{ prefix }}…</dd>
+          <dt>نام کاربری</dt><dd class="live-user">{{ prefix }}…_user</dd>
           <dt>پورت</dt><dd>5432</dd>
           <dt>SSL</dt><dd>require</dd>
         </dl>

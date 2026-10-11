@@ -14,6 +14,7 @@
       <article class="db-item">
         <div>
           <h2><a href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a></h2>
+          <div class="small muted ltr" style="font-family:var(--f-mono)">user: {{ db.role_name }}</div>
           <span class="badge {{ db.status }}">{{ db.get_status_display }}</span>
           <span class="muted small" style="margin-inline-start:8px">ساخته‌شده در {{ db.created_at|jdate }}</span>
         </div>
@@ -22,7 +23,10 @@
           <div class="meter-label"><span>{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span>
             <span>{% if db.days_left is not None %}{{ db.days_left|fanum }} روز اعتبار{% endif %}</span></div>
         </div>
-        <a class="btn ghost sm" href="{% url 'databases:detail' db.pk %}">اطلاعات اتصال</a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <a class="btn ghost sm" href="{% url 'databases:detail' db.pk %}">اطلاعات اتصال</a>
+          {% if db.is_live %}<a class="btn ghost sm" href="{% url 'databases:explore' db.pk %}">جدول‌ها و داده‌ها</a>{% endif %}
+        </div>
       </article>
     {% endfor %}
     </div>

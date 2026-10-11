@@ -1,0 +1,36 @@
+{% extends "base.html" %}{% load fa static %}
+{% block title %}مرورگر {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page ex-page">
+  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a> / <a href="{% url 'databases:detail' db.pk %}" class="ltr">{{ db.db_name }}</a></p>
+  <div class="page-head">
+    <h1>مرورگر پایگاه داده</h1>
+    <nav class="seg" aria-label="بخش‌های مرورگر">
+      <a href="{% url 'databases:explore' db.pk %}" {% if section == 'tables' %}aria-current="page"{% endif %}>جدول‌ها</a>
+      <a href="{% url 'databases:explore_sql' db.pk %}" {% if section == 'sql' %}aria-current="page"{% endif %}>اجرای SQL</a>
+    </nav>
+  </div>
+  <div class="ex-layout">
+    <aside class="ex-side" aria-label="فهرست جدول‌ها">
+      <div class="ex-side-head">جدول‌ها <span class="muted">({{ tables|length|fanum }})</span></div>
+      {% regroup tables by schema as groups %}
+      {% for g in groups %}
+        {% if groups|length > 1 or g.grouper != 'public' %}<div class="ex-schema ltr">{{ g.grouper }}</div>{% endif %}
+        <ul>
+        {% for x in g.list %}
+          <li><a href="{% url 'databases:explore_table' db.pk x.schema x.name %}" {% if t and t.oid == x.oid %}aria-current="page"{% endif %}>
+            <span class="ltr ex-tname">{{ x.name }}</span>
+            {% if x.geometry %}<span class="geo-dot" title="{{ x.geometry.0.type }} · SRID {{ x.geometry.0.srid }}" aria-label="مکانی"></span>{% endif %}
+          </a></li>
+        {% endfor %}
+        </ul>
+      {% empty %}
+        <p class="small muted" style="padding:0 12px">هنوز جدولی ندارید.</p>
+      {% endfor %}
+    </aside>
+    <section class="ex-main">
+      {% block ex %}{% endblock %}
+    </section>
+  </div>
+</div>
+{% endblock %}

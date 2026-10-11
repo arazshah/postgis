@@ -34,6 +34,14 @@ class SiteSettings(models.Model):
                                                           help_text="پس از این مدت پایگاه داده حذف می‌شود.")
     renew_window_days = models.PositiveSmallIntegerField("دکمه تمدید از چند روز مانده فعال شود", default=30)
 
+    # --- نقشه مرورگر پایگاه داده ---
+    map_tile_url = models.CharField("آدرس کاشی نقشه پایه", max_length=300,
+                                    default="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                                    help_text="برای پیش‌نمایش نقشه در مرورگر پایگاه داده. خالی = بدون نقشه پایه.",
+                                    blank=True)
+    map_tile_attribution = models.CharField("منبع نقشه پایه", max_length=200, blank=True,
+                                            default="© OpenStreetMap")
+
     # --- پیامک ---
     sms_backend = models.CharField("سرویس پیامک", max_length=20, choices=SMS_BACKENDS, default="smsir")
     smsir_api_key_encrypted = models.TextField(blank=True, editable=False)

@@ -1,0 +1,31 @@
+{% extends "databases/_explore_base.html" %}{% load fa %}
+{% block ex %}
+{% if tables %}
+<div class="panel">
+  <h2>خلاصه جدول‌ها</h2>
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead><tr><th>نام</th><th>نوع</th><th>تعداد تقریبی سطر</th><th>حجم</th><th>ستون مکانی</th></tr></thead>
+    <tbody>
+    {% for x in tables %}
+      <tr>
+        <td><a class="ltr" href="{% url 'databases:explore_table' db.pk x.schema x.name %}">{% if x.schema != 'public' %}{{ x.schema }}.{% endif %}{{ x.name }}</a></td>
+        <td>{{ x.kind_label }}</td>
+        <td>{{ x.rows_estimate|fanum }}</td>
+        <td>{% if x.size_bytes %}{{ x.size_bytes|fasize }}{% else %}—{% endif %}</td>
+        <td>{% for g in x.geometry %}<span class="chip ltr">{{ g.column }} · {{ g.type }} · {{ g.srid }}</span> {% empty %}—{% endfor %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="small muted" style="margin-top:12px">جدول‌های سیستمی PostGIS (مثل spatial_ref_sys) نمایش داده نمی‌شوند. تعداد سطرها تقریبی است و بعد از VACUUM/ANALYZE دقیق‌تر می‌شود.</p>
+</div>
+{% else %}
+<div class="empty">
+  <h2>این پایگاه داده هنوز جدولی ندارد</h2>
+  <p class="muted">لایه‌های خود را از QGIS یا با ogr2ogr وارد کنید؛ بعد اینجا می‌توانید داده‌ها و نقشه‌شان را ببینید.</p>
+  <a class="btn" href="{% url 'core:doc' 'import' %}">آموزش وارد کردن Shapefile</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,5 +1,8 @@
+import csv
+
 from django.conf import settings
 from django.contrib import messages
+from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST
 
@@ -7,6 +10,7 @@ from accounts.decorators import site_user_required
 
 from . import services
 from .crypto import generate_password
+from .explorer import EXPORT_LIMIT, MAP_LIMIT, SQL_MAX_ROWS, Explorer, ExplorerError
 from .forms import AddExtensionForm, CreateDatabaseForm, DeleteConfirmForm, PasswordResetForm
 from .models import UserDatabase
 from .provisioner import ProvisionError
@@ -42,7 +46,8 @@ def create(request):
         try:
             db = services.create_database(
                 request.user, form.cleaned_data["label"], form.cleaned_data["password"],
-                [e.name for e in form.cleaned_data["extensions"]], plan)
+                [e.name for e in form.cleaned_data["extensions"]], plan,
+                username=form.cleaned_data["username"])
         except services.ServiceError as exc:
             messages.error(request, str(exc))
         else:
@@ -134,3 +139,118 @@ def delete(request, pk):
         return redirect("databases:detail", pk=db.pk)
     messages.success(request, "پایگاه داده و همه داده‌های آن حذف شد.")
     return redirect("databases:dashboard")
+
+
+# ---------------------------------------------------------------------- مرورگر پایگاه داده
+def _explorer_db(request, pk):
+    db = _user_db(request, pk)
+    if not db.is_live:
+        messages.error(request, "مرورگر فقط برای پایگاه داده فعال در دسترس است.")
+        return db, None
+    return db, Explorer(db)
+
+
+@site_user_required
+def explore(request, pk):
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        return redirect("databases:detail", pk=db.pk)
+    try:
+        tables = ex.tables()
+    except ExplorerError as exc:
+        messages.error(request, str(exc))
+        return redirect("databases:detail", pk=db.pk)
+    return render(request, "databases/explore.html", {"db": db, "tables": tables, "section": "tables"})
+
+
+@site_user_required
+def explore_table(request, pk, schema, table):
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        return redirect("databases:detail", pk=db.pk)
+    try:
+        tables = ex.tables()
+        t = next((x for x in tables if x.schema == schema and x.name == table), None)
+        if t is None:
+            raise ExplorerError("جدول پیدا نشد.")
+        tab = request.GET.get("tab", "data")
+        ctx = {"db": db, "tables": tables, "t": t, "tab": tab, "section": "tables"}
+        if tab == "columns":
+            ctx["columns"] = ex.columns(t)
+        elif tab != "map":
+            try:
+                page = int(request.GET.get("page", "1"))
+            except ValueError:
+                page = 1
+            ctx["data"] = ex.rows(t, page)
+    except ExplorerError as exc:
+        messages.error(request, str(exc))
+        return redirect("databases:explore", pk=db.pk)
+    return render(request, "databases/explore_table.html", ctx)
+
+
+@site_user_required
+def explore_geojson(request, pk, schema, table):
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        raise Http404
+    try:
+        t = ex.find(schema, table)
+        download = request.GET.get("download") == "1"
+        data = ex.geojson(t, request.GET.get("column"), limit=EXPORT_LIMIT if download else MAP_LIMIT)
+    except ExplorerError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    resp = HttpResponse(data, content_type="application/geo+json")
+    if download:
+        resp["Content-Disposition"] = f'attachment; filename="{schema}.{table}.geojson"'
+    return resp
+
+
+@site_user_required
+def explore_csv(request, pk, schema, table):
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        raise Http404
+    try:
+        t = ex.find(schema, table)
+    except ExplorerError as exc:
+        raise Http404 from exc
+
+    class Echo:
+        def write(self, value):
+            return value
+
+    writer = csv.writer(Echo())
+
+    def stream():
+        yield "﻿"  # BOM برای باز شدن درست فارسی در Excel
+        for row in ex.export_rows(t):
+            yield writer.writerow(row)
+
+    resp = StreamingHttpResponse(stream(), content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{schema}.{table}.csv"'
+    return resp
+
+
+@site_user_required
+@require_http_methods(["GET", "POST"])
+def explore_sql(request, pk):
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        return redirect("databases:detail", pk=db.pk)
+    query = request.POST.get("query", "") if request.method == "POST" else request.GET.get("q", "")
+    allow_write = request.POST.get("allow_write") == "on"
+    result = error = None
+    if request.method == "POST":
+        try:
+            result = ex.run_sql(query, allow_write=allow_write)
+        except ExplorerError as exc:
+            error = str(exc)
+    try:
+        tables = ex.tables()
+    except ExplorerError as exc:
+        messages.error(request, str(exc))
+        tables = []
+    return render(request, "databases/explore_sql.html", {
+        "db": db, "tables": tables, "query": query, "allow_write": allow_write, "result": result,
+        "error": error, "section": "sql", "max_rows": SQL_MAX_ROWS})

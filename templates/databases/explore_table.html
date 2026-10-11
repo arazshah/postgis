@@ -1,0 +1,57 @@
+{% extends "databases/_explore_base.html" %}{% load fa static %}
+{% block head %}{% if tab == 'map' %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endif %}{% endblock %}
+{% block ex %}
+<div class="ex-title">
+  <div>
+    <h2 class="ltr" style="margin:0">{% if t.schema != 'public' %}{{ t.schema }}.{% endif %}{{ t.name }}</h2>
+    <p class="small muted" style="margin:4px 0 0">{{ t.kind_label }} · حدود {{ t.rows_estimate|fanum }} سطر{% if t.size_bytes %} · {{ t.size_bytes|fasize }}{% endif %}
+      {% for g in t.geometry %} · <span class="ltr">{{ g.type }} / SRID {{ g.srid }}</span>{% endfor %}</p>
+  </div>
+  <div class="ex-actions">
+    <a class="btn ghost sm" href="{% url 'databases:explore_csv' db.pk t.schema t.name %}">دانلود CSV</a>
+    {% if t.geometry %}<a class="btn ghost sm" href="{% url 'databases:explore_geojson' db.pk t.schema t.name %}?download=1">دانلود GeoJSON</a>{% endif %}
+  </div>
+</div>
+
+<div class="tabs" role="tablist" aria-label="نمای جدول">
+  <a role="tab" href="?tab=data" aria-selected="{% if tab == 'data' %}true{% else %}false{% endif %}">داده‌ها</a>
+  <a role="tab" href="?tab=columns" aria-selected="{% if tab == 'columns' %}true{% else %}false{% endif %}">ستون‌ها</a>
+  {% if t.geometry %}<a role="tab" href="?tab=map" aria-selected="{% if tab == 'map' %}true{% else %}false{% endif %}">نقشه</a>{% endif %}
+</div>
+
+{% if tab == 'columns' %}
+  <div class="table-scroll ltr-table">
+  <table class="data-table">
+    <thead><tr><th>نام ستون</th><th>نوع</th><th>الزامی</th><th>پیش‌فرض</th></tr></thead>
+    <tbody>{% for c in columns %}
+      <tr><td class="ltr">{{ c.name }}{% if c.pk %} <span class="chip">کلید اصلی</span>{% endif %}{% if c.spatial %} <span class="chip geo">مکانی</span>{% endif %}</td>
+          <td class="ltr mono">{{ c.type }}</td><td>{% if c.not_null %}بله{% else %}—{% endif %}</td><td class="ltr mono small">{{ c.default|default:"—" }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+{% elif tab == 'map' %}
+  <div id="map" class="ex-map" data-src="{% url 'databases:explore_geojson' db.pk t.schema t.name %}"
+       data-tiles="{{ SITE.map_tile_url }}" data-attr="{{ SITE.map_tile_attribution }}"></div>
+  <p class="small muted" id="map-note" style="margin-top:8px">حداکثر ۲٬۰۰۰ عارضه اول نمایش داده می‌شود. روی هر عارضه کلیک کنید تا ویژگی‌هایش را ببینید.</p>
+  <script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>
+  <script src="{% static 'js/explore-map.js' %}" defer></script>
+{% else %}
+  {% if data.rows %}
+  <div class="table-scroll ltr-table">
+  <table class="data-table">
+    <thead><tr><th class="rownum">#</th>{% for c in data.columns %}<th class="ltr">{{ c.name }}{% if c.spatial %} <span class="geo-dot"></span>{% endif %}</th>{% endfor %}</tr></thead>
+    <tbody>{% for r in data.rows %}<tr><td class="rownum">{{ forloop.counter|add:data.offset|fanum }}</td>{% for v in r %}<td class="ltr">{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table>
+  </div>
+  <div class="pager-row">
+    <span class="small muted">{% if data.total_exact %}{{ data.total|fanum }}{% else %}حدود {{ data.total|fanum }}{% endif %} سطر · صفحه {{ data.page|fanum }} از {{ data.pages|fanum }}</span>
+    <span>
+      {% if data.page > 1 %}<a class="btn ghost sm" href="?tab=data&page={{ data.page|add:'-1' }}">قبلی</a>{% endif %}
+      {% if data.page < data.pages %}<a class="btn ghost sm" href="?tab=data&page={{ data.page|add:'1' }}">بعدی</a>{% endif %}
+    </span>
+  </div>
+  {% else %}
+  <div class="empty" style="padding:48px 24px"><h2>این جدول خالی است</h2></div>
+  {% endif %}
+{% endif %}
+{% endblock %}

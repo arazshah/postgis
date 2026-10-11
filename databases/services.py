@@ -65,7 +65,8 @@ def user_can_create(user) -> tuple[bool, str]:
     return True, ""
 
 
-def create_database(user, label: str, password: str, extension_names: list[str], plan: Plan | None = None) -> UserDatabase:
+def create_database(user, label: str, password: str, extension_names: list[str], plan: Plan | None = None,
+                    username: str | None = None) -> UserDatabase:
     plan = plan or default_plan()
     if plan is None:
         raise ServiceError("هنوز هیچ پلنی تعریف نشده است. لطفاً بعداً تلاش کنید.")
@@ -79,16 +80,20 @@ def create_database(user, label: str, password: str, extension_names: list[str],
     allowed = {e.name: e for e in plan.extensions_qs()}
     chosen = [allowed[n] for n in extension_names if n in allowed]
     ident = UserDatabase.build_identifier(label)
+    role = UserDatabase.build_identifier(username or f"{label}_user")
     if UserDatabase.objects.filter(db_name=ident).exists():
         raise ServiceError("این نام قبلاً استفاده شده است؛ نام دیگری انتخاب کنید.")
+    if role == ident or UserDatabase.objects.filter(role_name=role).exists():
+        raise ServiceError("این نام کاربری قبلاً استفاده شده است؛ نام دیگری انتخاب کنید.")
 
     with transaction.atomic():
         db = UserDatabase.objects.create(
-            owner=user, server=server, plan=plan, label=label, db_name=ident, role_name=ident,
+            owner=user, server=server, plan=plan, label=label, db_name=ident, role_name=role,
             status=UserDatabase.Status.PENDING,
         )
     try:
-        installed = provisioner_for(server).create_tenant(ident, password, [e.name for e in chosen], limits_for(plan))
+        installed = provisioner_for(server).create_tenant(ident, role, password, [e.name for e in chosen],
+                                                         limits_for(plan))
     except ProvisionError as exc:
         db.status = UserDatabase.Status.ERROR
         db.last_error = str(exc)
@@ -127,7 +132,7 @@ def add_extension(db: UserDatabase, ext: Extension, actor=None):
 
 def delete_database(db: UserDatabase, actor=None, reason="درخواست کاربر"):
     try:
-        provisioner_for(db.server).drop_tenant(db.db_name)
+        provisioner_for(db.server).drop_tenant(db.db_name, db.role_name)
     except ProvisionError as exc:
         logevent("delete", str(exc), user=actor, database=db, success=False)
         raise ServiceError("حذف پایگاه داده روی سرور ناموفق بود.") from exc
@@ -135,8 +140,9 @@ def delete_database(db: UserDatabase, actor=None, reason="درخواست کار�
     db.deleted_at = timezone.now()
     # آزاد کردن نام برای استفاده مجدد
     suffix = f"__del{db.pk}"
-    db.db_name = (db.db_name[: 63 - len(suffix)] + suffix)
-    db.role_name = db.db_name
+    db.db_name = db.db_name[: 63 - len(suffix)] + suffix
+    db.role_name = db.role_name[: 63 - len(suffix)] + suffix
+    db.browser_password_encrypted = ""
     db.save()
     logevent("delete", reason, user=actor, database=db)
 

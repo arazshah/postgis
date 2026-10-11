@@ -41,6 +41,7 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         ("پشتیبانی", {"fields": ("support_phone", "support_telegram", "support_email")}),
         ("کاربران و سرویس", {"fields": ("signup_open", "allow_new_databases", "max_databases_per_user",
                                          "renew_window_days", "expiry_warning_days", "expired_grace_days")}),
+        ("نقشه مرورگر پایگاه داده", {"fields": ("map_tile_url", "map_tile_attribution")}),
         ("پنل پیامک (sms.ir)", {
             "fields": ("sms_backend", "api_key_status", "smsir_api_key", "clear_smsir_api_key",
                        "smsir_template_id", "smsir_code_param", "smsir_line_number", "sms_tools"),
