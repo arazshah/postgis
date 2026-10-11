@@ -7,7 +7,7 @@ if [ "${RUN_MIGRATIONS:-1}" = "1" ]; then
 fi
 
 # ساخت ادمین اولیه در اولین اجرا (اختیاری)
-if [ -n "$DJANGO_SUPERUSER_PHONE" ]; then
+if [ -n "$DJANGO_SUPERUSER_USERNAME" ] && [ -n "$DJANGO_SUPERUSER_PASSWORD" ]; then
   python manage.py ensure_superuser || true
 fi
 

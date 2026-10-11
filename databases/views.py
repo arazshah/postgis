@@ -1,8 +1,9 @@
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST
+
+from accounts.decorators import site_user_required
 
 from . import services
 from .crypto import generate_password
@@ -19,7 +20,7 @@ def _user_db(request, pk) -> UserDatabase:
         pk=pk, owner=request.user)
 
 
-@login_required
+@site_user_required
 def dashboard(request):
     dbs = (request.user.databases.exclude(status=UserDatabase.Status.DELETED)
            .select_related("server", "plan").prefetch_related("extensions"))
@@ -27,7 +28,7 @@ def dashboard(request):
     return render(request, "databases/dashboard.html", {"dbs": dbs, "can_create": can_create, "reason": reason})
 
 
-@login_required
+@site_user_required
 @require_http_methods(["GET", "POST"])
 def create(request):
     plan = services.default_plan()
@@ -56,7 +57,7 @@ def create(request):
         "form": form, "plan": plan, "selected": selected, "prefix": settings.TENANT_PREFIX})
 
 
-@login_required
+@site_user_required
 def detail(request, pk):
     db = _user_db(request, pk)
     once_password = request.session.pop(SESSION_PW_KEY.format(db.pk), None)
@@ -70,7 +71,7 @@ def detail(request, pk):
     })
 
 
-@login_required
+@site_user_required
 @require_POST
 def reset_password(request, pk):
     db = _user_db(request, pk)
@@ -90,7 +91,7 @@ def reset_password(request, pk):
     return redirect("databases:detail", pk=db.pk)
 
 
-@login_required
+@site_user_required
 @require_POST
 def add_extension(request, pk):
     db = _user_db(request, pk)
@@ -106,7 +107,7 @@ def add_extension(request, pk):
     return redirect("databases:detail", pk=db.pk)
 
 
-@login_required
+@site_user_required
 @require_POST
 def renew(request, pk):
     db = _user_db(request, pk)
@@ -118,7 +119,7 @@ def renew(request, pk):
     return redirect("databases:detail", pk=db.pk)
 
 
-@login_required
+@site_user_required
 @require_POST
 def delete(request, pk):
     db = _user_db(request, pk)

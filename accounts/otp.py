@@ -8,6 +8,8 @@ from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
 
+from core.models import SiteSettings
+
 from .models import OTPCode
 from .sms import SMSError, send_otp
 
@@ -33,26 +35,28 @@ def client_ip(request) -> str | None:
     return request.META.get("REMOTE_ADDR")
 
 
-def seconds_until_resend(phone: str) -> int:
+def seconds_until_resend(phone: str, conf: SiteSettings | None = None) -> int:
+    conf = conf or SiteSettings.get()
     last = OTPCode.objects.filter(phone=phone).order_by("-created_at").first()
     if not last:
         return 0
     elapsed = (timezone.now() - last.created_at).total_seconds()
-    return max(int(settings.OTP_RESEND_SECONDS - elapsed), 0)
+    return max(int(conf.otp_resend_seconds - elapsed), 0)
 
 
 def request_code(phone: str, ip: str | None) -> OTPResult:
-    wait = seconds_until_resend(phone)
+    conf = SiteSettings.get()
+    wait = seconds_until_resend(phone, conf)
     if wait:
         return OTPResult(False, f"برای ارسال دوباره {wait} ثانیه صبر کنید.", wait)
 
     hour_ago = timezone.now() - timedelta(hours=1)
-    if OTPCode.objects.filter(phone=phone, created_at__gte=hour_ago).count() >= settings.OTP_MAX_PER_PHONE_HOUR:
+    if OTPCode.objects.filter(phone=phone, created_at__gte=hour_ago).count() >= conf.otp_max_per_phone_hour:
         return OTPResult(False, "تعداد درخواست کد برای این شماره زیاد بوده است. یک ساعت دیگر تلاش کنید.")
-    if ip and OTPCode.objects.filter(ip=ip, created_at__gte=hour_ago).count() >= settings.OTP_MAX_PER_IP_HOUR:
+    if ip and OTPCode.objects.filter(ip=ip, created_at__gte=hour_ago).count() >= conf.otp_max_per_ip_hour:
         return OTPResult(False, "تعداد درخواست‌ها از این اینترنت زیاد بوده است. کمی بعد تلاش کنید.")
 
-    otp, code = OTPCode.issue(phone, ip)
+    otp, code = OTPCode.issue(phone, ip, conf)
     try:
         send_otp(phone, code)
     except SMSError:
@@ -60,19 +64,20 @@ def request_code(phone: str, ip: str | None) -> OTPResult:
         otp.sent_ok = False
         otp.save(update_fields=["sent_ok"])
         return OTPResult(False, "ارسال پیامک ممکن نشد. چند دقیقه دیگر دوباره تلاش کنید.")
-    return OTPResult(True, "کد تأیید پیامک شد.", settings.OTP_RESEND_SECONDS,
-                     debug_code=code if settings.OTP_SHOW_IN_DEBUG else None)
+    show = settings.DEBUG and conf.sms_backend == "console"
+    return OTPResult(True, "کد تأیید پیامک شد.", conf.otp_resend_seconds, debug_code=code if show else None)
 
 
 def verify_code(phone: str, code: str) -> tuple[bool, str]:
+    conf = SiteSettings.get()
     otp = OTPCode.objects.filter(phone=phone, used_at__isnull=True, sent_ok=True).order_by("-created_at").first()
     if otp is None or otp.expires_at <= timezone.now():
         return False, "کد منقضی شده است. کد جدید بگیرید."
-    if otp.attempts >= settings.OTP_MAX_ATTEMPTS:
+    if otp.attempts >= conf.otp_max_attempts:
         return False, "تعداد تلاش‌ها بیش از حد مجاز بود. کد جدید بگیرید."
-    if otp.check_code(code):
+    if otp.check_code(code, conf.otp_max_attempts):
         return True, ""
-    left = settings.OTP_MAX_ATTEMPTS - otp.attempts
+    left = conf.otp_max_attempts - otp.attempts
     if left <= 0:
         return False, "کد اشتباه بود و این کد باطل شد. کد جدید بگیرید."
     return False, f"کد اشتباه است. {left} بار دیگر می‌توانید تلاش کنید."

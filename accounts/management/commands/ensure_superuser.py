@@ -2,27 +2,21 @@ import os
 
 from django.core.management.base import BaseCommand
 
-from accounts.models import User, normalize_mobile
+from accounts.models import User
 
 
 class Command(BaseCommand):
-    help = "ساخت یا ارتقای ادمین از DJANGO_SUPERUSER_PHONE (رمز DJANGO_SUPERUSER_PASSWORD اختیاری است)"
+    help = ("ساخت مدیر اولیه از DJANGO_SUPERUSER_USERNAME و DJANGO_SUPERUSER_PASSWORD. "
+            "اگر این نام کاربری وجود داشته باشد هیچ تغییری نمی‌دهد (رمزی که از پنل عوض کرده‌اید حفظ می‌شود).")
 
     def handle(self, *args, **options):
-        raw = os.environ.get("DJANGO_SUPERUSER_PHONE", "").strip()
-        if not raw:
-            self.stdout.write("DJANGO_SUPERUSER_PHONE not set; skipped")
+        username = os.environ.get("DJANGO_SUPERUSER_USERNAME", "").strip()
+        password = os.environ.get("DJANGO_SUPERUSER_PASSWORD", "")
+        if not username or not password:
+            self.stdout.write("DJANGO_SUPERUSER_USERNAME/PASSWORD not set; skipped")
             return
-        phone = normalize_mobile(raw)
-        password = os.environ.get("DJANGO_SUPERUSER_PASSWORD") or None
-        user = User.objects.filter(phone=phone).first()
-        if user:
-            if not (user.is_staff and user.is_superuser):
-                user.is_staff = user.is_superuser = True
-                user.save(update_fields=["is_staff", "is_superuser"])
-                self.stdout.write(self.style.SUCCESS(f"{phone} promoted to superuser"))
-            else:
-                self.stdout.write("superuser exists")
+        if User.objects.filter(username=username).exists():
+            self.stdout.write(f"admin '{username}' exists; unchanged")
             return
-        User.objects.create_superuser(phone, password)
-        self.stdout.write(self.style.SUCCESS(f"superuser {phone} created"))
+        User.objects.create_admin(username, password, full_name="مدیر سایت")
+        self.stdout.write(self.style.SUCCESS(f"admin '{username}' created"))

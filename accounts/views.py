@@ -1,12 +1,14 @@
 from django.contrib import messages
 from django.contrib.auth import login
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods, require_POST
 
+from core.models import SiteSettings
+
 from . import otp
+from .decorators import site_user_required
 from .forms import PhoneForm, ProfileForm, VerifyForm
 from .models import User
 
@@ -30,6 +32,13 @@ def login_start(request):
     form = PhoneForm(request.POST or None, initial={"phone": request.session.get(SESSION_PHONE, "")})
     if request.method == "POST" and form.is_valid():
         phone = form.cleaned_data["phone"]
+        existing = User.objects.filter(phone=phone).first()
+        if existing is None and not SiteSettings.get().signup_open:
+            messages.error(request, "ثبت‌نام کاربر جدید فعلاً بسته است.")
+            return render(request, "accounts/login.html", {"form": form, "next": nxt or ""})
+        if existing is not None and existing.is_staff:
+            messages.error(request, "این شماره به حساب مدیریتی متصل است و از اینجا وارد نمی‌شود.")
+            return render(request, "accounts/login.html", {"form": form, "next": nxt or ""})
         result = otp.request_code(phone, otp.client_ip(request))
         if result.ok or result.wait_seconds:
             request.session[SESSION_PHONE] = phone
@@ -51,6 +60,9 @@ def verify(request):
     if not phone:
         return redirect("accounts:login")
     user = User.objects.filter(phone=phone).first()
+    if user is not None and user.is_staff:
+        request.session.pop(SESSION_PHONE, None)
+        return redirect("accounts:login")
     new_user = user is None
     form = VerifyForm(request.POST or None, new_user=new_user)
 
@@ -59,6 +71,9 @@ def verify(request):
         if not ok:
             form.add_error("code", error)
         else:
+            if new_user and not SiteSettings.get().signup_open:
+                messages.error(request, "ثبت‌نام کاربر جدید فعلاً بسته است.")
+                return redirect("accounts:login")
             if new_user:
                 user = User.objects.create_user(
                     phone, full_name=form.cleaned_data["full_name"],
@@ -96,7 +111,7 @@ def resend(request):
     return redirect("accounts:verify")
 
 
-@login_required
+@site_user_required
 @require_http_methods(["GET", "POST"])
 def profile(request):
     form = ProfileForm(request.POST or None, instance=request.user)

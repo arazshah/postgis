@@ -16,6 +16,8 @@ import urllib.request
 
 from django.conf import settings
 
+from core.models import SiteSettings
+
 log = logging.getLogger(__name__)
 
 SMSIR_API = "https://api.sms.ir/v1"
@@ -23,6 +25,10 @@ SMSIR_API = "https://api.sms.ir/v1"
 
 class SMSError(Exception):
     pass
+
+
+def _api_key() -> str:
+    return SiteSettings.get().get_smsir_api_key()
 
 
 def _smsir_post(path: str, payload: dict) -> dict:
@@ -33,7 +39,7 @@ def _smsir_post(path: str, payload: dict) -> dict:
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "X-API-KEY": settings.SMSIR_API_KEY,
+            "X-API-KEY": _api_key(),
         },
     )
     try:
@@ -55,45 +61,53 @@ def _smsir_mobile(phone: str) -> str:
 
 
 def send_otp(phone: str, code: str) -> None:
-    backend = settings.SMS_BACKEND
-    if backend == "console":
+    conf = SiteSettings.get()
+    if conf.sms_backend == "console":
         log.warning("OTP for %s: %s", phone, code)
         return
-    if backend == "smsir":
-        if not settings.SMSIR_API_KEY or not settings.SMSIR_TEMPLATE_ID:
-            raise SMSError("SMSIR_API_KEY یا SMSIR_TEMPLATE_ID تنظیم نشده است")
+    if conf.sms_backend == "smsir":
+        if not conf.has_smsir_api_key or not conf.smsir_template_id:
+            raise SMSError("کلید API یا شناسه قالب sms.ir در تنظیمات سایت وارد نشده است")
+        try:
+            template_id = int(conf.smsir_template_id)
+        except ValueError as exc:
+            raise SMSError("شناسه قالب sms.ir باید عدد باشد") from exc
         _smsir_post("send/verify", {
             "mobile": _smsir_mobile(phone),
-            "templateId": int(settings.SMSIR_TEMPLATE_ID),
-            "parameters": [{"name": settings.SMSIR_CODE_PARAM, "value": code}],
+            "templateId": template_id,
+            "parameters": [{"name": conf.smsir_code_param, "value": code}],
         })
         return
-    raise SMSError(f"SMS_BACKEND ناشناخته: {backend}")
+    raise SMSError(f"سرویس پیامک ناشناخته: {conf.sms_backend}")
 
 
 def send_text(phone: str, text: str) -> bool:
     """اطلاع‌رسانی متنی (انقضا، حجم). اگر خط اختصاصی تنظیم نشده باشد بی‌صدا رد می‌شود."""
-    backend = settings.SMS_BACKEND
-    if backend == "console":
+    conf = SiteSettings.get()
+    if not phone:
+        return False
+    if conf.sms_backend == "console":
         log.info("SMS to %s: %s", phone, text)
         return True
-    if backend == "smsir" and settings.SMSIR_LINE_NUMBER:
+    if conf.sms_backend == "smsir" and conf.smsir_line_number and conf.has_smsir_api_key:
         try:
             _smsir_post("send/bulk", {
-                "lineNumber": int(settings.SMSIR_LINE_NUMBER),
+                "lineNumber": int(conf.smsir_line_number),
                 "messageText": text,
                 "mobiles": [_smsir_mobile(phone)],
             })
             return True
-        except SMSError:
+        except (SMSError, ValueError):
             log.exception("sms send_text failed")
     return False
 
 
 def get_credit() -> float | None:
-    if settings.SMS_BACKEND != "smsir" or not settings.SMSIR_API_KEY:
+    """اعتبار باقی‌مانده پنل sms.ir؛ None یعنی نامشخص."""
+    conf = SiteSettings.get()
+    if conf.sms_backend != "smsir" or not conf.has_smsir_api_key:
         return None
-    req = urllib.request.Request(f"{SMSIR_API}/credit", headers={"X-API-KEY": settings.SMSIR_API_KEY,
+    req = urllib.request.Request(f"{SMSIR_API}/credit", headers={"X-API-KEY": _api_key(),
                                                                  "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=settings.SMS_TIMEOUT) as resp:

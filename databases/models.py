@@ -255,13 +255,18 @@ class UserDatabase(models.Model):
     def is_live(self) -> bool:
         return self.status in self.LIVE_STATUSES
 
-    @property
-    def can_renew(self) -> bool:
+    def can_renew_within(self, window_days: int) -> bool:
         return (
             self.plan.is_renewable
             and self.status in (self.Status.ACTIVE, self.Status.READONLY, self.Status.EXPIRED)
-            and (self.days_left is None or self.days_left <= 30)
+            and (self.days_left is None or self.days_left <= window_days)
         )
+
+    @property
+    def can_renew(self) -> bool:
+        from core.models import SiteSettings
+
+        return self.can_renew_within(SiteSettings.get().renew_window_days)
 
     def extend(self, days: int | None = None):
         base = max(self.expires_at or timezone.now(), timezone.now())

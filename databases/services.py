@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
@@ -14,9 +13,12 @@ from .provisioner import Provisioner, ProvisionError, TenantLimits
 
 log = logging.getLogger(__name__)
 
-# فاصله‌ها برای چرخه عمر دیتابیس‌های رایگان
-EXPIRY_WARNING_DAYS = 7
-EXPIRED_GRACE_DAYS = 14  # پس از انقضا: معلق؛ پس از این مدت: حذف
+
+
+def conf():
+    from core.models import SiteSettings
+
+    return SiteSettings.get()
 
 
 class ServiceError(Exception):
@@ -54,11 +56,12 @@ def pick_server() -> DatabaseServer | None:
 
 
 def user_can_create(user) -> tuple[bool, str]:
-    if user.is_staff:
-        return True, ""
+    c = conf()
+    if not c.allow_new_databases:
+        return False, "ساخت پایگاه داده جدید موقتاً غیرفعال است. کمی بعد دوباره سر بزنید."
     count = user.databases.exclude(status__in=UserDatabase.GONE_STATUSES).count()
-    if count >= settings.MAX_DATABASES_PER_USER:
-        return False, f"در پلن رایگان هر کاربر حداکثر {settings.MAX_DATABASES_PER_USER} پایگاه داده می‌تواند داشته باشد."
+    if count >= c.max_databases_per_user:
+        return False, f"هر کاربر حداکثر {c.max_databases_per_user} پایگاه داده می‌تواند داشته باشد."
     return True, ""
 
 
@@ -139,7 +142,7 @@ def delete_database(db: UserDatabase, actor=None, reason="درخواست کار�
 
 
 def renew(db: UserDatabase, actor=None):
-    if not db.can_renew:
+    if not db.can_renew_within(conf().renew_window_days):
         raise ServiceError("تمدید برای این پایگاه داده در حال حاضر ممکن نیست.")
     if db.status == UserDatabase.Status.EXPIRED:
         provisioner_for(db.server).set_login(db.role_name, True)
@@ -167,12 +170,12 @@ def _notify(user, subject, body):
     from accounts.sms import send_text
 
     try:
-        send_text(user.phone, f"{settings.SITE_NAME}: {body}")
+        send_text(user.phone, f"{conf().site_name}: {body}")
     except Exception:  # noqa: BLE001
         log.exception("sms notify failed")
     if user.email:
         try:
-            send_mail(f"[{settings.SITE_NAME}] {subject}", body, None, [user.email], fail_silently=True)
+            send_mail(f"[{conf().site_name}] {subject}", body, None, [user.email], fail_silently=True)
         except Exception:  # noqa: BLE001
             log.exception("email failed")
 
@@ -226,11 +229,12 @@ def check_quotas() -> dict:
 def process_expiry() -> dict:
     """هشدار پیش از انقضا، تعلیق پس از انقضا، و حذف پس از مهلت."""
     now = timezone.now()
+    c = conf()
     stats = {"warned": 0, "expired": 0, "deleted": 0, "errors": 0}
 
     for db in UserDatabase.objects.filter(status__in=UserDatabase.LIVE_STATUSES, expires_at__isnull=False,
                                           expiry_warned_at__isnull=True,
-                                          expires_at__lte=now + timedelta(days=EXPIRY_WARNING_DAYS),
+                                          expires_at__lte=now + timedelta(days=c.expiry_warning_days),
                                           expires_at__gt=now).select_related("owner"):
         _notify(db.owner, "اعتبار پایگاه داده رو به پایان است",
                 f"اعتبار {db.label} تا {db.days_left} روز دیگر تمام می‌شود. از داشبورد آن را رایگان تمدید کنید.")
@@ -246,13 +250,13 @@ def process_expiry() -> dict:
             db.save(update_fields=["status"])
             logevent("expire", "اعتبار تمام شد؛ ورود غیرفعال شد", database=db)
             _notify(db.owner, "اعتبار پایگاه داده تمام شد",
-                    f"{db.label} منقضی شد. تا {EXPIRED_GRACE_DAYS} روز فرصت تمدید دارید؛ پس از آن حذف می‌شود.")
+                    f"{db.label} منقضی شد. تا {c.expired_grace_days} روز فرصت تمدید دارید؛ پس از آن حذف می‌شود.")
             stats["expired"] += 1
         except ProvisionError as exc:
             stats["errors"] += 1
             logevent("expire", str(exc), database=db, success=False)
 
-    cutoff = now - timedelta(days=EXPIRED_GRACE_DAYS)
+    cutoff = now - timedelta(days=c.expired_grace_days)
     for db in UserDatabase.objects.filter(status=UserDatabase.Status.EXPIRED, expires_at__lte=cutoff).select_related("server"):
         try:
             delete_database(db, reason="حذف خودکار پس از پایان مهلت تمدید")
