@@ -2,6 +2,8 @@
 # - دامنه با SERVICE_FQDN_WEB_8000 در تب General تنظیم می‌شود
 # - رمز دیتابیس پنل را Coolify خودکار می‌سازد (SERVICE_PASSWORD_POSTGRES)
 # - هیچ پورتی روی میزبان باز نمی‌شود؛ ترافیک از پراکسی Coolify می‌آید
+# - web به شبکه مشترک «coolify» هم وصل است تا به سرویس‌های دیتابیس دیگر Coolify
+#   (مثل سرور PostGIS مشتریان) با نام داخلی‌شان دسترسی داشته باشد
 services:
   web:
     build: .
@@ -22,6 +24,9 @@ services:
       - SMS_BACKEND=${SMS_BACKEND:-smsir}
       - TENANT_PREFIX=${TENANT_PREFIX:-gp_}
       - WEB_CONCURRENCY=${WEB_CONCURRENCY:-3}
+    networks:
+      - default
+      - coolify
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
       interval: 30s
@@ -46,3 +51,7 @@ services:
 
 volumes:
   panel-db-data:
+
+networks:
+  coolify:
+    external: true
