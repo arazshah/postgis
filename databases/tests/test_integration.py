@@ -27,11 +27,12 @@ class ProvisionerIntegrationTests(SimpleTestCase):
     def setUp(self):
         self.p = Provisioner(PG)
         self.name = f"gp_it_{uuid.uuid4().hex[:8]}"
+        self.role = self.name + "_user"
         self.pw = "Integr4tionPass"
-        self.addCleanup(self.p.drop_tenant, self.name)
+        self.addCleanup(self.p.drop_tenant, self.name, self.role)
 
     def tenant_conn(self, dbname=None, password=None):
-        return psycopg.connect(host=PG["host"], port=PG["port"], user=self.name, password=password or self.pw,
+        return psycopg.connect(host=PG["host"], port=PG["port"], user=self.role, password=password or self.pw,
                                dbname=dbname or self.name, sslmode="disable", autocommit=True, connect_timeout=5)
 
     def test_check(self):
@@ -40,7 +41,7 @@ class ProvisionerIntegrationTests(SimpleTestCase):
         self.assertTrue(info.postgis_version)
 
     def test_full_lifecycle(self):
-        installed = self.p.create_tenant(self.name, self.pw, ["postgis", "postgis_topology"],
+        installed = self.p.create_tenant(self.name, self.role, self.pw, ["postgis", "postgis_topology"],
                                          TenantLimits(connection_limit=3, statement_timeout_s=30))
         self.assertEqual(installed, ["postgis", "postgis_topology"])
         with self.tenant_conn() as c:
@@ -59,25 +60,25 @@ class ProvisionerIntegrationTests(SimpleTestCase):
             c.execute("INSERT INTO pts(g) VALUES (NULL)")
         self.p.set_readonly(self.name, False)
 
-        self.p.set_password(self.name, "Brand2NewPass")
+        self.p.set_password(self.role, "Brand2NewPass")
         with self.tenant_conn(password="Brand2NewPass") as c:
             c.execute("INSERT INTO pts(g) VALUES (NULL)")
 
         self.p.install_extension(self.name, "fuzzystrmatch")
         self.assertIn("fuzzystrmatch", self.p.installed_extensions(self.name))
 
-        self.p.set_login(self.name, False)
+        self.p.set_login(self.role, False)
         with self.assertRaises(psycopg.OperationalError):
             self.tenant_conn(password="Brand2NewPass")
 
-        self.p.drop_tenant(self.name)
+        self.p.drop_tenant(self.name, self.role)
         self.assertEqual(self.p.database_sizes([self.name]), {})
 
     def test_harden(self):
         done = self.p.harden()
         self.assertTrue(any("postgres" in d for d in done))
         self.assertTrue(self.p.check().hardened)
-        self.p.create_tenant(self.name, self.pw, [], TenantLimits())
+        self.p.create_tenant(self.name, self.role, self.pw, [], TenantLimits())
         with self.assertRaises(psycopg.OperationalError):
             self.tenant_conn(dbname="postgres")  # کاربر مشتری به دیتابیس سیستمی راه ندارد
         with self.tenant_conn() as c:
@@ -85,12 +86,12 @@ class ProvisionerIntegrationTests(SimpleTestCase):
 
     def test_rollback_on_bad_extension(self):
         with self.assertRaises(ProvisionError):
-            self.p.create_tenant(self.name, self.pw, ["postgis", "does_not_exist_ext"], TenantLimits())
+            self.p.create_tenant(self.name, self.role, self.pw, ["postgis", "does_not_exist_ext"], TenantLimits())
         self.assertEqual(self.p.database_sizes([self.name]), {})
 
     def test_rejects_bad_identifiers(self):
         for bad in ["Upper", "a; drop", "x", "1abc", "pg x"]:
             with self.assertRaises(ProvisionError):
-                self.p.create_tenant(bad, self.pw, [], TenantLimits())
+                self.p.create_tenant(bad, self.role, self.pw, [], TenantLimits())
         with self.assertRaises(ProvisionError):
-            self.p.create_tenant(self.name, self.pw, ["postgis; drop"], TenantLimits())
+            self.p.create_tenant(self.name, self.role, self.pw, ["postgis; drop"], TenantLimits())

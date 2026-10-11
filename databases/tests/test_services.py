@@ -20,8 +20,8 @@ class FakeProvisioner:
         self.sizes = {}
         self.fail_create = False
 
-    def create_tenant(self, name, password, extensions, limits):
-        self.calls.append(("create", name, tuple(extensions), limits.connection_limit))
+    def create_tenant(self, name, role, password, extensions, limits):
+        self.calls.append(("create", name, role, tuple(extensions), limits.connection_limit))
         if self.fail_create:
             raise ProvisionError("boom")
         return list(extensions)
@@ -72,11 +72,19 @@ class CreateDatabaseTests(BaseCase):
         db = services.create_database(self.user, "tehran", "Abcdefgh123", ["postgis", "not_allowed"])
         self.assertEqual(db.status, UserDatabase.Status.ACTIVE)
         self.assertEqual(db.db_name, "gp_tehran")
-        self.assertEqual(db.role_name, "gp_tehran")
-        self.assertEqual(self.fake.calls[0], ("create", "gp_tehran", ("postgis",), 5))
+        self.assertEqual(db.role_name, "gp_tehran_user")
+        self.assertEqual(self.fake.calls[0], ("create", "gp_tehran", "gp_tehran_user", ("postgis",), 5))
         self.assertEqual([e.name for e in db.extensions.all()], ["postgis"])
         self.assertIsNotNone(db.expires_at)
         self.assertEqual(db.size_bytes, 1000)
+
+    def test_custom_username(self):
+        db = services.create_database(self.user, "city", "Abcdefgh123", [], username="ali_gis")
+        self.assertEqual((db.db_name, db.role_name), ("gp_city", "gp_ali_gis"))
+
+    def test_username_must_differ_and_be_unique(self):
+        with self.assertRaises(services.ServiceError):
+            services.create_database(self.user, "same", "Abcdefgh123", [], username="same")
 
     def test_limit_per_user(self):
         services.create_database(self.user, "one", "Abcdefgh123", [])
@@ -100,7 +108,7 @@ class CreateDatabaseTests(BaseCase):
         services.delete_database(db)
         db.refresh_from_db()
         self.assertEqual(db.status, UserDatabase.Status.DELETED)
-        self.assertIn(("drop_tenant", "gp_reuse"), self.fake.calls)
+        self.assertIn(("drop_tenant", "gp_reuse", "gp_reuse_user"), self.fake.calls)
         # نام دوباره قابل استفاده است
         services.create_database(self.user, "reuse", "Abcdefgh123", [])
 
@@ -128,7 +136,7 @@ class QuotaExpiryTests(BaseCase):
         services.process_expiry()
         self.db.refresh_from_db()
         self.assertEqual(self.db.status, UserDatabase.Status.EXPIRED)
-        self.assertIn(("set_login", "gp_q_db", False), self.fake.calls)
+        self.assertIn(("set_login", "gp_q_db_user", False), self.fake.calls)
 
         services.renew(self.db)
         self.db.refresh_from_db()

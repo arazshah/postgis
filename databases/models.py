@@ -238,6 +238,8 @@ class UserDatabase(models.Model):
     status = models.CharField("وضعیت", max_length=20, choices=Status.choices, default=Status.PENDING)
     extensions = models.ManyToManyField(Extension, blank=True, verbose_name="افزونه‌های نصب‌شده")
 
+    browser_password_encrypted = models.TextField(blank=True, editable=False,
+                                                  help_text="رمز نقش محدود مرورگر پنل (رمزنگاری‌شده)")
     size_bytes = models.BigIntegerField("حجم مصرفی (بایت)", default=0)
     size_checked_at = models.DateTimeField("آخرین اندازه‌گیری حجم", null=True, blank=True)
     last_error = models.TextField("آخرین خطا", blank=True)

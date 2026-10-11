@@ -161,42 +161,45 @@ class Provisioner:
         return done
 
     # ------------------------------------------------------------------ ساخت
-    def create_tenant(self, name: str, password: str, extensions: list[str], limits: TenantLimits) -> list[str]:
+    def create_tenant(self, db_name: str, role_name: str, password: str, extensions: list[str],
+                      limits: TenantLimits) -> list[str]:
         """
-        نقش و دیتابیس هم‌نام می‌سازد (برای pg_hba با sameuser)، محدودیت‌ها را اعمال و افزونه‌ها را نصب می‌کند.
-        در صورت خطا همه چیز را برمی‌گرداند. خروجی: فهرست افزونه‌های نصب‌شده.
+        نقش (کاربر) و دیتابیس را می‌سازد، محدودیت‌ها را اعمال و افزونه‌ها را نصب می‌کند.
+        نام نقش و دیتابیس می‌تواند متفاوت باشد. در صورت خطا همه چیز برگردانده می‌شود.
+        خروجی: فهرست افزونه‌های نصب‌شده.
         """
-        _check_ident(name)
+        _check_ident(db_name)
+        _check_ident(role_name)
         exts = [_check_ext(e) for e in extensions]
-        ident = sql.Identifier(name)
+        db_ident, role_ident = sql.Identifier(db_name), sql.Identifier(role_name)
         created_role = created_db = False
         try:
             with self.connect() as conn:
                 cur = conn.cursor()
-                if cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (name,)).fetchone():
-                    raise ProvisionError("نقشی با این نام از قبل روی سرور وجود دارد.")
-                if cur.execute("SELECT 1 FROM pg_database WHERE datname=%s", (name,)).fetchone():
+                if cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role_name,)).fetchone():
+                    raise ProvisionError("کاربری با این نام از قبل روی سرور وجود دارد.")
+                if cur.execute("SELECT 1 FROM pg_database WHERE datname=%s", (db_name,)).fetchone():
                     raise ProvisionError("دیتابیسی با این نام از قبل روی سرور وجود دارد.")
 
                 cur.execute(sql.SQL(
                     "CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION "
                     "NOBYPASSRLS INHERIT CONNECTION LIMIT {} PASSWORD {}"
-                ).format(ident, sql.Literal(int(limits.connection_limit)),
+                ).format(role_ident, sql.Literal(int(limits.connection_limit)),
                          sql.Literal(scram_sha256_verifier(password))))
                 created_role = True
 
                 cur.execute(sql.SQL("CREATE DATABASE {} OWNER {} ENCODING 'UTF8' TEMPLATE template0")
-                            .format(ident, ident))
+                            .format(db_ident, role_ident))
                 created_db = True
 
-                cur.execute(sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(ident))
-                cur.execute(sql.SQL("GRANT CONNECT, TEMPORARY ON DATABASE {} TO {}").format(ident, ident))
-                self._apply_role_limits(cur, name, limits)
+                cur.execute(sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(db_ident))
+                cur.execute(sql.SQL("GRANT CONNECT, TEMPORARY ON DATABASE {} TO {}").format(db_ident, role_ident))
+                self._apply_role_limits(cur, role_name, limits)
 
             installed = []
-            with self.connect(dbname=name) as conn:
+            with self.connect(dbname=db_name) as conn:
                 cur = conn.cursor()
-                cur.execute(sql.SQL("ALTER SCHEMA public OWNER TO {}").format(ident))
+                cur.execute(sql.SQL("ALTER SCHEMA public OWNER TO {}").format(role_ident))
                 cur.execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
                 for ext in exts:
                     cur.execute(sql.SQL("CREATE EXTENSION IF NOT EXISTS {} CASCADE").format(sql.Identifier(ext)))
@@ -204,25 +207,57 @@ class Provisioner:
                 # جدول مختصات PostGIS: اجازه افزودن سیستم مختصات سفارشی به مالک
                 if cur.execute("SELECT to_regclass('public.spatial_ref_sys')").fetchone()[0]:
                     cur.execute(sql.SQL(
-                        "GRANT SELECT, INSERT, UPDATE, DELETE ON public.spatial_ref_sys TO {}").format(ident))
+                        "GRANT SELECT, INSERT, UPDATE, DELETE ON public.spatial_ref_sys TO {}").format(role_ident))
             return installed
         except Exception as exc:
-            log.exception("create_tenant failed for %s", name)
-            self._rollback(name, created_db, created_role)
+            log.exception("create_tenant failed for %s", db_name)
+            self._rollback(db_name, role_name, created_db, created_role)
             if isinstance(exc, ProvisionError):
                 raise
             raise ProvisionError(f"ساخت پایگاه داده ناموفق بود: {exc}") from exc
 
-    def _rollback(self, name: str, drop_db: bool, drop_role: bool):
+    def _rollback(self, db_name: str, role_name: str, drop_db: bool, drop_role: bool):
         try:
             with self.connect() as conn:
                 cur = conn.cursor()
                 if drop_db:
-                    cur.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name)))
+                    cur.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(db_name)))
                 if drop_role:
-                    cur.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(name)))
+                    cur.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role_name)))
         except Exception:  # noqa: BLE001
-            log.exception("rollback failed for %s", name)
+            log.exception("rollback failed for %s", db_name)
+
+    # ------------------------------------------------------------------ نقش مرورگر (نمایش در پنل)
+    @staticmethod
+    def browser_role_name(role_name: str) -> str:
+        return role_name[:59] + "_web"
+
+    def ensure_browser_role(self, db_name: str, role_name: str, password: str) -> str:
+        """
+        نقش محدود برای «مرورگر پایگاه داده» پنل: عضو نقش کاربر است (همان دسترسی‌ها)،
+        superuser نیست و فقط به دیتابیس همان کاربر وصل می‌شود. رمزش را پنل رمزنگاری‌شده نگه می‌دارد.
+        """
+        _check_ident(db_name)
+        _check_ident(role_name)
+        web = self.browser_role_name(role_name)
+        web_ident, role_ident = sql.Identifier(web), sql.Identifier(role_name)
+        with self.connect() as conn:
+            cur = conn.cursor()
+            exists = cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (web,)).fetchone()
+            verifier = sql.Literal(scram_sha256_verifier(password))
+            if exists:
+                cur.execute(sql.SQL("ALTER ROLE {} LOGIN PASSWORD {}").format(web_ident, verifier))
+            else:
+                cur.execute(sql.SQL(
+                    "CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS "
+                    "INHERIT CONNECTION LIMIT 3 PASSWORD {}").format(web_ident, verifier))
+            cur.execute(sql.SQL("GRANT {} TO {}").format(role_ident, web_ident))
+            cur.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(sql.Identifier(db_name), web_ident))
+            for key, value in (("statement_timeout", "20s"), ("idle_in_transaction_session_timeout", "30s"),
+                               ("temp_file_limit", "256MB")):
+                cur.execute(sql.SQL("ALTER ROLE {} SET {} = {}").format(web_ident, sql.Identifier(key),
+                                                                     sql.Literal(value)))
+        return web
 
     def _apply_role_limits(self, cur, name: str, limits: TenantLimits):
         ident = sql.Identifier(name)
@@ -261,12 +296,20 @@ class Provisioner:
         with self.connect(dbname=name) as conn:
             return [r[0] for r in conn.execute("SELECT extname FROM pg_extension ORDER BY extname").fetchall()]
 
-    def terminate_sessions(self, name: str):
-        _check_ident(name)
+    def terminate_sessions(self, db_name: str | None = None, role_name: str | None = None):
+        """قطع اتصال‌های یک دیتابیس و/یا یک کاربر (و نقش مرورگرش)."""
         with self.connect() as conn:
-            conn.execute(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                "WHERE datname = %s AND pid <> pg_backend_pid()", (name,))
+            if db_name:
+                _check_ident(db_name)
+                conn.execute(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                    "WHERE datname = %s AND pid <> pg_backend_pid()", (db_name,))
+            if role_name:
+                _check_ident(role_name)
+                conn.execute(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                    "WHERE usename = ANY(%s) AND pid <> pg_backend_pid()",
+                    ([role_name, self.browser_role_name(role_name)],))
 
     def set_readonly(self, name: str, readonly: bool):
         _check_ident(name)
@@ -276,22 +319,27 @@ class Provisioner:
                 conn.execute(sql.SQL("ALTER DATABASE {} SET default_transaction_read_only = on").format(ident))
             else:
                 conn.execute(sql.SQL("ALTER DATABASE {} RESET default_transaction_read_only").format(ident))
-        self.terminate_sessions(name)
+        self.terminate_sessions(db_name=name)
 
     def set_login(self, name: str, enabled: bool):
         """تعلیق/فعال‌سازی ورود کاربر."""
         _check_ident(name)
         with self.connect() as conn:
-            conn.execute(sql.SQL("ALTER ROLE {} " + ("LOGIN" if enabled else "NOLOGIN")).format(sql.Identifier(name)))
+            for role in (name, self.browser_role_name(name)):
+                if conn.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,)).fetchone():
+                    conn.execute(sql.SQL("ALTER ROLE {} " + ("LOGIN" if enabled else "NOLOGIN"))
+                                 .format(sql.Identifier(role)))
         if not enabled:
-            self.terminate_sessions(name)
+            self.terminate_sessions(role_name=name)
 
-    def drop_tenant(self, name: str):
-        _check_ident(name)
-        ident = sql.Identifier(name)
+    def drop_tenant(self, db_name: str, role_name: str | None = None):
+        _check_ident(db_name)
+        role_name = role_name or db_name
+        _check_ident(role_name)
         with self.connect() as conn:
-            conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(ident))
-            conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(ident))
+            conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(db_name)))
+            for role in (self.browser_role_name(role_name), role_name):
+                conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
 
     def database_sizes(self, names: list[str]) -> dict[str, int]:
         names = [_check_ident(n) for n in names]

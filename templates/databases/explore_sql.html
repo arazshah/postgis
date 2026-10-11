@@ -1,0 +1,35 @@
+{% extends "databases/_explore_base.html" %}{% load fa %}
+{% block ex %}
+<form method="post" class="panel sql-form">
+  {% csrf_token %}
+  <label for="sql-q" class="sr-label">دستور SQL</label>
+  <textarea id="sql-q" name="query" dir="ltr" spellcheck="false" rows="7" placeholder="SELECT * FROM my_table LIMIT 10">{{ query }}</textarea>
+  <div class="sql-bar">
+    <label class="check small"><input type="checkbox" name="allow_write" {% if allow_write %}checked{% endif %}><span>اجازه تغییر داده (INSERT، UPDATE، DELETE، CREATE…)</span></label>
+    <button class="btn" type="submit">اجرا</button>
+  </div>
+  <div class="chips sql-examples" aria-label="نمونه کوئری">
+    {% for x in tables|slice:":1" %}
+      <button type="button" class="chip" data-sql="SELECT * FROM {% if x.schema != 'public' %}{{ x.schema }}.{% endif %}{{ x.name }} LIMIT 20">۲۰ سطر اول {{ x.name }}</button>
+      {% if x.geometry %}<button type="button" class="chip" data-sql="SELECT GeometryType({{ x.geometry.0.column }}), count(*) FROM {% if x.schema != 'public' %}{{ x.schema }}.{% endif %}{{ x.name }} GROUP BY 1">انواع هندسه</button>
+      <button type="button" class="chip" data-sql="SELECT ST_Extent(ST_Transform({{ x.geometry.0.column }}, 4326)) FROM {% if x.schema != 'public' %}{{ x.schema }}.{% endif %}{{ x.name }}">محدوده لایه</button>{% endif %}
+    {% endfor %}
+    <button type="button" class="chip" data-sql="SELECT postgis_full_version()">نسخه PostGIS</button>
+    <button type="button" class="chip" data-sql="SELECT pg_size_pretty(pg_database_size(current_database()))">حجم پایگاه داده</button>
+  </div>
+  <p class="small muted" style="margin:8px 0 0">در هر اجرا یک دستور. حداکثر {{ max_rows|fanum }} سطر نمایش داده می‌شود و هر کوئری حداکثر ۲۰ ثانیه وقت دارد.</p>
+</form>
+
+{% if error %}<div class="msg error ltr-mixed" role="alert">{{ error }}</div>{% endif %}
+{% if result %}
+  <p class="small muted">{{ result.status }} · {{ result.elapsed_ms|fanum }} میلی‌ثانیه{% if result.truncated %} · فقط {{ max_rows|fanum }} سطر اول نمایش داده شد{% endif %}</p>
+  {% if result.columns %}
+  <div class="table-scroll ltr-table">
+  <table class="data-table">
+    <thead><tr>{% for c in result.columns %}<th class="ltr">{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for r in result.rows %}<tr>{% for v in r %}<td class="ltr">{{ v }}</td>{% endfor %}</tr>{% empty %}<tr><td colspan="{{ result.columns|length }}" class="muted">نتیجه‌ای نداشت.</td></tr>{% endfor %}</tbody>
+  </table>
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}
