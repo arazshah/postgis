@@ -1,0 +1,48 @@
+# استقرار در Coolify (Build Pack: Docker Compose)
+# - دامنه با SERVICE_FQDN_WEB_8000 در تب General تنظیم می‌شود
+# - رمز دیتابیس پنل را Coolify خودکار می‌سازد (SERVICE_PASSWORD_POSTGRES)
+# - هیچ پورتی روی میزبان باز نمی‌شود؛ ترافیک از پراکسی Coolify می‌آید
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      panel-db:
+        condition: service_healthy
+    environment:
+      - SERVICE_FQDN_WEB_8000
+      - DATABASE_URL=postgres://panel:${SERVICE_PASSWORD_POSTGRES}@panel-db:5432/panel
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-postgis.ir,www.postgis.ir}
+      - DJANGO_CSRF_TRUSTED_ORIGINS=${DJANGO_CSRF_TRUSTED_ORIGINS:-https://postgis.ir,https://www.postgis.ir}
+      - SITE_URL=${SITE_URL:-https://postgis.ir}
+      - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME:-admin}
+      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
+      - SMS_BACKEND=${SMS_BACKEND:-smsir}
+      - TENANT_PREFIX=${TENANT_PREFIX:-gp_}
+      - WEB_CONCURRENCY=${WEB_CONCURRENCY:-3}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  panel-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=panel
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=panel
+    volumes:
+      - panel-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U panel -d panel"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  panel-db-data:

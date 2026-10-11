@@ -39,7 +39,7 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-یا با Docker و یک PostGIS آزمایشی: `docker compose -f docker-compose.dev.yml up --build`
+یا با Docker و یک PostGIS آزمایشی: `docker compose -f compose.local.yml up --build`
 سپس در `/manage/` سرور با host `tenant-pg`، پورت `5432`، کاربر `postgres` و رمز `devpass` اضافه کنید.
 
 ## تست
@@ -63,23 +63,23 @@ ruff check .
 
 ## دیپلوی روی Coolify
 
-1. **دیتابیس پنل:** در Coolify یک PostgreSQL بسازید (این فقط برای کاربران و تنظیمات پنل است، نه دیتابیس مشتریان) و Internal URL آن را بردارید.
-2. **برنامه:** New Resource ← Public/Private Repository (GitHub App) ← همین ریپو، شاخه `main`، Build Pack: **Dockerfile**، پورت **8000**.
-3. **دامنه:** مثلاً `https://postgis.ir` (رکورد A زیردامنه را به IP سرور Coolify بزنید).
-4. **متغیرهای محیطی:** از `.env.example`؛ حداقل:
-   - `DJANGO_SECRET_KEY`
-   - `CREDENTIALS_ENCRYPTION_KEY` (یک بار بسازید و هرگز عوض نکنید، وگرنه رمزهای ذخیره‌شده سرورها خوانده نمی‌شوند)
-   - `DATABASE_URL`
-   - `DJANGO_ALLOWED_HOSTS=postgis.ir`
-   - `DJANGO_CSRF_TRUSTED_ORIGINS=https://postgis.ir`
-   - `DJANGO_SUPERUSER_USERNAME` و `DJANGO_SUPERUSER_PASSWORD`: مدیر اولیه که فقط بار اول ساخته می‌شود. رمز را بعداً از پنل عوض کنید؛ با دیپلوی‌های بعدی تغییری نمی‌کند.
-5. **Health check:** مسیر `/healthz`.
-6. **دیپلوی خودکار:** با اتصال از طریق GitHub App، گزینه Auto Deploy را روشن کنید؛ هر push یا merge روی `main` دیپلوی می‌شود. اگر به‌جای GitHub App از Deploy Key استفاده می‌کنید، از تب Webhooks آدرس webhook و secret را بردارید و در GitHub ← Settings ← Webhooks با رویداد push اضافه کنید.
-7. **کار زمان‌بندی‌شده:** در تب Scheduled Tasks:
-   - دستور `python manage.py run_maintenance`
-   - زمان‌بندی `*/10 * * * *`
+روش پیشنهادی **Docker Compose** است: برنامه و دیتابیس خود پنل با هم بالا می‌آیند و رمز دیتابیس را Coolify خودکار می‌سازد.
 
-   این کار حجم را می‌سنجد، دیتابیس‌های پر را فقط‌خواندنی می‌کند، انقضا را مدیریت می‌کند و سلامت سرورها را بررسی می‌کند.
+1. **ساخت برنامه:** New Resource ← ریپو `arazshah/postgis`، شاخه `main`، Build Pack: **Docker Compose**، Docker Compose Location: **`/docker-compose.yml`** (نه `compose.local.yml`).
+2. **دامنه:** در تنظیمات سرویس `web`، دامنه را `https://postgis.ir` (و در صورت نیاز `https://www.postgis.ir`) بگذارید. رکورد A دامنه باید به IP سرور اشاره کند.
+3. **متغیرهای محیطی (تب Environment Variables):**
+   - `DJANGO_SECRET_KEY`
+   - `CREDENTIALS_ENCRYPTION_KEY` — یک بار بسازید و هرگز عوض نکنید
+   - `DJANGO_SUPERUSER_USERNAME` و `DJANGO_SUPERUSER_PASSWORD` — مدیر اولیه، فقط بار اول ساخته می‌شود
+
+   `DATABASE_URL` لازم نیست؛ خودکار ساخته می‌شود.
+4. **دیپلوی خودکار:** Auto Deploy را روشن کنید تا هر merge روی `main` دیپلوی شود.
+5. **کار زمان‌بندی‌شده:** در تب Scheduled Tasks:
+   - دستور: `python manage.py run_maintenance`
+   - کانتینر: `web`
+   - زمان‌بندی: `*/10 * * * *`
+
+روش جایگزین: Build Pack **Dockerfile** با پورت 8000. در این روش دیتابیس پنل را جدا در Coolify بسازید و `DATABASE_URL` را دستی وارد کنید.
 
 مایگریشن‌ها در هر دیپلوی خودکار اجرا می‌شوند (`docker/entrypoint.sh`).
 
