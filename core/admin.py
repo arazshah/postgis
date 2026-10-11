@@ -25,6 +25,15 @@ class SiteSettingsForm(forms.ModelForm):
         model = SiteSettings
         fields = "__all__"
 
+    def clean_aban_api_key(self):
+        from billing.aban import key_mode
+
+        key = "".join((self.cleaned_data.get("aban_api_key") or "").split())
+        if key and not key_mode(key):
+            raise ValidationError("قالب کلید درست نیست. کلید آبان با ag_live_ (واقعی) یا ag_test_ (آزمایشی) شروع "
+                                  "می‌شود و بعد از آن دقیقاً ۴۸ حرف/عدد می‌آید. کلید کامل را دوباره کپی کنید.")
+        return key
+
     def save(self, commit=True):
         obj = super().save(commit=False)
         if self.cleaned_data.get("clear_smsir_api_key"):
@@ -32,7 +41,7 @@ class SiteSettingsForm(forms.ModelForm):
         elif self.cleaned_data.get("smsir_api_key"):
             obj.set_smsir_api_key(self.cleaned_data["smsir_api_key"].strip())
         if self.cleaned_data.get("aban_api_key"):
-            obj.set_aban_api_key(self.cleaned_data["aban_api_key"].strip())
+            obj.set_aban_api_key(self.cleaned_data["aban_api_key"])
         if commit:
             obj.save()
         return obj
@@ -41,7 +50,7 @@ class SiteSettingsForm(forms.ModelForm):
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
     form = SiteSettingsForm
-    readonly_fields = ["api_key_status", "aban_key_status", "sms_tools", "updated_at"]
+    readonly_fields = ["api_key_status", "aban_key_status", "aban_tools", "sms_tools", "updated_at"]
     fieldsets = (
         ("سایت", {"fields": ("site_name", "tagline", "announcement", "announcement_level")}),
         ("پشتیبانی", {"fields": ("support_phone", "support_telegram", "support_email")}),
@@ -49,8 +58,7 @@ class SiteSettingsAdmin(admin.ModelAdmin):
                                          "renew_window_days", "expiry_warning_days", "expired_grace_days")}),
         ("پرداخت و فروش پلن‌ها", {
             "fields": ("pay_enabled", "invoice_ttl_minutes",
-                       "pay_aban_enabled", "aban_key_status", "aban_api_key", "aban_api_base", "aban_create_path",
-                       "aban_status_path",
+                       "pay_aban_enabled", "aban_key_status", "aban_api_key", "aban_api_base", "aban_tools",
                        "pay_manual_enabled", "pay_card_number", "pay_card_holder", "pay_bank_name",
                        "pay_manual_note"),
             "description": "قیمت پلن‌ها را از بخش «پلن‌ها» تعیین کنید. پرداخت‌های منتظر تأیید در بخش «فاکتورها» هستند.",
@@ -86,9 +94,22 @@ class SiteSettingsAdmin(admin.ModelAdmin):
 
     @admin.display(description="وضعیت کلید آبان")
     def aban_key_status(self, obj):
-        if obj.aban_api_key_encrypted:
-            return format_html('<b style="color:#1a7f4b">ذخیره شده</b>')
-        return format_html('<b style="color:#b42318">وارد نشده</b>')
+        from billing.aban import key_mode
+
+        if not obj.aban_api_key_encrypted:
+            return format_html('<b style="color:#b42318">وارد نشده</b>')
+        try:
+            mode = key_mode(obj.get_aban_api_key())
+        except Exception:  # noqa: BLE001
+            mode = ""
+        label = {"live": "کلید واقعی (ag_live_)", "test": "کلید آزمایشی (ag_test_) — پرداخت واقعی انجام نمی‌شود"}
+        color = "#1a7f4b" if mode == "live" else "#b54708"
+        return format_html('<b style="color:{}">ذخیره شده — {}</b>', color, label.get(mode, "قالب ناشناخته"))
+
+    @admin.display(description="ابزار آبان")
+    def aban_tools(self, obj):
+        return format_html('<a class="button" href="{}">آزمایش اتصال به آبان گیت وی</a>',
+                           reverse("admin:core_sitesettings_abantest"))
 
     @admin.display(description="ابزار پیامک")
     def sms_tools(self, obj):
@@ -100,11 +121,28 @@ class SiteSettingsAdmin(admin.ModelAdmin):
     def get_urls(self):
         return [
             path("credit/", self.admin_site.admin_view(self.credit_view), name="core_sitesettings_credit"),
+            path("aban-test/", self.admin_site.admin_view(self.aban_test_view), name="core_sitesettings_abantest"),
             path("test-sms/", self.admin_site.admin_view(self.test_sms_view), name="core_sitesettings_testsms"),
         ] + super().get_urls()
 
     def _back(self):
         return redirect(reverse("admin:core_sitesettings_change", args=[1]))
+
+    def aban_test_view(self, request):
+        from billing.aban import AbanClient, AbanError
+
+        try:
+            client = AbanClient()
+            mode = client.ping()
+        except AbanError as exc:
+            messages.error(request, f"اتصال به آبان ناموفق بود: {exc}" + (f" — {exc.hint}" if exc.hint else ""))
+        else:
+            if mode == "test":
+                messages.warning(request, f"اتصال و کلید درست است ({client.base}). کلید «آزمایشی» است؛ پرداخت‌ها "
+                                          "شبیه‌سازی می‌شوند. برای فروش واقعی کلید ag_live_ را وارد کنید.")
+            else:
+                messages.success(request, f"اتصال و کلید آبان گیت وی درست است ({client.base}).")
+        return self._back()
 
     def credit_view(self, request):
         from accounts.sms import get_credit

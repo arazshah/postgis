@@ -4,14 +4,14 @@ from datetime import timedelta
 from unittest import mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
 from accounts.models import User
 from billing import services
-from billing.aban import AbanInvoice
+from billing.aban import AbanError
 from billing.models import Invoice, PlanVoucher
 from core.models import SiteSettings
 from databases import services as db_services
@@ -141,71 +141,112 @@ class BillingTests(TestCase):
 
 @override_settings(MEDIA_ROOT="/tmp/claude-0/-home-claude/2234ec6a-5c11-59b3-8baf-aeb4326ca9f5/scratchpad/media-test")
 class AbanTests(BillingTests):
+    KEY = "ag_test_" + "a" * 48
+
     def setUp(self):
         super().setUp()
         conf = SiteSettings.get()
         conf.pay_aban_enabled = True
-        conf.aban_api_base = "https://api.example-aban.ir/v1"
-        conf.set_aban_api_key("KEY123")
+        conf.aban_api_base = ""
+        conf.set_aban_api_key(self.KEY)
         conf.save()
         self.inv = services.create_invoice(self.user, Invoice.Kind.UPGRADE, self.pro, self.db)
         self.requests = []
         self.status = "pending"
-        self.paid_rial = None
+        self.amount = 1500000
+        self.verified = False
 
         def fake_request(client, method, path, payload=None):
-            self.requests.append((method, path, payload, client.key))
-            if method == "POST":
-                return {"data": {"id": "AB-77", "pay_url": "https://pay.example-aban.ir/AB-77", "status": "pending"}}
-            return {"id": "AB-77", "status": self.status, "paid_amount_rial": self.paid_rial}
+            self.requests.append((method, path, payload, client.key, client.base))
+            if method == "POST" and path == "/invoices":
+                return {"invoice_id": "inv_77", "status": "pending", "amount_rial": payload["amount_rial"],
+                        "payable_rial": payload["amount_rial"] + 10,
+                        "payment_url": "https://abangateway.ir/pay/inv_77"}
+            if path.endswith("/verify"):
+                if self.status != "paid":
+                    raise AbanError("x", code="not_yet_paid", http_status=402)
+                if self.verified:
+                    raise AbanError("x", code="already_verified", http_status=409)
+                self.verified = True
+                return {"verified": True, "invoice_id": "inv_77", "amount_rial": self.amount}
+            if path.endswith("/cancel"):
+                return {"invoice_id": "inv_77", "status": "cancelled"}
+            return {"invoice_id": "inv_77", "status": self.status, "amount_rial": self.amount}
 
         p = mock.patch("billing.aban.AbanClient._request", fake_request)
         p.start()
         self.addCleanup(p.stop)
 
-    def test_redirect_and_callback_paid(self):
+    def test_redirect_callback_and_verify(self):
         r = self.client.post(reverse("billing:pay_aban", args=[self.inv.number]))
-        self.assertEqual(r["Location"], "https://pay.example-aban.ir/AB-77")
-        method, path, payload, key = self.requests[0]
-        self.assertEqual((method, path, key), ("POST", "/invoices", "KEY123"))
+        self.assertEqual(r["Location"], "https://abangateway.ir/pay/inv_77")
+        method, path, payload, key, base = self.requests[0]
+        self.assertEqual((method, path, key, base), ("POST", "/invoices", self.KEY, "https://abangateway.ir/api/v1"))
         self.assertEqual(payload["amount_rial"], 1500000)
         self.assertEqual(payload["order_id"], self.inv.number)
         self.assertTrue(payload["callback_url"].endswith(f"/billing/callback/{self.inv.number}/"))
+        self.assertTrue(1 <= payload["expiry_minutes"] <= 1440)
         # برگشت بدون پرداخت
         self.client.get(reverse("billing:callback", args=[self.inv.number]))
         self.inv.refresh_from_db()
         self.assertEqual(self.inv.status, "pending")
-        # پرداخت شد
+        # پرداخت شد: استعلام + verify
         self.status = "paid"
         self.client.get(reverse("billing:callback", args=[self.inv.number]))
         self.inv.refresh_from_db()
         self.assertEqual(self.inv.status, "paid")
         self.assertIsNotNone(self.inv.applied_at)
-        self.assertEqual(self.requests[-1][1], "/invoices/AB-77")
+        self.assertEqual([r[1] for r in self.requests[-2:]], ["/invoices/inv_77", "/invoices/inv_77/verify"])
 
-    def test_webhook_cannot_fake_payment(self):
+    def test_webhook_post_to_callback_cannot_fake_payment(self):
         self.client.post(reverse("billing:pay_aban", args=[self.inv.number]))
-        r = self.client.post(reverse("billing:aban_webhook"), data=json.dumps(
-            {"order_id": self.inv.number, "status": "paid"}), content_type="application/json")
+        anon = Client()
+        r = anon.post(reverse("billing:callback", args=[self.inv.number]),
+                      data=json.dumps({"invoice_id": "inv_77", "status": "paid"}), content_type="application/json")
         self.assertEqual(r.status_code, 200)
         self.inv.refresh_from_db()
         self.assertEqual(self.inv.status, "pending")  # API هنوز pending است
         self.status = "paid"
-        self.client.post(reverse("billing:aban_webhook"), data=json.dumps({"data": {"id": "AB-77"}}),
-                         content_type="application/json")
+        anon.post(reverse("billing:callback", args=[self.inv.number]), data="{}", content_type="application/json")
         self.inv.refresh_from_db()
         self.assertEqual(self.inv.status, "paid")
 
-    def test_underpayment_goes_to_review(self):
+    def test_already_verified_is_idempotent(self):
         self.client.post(reverse("billing:pay_aban", args=[self.inv.number]))
-        self.status, self.paid_rial = "paid", 1000000
+        self.status, self.verified = "paid", True  # verify قبلاً (مثلاً قبل از تایم‌اوت) انجام شده
+        services.check_aban(Invoice.objects.get(pk=self.inv.pk))
+        self.inv.refresh_from_db()
+        self.assertEqual(self.inv.status, "paid")
+
+    def test_amount_mismatch_goes_to_review(self):
+        self.client.post(reverse("billing:pay_aban", args=[self.inv.number]))
+        self.status, self.amount = "paid", 1000000
         services.check_aban(Invoice.objects.get(pk=self.inv.pk))
         self.inv.refresh_from_db()
         self.assertEqual(self.inv.status, "review")
         self.assertIsNone(self.inv.applied_at)
 
-    def test_parse_variants(self):
-        from billing.aban import _parse
+    def test_cancel_calls_aban(self):
+        self.client.post(reverse("billing:pay_aban", args=[self.inv.number]))
+        self.client.post(reverse("billing:cancel", args=[self.inv.number]))
+        self.inv.refresh_from_db()
+        self.assertEqual(self.inv.status, "cancelled")
+        self.assertEqual(self.requests[-1][1], "/invoices/inv_77/cancel")
 
-        self.assertEqual(_parse({"invoice": {"uuid": "x", "payment_url": "https://p/x", "state": "PAID"}}),
-                         AbanInvoice(id="x", pay_url="https://p/x", status="paid", paid_rial=None))
+    def test_create_error_shows_code(self):
+        def boom(client, method, path, payload=None):
+            raise AbanError("x", code="insufficient_fee_wallet", http_status=402)
+
+        with mock.patch("billing.aban.AbanClient._request", boom):
+            r = self.client.post(reverse("billing:pay_aban", args=[self.inv.number]), follow=True)
+        self.assertContains(r, "insufficient_fee_wallet")
+
+    def test_normalize_base_and_key(self):
+        from billing.aban import key_mode, normalize_base
+
+        self.assertEqual(normalize_base(""), "https://abangateway.ir/api/v1")
+        self.assertEqual(normalize_base("https://abangateway.ir"), "https://abangateway.ir/api/v1")
+        self.assertEqual(normalize_base("https://abangateway.ir/dashboard"), "https://abangateway.ir/api/v1")
+        self.assertEqual(normalize_base("https://abangateway.ir/api/v1/invoices"), "https://abangateway.ir/api/v1")
+        self.assertEqual(key_mode("ag_live_" + "Z9" * 24), "live")
+        self.assertEqual(key_mode("ag_live_short"), "")
