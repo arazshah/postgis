@@ -1,0 +1,39 @@
+{% extends "base.html" %}{% load fa humanize %}
+{% block title %}خرید پلن — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <div class="page-head"><h1>خرید یا ارتقای پلن</h1><a class="small" href="{% url 'billing:invoices' %}">صورتحساب‌های من</a></div>
+  {% if not enabled %}
+    <div class="empty"><h2>فروش پلن پولی فعلاً فعال نیست</h2><p class="muted">به‌زودی فعال می‌شود. برای سؤال با پشتیبانی تماس بگیرید.</p></div>
+  {% elif not plans %}
+    <div class="empty"><h2>هنوز پلن پولی تعریف نشده است</h2></div>
+  {% else %}
+  <div class="plans">
+    {% for p in plans %}
+    <form method="post" action="{% url 'billing:start' %}" class="legend buy-card{% if selected_plan == p.slug %} is-selected{% endif %}">
+      {% csrf_token %}
+      <input type="hidden" name="plan" value="{{ p.slug }}">
+      <div class="legend-title"><h3>{{ p.name }}</h3><span class="price">{{ p.price_toman|money }} <small>تومان</small></span></div>
+      {% if p.description %}<p class="small muted">{{ p.description }}</p>{% endif %}
+      <ul>
+        <li><span class="sym fill"></span><span>حجم</span><strong>{{ p.quota_display|fanum }}</strong></li>
+        <li><span class="sym line"></span><span>اتصال همزمان</span><strong>{{ p.max_connections|fanum }}</strong></li>
+        <li><span class="sym dash"></span><span>مدت</span><strong>{{ p.duration_days|fanum }} روز</strong></li>
+        <li><span class="sym pt"></span><span>زمان هر کوئری</span><strong>{{ p.statement_timeout_s|fanum }} ثانیه</strong></li>
+        <li><span class="sym hatch"></span><span>نگهداری بکاپ</span><strong>{{ p.backup_retention_days|fanum }} روز</strong></li>
+      </ul>
+      <div class="field" style="margin:16px 0 12px">
+        <label for="t-{{ p.pk }}" class="small">برای کدام پایگاه داده؟</label>
+        <select name="target" id="t-{{ p.pk }}">
+          {% for db in dbs %}<option value="{{ db.pk }}" {% if selected_db == db.pk|stringformat:'s' %}selected{% endif %}>{% if db.plan_id == p.pk %}تمدید{% else %}ارتقای{% endif %} {{ db.db_name }} (اکنون: {{ db.plan.name }})</option>{% endfor %}
+          <option value="new" {% if not dbs or selected_db == 'new' %}selected{% endif %}>پایگاه داده جدید</option>
+        </select>
+      </div>
+      <button class="btn" type="submit" style="width:100%">ادامه و پرداخت</button>
+    </form>
+    {% endfor %}
+  </div>
+  <p class="small muted" style="margin-top:16px">ارتقا روی همان پایگاه داده انجام می‌شود و داده‌ها دست نمی‌خورند. مدت پلن جدید به روزهای باقی‌مانده اضافه می‌شود.</p>
+  {% endif %}
+</div>
+{% endblock %}

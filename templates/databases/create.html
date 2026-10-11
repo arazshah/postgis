@@ -5,7 +5,9 @@
   <div class="detail-grid">
     <form method="post" class="panel" novalidate>
       {% csrf_token %}
+      {% if voucher %}<input type="hidden" name="voucher" value="{{ voucher.pk }}">{% endif %}
       <h1 style="font-size:1.6rem">ساخت پایگاه داده مکانی</h1>
+      {% if voucher %}<p class="msg success">این پایگاه داده با پلن پولی <b>{{ voucher.plan.name }}</b> ساخته می‌شود.</p>{% endif %}
       {% include "partials/form_errors.html" %}
 
       <div class="field{% if form.label.errors %} has-error{% endif %}">

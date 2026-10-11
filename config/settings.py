@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "accounts",
     "core",
     "databases",
+    "billing",
 ]
 
 MIDDLEWARE = [
@@ -136,6 +137,11 @@ LANGUAGE_CODE = "fa-ir"
 TIME_ZONE = "Asia/Tehran"
 USE_I18N = True
 USE_TZ = True
+
+# فایل‌های آپلودی (رسید پرداخت)؛ عمومی سرو نمی‌شوند و فقط ادمین/صاحب فاکتور می‌بیند
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"

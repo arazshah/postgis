@@ -33,8 +33,18 @@ def build():
         {"label": "کد ورود ارسال‌شده در ۲۴ ساعت", "value": OTPCode.objects.filter(created_at__gte=day).count()},
         {"label": "ارسال ناموفق پیامک در ۲۴ ساعت", "value": otp_fail, "bad": otp_fail > 0},
     ]
+    from billing.models import Invoice
+
+    review = Invoice.objects.filter(status=Invoice.Status.REVIEW).count()
+    paid_month = Invoice.objects.filter(status=Invoice.Status.PAID, paid_at__gte=now - timedelta(days=30))
+    stats += [
+        {"label": "رسید منتظر تأیید", "value": review, "bad": review > 0},
+        {"label": "درآمد ۳۰ روز (تومان)", "value": f"{sum(paid_month.values_list('amount_toman', flat=True)):,}"},
+    ]
     conf = SiteSettings.get()
     warnings = []
+    if review:
+        warnings.append(f"{review} رسید پرداخت منتظر تأیید شماست (بخش فاکتورها).")
     if not servers:
         warnings.append("هنوز هیچ سرور دیتابیسی تعریف نشده؛ کاربران نمی‌توانند پایگاه داده بسازند.")
     for s in bad_servers:

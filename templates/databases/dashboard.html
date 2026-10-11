@@ -7,6 +7,12 @@
     {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">ساخت پایگاه داده</a>{% endif %}
   </div>
 
+  {% for v in vouchers %}
+  <div class="msg success" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <span>یک اعتبار پرداخت‌شده برای ساخت پایگاه داده با پلن <b>{{ v.plan.name }}</b> دارید.</span>
+    <a class="btn sm" href="{% url 'databases:create' %}?voucher={{ v.pk }}">ساخت پایگاه داده</a>
+  </div>
+  {% endfor %}
   {% if dbs %}
     {% if not can_create %}<p class="muted small">{{ reason }}</p>{% endif %}
     <div class="db-list">

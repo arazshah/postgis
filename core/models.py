@@ -42,6 +42,24 @@ class SiteSettings(models.Model):
     map_tile_attribution = models.CharField("منبع نقشه پایه", max_length=200, blank=True,
                                             default="© OpenStreetMap")
 
+    # --- پرداخت ---
+    pay_enabled = models.BooleanField("فروش پلن‌های پولی فعال است", default=False)
+    invoice_ttl_minutes = models.PositiveSmallIntegerField("مهلت پرداخت هر فاکتور (دقیقه)", default=60,
+                                                           validators=[MinValueValidator(5)])
+    pay_aban_enabled = models.BooleanField("پرداخت با آبان گیت وی (تأیید خودکار)", default=False)
+    aban_api_key_encrypted = models.TextField(blank=True, editable=False)
+    aban_api_base = models.URLField("آدرس API آبان گیت وی", blank=True,
+                                    help_text="از مستندات API در پنل آبان گیت وی، مثلاً https://.../api/v1")
+    aban_create_path = models.CharField("مسیر ساخت فاکتور", max_length=200, default="/invoices")
+    aban_status_path = models.CharField("مسیر استعلام فاکتور", max_length=200, default="/invoices/{id}",
+                                        help_text="{id} با شناسه فاکتور آبان جایگزین می‌شود.")
+    pay_manual_enabled = models.BooleanField("پرداخت دستی با آپلود رسید", default=True,
+                                             help_text="پشتیبان: مشتری کارت به کارت می‌کند، رسید را آپلود می‌کند و شما تأیید می‌کنید.")
+    pay_card_number = models.CharField("شماره کارت مقصد (پرداخت دستی)", max_length=19, blank=True)
+    pay_card_holder = models.CharField("نام صاحب کارت", max_length=100, blank=True)
+    pay_bank_name = models.CharField("نام بانک", max_length=50, blank=True)
+    pay_manual_note = models.TextField("توضیح برای پرداخت دستی", blank=True)
+
     # --- پیامک ---
     sms_backend = models.CharField("سرویس پیامک", max_length=20, choices=SMS_BACKENDS, default="smsir")
     smsir_api_key_encrypted = models.TextField(blank=True, editable=False)
@@ -128,3 +146,29 @@ class SiteSettings(models.Model):
     @property
     def has_smsir_api_key(self) -> bool:
         return bool(self.smsir_api_key_encrypted)
+
+    def set_aban_api_key(self, raw: str):
+        from databases.crypto import encrypt
+
+        self.aban_api_key_encrypted = encrypt(raw)
+
+    def get_aban_api_key(self) -> str:
+        from databases.crypto import decrypt
+
+        try:
+            return decrypt(self.aban_api_key_encrypted)
+        except ValueError:
+            return ""
+
+    @property
+    def aban_ready(self) -> bool:
+        return bool(self.pay_aban_enabled and self.aban_api_base and self.aban_api_key_encrypted)
+
+    @property
+    def manual_ready(self) -> bool:
+        return bool(self.pay_manual_enabled and self.pay_card_number)
+
+    @property
+    def card_number_display(self) -> str:
+        digits = "".join(ch for ch in self.pay_card_number if ch.isdigit())
+        return "-".join(digits[i:i + 4] for i in range(0, len(digits), 4))

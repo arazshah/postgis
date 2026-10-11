@@ -1,0 +1,78 @@
+{% extends "base.html" %}{% load fa humanize %}
+{% block title %}فاکتور {{ inv.number }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <p class="small"><a href="{% url 'billing:invoices' %}">صورتحساب‌های من</a></p>
+  <div class="detail-grid">
+    <div class="stack">
+      <section class="panel invoice-card">
+        <div class="inv-head">
+          <div><h1 style="font-size:1.4rem;margin:0">فاکتور <span class="ltr mono">{{ inv.number }}</span></h1>
+            <p class="muted small" style="margin:4px 0 0">{{ inv.title }}</p></div>
+          <span class="badge inv-{{ inv.status }}">{{ inv.get_status_display }}</span>
+        </div>
+        <div class="inv-amount"><span class="muted">مبلغ قابل پرداخت</span><b>{{ inv.amount_toman|money }} <small>تومان</small></b></div>
+
+        {% if inv.status == Status.PAID %}
+          <div class="msg success">پرداخت در {{ inv.paid_at|jdatetime_full }} تأیید شد.
+            {% if inv.kind == 'new' %}<a href="{% url 'databases:dashboard' %}">ساخت پایگاه داده جدید</a>{% elif inv.database %}<a href="{% url 'databases:detail' inv.database.pk %}">مشاهده پایگاه داده</a>{% endif %}</div>
+        {% elif inv.status == Status.REVIEW %}
+          <div class="msg info">رسید شما ثبت شده و در حال بررسی است. بعد از تأیید، پلن خودکار فعال می‌شود و پیامک می‌گیرید.</div>
+        {% elif inv.status == Status.PENDING %}
+          <p class="small muted">مهلت پرداخت: تا {{ inv.expires_at|jdatetime_full }}</p>
+
+          {% if 'aban' in methods %}
+          <div class="pay-option">
+            <h2>پرداخت آنلاین کارت به کارت <span class="chip">تأیید خودکار</span></h2>
+            <p class="small muted">به صفحه پرداخت منتقل می‌شوید، مبلغ نمایش‌داده‌شده را با اپ بانکی کارت به کارت می‌کنید و چند ثانیه بعد پرداخت خودکار تأیید می‌شود.</p>
+            <form method="post" action="{% url 'billing:pay_aban' inv.number %}">{% csrf_token %}
+              <button class="btn" type="submit">پرداخت {{ inv.amount_toman|money }} تومان</button>
+            </form>
+          </div>
+          {% endif %}
+
+          {% if 'manual' in methods %}
+          <details class="pay-option" {% if show_manual or 'aban' not in methods %}open{% endif %}>
+            <summary><h2 style="display:inline">کارت به کارت و ارسال رسید</h2></summary>
+            <p class="small muted">مبلغ دقیق را به کارت زیر واریز کنید و تصویر رسید را بفرستید. بعد از بررسی (معمولاً کمتر از چند ساعت) پلن فعال می‌شود.</p>
+            <div class="conn" style="margin:12px 0">
+              <dl>
+                <dt>شماره کارت</dt><dd><span id="card-no">{{ conf.card_number_display }}</span> <button class="copy" type="button" data-copy="{{ conf.pay_card_number }}" style="float:left">کپی</button></dd>
+                {% if conf.pay_card_holder %}<dt>به نام</dt><dd style="font-family:var(--f-body);direction:rtl;text-align:left">{{ conf.pay_card_holder }}</dd>{% endif %}
+                {% if conf.pay_bank_name %}<dt>بانک</dt><dd style="font-family:var(--f-body);direction:rtl;text-align:left">{{ conf.pay_bank_name }}</dd>{% endif %}
+                <dt>مبلغ</dt><dd>{{ inv.amount_rial|money }} ریال <button class="copy" type="button" data-copy="{{ inv.amount_rial }}" style="float:left">کپی</button></dd>
+              </dl>
+            </div>
+            {% if conf.pay_manual_note %}<p class="small">{{ conf.pay_manual_note|linebreaksbr }}</p>{% endif %}
+            <form method="post" action="{% url 'billing:receipt' inv.number %}" enctype="multipart/form-data" novalidate>
+              {% csrf_token %}
+              {% for field in form %}{% include "partials/field.html" %}{% endfor %}
+              <button class="btn" type="submit">ثبت رسید</button>
+            </form>
+          </details>
+          {% endif %}
+
+          <form method="post" action="{% url 'billing:cancel' inv.number %}" style="margin-top:12px">{% csrf_token %}
+            <button class="linkbtn small" type="submit">لغو این فاکتور</button></form>
+        {% elif inv.status == Status.REJECTED %}
+          <div class="msg error">رسید این فاکتور تأیید نشد.{% if inv.note %} {{ inv.note }}{% endif %} برای پیگیری با پشتیبانی تماس بگیرید.</div>
+        {% else %}
+          <div class="msg warning">این فاکتور {{ inv.get_status_display }} است. <a href="{% url 'billing:plans' %}">فاکتور جدید بسازید</a>.</div>
+        {% endif %}
+      </section>
+    </div>
+    <aside class="panel">
+      <h3>جزئیات</h3>
+      <table class="kv small">
+        <tr><th>پلن</th><td class="rtl">{{ inv.plan.name }}</td></tr>
+        <tr><th>نوع</th><td class="rtl">{{ inv.get_kind_display }}</td></tr>
+        {% if inv.database %}<tr><th>پایگاه داده</th><td>{{ inv.database.db_name }}</td></tr>{% endif %}
+        <tr><th>حجم</th><td class="rtl">{{ inv.plan.quota_display|fanum }}</td></tr>
+        <tr><th>مدت</th><td class="rtl">{{ inv.plan.duration_days|fanum }} روز</td></tr>
+        <tr><th>تاریخ</th><td class="rtl">{{ inv.created_at|jdate }}</td></tr>
+        {% if inv.method %}<tr><th>روش</th><td class="rtl">{{ inv.get_method_display }}</td></tr>{% endif %}
+      </table>
+    </aside>
+  </div>
+</div>
+{% endblock %}

@@ -6,3 +6,4 @@ staticfiles/
 .venv/
 *.log
 .ruff_cache/
+media/
