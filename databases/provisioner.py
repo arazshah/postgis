@@ -82,6 +82,9 @@ class Provisioner:
             conn = psycopg.connect(autocommit=True, **kwargs)
         except psycopg.OperationalError as exc:
             raise ProvisionError(f"اتصال به سرور دیتابیس ممکن نشد: {exc}".strip()) from exc
+        except (UnicodeError, ValueError, OSError, psycopg.Error) as exc:
+            # مثلاً آدرس نامعتبر در فیلد host؛ هرگز نباید به خطای 500 برسد
+            raise ProvisionError(f"آدرس یا تنظیمات اتصال نامعتبر است: {exc}") from exc
         try:
             yield conn
         finally:
