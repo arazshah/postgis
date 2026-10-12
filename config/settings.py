@@ -64,6 +64,10 @@ for _host in _coolify_domains():
 
 SITE_NAME = os.environ.get("SITE_NAME", "ژئوپایگاه")
 SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
+# دامنه اصلی برای سئو: لینک canonical، نقشه سایت و تصویر اشتراک‌گذاری
+CANONICAL_URL = os.environ.get("CANONICAL_URL", "https://postgis.ir").rstrip("/")
+# دامنه‌های دیگر با 301 به دامنه اصلی می‌روند تا گوگل محتوای تکراری نبیند (خالی = خاموش)
+CANONICAL_REDIRECT_HOSTS = env_list("CANONICAL_REDIRECT_HOSTS", "www.postgis.ir,postgis.araz.me")
 SUPPORT_TELEGRAM = os.environ.get("SUPPORT_TELEGRAM", "")
 SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "")
 
@@ -84,6 +88,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "core.middleware.HealthCheckMiddleware",
+    "core.middleware.CanonicalHostMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

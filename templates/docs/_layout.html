@@ -1,6 +1,23 @@
 {% extends "base.html" %}
 {% block title %}{{ doc.1 }} — آموزش {{ SITE_NAME }}{% endblock %}
 {% block description %}{{ doc.2 }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_title %}{{ doc.1 }}{% endblock %}
+{% block og_description %}{{ doc.2 }}{% endblock %}
+{% block jsonld %}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"TechArticle","headline":"{{ doc.1|escapejs }}","description":"{{ doc.2|escapejs }}","inLanguage":"fa-IR",
+  "mainEntityOfPage":"{{ CANONICAL_URL }}","image":"{{ BASE_URL }}/static/img/og.jpg",
+  "author":{"@type":"Organization","name":"{{ SITE_NAME|escapejs }}","url":"{{ BASE_URL }}/"},
+  "publisher":{"@type":"Organization","name":"{{ SITE_NAME|escapejs }}","url":"{{ BASE_URL }}/"}},
+ {"@type":"BreadcrumbList","itemListElement":[
+  {"@type":"ListItem","position":1,"name":"{{ SITE_NAME|escapejs }}","item":"{{ BASE_URL }}/"},
+  {"@type":"ListItem","position":2,"name":"آموزش","item":"{{ BASE_URL }}{% url 'core:docs' %}"},
+  {"@type":"ListItem","position":3,"name":"{{ doc.1|escapejs }}","item":"{{ CANONICAL_URL }}"}]}
+]}
+</script>
+{% endblock %}
 {% block content %}
 <div class="wrap page docs-layout">
   <nav class="docs-nav" aria-label="فهرست آموزش‌ها">

@@ -3,13 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ SITE_NAME }} — پایگاه داده مکانی PostGIS آماده{% endblock %}</title>
-  <meta name="description" content="{% block description %}{% if SITE.tagline %}{{ SITE.tagline }}. {% endif %}پایگاه داده PostGIS آماده برای WebGIS، QGIS و GeoServer؛ در سه دقیقه، بدون نصب و دردسر سرور.{% endblock %}">
+  <title>{% block title %}پایگاه داده مکانی PostGIS آنلاین — {{ SITE_NAME }}{% endblock %}</title>
+  <meta name="description" content="{% block description %}پایگاه داده مکانی PostGIS آماده برای WebGIS، QGIS و GeoServer؛ ساخت رایگان در سه دقیقه، بدون نصب سرور.{% endblock %}">
+  <meta name="robots" content="{% block robots %}{{ ROBOTS }}{% endblock %}">
+  <link rel="canonical" href="{% block canonical %}{{ CANONICAL_URL }}{% endblock %}">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+  <meta property="og:site_name" content="{{ SITE_NAME }} — postgis.ir">
+  <meta property="og:locale" content="fa_IR">
+  <meta property="og:title" content="{% block og_title %}{{ SITE_NAME }} — پایگاه داده مکانی PostGIS آماده در ۳ دقیقه{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}PostGIS آماده برای WebGIS، QGIS، GeoServer و پایتون. ثبت‌نام با موبایل، شروع رایگان.{% endblock %}">
+  <meta property="og:url" content="{{ CANONICAL_URL }}">
+  <meta property="og:image" content="{{ BASE_URL }}{% static 'img/og.jpg' %}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#0F5C59">
   <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
   <link rel="preload" href="{% static 'fonts/vazirmatn-arabic-400-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   {% block head %}{% endblock %}
+  {% block jsonld %}{% endblock %}
 </head>
 <body>
 <a class="skip" href="#main">رفتن به محتوای اصلی</a>

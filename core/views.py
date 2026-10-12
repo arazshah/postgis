@@ -1,10 +1,18 @@
+import datetime
+import os
+from xml.sax.saxutils import escape
+
+from django.conf import settings
 from django.db import connection
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
+from django.urls import reverse
 
 from databases.models import Extension, Plan
 
 DOCS = [
+    ("what-is-postgis", "پایگاه داده مکانی و PostGIS چیست؟",
+     "راهنمای کامل پایگاه داده مکانی: کاربردها، توابع مکانی، مقایسه با Shapefile و شروع رایگان"),
     ("start", "شروع سریع در ۳ دقیقه", "ساخت حساب، ساخت پایگاه داده و گرفتن رشته اتصال"),
     ("qgis", "اتصال از QGIS", "افزودن اتصال PostGIS در QGIS و نمایش لایه‌ها"),
     ("import", "وارد کردن Shapefile و GeoPackage", "سه روش: DB Manager در QGIS، ogr2ogr و shp2pgsql"),
@@ -52,3 +60,45 @@ def healthz(request):
         return JsonResponse({"status": "ok"})
     except Exception:  # noqa: BLE001
         return JsonResponse({"status": "db-error"}, status=503)
+
+
+def robots_txt(request):
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /manage/",
+        "Disallow: /dashboard/",
+        "Disallow: /accounts/",
+        "Disallow: /billing/",
+        "Disallow: /support/",
+        "",
+        f"Sitemap: {settings.CANONICAL_URL}/sitemap.xml",
+        "",
+    ]
+    return HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
+
+
+def _template_date(name: str) -> str:
+    from django.template.loader import get_template
+
+    try:
+        path = get_template(name).origin.name
+        return datetime.date.fromtimestamp(os.path.getmtime(path)).isoformat()
+    except Exception:  # noqa: BLE001
+        return datetime.date.today().isoformat()
+
+
+def sitemap_xml(request):
+    base = settings.CANONICAL_URL
+    pages = [(reverse("core:home"), "1.0", "core/home.html"),
+             (reverse("core:docs"), "0.8", "docs/index.html")]
+    pages += [(reverse("core:doc", args=[d[0]]), "0.9" if d[0] == "what-is-postgis" else "0.7", f"docs/{d[0]}.html")
+              for d in DOCS]
+    pages.append((reverse("core:terms"), "0.3", "core/terms.html"))
+    items = "".join(
+        f"<url><loc>{escape(base + path)}</loc><lastmod>{_template_date(tpl)}</lastmod>"
+        f"<priority>{prio}</priority></url>"
+        for path, prio, tpl in pages)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
+           f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</urlset>')
+    return HttpResponse(xml, content_type="application/xml; charset=utf-8")
