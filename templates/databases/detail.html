@@ -10,10 +10,10 @@
     {% if db.is_live %}<a class="btn sm" href="{% url 'databases:explore' db.pk %}" style="margin-inline-start:auto">مشاهده جدول‌ها و داده‌ها</a>{% endif %}
   </div>
 
-  {% if db.status == 'readonly' %}<div class="msg warning">حجم این پایگاه داده پر شده و فعلاً فقط‌خواندنی است. خواندن داده‌ها و اتصال QGIS و GeoServer کار می‌کند. برای آزاد کردن فضا به پشتیبانی پیام دهید و بگویید کدام جدول‌ها حذف شوند؛ وقتی حجم به زیر ۹۵٪ برسد، خودکار دوباره قابل نوشتن می‌شود.</div>{% endif %}
+  {% if db.status == 'readonly' %}<div class="msg warning">حجم این پایگاه داده پر شده و فعلاً فقط‌خواندنی است. خواندن داده‌ها و اتصال QGIS و GeoServer کار می‌کند. برای آزاد کردن فضا <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید و بگویید کدام جدول‌ها حذف شوند؛ وقتی حجم به زیر ۹۵٪ برسد، خودکار دوباره قابل نوشتن می‌شود.</div>{% endif %}
   {% if db.status == 'expired' %}<div class="msg error">اعتبار این پایگاه داده تمام شده و اتصال غیرفعال است. با تمدید رایگان، دوباره فعال می‌شود.</div>{% endif %}
-  {% if db.status == 'suspended' %}<div class="msg error">این پایگاه داده توسط مدیریت معلق شده است. برای اطلاع از علت با پشتیبانی تماس بگیرید.</div>{% endif %}
-  {% if db.status == 'error' %}<div class="msg error">ساخت این پایگاه داده کامل نشد. آن را حذف کنید و دوباره بسازید؛ اگر تکرار شد به پشتیبانی خبر دهید.</div>{% endif %}
+  {% if db.status == 'suspended' %}<div class="msg error">این پایگاه داده توسط مدیریت معلق شده است. برای اطلاع از علت <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید.</div>{% endif %}
+  {% if db.status == 'error' %}<div class="msg error">ساخت این پایگاه داده کامل نشد. آن را حذف کنید و دوباره بسازید؛ اگر تکرار شد <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید.</div>{% endif %}
 
   <div class="detail-grid">
     <div class="stack">

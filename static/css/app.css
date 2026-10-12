@@ -163,10 +163,11 @@ code,.mono,kbd{font-family:var(--f-mono);font-size:.88em}
 .auth{max-width:440px;margin:0 auto}
 .field{margin-bottom:var(--s5)}
 .field label{display:block;font-weight:700;margin-bottom:var(--s2)}
-.field input[type=text],.field input[type=email],.field input[type=password],.field select{
+.field input[type=text],.field input[type=email],.field input[type=password],.field select,.field textarea{
   width:100%;min-height:46px;padding:0 var(--s3);border:1.5px solid var(--line);border-radius:var(--r-sm);
   background:#fff;color:var(--ink);font:inherit}
-.field input:focus,.field select:focus{border-color:var(--teal);outline:none;box-shadow:0 0 0 3px var(--teal-soft)}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--teal);outline:none;box-shadow:0 0 0 3px var(--teal-soft)}
+.field textarea{padding:var(--s3);line-height:1.8;resize:vertical}
 .field input[dir=ltr],.field input.mono{font-family:var(--f-mono);direction:ltr;text-align:left}
 .help{display:block;color:var(--ink-2);font-size:.86rem;margin-top:var(--s1)}
 .errorlist{list-style:none;margin:var(--s1) 0 0;padding:0;color:var(--red);font-size:.9rem}
@@ -381,3 +382,13 @@ details.pay-option summary{cursor:pointer}
 .badge.inv-paid{background:var(--green-soft);color:var(--green)}
 .badge.inv-pending,.badge.inv-review{background:var(--ochre-soft);color:#7a5200}
 .badge.inv-rejected,.badge.inv-expired,.badge.inv-cancelled{background:var(--red-soft);color:var(--red)}
+
+/* تیکت پشتیبانی */
+.badge.tk-open{background:var(--ochre-soft);color:#7a5200}
+.badge.tk-answered{background:var(--green-soft);color:var(--green)}
+.badge.tk-closed{background:var(--paper-2);color:var(--ink-2)}
+.thread{list-style:none;padding:0;margin:20px 0;display:flex;flex-direction:column;gap:12px}
+.tmsg{border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;background:var(--surface);max-width:92%}
+.tmsg.staff{align-self:flex-end;background:var(--green-soft);border-color:transparent}
+.tmsg-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:6px}
+.tmsg-body{white-space:normal;overflow-wrap:anywhere;line-height:1.9}

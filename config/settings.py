@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "core",
     "databases",
     "billing",
+    "support",
 ]
 
 MIDDLEWARE = [

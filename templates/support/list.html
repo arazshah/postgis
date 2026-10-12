@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}پشتیبانی — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <div class="page-head"><h1>تیکت‌های پشتیبانی</h1>
+    {% if not can_open %}<a class="btn sm" href="{% url 'support:new' %}">تیکت جدید</a>{% endif %}</div>
+  {% if can_open %}<p class="msg warning small">{{ can_open }}</p>{% endif %}
+  {% if tickets %}
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead><tr><th>شماره</th><th>موضوع</th><th>دسته</th><th>وضعیت</th><th>آخرین فعالیت</th></tr></thead>
+    <tbody>{% for t in tickets %}
+      <tr><td><a class="ltr mono" href="{% url 'support:detail' t.number %}">{{ t.number }}</a></td>
+        <td><a href="{% url 'support:detail' t.number %}">{{ t.subject }}</a></td>
+        <td>{{ t.get_category_display }}</td>
+        <td><span class="badge tk-{{ t.status }}">{{ t.get_status_display }}</span></td>
+        <td>{{ t.updated_at|jdatetime_full }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty"><h2>هنوز تیکتی ثبت نکرده‌اید</h2>
+    <p class="muted">سؤال فنی، مشکل اتصال یا درخواست خرید پلن را از این‌جا بپرسید.</p>
+    <a class="btn" href="{% url 'support:new' %}">ثبت تیکت</a></div>
+  {% endif %}
+</div>
+{% endblock %}
