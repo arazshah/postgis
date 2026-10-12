@@ -26,6 +26,7 @@
       {% elif user.is_authenticated %}
         <a href="{% url 'databases:dashboard' %}" {% if ns == 'databases' %}aria-current="page"{% endif %}>پایگاه‌های داده من</a>
         <a href="{% url 'billing:invoices' %}" {% if ns == 'billing' %}aria-current="page"{% endif %}>صورتحساب‌ها</a>
+        <a href="{% url 'support:list' %}" {% if ns == 'support' %}aria-current="page"{% endif %}>پشتیبانی</a>
         <a href="{% url 'accounts:profile' %}" {% if u == 'profile' %}aria-current="page"{% endif %}>حساب</a>
         <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="linkbtn" type="submit">خروج</button></form>
       {% else %}
@@ -52,6 +53,7 @@
     <div style="display:flex;gap:16px;flex-wrap:wrap">
       <a href="{% url 'core:docs' %}">آموزش</a>
       <a href="{% url 'core:terms' %}">قوانین استفاده</a>
+      <a href="{% url 'support:new' %}">ثبت تیکت پشتیبانی</a>
       {% if SITE.support_phone %}<span>پشتیبانی: <span class="ltr">{{ SITE.support_phone }}</span></span>{% endif %}
       {% if SUPPORT_TELEGRAM %}<a href="https://t.me/{{ SUPPORT_TELEGRAM }}" rel="noopener">پشتیبانی در تلگرام</a>{% endif %}
       {% if SUPPORT_EMAIL %}<a href="mailto:{{ SUPPORT_EMAIL }}">{{ SUPPORT_EMAIL }}</a>{% endif %}

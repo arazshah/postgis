@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}تیکت {{ t.number }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page" style="max-width:860px">
+  <p class="small"><a href="{% url 'support:list' %}">تیکت‌های من</a></p>
+  <div class="page-head" style="align-items:flex-start">
+    <div><h1 style="font-size:1.4rem;margin:0">{{ t.subject }}</h1>
+      <p class="muted small" style="margin:4px 0 0"><span class="ltr mono">{{ t.number }}</span> · {{ t.get_category_display }}
+        {% if t.database %} · <a class="ltr" href="{% url 'databases:detail' t.database.pk %}">{{ t.database.db_name }}</a>{% endif %}
+        {% if t.plan %} · پلن {{ t.plan.name }}{% endif %}</p></div>
+    <span class="badge tk-{{ t.status }}">{{ t.get_status_display }}</span>
+  </div>
+
+  <ol class="thread">
+    {% for m in msgs %}
+    <li class="tmsg{% if m.is_staff %} staff{% endif %}">
+      <div class="tmsg-head"><b>{% if m.is_staff %}پشتیبانی {{ SITE_NAME }}{% else %}شما{% endif %}</b>
+        <span class="muted small">{{ m.created_at|jdatetime_full }}</span></div>
+      <div class="tmsg-body">{{ m.body|linebreaksbr|urlize }}</div>
+      {% if m.attachment %}<a class="small" href="{% url 'support:attachment' m.pk %}">پیوست: <span class="ltr">{{ m.attachment_name }}</span></a>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+
+  {% if t.is_closed %}
+    <div class="msg info">این تیکت بسته شده است. <a href="{% url 'support:new' %}">تیکت جدید ثبت کنید</a>.</div>
+  {% else %}
+    <form method="post" enctype="multipart/form-data" class="panel" novalidate>
+      {% csrf_token %}
+      {% for field in form %}{% include "partials/field.html" %}{% endfor %}
+      <button class="btn" type="submit">ارسال</button>
+    </form>
+    <form method="post" action="{% url 'support:close' t.number %}" style="margin-top:12px">{% csrf_token %}
+      <button class="linkbtn small" type="submit">مشکلم حل شد؛ بستن تیکت</button></form>
+  {% endif %}
+</div>
+{% endblock %}

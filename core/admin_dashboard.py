@@ -41,8 +41,14 @@ def build():
         {"label": "رسید منتظر تأیید", "value": review, "bad": review > 0},
         {"label": "درآمد ۳۰ روز (تومان)", "value": f"{sum(paid_month.values_list('amount_toman', flat=True)):,}"},
     ]
+    from support.models import Ticket
+
+    open_tickets = Ticket.objects.filter(status=Ticket.Status.OPEN).count()
+    stats.append({"label": "تیکت منتظر پاسخ", "value": open_tickets, "bad": open_tickets > 0})
     conf = SiteSettings.get()
     warnings = []
+    if open_tickets:
+        warnings.append(f"{open_tickets} تیکت پشتیبانی منتظر پاسخ شماست (بخش تیکت‌ها).")
     if review:
         warnings.append(f"{review} رسید پرداخت منتظر تأیید شماست (بخش فاکتورها).")
     if not servers:
