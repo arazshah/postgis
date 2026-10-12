@@ -14,7 +14,7 @@ from databases import services as db_services
 from databases.models import Plan, UserDatabase
 from databases.provisioner import ProvisionError
 
-from .aban import FAILED_STATUSES, PAID_STATUSES, AbanClient, AbanError
+from .gateways import GatewayError, get_gateway
 from .models import Invoice, PlanVoucher
 
 log = logging.getLogger(__name__)
@@ -31,8 +31,8 @@ def paid_plans():
 def methods_available(conf: SiteSettings | None = None) -> list[str]:
     conf = conf or SiteSettings.get()
     out = []
-    if conf.aban_ready:
-        out.append(Invoice.Method.ABAN)
+    if conf.gateway_ready:
+        out.append(Invoice.Method.GATEWAY)
     if conf.manual_ready:
         out.append(Invoice.Method.MANUAL)
     return out
@@ -69,7 +69,7 @@ def create_invoice(user, kind: str, plan: Plan, database: UserDatabase | None = 
     return inv
 
 
-# ---------------------------------------------------------------------- آبان گیت وی
+# ---------------------------------------------------------------------- درگاه پرداخت
 def _callback_url(inv: Invoice, request) -> str:
     url = request.build_absolute_uri(reverse("billing:callback", args=[inv.number]))
     if url.startswith("http://") and not settings.DEBUG:
@@ -77,82 +77,66 @@ def _callback_url(inv: Invoice, request) -> str:
     return url
 
 
-def start_aban(inv: Invoice, request) -> str:
+def start_gateway(inv: Invoice, request) -> str:
+    """یک درخواست پرداخت تازه می‌سازد و لینک درگاه را برمی‌گرداند."""
     if inv.status != Invoice.Status.PENDING or inv.is_expired_now:
         raise BillingError("این فاکتور دیگر قابل پرداخت نیست.")
-    if inv.method == Invoice.Method.ABAN and inv.pay_url:
-        return inv.pay_url
-    minutes = int((inv.expires_at - timezone.now()).total_seconds() // 60)
+    conf = SiteSettings.get()
     try:
-        result = AbanClient().create(amount_rial=inv.amount_rial, order_id=inv.number,
-                                     callback_url=_callback_url(inv, request), description=inv.title,
-                                     expiry_minutes=max(minutes, 5), metadata={"invoice": inv.number})
-    except AbanError as exc:
-        log.warning("aban create failed for %s: %s", inv.number, exc)
-        detail = f"{exc}" + (f" — {exc.hint}" if exc.hint else "")
-        db_services.logevent("payment", f"{inv.number}: {detail}"[:500], user=inv.user, database=inv.database,
+        gw = get_gateway(conf)
+        result = gw.request(amount_rial=inv.amount_rial, callback_url=_callback_url(inv, request),
+                            description=f"{conf.site_name} – فاکتور {inv.number}: {inv.title}",
+                            order_id=inv.number, mobile=inv.user.phone or "", email=inv.user.email or "")
+    except GatewayError as exc:
+        log.warning("gateway request failed for %s: %s", inv.number, exc)
+        db_services.logevent("payment", f"{inv.number}: {exc}"[:500], user=inv.user, database=inv.database,
                              success=False)
-        msg = "اتصال به درگاه پرداخت ممکن نشد. چند دقیقه دیگر تلاش کنید یا از پرداخت با رسید استفاده کنید."
-        if exc.code:
-            msg += f" (کد خطا: {exc.code})"
-        raise BillingError(msg) from exc
-    inv.method = Invoice.Method.ABAN
-    inv.provider_id = result.id
+        msg = "اتصال به درگاه پرداخت ممکن نشد. چند دقیقه دیگر تلاش کنید"
+        msg += " یا از روش کارت به کارت استفاده کنید." if conf.manual_ready else "."
+        raise BillingError(f"{msg} ({exc})" if exc.code not in ("", "network") else msg) from exc
+    inv.method = Invoice.Method.GATEWAY
+    inv.gateway = gw.name
+    inv.provider_id = result.token
     inv.pay_url = result.pay_url
-    inv.provider_status = result.status
-    if result.payable_rial:
-        inv.note = (inv.note + f"\nمبلغ قابل پرداخت در آبان: {result.payable_rial} ریال").strip()
-    inv.save(update_fields=["method", "provider_id", "pay_url", "provider_status", "note"])
-    return inv.pay_url
+    inv.provider_status = ""
+    inv.save(update_fields=["method", "gateway", "provider_id", "pay_url", "provider_status"])
+    return result.pay_url
 
 
-def check_aban(inv: Invoice) -> Invoice:
-    """وضعیت را مستقیم از آبان استعلام و در صورت پرداخت، verify می‌کند؛ تنها راه تأیید پرداخت آبان."""
-    if inv.method != Invoice.Method.ABAN or not inv.provider_id or inv.status == Invoice.Status.PAID:
+def verify_gateway(inv: Invoice, token: str | None = None) -> Invoice:
+    """
+    تأیید سمت سرور؛ تنها راه پرداخت‌شده شدن فاکتور درگاهی.
+    token فقط وقتی پذیرفته می‌شود که همان شناسه ثبت‌شده برای این فاکتور باشد.
+    """
+    if inv.method != Invoice.Method.GATEWAY or not inv.provider_id or inv.status == Invoice.Status.PAID:
+        return inv
+    if token is not None and str(token) != inv.provider_id:
+        log.warning("callback token mismatch for %s", inv.number)
         return inv
     try:
-        client = AbanClient()
-        result = client.get(inv.provider_id)
-        inv.provider_status = result.status
+        gw = get_gateway(name=inv.gateway or None)
+        res = gw.verify(inv.provider_id, inv.amount_rial)
+    except GatewayError as exc:
+        log.warning("gateway verify failed for %s: %s", inv.number, exc)
+        inv.provider_status = str(exc)[:200]
         inv.save(update_fields=["provider_status"])
-        if result.status in PAID_STATUSES:
-            if result.amount_rial is not None and result.amount_rial != inv.amount_rial:
-                return _to_review(inv, f"مبلغ فاکتور آبان ({result.amount_rial} ریال) با فاکتور سایت برابر نیست.")
-            v = client.verify(inv.provider_id)
-            if not v.verified:
-                return inv
-            if v.amount_rial is not None and v.amount_rial != inv.amount_rial:
-                return _to_review(inv, f"مبلغ تأییدشده آبان ({v.amount_rial} ریال) با فاکتور برابر نیست.")
-            mark_paid(inv)
-            inv.refresh_from_db()
-        elif result.status in FAILED_STATUSES and inv.status == Invoice.Status.PENDING:
-            inv.status = Invoice.Status.EXPIRED if "expire" in result.status else Invoice.Status.CANCELLED
-            inv.save(update_fields=["status"])
-    except AbanError as exc:
-        log.warning("aban check failed for %s: %s", inv.number, exc)
-    return inv
-
-
-def _to_review(inv: Invoice, why: str) -> Invoice:
-    inv.note = (inv.note + "\n" + why).strip()
-    inv.status = Invoice.Status.REVIEW
-    inv.save(update_fields=["note", "status"])
+        return inv
+    if not res.paid:
+        inv.provider_status = res.message[:200]
+        inv.save(update_fields=["provider_status"])
+        return inv
+    inv.gateway_ref = res.ref_id
+    inv.payer_card_last4 = res.card
+    inv.provider_status = "تأیید شد" + (" (قبلاً)" if res.already else "")
+    inv.save(update_fields=["gateway_ref", "payer_card_last4", "provider_status"])
+    mark_paid(inv)
+    inv.refresh_from_db()
     return inv
 
 
 def cancel_invoice(inv: Invoice) -> None:
     if inv.status != Invoice.Status.PENDING:
         return
-    if inv.method == Invoice.Method.ABAN and inv.provider_id:
-        try:
-            AbanClient().cancel(inv.provider_id)
-        except AbanError as exc:
-            if exc.http_status == 409:  # احتمالاً همین الان پرداخت شده
-                check_aban(inv)
-                inv.refresh_from_db()
-                if inv.status != Invoice.Status.PENDING:
-                    return
-            log.warning("aban cancel failed for %s: %s", inv.number, exc)
     inv.status = Invoice.Status.CANCELLED
     inv.save(update_fields=["status"])
 
@@ -243,18 +227,14 @@ def apply_invoice(inv: Invoice):
 
 # ---------------------------------------------------------------------- نگهداری
 def maintenance() -> dict:
+    """پرداخت‌هایی که خریدار بعد از پرداخت به سایت برنگشته، این‌جا تأیید می‌شوند."""
     now = timezone.now()
     stats = {"checked": 0, "expired": 0}
-    for inv in Invoice.objects.filter(status=Invoice.Status.PENDING, method=Invoice.Method.ABAN,
-                                      created_at__gte=now - timedelta(days=2)).exclude(provider_id=""):
-        check_aban(inv)
+    for inv in Invoice.objects.filter(status=Invoice.Status.PENDING, method=Invoice.Method.GATEWAY,
+                                      created_at__gte=now - timedelta(days=1)).exclude(provider_id=""):
+        verify_gateway(inv)
         stats["checked"] += 1
-    stats["expired"] = Invoice.objects.filter(status=Invoice.Status.PENDING, expires_at__lt=now,
-                                              method__in=["", Invoice.Method.MANUAL]).update(
-        status=Invoice.Status.EXPIRED)
-    # فاکتور آبانی که مهلتش گذشته و هنوز پرداخت نشده (یک روز فرصت برای تأیید دیرهنگام)
-    stats["expired"] += Invoice.objects.filter(status=Invoice.Status.PENDING, method=Invoice.Method.ABAN,
-                                               expires_at__lt=now - timedelta(days=1)).update(
+    stats["expired"] = Invoice.objects.filter(status=Invoice.Status.PENDING, expires_at__lt=now).update(
         status=Invoice.Status.EXPIRED)
     return stats
 

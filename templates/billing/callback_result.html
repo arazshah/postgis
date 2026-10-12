@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}نتیجه پرداخت — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page" style="max-width:640px">
+  <section class="panel">
+    <h1 style="font-size:1.4rem">فاکتور <span class="ltr mono">{{ inv.number }}</span></h1>
+    {% if inv.status == Status.PAID %}
+      <div class="msg success">پرداخت تأیید شد و پلن فعال شد.{% if inv.gateway_ref %} کد رهگیری: <b class="ltr mono">{{ inv.gateway_ref }}</b>{% endif %}</div>
+    {% else %}
+      <div class="msg error">پرداخت انجام نشد یا لغو شد. اگر مبلغی از حسابتان کم شده، حداکثر ظرف ۷۲ ساعت خودکار برمی‌گردد.</div>
+    {% endif %}
+    <p><a class="btn" href="{% url 'billing:invoice' inv.number %}">ورود و مشاهده فاکتور</a></p>
+  </section>
+</div>
+{% endblock %}

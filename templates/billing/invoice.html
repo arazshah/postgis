@@ -1,6 +1,5 @@
 {% extends "base.html" %}{% load fa humanize %}
 {% block title %}فاکتور {{ inv.number }} — {{ SITE_NAME }}{% endblock %}
-{% block head %}{% if inv.status == Status.PENDING and inv.method == "aban" and inv.provider_id %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
 {% block content %}
 <div class="wrap page">
   <p class="small"><a href="{% url 'billing:invoices' %}">صورتحساب‌های من</a></p>
@@ -22,29 +21,31 @@
         {% elif inv.status == Status.PENDING %}
           <p class="small muted">مهلت پرداخت: تا {{ inv.expires_at|jdatetime_full }}</p>
 
-          {% if 'aban' in methods %}
+          {% if 'gateway' in methods %}
           <div class="pay-option">
-            <h2>پرداخت آنلاین کارت به کارت <span class="chip">تأیید خودکار</span></h2>
-            <p class="small muted">به صفحه پرداخت منتقل می‌شوید، مبلغ نمایش‌داده‌شده را با اپ بانکی کارت به کارت می‌کنید و چند ثانیه بعد پرداخت خودکار تأیید می‌شود.</p>
-            <form method="post" action="{% url 'billing:pay_aban' inv.number %}">{% csrf_token %}
-              <button class="btn" type="submit">{% if inv.pay_url %}ادامه پرداخت در آبان گیت وی{% else %}پرداخت {{ inv.amount_toman|money }} تومان{% endif %}</button>
+            <h2>پرداخت آنلاین <span class="chip">تأیید فوری</span></h2>
+            <p class="small muted">با همه کارت‌های عضو شتاب{% if conf.gateway_provider %} از درگاه امن {{ conf.get_gateway_provider_display }}{% endif %}. بعد از پرداخت به همین سایت برمی‌گردید و پلن بلافاصله فعال می‌شود.</p>
+            {% if conf.gateway_sandbox %}<p class="msg warning small">درگاه در حالت آزمایشی است؛ پرداخت واقعی انجام نمی‌شود.</p>{% endif %}
+            <form method="post" action="{% url 'billing:pay_gateway' inv.number %}">{% csrf_token %}
+              <button class="btn" type="submit">پرداخت {{ inv.amount_toman|money }} تومان</button>
             </form>
-            <p class="small muted" style="margin-top:8px">در صفحه پرداخت، <b>دقیقاً همان مبلغی را که آبان نشان می‌دهد</b> (چند ریال بیشتر از مبلغ فاکتور) واریز کنید تا پرداخت خودکار شناسایی شود.{% if inv.pay_url %} بعد از واریز، این صفحه خودکار به‌روز می‌شود.{% endif %}</p>
           </div>
           {% endif %}
 
           {% if 'manual' in methods %}
-          <details class="pay-option" {% if show_manual or 'aban' not in methods %}open{% endif %}>
-            <summary><h2 style="display:inline">کارت به کارت و ارسال رسید</h2></summary>
-            <p class="small muted">مبلغ دقیق را به کارت زیر واریز کنید و تصویر رسید را بفرستید. بعد از بررسی (معمولاً کمتر از چند ساعت) پلن فعال می‌شود.</p>
-            <div class="conn" style="margin:12px 0">
+          <details class="pay-option" {% if show_manual or 'gateway' not in methods %}open{% endif %}>
+            <summary><h2 style="display:inline">{% if conf.pay_card_number %}کارت به کارت{% if conf.pay_link_url %} یا لینک پرداخت{% endif %}{% else %}لینک پرداخت{% endif %} و ثبت رسید</h2></summary>
+            <p class="small muted">مبلغ دقیق را پرداخت کنید و رسید یا شماره پیگیری را ثبت کنید. بعد از بررسی (معمولاً کمتر از چند ساعت) پلن فعال می‌شود.</p>
+            {% if conf.pay_link_url %}<p><a class="btn ghost" href="{{ conf.pay_link_url }}" target="_blank" rel="noopener">پرداخت {{ inv.amount_toman|money }} تومان با لینک پرداخت</a></p>
+            <p class="small muted">در توضیحات پرداخت، شماره فاکتور <b class="ltr mono">{{ inv.number }}</b> را بنویسید.</p>{% endif %}
+            {% if conf.pay_card_number %}<div class="conn" style="margin:12px 0">
               <dl>
                 <dt>شماره کارت</dt><dd><span id="card-no">{{ conf.card_number_display }}</span> <button class="copy" type="button" data-copy="{{ conf.pay_card_number }}" style="float:left">کپی</button></dd>
                 {% if conf.pay_card_holder %}<dt>به نام</dt><dd style="font-family:var(--f-body);direction:rtl;text-align:left">{{ conf.pay_card_holder }}</dd>{% endif %}
                 {% if conf.pay_bank_name %}<dt>بانک</dt><dd style="font-family:var(--f-body);direction:rtl;text-align:left">{{ conf.pay_bank_name }}</dd>{% endif %}
                 <dt>مبلغ</dt><dd>{{ inv.amount_rial|money }} ریال <button class="copy" type="button" data-copy="{{ inv.amount_rial }}" style="float:left">کپی</button></dd>
               </dl>
-            </div>
+            </div>{% endif %}
             {% if conf.pay_manual_note %}<p class="small">{{ conf.pay_manual_note|linebreaksbr }}</p>{% endif %}
             <form method="post" action="{% url 'billing:receipt' inv.number %}" enctype="multipart/form-data" novalidate>
               {% csrf_token %}
@@ -73,6 +74,7 @@
         <tr><th>مدت</th><td class="rtl">{{ inv.plan.duration_days|fanum }} روز</td></tr>
         <tr><th>تاریخ</th><td class="rtl">{{ inv.created_at|jdate }}</td></tr>
         {% if inv.method %}<tr><th>روش</th><td class="rtl">{{ inv.get_method_display }}</td></tr>{% endif %}
+        {% if inv.gateway_ref %}<tr><th>کد رهگیری</th><td>{{ inv.gateway_ref }}</td></tr>{% endif %}
       </table>
     </aside>
   </div>

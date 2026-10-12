@@ -1,5 +1,4 @@
 import io
-import json
 from datetime import timedelta
 from unittest import mock
 
@@ -11,7 +10,6 @@ from PIL import Image
 
 from accounts.models import User
 from billing import services
-from billing.aban import AbanError
 from billing.models import Invoice, PlanVoucher
 from core.models import SiteSettings
 from databases import services as db_services
@@ -139,114 +137,194 @@ class BillingTests(TestCase):
         self.assertGreater(self.db.days_left, 25)
 
 
-@override_settings(MEDIA_ROOT="/tmp/claude-0/-home-claude/2234ec6a-5c11-59b3-8baf-aeb4326ca9f5/scratchpad/media-test")
-class AbanTests(BillingTests):
-    KEY = "ag_test_" + "a" * 48
+class _GatewayBase:
+    PROVIDER = ""
 
     def setUp(self):
         super().setUp()
         conf = SiteSettings.get()
-        conf.pay_aban_enabled = True
-        conf.aban_api_base = ""
-        conf.set_aban_api_key(self.KEY)
+        conf.pay_gateway_enabled = True
+        conf.gateway_provider = self.PROVIDER
+        conf.set_gateway_merchant(self.MERCHANT)
         conf.save()
         self.inv = services.create_invoice(self.user, Invoice.Kind.UPGRADE, self.pro, self.db)
-        self.requests = []
-        self.status = "pending"
-        self.amount = 1500000
+        self.calls = []
+        self.paid = False
         self.verified = False
-
-        def fake_request(client, method, path, payload=None):
-            self.requests.append((method, path, payload, client.key, client.base))
-            if method == "POST" and path == "/invoices":
-                return {"invoice_id": "inv_77", "status": "pending", "amount_rial": payload["amount_rial"],
-                        "payable_rial": payload["amount_rial"] + 10,
-                        "payment_url": "https://abangateway.ir/pay/inv_77"}
-            if path.endswith("/verify"):
-                if self.status != "paid":
-                    raise AbanError("x", code="not_yet_paid", http_status=402)
-                if self.verified:
-                    raise AbanError("x", code="already_verified", http_status=409)
-                self.verified = True
-                return {"verified": True, "invoice_id": "inv_77", "amount_rial": self.amount}
-            if path.endswith("/cancel"):
-                return {"invoice_id": "inv_77", "status": "cancelled"}
-            return {"invoice_id": "inv_77", "status": self.status, "amount_rial": self.amount}
-
-        p = mock.patch("billing.aban.AbanClient._request", fake_request)
+        self.paid_amount = None
+        p = mock.patch("billing.gateways._post", self.fake_post)
         p.start()
         self.addCleanup(p.stop)
 
-    def test_redirect_callback_and_verify(self):
-        r = self.client.post(reverse("billing:pay_aban", args=[self.inv.number]))
-        self.assertEqual(r["Location"], "https://abangateway.ir/pay/inv_77")
-        method, path, payload, key, base = self.requests[0]
-        self.assertEqual((method, path, key, base), ("POST", "/invoices", self.KEY, "https://abangateway.ir/api/v1"))
-        self.assertEqual(payload["amount_rial"], 1500000)
-        self.assertEqual(payload["order_id"], self.inv.number)
+    def start(self):
+        r = self.client.post(reverse("billing:pay_gateway", args=[self.inv.number]))
+        self.inv.refresh_from_db()
+        return r
+
+
+class ZarinpalTests(_GatewayBase, BillingTests):
+    PROVIDER = "zarinpal"
+    MERCHANT = "11111111-2222-3333-4444-555555555555"
+
+    def fake_post(self, url, payload):
+        self.calls.append((url, payload))
+        if url.endswith("/request.json"):
+            return {"data": {"code": 100, "message": "Success", "authority": "A0000000000000000000000000000077",
+                             "fee_type": "Merchant", "fee": 0}, "errors": []}
+        if url.endswith("/verify.json"):
+            if not self.paid:
+                return {"data": [], "errors": {"code": -51, "message": "Session is not valid"}}
+            if self.paid_amount is not None and payload["amount"] != self.paid_amount:
+                return {"data": [], "errors": {"code": -50, "message": "amount mismatch"}}
+            code = 101 if self.verified else 100
+            self.verified = True
+            return {"data": {"code": code, "ref_id": 201, "card_pan": "502229******5995"}, "errors": []}
+        raise AssertionError(url)
+
+    def test_full_flow(self):
+        r = self.start()
+        self.assertEqual(r["Location"], "https://payment.zarinpal.com/pg/StartPay/A0000000000000000000000000000077")
+        url, payload = self.calls[0]
+        self.assertEqual(url, "https://payment.zarinpal.com/pg/v4/payment/request.json")
+        self.assertEqual(payload["amount"], 1500000)
+        self.assertEqual(payload["currency"], "IRR")
+        self.assertEqual(payload["merchant_id"], self.MERCHANT)
         self.assertTrue(payload["callback_url"].endswith(f"/billing/callback/{self.inv.number}/"))
-        self.assertTrue(1 <= payload["expiry_minutes"] <= 1440)
-        # برگشت بدون پرداخت
-        self.client.get(reverse("billing:callback", args=[self.inv.number]))
+        cb = reverse("billing:callback", args=[self.inv.number])
+        # لغو در درگاه
+        self.client.get(cb, {"Authority": self.inv.provider_id, "Status": "NOK"})
         self.inv.refresh_from_db()
         self.assertEqual(self.inv.status, "pending")
-        # پرداخت شد: استعلام + verify
-        self.status = "paid"
-        self.client.get(reverse("billing:callback", args=[self.inv.number]))
+        # پرداخت موفق
+        self.paid = True
+        r = self.client.get(cb, {"Authority": self.inv.provider_id, "Status": "OK"})
+        self.assertRedirects(r, reverse("billing:invoice", args=[self.inv.number]), fetch_redirect_response=False)
         self.inv.refresh_from_db()
         self.assertEqual(self.inv.status, "paid")
+        self.assertEqual(self.inv.gateway_ref, "201")
+        self.assertEqual(self.inv.payer_card_last4, "5995")
         self.assertIsNotNone(self.inv.applied_at)
-        self.assertEqual([r[1] for r in self.requests[-2:]], ["/invoices/inv_77", "/invoices/inv_77/verify"])
+        # تکرار callback بی‌اثر است
+        self.client.get(cb, {"Authority": self.inv.provider_id, "Status": "OK"})
+        self.assertEqual(Invoice.objects.get(pk=self.inv.pk).status, "paid")
 
-    def test_webhook_post_to_callback_cannot_fake_payment(self):
-        self.client.post(reverse("billing:pay_aban", args=[self.inv.number]))
-        anon = Client()
-        r = anon.post(reverse("billing:callback", args=[self.inv.number]),
-                      data=json.dumps({"invoice_id": "inv_77", "status": "paid"}), content_type="application/json")
-        self.assertEqual(r.status_code, 200)
-        self.inv.refresh_from_db()
-        self.assertEqual(self.inv.status, "pending")  # API هنوز pending است
-        self.status = "paid"
-        anon.post(reverse("billing:callback", args=[self.inv.number]), data="{}", content_type="application/json")
+    def test_forged_callback_cannot_mark_paid(self):
+        self.start()
+        cb = reverse("billing:callback", args=[self.inv.number])
+        # Status=OK بدون پرداخت واقعی
+        Client().get(cb, {"Authority": self.inv.provider_id, "Status": "OK"})
+        self.assertEqual(Invoice.objects.get(pk=self.inv.pk).status, "pending")
+        # شناسه پرداخت یک فاکتور دیگر
+        self.paid = True
+        n = len(self.calls)
+        Client().get(cb, {"Authority": "A-someone-else", "Status": "OK"})
+        self.assertEqual(Invoice.objects.get(pk=self.inv.pk).status, "pending")
+        self.assertEqual(len(self.calls), n)  # اصلاً verify نشد
+
+    def test_amount_mismatch_not_paid(self):
+        self.start()
+        self.paid, self.paid_amount = True, 1000000
+        services.verify_gateway(Invoice.objects.get(pk=self.inv.pk))
+        self.assertEqual(Invoice.objects.get(pk=self.inv.pk).status, "pending")
+
+    def test_anonymous_return_still_verifies(self):
+        self.start()
+        self.paid = True
+        r = Client().get(reverse("billing:callback", args=[self.inv.number]),
+                         {"Authority": self.inv.provider_id, "Status": "OK"})
+        self.assertContains(r, "پرداخت تأیید شد")
+        self.assertEqual(Invoice.objects.get(pk=self.inv.pk).status, "paid")
+
+    def test_maintenance_verifies_abandoned_payment(self):
+        self.start()
+        self.paid = True
+        services.maintenance()
+        self.assertEqual(Invoice.objects.get(pk=self.inv.pk).status, "paid")
+
+    def test_already_verified_counts_as_paid(self):
+        self.start()
+        self.paid, self.verified = True, True
+        services.verify_gateway(Invoice.objects.get(pk=self.inv.pk))
+        self.assertEqual(Invoice.objects.get(pk=self.inv.pk).status, "paid")
+
+    def test_request_error_message(self):
+        with mock.patch("billing.gateways._post",
+                        lambda url, p: {"data": [], "errors": {"code": -11, "message": "x"}}):
+            r = self.client.post(reverse("billing:pay_gateway", args=[self.inv.number]), follow=True)
+        self.assertContains(r, "مرچنت کد فعال نیست")
+
+    def test_sandbox_urls(self):
+        conf = SiteSettings.get()
+        conf.gateway_sandbox = True
+        conf.save()
+        r = self.start()
+        self.assertTrue(r["Location"].startswith("https://sandbox.zarinpal.com/pg/StartPay/"))
+        self.assertTrue(self.calls[-1][0].startswith("https://sandbox.zarinpal.com/pg/v4/"))
+
+
+class ZibalTests(_GatewayBase, BillingTests):
+    PROVIDER = "zibal"
+    MERCHANT = "my-zibal-merchant"
+
+    def fake_post(self, url, payload):
+        self.calls.append((url, payload))
+        if url.endswith("/request"):
+            return {"result": 100, "trackId": 15966442233, "message": "success"}
+        if url.endswith("/verify"):
+            if not self.paid:
+                return {"result": 202, "message": "unpaid"}
+            if self.verified:
+                return {"result": 201, "message": "already"}
+            self.verified = True
+            return {"result": 100, "amount": self.paid_amount or 1500000, "refNumber": 98765,
+                    "cardNumber": "62741****44", "orderId": self.inv.number}
+        if url.endswith("/inquiry"):
+            return {"result": 100, "status": 1, "amount": 1500000}
+        raise AssertionError(url)
+
+    def test_full_flow(self):
+        r = self.start()
+        self.assertEqual(r["Location"], "https://gateway.zibal.ir/start/15966442233")
+        url, payload = self.calls[0]
+        self.assertEqual(url, "https://gateway.zibal.ir/v1/request")
+        self.assertEqual((payload["merchant"], payload["amount"], payload["orderId"]),
+                         (self.MERCHANT, 1500000, self.inv.number))
+        self.paid = True
+        self.client.get(reverse("billing:callback", args=[self.inv.number]),
+                        {"trackId": "15966442233", "success": "1", "status": "2"})
         self.inv.refresh_from_db()
         self.assertEqual(self.inv.status, "paid")
+        self.assertEqual(self.inv.gateway_ref, "98765")
+        self.assertEqual(self.calls[-1][1], {"merchant": self.MERCHANT, "trackId": 15966442233})
 
-    def test_already_verified_is_idempotent(self):
-        self.client.post(reverse("billing:pay_aban", args=[self.inv.number]))
-        self.status, self.verified = "paid", True  # verify قبلاً (مثلاً قبل از تایم‌اوت) انجام شده
-        services.check_aban(Invoice.objects.get(pk=self.inv.pk))
-        self.inv.refresh_from_db()
-        self.assertEqual(self.inv.status, "paid")
+    def test_amount_mismatch(self):
+        self.start()
+        self.paid, self.paid_amount = True, 10000
+        services.verify_gateway(Invoice.objects.get(pk=self.inv.pk))
+        self.assertEqual(Invoice.objects.get(pk=self.inv.pk).status, "pending")
 
-    def test_amount_mismatch_goes_to_review(self):
-        self.client.post(reverse("billing:pay_aban", args=[self.inv.number]))
-        self.status, self.amount = "paid", 1000000
-        services.check_aban(Invoice.objects.get(pk=self.inv.pk))
-        self.inv.refresh_from_db()
-        self.assertEqual(self.inv.status, "review")
-        self.assertIsNone(self.inv.applied_at)
+    def test_already_verified_uses_inquiry_amount(self):
+        self.start()
+        self.paid, self.verified = True, True
+        services.verify_gateway(Invoice.objects.get(pk=self.inv.pk))
+        self.assertEqual(Invoice.objects.get(pk=self.inv.pk).status, "paid")
+        self.assertTrue(self.calls[-1][0].endswith("/inquiry"))
 
-    def test_cancel_calls_aban(self):
-        self.client.post(reverse("billing:pay_aban", args=[self.inv.number]))
-        self.client.post(reverse("billing:cancel", args=[self.inv.number]))
-        self.inv.refresh_from_db()
-        self.assertEqual(self.inv.status, "cancelled")
-        self.assertEqual(self.requests[-1][1], "/invoices/inv_77/cancel")
+    def test_sandbox_uses_zibal_merchant(self):
+        conf = SiteSettings.get()
+        conf.gateway_sandbox = True
+        conf.save()
+        self.start()
+        self.assertEqual(self.calls[-1][1]["merchant"], "zibal")
 
-    def test_create_error_shows_code(self):
-        def boom(client, method, path, payload=None):
-            raise AbanError("x", code="insufficient_fee_wallet", http_status=402)
 
-        with mock.patch("billing.aban.AbanClient._request", boom):
-            r = self.client.post(reverse("billing:pay_aban", args=[self.inv.number]), follow=True)
-        self.assertContains(r, "insufficient_fee_wallet")
-
-    def test_normalize_base_and_key(self):
-        from billing.aban import key_mode, normalize_base
-
-        self.assertEqual(normalize_base(""), "https://abangateway.ir/api/v1")
-        self.assertEqual(normalize_base("https://abangateway.ir"), "https://abangateway.ir/api/v1")
-        self.assertEqual(normalize_base("https://abangateway.ir/dashboard"), "https://abangateway.ir/api/v1")
-        self.assertEqual(normalize_base("https://abangateway.ir/api/v1/invoices"), "https://abangateway.ir/api/v1")
-        self.assertEqual(key_mode("ag_live_" + "Z9" * 24), "live")
-        self.assertEqual(key_mode("ag_live_short"), "")
+class PaymentLinkTests(BillingTests):
+    def test_link_only_manual_method(self):
+        conf = SiteSettings.get()
+        conf.pay_card_number = ""
+        conf.pay_link_url = "https://zarinp.al/postgis"
+        conf.save()
+        inv = services.create_invoice(self.user, Invoice.Kind.UPGRADE, self.pro, self.db)
+        r = self.client.get(reverse("billing:invoice", args=[inv.number]))
+        self.assertContains(r, "https://zarinp.al/postgis")
+        self.assertContains(r, inv.number)
