@@ -127,8 +127,7 @@
   }
 
   // شمارش معکوس ارسال دوباره کد
-  const resend = document.querySelector("form.resend");
-  if (resend) {
+  document.querySelectorAll("form.resend").forEach((resend) => {
     const btn = resend.querySelector(".resend-btn");
     const timer = resend.querySelector(".resend-timer");
     let left = parseInt(resend.getAttribute("data-wait") || "0", 10);
@@ -141,7 +140,7 @@
       } else { btn.disabled = false; btn.style.opacity = ""; timer.textContent = ""; }
     };
     tick();
-  }
+  });
 
   // تأیید فرم‌های خطرناک
   document.querySelectorAll("form[data-confirm]").forEach((f) => {

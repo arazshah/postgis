@@ -76,6 +76,16 @@ class SiteSettings(models.Model):
                                          help_text="برای پیامک‌های هشدار حجم و انقضا. خالی = ارسال نشود.")
 
     # --- رمز یک‌بار مصرف ---
+    # --- پیام‌رسان بله (سفیر) ---
+    bale_enabled = models.BooleanField(
+        "ارسال کد ورود از طریق بله", default=False,
+        help_text="سرویس سفیر بله؛ کد از بازوی رسمی «کد تأیید» (@verification_code_bot) برای کاربر می‌رود.")
+    bale_client_id = models.CharField("شناسه سرویس سفیر (Client ID)", max_length=200, blank=True)
+    bale_client_secret_encrypted = models.TextField(blank=True, editable=False)
+    bale_fallback = models.BooleanField("اگر پیامک ارسال نشد، خودکار با بله بفرست", default=True)
+    bale_button = models.BooleanField("دکمه «ارسال کد در بله» در صفحه ورود", default=True,
+                                      help_text="برای وقتی که پیامک ارسال شده ولی به دست کاربر نرسیده است.")
+
     otp_length = models.PositiveSmallIntegerField("تعداد رقم کد", default=5,
                                                   validators=[MinValueValidator(4), MaxValueValidator(8)])
     otp_ttl_seconds = models.PositiveSmallIntegerField("اعتبار کد (ثانیه)", default=120,
@@ -148,6 +158,25 @@ class SiteSettings(models.Model):
             return decrypt(self.smsir_api_key_encrypted)
         except ValueError:
             return ""
+
+    def set_bale_client_secret(self, raw: str):
+        from databases.crypto import encrypt
+
+        self.bale_client_secret_encrypted = encrypt(raw) if raw else ""
+
+    def get_bale_client_secret(self) -> str:
+        from databases.crypto import decrypt
+
+        if not self.bale_client_secret_encrypted:
+            return ""
+        try:
+            return decrypt(self.bale_client_secret_encrypted)
+        except ValueError:
+            return ""
+
+    @property
+    def bale_ready(self) -> bool:
+        return bool(self.bale_enabled and self.bale_client_id and self.bale_client_secret_encrypted)
 
     @property
     def has_smsir_api_key(self) -> bool:

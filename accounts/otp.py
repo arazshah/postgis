@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from core.models import SiteSettings
 
+from . import bale
 from .models import OTPCode
 from .sms import SMSError, send_otp
 
@@ -35,18 +36,37 @@ def client_ip(request) -> str | None:
     return request.META.get("REMOTE_ADDR")
 
 
-def seconds_until_resend(phone: str, conf: SiteSettings | None = None) -> int:
+def seconds_until_resend(phone: str, conf: SiteSettings | None = None, channel: str = "sms") -> int:
     conf = conf or SiteSettings.get()
     last = OTPCode.objects.filter(phone=phone).order_by("-created_at").first()
     if not last:
         return 0
+    if channel == "bale" and last.channel != "bale":
+        return 0  # «پیامک نرسید، در بله بفرست» بدون انتظار مجاز است؛ تکرار بله دوباره انتظار دارد
     elapsed = (timezone.now() - last.created_at).total_seconds()
     return max(int(conf.otp_resend_seconds - elapsed), 0)
 
 
-def request_code(phone: str, ip: str | None) -> OTPResult:
+BALE_SENT = "کد تأیید را در پیام‌رسان بله فرستادیم (بازوی «کد تأیید»)."
+
+
+def _send_bale(otp: OTPCode, phone: str, code: str, conf) -> bool:
+    try:
+        bale.send_otp(phone, code, conf)
+    except bale.BaleError:
+        log.exception("Bale OTP send failed for %s", phone)
+        return False
+    otp.channel = "bale"
+    otp.sent_ok = True
+    otp.save(update_fields=["channel", "sent_ok"])
+    return True
+
+
+def request_code(phone: str, ip: str | None, channel: str = "sms") -> OTPResult:
     conf = SiteSettings.get()
-    wait = seconds_until_resend(phone, conf)
+    if channel == "bale" and not (conf.bale_ready and conf.bale_button):
+        return OTPResult(False, "ارسال کد از طریق بله فعال نیست.")
+    wait = seconds_until_resend(phone, conf, channel)
     if wait:
         return OTPResult(False, f"برای ارسال دوباره {wait} ثانیه صبر کنید.", wait)
 
@@ -57,15 +77,27 @@ def request_code(phone: str, ip: str | None) -> OTPResult:
         return OTPResult(False, "تعداد درخواست‌ها از این اینترنت زیاد بوده است. کمی بعد تلاش کنید.")
 
     otp, code = OTPCode.issue(phone, ip, conf)
+    show = settings.DEBUG and conf.sms_backend == "console"
+    debug = code if show else None
+
+    if channel == "bale":
+        if _send_bale(otp, phone, code, conf):
+            return OTPResult(True, BALE_SENT + " اگر بله ندارید، از ارسال دوباره پیامک استفاده کنید.",
+                             conf.otp_resend_seconds, debug_code=debug)
+        otp.sent_ok = False
+        otp.save(update_fields=["sent_ok"])
+        return OTPResult(False, "ارسال کد در بله ممکن نشد. دوباره پیامک بگیرید یا کمی بعد تلاش کنید.")
+
     try:
         send_otp(phone, code)
     except SMSError:
         log.exception("OTP send failed for %s", phone)
+        if conf.bale_ready and conf.bale_fallback and _send_bale(otp, phone, code, conf):
+            return OTPResult(True, "ارسال پیامک ممکن نشد؛ " + BALE_SENT, conf.otp_resend_seconds, debug_code=debug)
         otp.sent_ok = False
         otp.save(update_fields=["sent_ok"])
         return OTPResult(False, "ارسال پیامک ممکن نشد. چند دقیقه دیگر دوباره تلاش کنید.")
-    show = settings.DEBUG and conf.sms_backend == "console"
-    return OTPResult(True, "کد تأیید پیامک شد.", conf.otp_resend_seconds, debug_code=code if show else None)
+    return OTPResult(True, "کد تأیید پیامک شد.", conf.otp_resend_seconds, debug_code=debug)
 
 
 def verify_code(phone: str, code: str) -> tuple[bool, str]:

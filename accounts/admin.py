@@ -125,8 +125,8 @@ class AdminUserAdmin(BaseUserAdmin):
 
 @admin.register(OTPCode)
 class OTPCodeAdmin(admin.ModelAdmin):
-    list_display = ["phone", "created_at", "expires_at", "attempts", "used_at", "sent_ok", "ip"]
-    list_filter = ["sent_ok"]
+    list_display = ["phone", "channel", "created_at", "expires_at", "attempts", "used_at", "sent_ok", "ip"]
+    list_filter = ["sent_ok", "channel"]
     search_fields = ["phone", "ip"]
     readonly_fields = [f.name for f in OTPCode._meta.fields]
 

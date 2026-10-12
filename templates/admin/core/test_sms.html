@@ -5,6 +5,7 @@
   <form method="post">{% csrf_token %}
     <fieldset class="module aligned">
       <div class="form-row">{{ form.phone.errors }}{{ form.phone.label_tag }} {{ form.phone }}</div>
+      <div class="form-row">{{ form.channel.label_tag }} {{ form.channel }}</div>
     </fieldset>
     <div class="submit-row"><input type="submit" class="default" value="ارسال"></div>
   </form>

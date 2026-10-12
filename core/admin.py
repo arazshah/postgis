@@ -16,6 +16,10 @@ class SiteSettingsForm(forms.ModelForm):
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
         help_text="فقط هنگام تغییر وارد کنید. رمزنگاری‌شده ذخیره می‌شود و دوباره نمایش داده نمی‌شود.")
     clear_smsir_api_key = forms.BooleanField(label="حذف کلید API فعلی", required=False)
+    bale_client_secret = forms.CharField(
+        label="رمز سرویس سفیر (Client Secret)", required=False,
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
+        help_text="فقط هنگام تغییر وارد کنید؛ رمزنگاری‌شده ذخیره می‌شود.")
     gateway_merchant = forms.CharField(
         label="مرچنت کد درگاه", required=False,
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
@@ -44,6 +48,8 @@ class SiteSettingsForm(forms.ModelForm):
             obj.smsir_api_key_encrypted = ""
         elif self.cleaned_data.get("smsir_api_key"):
             obj.set_smsir_api_key(self.cleaned_data["smsir_api_key"].strip())
+        if self.cleaned_data.get("bale_client_secret"):
+            obj.set_bale_client_secret(self.cleaned_data["bale_client_secret"].strip())
         if self.cleaned_data.get("gateway_merchant"):
             obj.set_gateway_merchant(self.cleaned_data["gateway_merchant"])
         if commit:
@@ -54,7 +60,7 @@ class SiteSettingsForm(forms.ModelForm):
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
     form = SiteSettingsForm
-    readonly_fields = ["api_key_status", "gateway_status", "gateway_tools", "sms_tools", "updated_at"]
+    readonly_fields = ["api_key_status", "bale_status", "gateway_status", "gateway_tools", "sms_tools", "updated_at"]
     fieldsets = (
         ("سایت", {"fields": ("site_name", "tagline", "announcement", "announcement_level")}),
         ("پشتیبانی", {"fields": ("support_phone", "support_telegram", "support_email")}),
@@ -74,6 +80,13 @@ class SiteSettingsAdmin(admin.ModelAdmin):
                        "smsir_template_id", "smsir_code_param", "smsir_line_number", "sms_tools"),
             "description": "قالب کد تأیید را در پنل sms.ir بسازید، مثلاً «کد ورود شما: #CODE#»، "
                            "و شناسه آن را اینجا وارد کنید.",
+        }),
+        ("ارسال کد ورود در پیام‌رسان بله (سفیر)", {
+            "fields": ("bale_enabled", "bale_status", "bale_client_id", "bale_client_secret", "bale_fallback",
+                       "bale_button"),
+            "description": "در سامانه سفیر بله (bale.ai/safir) حساب سازمانی بسازید، سرویس ارسال کد تأیید (OTP) را فعال کنید و "
+                           "Client ID و Client Secret را این‌جا وارد کنید. با «ارسال کد آزمایشی» در بخش پیامک، "
+                           "مسیر بله را هم می‌توانید آزمایش کنید.",
         }),
         ("رمز یک‌بار مصرف و امنیت ورود", {"fields": ("otp_length", "otp_ttl_seconds", "otp_resend_seconds",
                                                     "otp_max_attempts", "otp_max_per_phone_hour",
@@ -96,6 +109,14 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         if obj.has_smsir_api_key:
             return format_html('<b style="color:#1a7f4b">ذخیره شده</b>')
         return format_html('<b style="color:#b42318">وارد نشده</b>')
+
+    @admin.display(description="وضعیت بله")
+    def bale_status(self, obj):
+        if obj.bale_ready:
+            return format_html('<b style="color:#1a7f4b">فعال و آماده</b>')
+        if obj.bale_client_secret_encrypted and obj.bale_client_id:
+            return format_html('<b style="color:#b54708">اطلاعات ذخیره شده، ولی غیرفعال</b>')
+        return format_html('<b style="color:#b42318">تنظیم نشده</b>')
 
     @admin.display(description="وضعیت مرچنت کد")
     def gateway_status(self, obj):
@@ -163,15 +184,27 @@ class SiteSettingsAdmin(admin.ModelAdmin):
 
         class TestForm(forms.Form):
             phone = forms.CharField(label="شماره موبایل گیرنده", widget=forms.TextInput(attrs={"dir": "ltr"}))
+            channel = forms.ChoiceField(label="مسیر", choices=[("sms", "پیامک (sms.ir)"), ("bale", "پیام‌رسان بله")])
 
             def clean_phone(self):
                 return normalize_mobile(self.cleaned_data["phone"])
 
         form = TestForm(request.POST or None)
         if request.method == "POST" and form.is_valid():
+            phone = form.cleaned_data["phone"]
             try:
-                send_otp(form.cleaned_data["phone"], "12345")
-                messages.success(request, "پیامک آزمایشی با کد 12345 ارسال شد.")
+                if form.cleaned_data["channel"] == "bale":
+                    from accounts.bale import BaleError
+                    from accounts.bale import send_otp as bale_send
+
+                    try:
+                        bale_send(phone, "12345")
+                    except BaleError as exc:
+                        raise SMSError(str(exc)) from exc
+                    messages.success(request, "کد آزمایشی 12345 در بله ارسال شد (بازوی «کد تأیید»).")
+                else:
+                    send_otp(phone, "12345")
+                    messages.success(request, "پیامک آزمایشی با کد 12345 ارسال شد.")
             except (SMSError, ValidationError) as exc:
                 messages.error(request, f"ارسال ناموفق: {exc}")
             return self._back()
