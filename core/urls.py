@@ -10,4 +10,6 @@ urlpatterns = [
     path("docs/<slug:slug>/", views.docs_page, name="doc"),
     path("terms/", views.terms, name="terms"),
     path("healthz", views.healthz, name="healthz"),
+    path("robots.txt", views.robots_txt, name="robots"),
+    path("sitemap.xml", views.sitemap_xml, name="sitemap"),
 ]

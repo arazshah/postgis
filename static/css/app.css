@@ -392,3 +392,9 @@ details.pay-option summary{cursor:pointer}
 .tmsg.staff{align-self:flex-end;background:var(--green-soft);border-color:transparent}
 .tmsg-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:6px}
 .tmsg-body{white-space:normal;overflow-wrap:anywhere;line-height:1.9}
+
+/* پرسش‌های متداول */
+.faq{display:flex;flex-direction:column;gap:12px;max-width:860px}
+.faq details{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:18px 22px}
+.faq summary{cursor:pointer;font-weight:700;font-size:1.05rem}
+.faq details p{margin:12px 0 0;line-height:1.9;color:var(--ink-2)}

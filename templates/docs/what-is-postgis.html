@@ -1,0 +1,79 @@
+{% extends "docs/_layout.html" %}
+{% block title %}پایگاه داده مکانی و PostGIS چیست؟ راهنمای کامل + ساخت رایگان — {{ SITE_NAME }}{% endblock %}
+{% block jsonld %}{{ block.super }}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+ {"@type":"Question","name":"آیا PostGIS رایگان است؟","acceptedAnswer":{"@type":"Answer","text":"بله. PostGIS و PostgreSQL هر دو متن‌باز و رایگان‌اند؛ هزینه فقط مربوط به سروری است که روی آن اجرا می‌شوند."}},
+ {"@type":"Question","name":"برای راه‌اندازی WebGIS به چه چیزهایی نیاز دارم؟","acceptedAnswer":{"@type":"Answer","text":"معمولاً یک پایگاه داده مکانی (PostGIS)، یک سرور نقشه یا API (مثل GeoServer) و یک کتابخانه نمایش نقشه در مرورگر (Leaflet یا OpenLayers)."}},
+ {"@type":"Question","name":"آیا می‌توانم از ArcGIS به PostGIS وصل شوم؟","acceptedAnswer":{"@type":"Answer","text":"بله، ArcGIS Pro از اتصال به PostgreSQL/PostGIS پشتیبانی می‌کند؛ اطلاعات اتصال همان است که برای QGIS استفاده می‌کنید."}}
+]}
+</script>
+{% endblock %}
+{% block doc %}
+<p><strong>پایگاه داده مکانی</strong> (Spatial Database) پایگاه داده‌ای است که علاوه بر عدد و متن، <em>شکل و موقعیت</em> را هم ذخیره می‌کند و می‌فهمد: نقطه‌ی یک ایستگاه، خط یک خیابان، چندضلعی یک قطعه زمین. <strong>PostGIS</strong> محبوب‌ترین پایگاه داده مکانی متن‌باز جهان است؛ افزونه‌ای که PostgreSQL را به یک موتور کامل تحلیل مکانی تبدیل می‌کند. در این راهنما می‌بینید پایگاه داده مکانی چه کاری انجام می‌دهد، کجا به آن نیاز دارید و چطور در چند دقیقه یکی داشته باشید.</p>
+
+<h2>پایگاه داده مکانی چه فرقی با پایگاه داده معمولی دارد؟</h2>
+<p>در یک پایگاه داده معمولی می‌توانید بپرسید «کدام مشتری‌ها در تهران هستند؟» چون «تهران» یک متن است. اما سؤال‌هایی مثل این‌ها فقط در پایگاه داده مکانی جواب دارند:</p>
+<ul>
+  <li>کدام مدرسه‌ها در شعاع ۵۰۰ متری این خیابان هستند؟</li>
+  <li>مساحت هر قطعه زمین چقدر است و کدام‌ها با حریم رودخانه هم‌پوشانی دارند؟</li>
+  <li>نزدیک‌ترین ایستگاه آتش‌نشانی به این آدرس کجاست و مسیر رسیدن چقدر طول می‌کشد؟</li>
+  <li>چند حسگر آلودگی هوا داخل هر منطقه شهرداری قرار دارد؟</li>
+</ul>
+<p>پایگاه داده مکانی برای این کارها سه چیز دارد: <strong>نوع داده هندسی</strong> (نقطه، خط، چندضلعی)، <strong>توابع مکانی</strong> (فاصله، تقاطع، بافر، تبدیل مختصات) و <strong>نمایه مکانی</strong> که جستجو بین میلیون‌ها عارضه را در کسری از ثانیه انجام می‌دهد.</p>
+
+<h2>PostGIS چیست؟</h2>
+<p>PostGIS افزونه‌ای رایگان و متن‌باز برای PostgreSQL است که از سال ۲۰۰۱ توسعه داده می‌شود و امروز ستون فقرات بسیاری از سامانه‌های GIS در دنیاست. با نصب آن، ستون‌های <code>geometry</code> و <code>geography</code> و صدها تابع مکانی با پیشوند <code>ST_</code> به پایگاه داده اضافه می‌شود. تقریباً همه ابزارهای GIS مستقیم به PostGIS وصل می‌شوند:</p>
+<table>
+  <tr><th>ابزار</th><th>کاربرد با PostGIS</th></tr>
+  <tr><td class="ltr">QGIS</td><td>نمایش، ویرایش و تحلیل لایه‌ها مستقیم از پایگاه داده (<a href="{% url 'core:doc' 'qgis' %}">آموزش اتصال QGIS</a>)</td></tr>
+  <tr><td class="ltr">GeoServer</td><td>انتشار لایه‌ها به‌صورت WMS و WFS برای WebGIS (<a href="{% url 'core:doc' 'geoserver' %}">آموزش GeoServer</a>)</td></tr>
+  <tr><td class="ltr">Python / GeoPandas</td><td>خواندن و نوشتن داده مکانی با چند خط کد (<a href="{% url 'core:doc' 'code' %}">نمونه کد</a>)</td></tr>
+  <tr><td class="ltr">GeoDjango / Node.js</td><td>ساخت وب‌سایت و API نقشه</td></tr>
+  <tr><td class="ltr">ogr2ogr / shp2pgsql</td><td>وارد کردن Shapefile، GeoPackage و GeoJSON (<a href="{% url 'core:doc' 'import' %}">آموزش ورود داده</a>)</td></tr>
+</table>
+
+<h2>افزونه‌های مهم کنار PostGIS</h2>
+<ul>
+  <li><strong>pgRouting:</strong> کوتاه‌ترین مسیر، تحلیل شبکه معابر و حوزه دسترسی.</li>
+  <li><strong>postgis_raster:</strong> ذخیره و تحلیل تصاویر ماهواره‌ای و مدل رقومی ارتفاع (DEM).</li>
+  <li><strong>postgis_topology:</strong> مدیریت مرزهای مشترک و همسایگی، مثل نقشه‌های کاداستر.</li>
+  <li><strong>pg_trgm و fuzzystrmatch:</strong> جستجوی سریع و تقریبی روی نام مکان‌ها و نشانی‌ها.</li>
+</ul>
+
+<h2>چند کوئری مکانی نمونه</h2>
+<p>فاصله واقعی به متر بین دو نقطه (با نوع <code>geography</code>):</p>
+<pre class="ltr"><code>SELECT ST_Distance(
+  ST_SetSRID(ST_MakePoint(51.3380, 35.6997), 4326)::geography,  -- برج آزادی
+  ST_SetSRID(ST_MakePoint(51.3890, 35.7575), 4326)::geography   -- برج میلاد
+) AS meters;</code></pre>
+<p>همه قطعه‌هایی که با حریم ۲۰۰ متری یک رودخانه تقاطع دارند:</p>
+<pre class="ltr"><code>SELECT p.id, p.owner
+FROM parcels p
+JOIN rivers r ON ST_DWithin(p.geom::geography, r.geom::geography, 200);</code></pre>
+<p>تعداد نقاط داخل هر منطقه:</p>
+<pre class="ltr"><code>SELECT z.name, count(s.*) AS sensors
+FROM zones z LEFT JOIN sensors s ON ST_Contains(z.geom, s.geom)
+GROUP BY z.name ORDER BY sensors DESC;</code></pre>
+<p>نمونه‌های بیشتر در <a href="{% url 'core:doc' 'sql' %}">کوئری‌های مکانی پرکاربرد</a> آمده است.</p>
+
+<h2>PostGIS یا Shapefile و GeoPackage؟</h2>
+<p>Shapefile و GeoPackage <em>فایل</em> هستند: برای یک نفر روی یک کامپیوتر عالی‌اند. وقتی چند نفر باید هم‌زمان روی داده کار کنند، وقتی GeoServer یا یک وب‌سایت باید لایه را نمایش دهد، یا وقتی داده از چند صد هزار عارضه بیشتر می‌شود، به یک <strong>پایگاه داده مکانی سرور</strong> نیاز دارید. PostGIS همچنین کنترل دسترسی، تراکنش، نمایه مکانی و تحلیل با SQL را یکجا می‌دهد.</p>
+
+<h2>سیستم مختصات (SRID) را چطور انتخاب کنیم؟</h2>
+<p>برای ذخیره و نمایش وب معمولاً <span class="ltr">EPSG:4326</span> (طول و عرض جغرافیایی) کافی است. برای محاسبه دقیق فاصله و مساحت، یا از نوع <code>geography</code> استفاده کنید یا داده را به UTM زون مربوط ببرید؛ برای تهران <span class="ltr">EPSG:32639</span>. جزئیات در <a href="{% url 'core:doc' 'srid' %}">سیستم مختصات و SRID در ایران</a>.</p>
+
+<h2>چطور یک پایگاه داده PostGIS داشته باشیم؟</h2>
+<p>دو راه دارید. <strong>نصب روی سرور خودتان:</strong> PostgreSQL و PostGIS را نصب می‌کنید، دسترسی از بیرون، کاربر محدود، SSL، فایروال و بکاپ را تنظیم می‌کنید. برای تیم‌هایی که مدیر سرور دارند مناسب است، ولی برای یک پایان‌نامه یا پروژه کوچک چند روز وقت می‌گیرد.</p>
+<p><strong>پایگاه داده PostGIS آماده در {{ SITE_NAME }}:</strong> با شماره موبایل ثبت‌نام می‌کنید، یک نام می‌نویسید و افزونه‌ها را تیک می‌زنید. کمتر از یک دقیقه بعد یک پایگاه داده مکانی با اتصال SSL و کاربر اختصاصی دارید، همراه با اطلاعات اتصال آماده برای QGIS، GeoServer و پایتون. جدول‌ها، نقشه هر لایه و کنسول SQL هم داخل خود سایت در دسترس است.</p>
+{% if plan %}<p>پلن رایگان: {{ plan.quota_display }} حجم، {{ plan.max_connections }} اتصال همزمان و {{ plan.duration_days }} روز اعتبار با امکان تمدید رایگان؛ مناسب یادگیری، پایان‌نامه و نمونه اولیه WebGIS.</p>{% endif %}
+<p><a class="btn" href="{% if user.is_authenticated %}{% url 'databases:create' %}{% else %}{% url 'accounts:login' %}{% endif %}">ساخت پایگاه داده مکانی رایگان</a></p>
+
+<h2>پرسش‌های متداول</h2>
+<h3>آیا PostGIS رایگان است؟</h3>
+<p>بله. PostGIS و PostgreSQL هر دو متن‌باز و رایگان‌اند؛ هزینه فقط مربوط به سروری است که روی آن اجرا می‌شوند.</p>
+<h3>برای راه‌اندازی WebGIS به چه چیزهایی نیاز دارم؟</h3>
+<p>معمولاً یک پایگاه داده مکانی (PostGIS)، یک سرور نقشه یا API (مثل GeoServer) و یک کتابخانه نمایش نقشه در مرورگر (Leaflet یا OpenLayers).</p>
+<h3>آیا می‌توانم از ArcGIS به PostGIS وصل شوم؟</h3>
+<p>بله، ArcGIS Pro از اتصال به PostgreSQL/PostGIS پشتیبانی می‌کند؛ اطلاعات اتصال همان است که برای QGIS استفاده می‌کنید.</p>
+{% endblock %}
