@@ -10,15 +10,15 @@ from .models import Invoice, PlanVoucher
 class InvoiceAdmin(admin.ModelAdmin):
     list_display = ["number", "user", "title_col", "amount_col", "method", "status_col", "created_at", "paid_at"]
     list_filter = ["status", "method", "kind", "plan"]
-    search_fields = ["number", "user__phone", "user__full_name", "tracking_code", "payer_card_last4", "provider_id"]
+    search_fields = ["number", "user__phone", "user__full_name", "tracking_code", "payer_card_last4", "provider_id", "gateway_ref"]
     date_hierarchy = "created_at"
-    actions = ["approve", "reject_selected", "check_gateway", "simulate", "reapply"]
-    readonly_fields = ["number", "user", "kind", "plan", "database", "amount_toman", "method", "provider_id",
-                       "pay_url", "provider_status", "receipt_preview", "payer_card_last4", "tracking_code",
+    actions = ["approve", "reject_selected", "check_gateway", "reapply"]
+    readonly_fields = ["number", "user", "kind", "plan", "database", "amount_toman", "method", "gateway", "provider_id",
+                       "gateway_ref", "pay_url", "provider_status", "receipt_preview", "payer_card_last4", "tracking_code",
                        "paid_at_claimed", "reviewed_by", "created_at", "expires_at", "paid_at", "applied_at"]
     fields = ["number", "user", "kind", "plan", "database", "amount_toman", "status", "method",
               "receipt_preview", "payer_card_last4", "tracking_code", "paid_at_claimed",
-              "provider_id", "pay_url", "provider_status", "note", "reviewed_by",
+              "gateway", "provider_id", "gateway_ref", "pay_url", "provider_status", "note", "reviewed_by",
               "created_at", "expires_at", "paid_at", "applied_at"]
 
     def get_queryset(self, request):
@@ -77,31 +77,10 @@ class InvoiceAdmin(admin.ModelAdmin):
             n += 1
         self.message_user(request, f"{n} فاکتور رد شد و به کاربر اطلاع داده شد.", messages.SUCCESS)
 
-    @admin.action(description="استعلام دوباره از آبان گیت وی")
+    @admin.action(description="استعلام و تأیید دوباره از درگاه")
     def check_gateway(self, request, queryset):
-        for inv in queryset.filter(method=Invoice.Method.ABAN):
-            inv = services.check_aban(inv)
-            self.message_user(request, f"{inv.number}: {inv.get_status_display()} ({inv.provider_status or '—'})")
-
-    @admin.action(description="شبیه‌سازی پرداخت (فقط با کلید آزمایشی ag_test_)")
-    def simulate(self, request, queryset):
-        from .aban import AbanClient, AbanError
-
-        try:
-            client = AbanClient()
-        except AbanError as exc:
-            self.message_user(request, str(exc), messages.ERROR)
-            return
-        if client.mode != "test":
-            self.message_user(request, "شبیه‌سازی فقط با کلید آزمایشی (ag_test_) ممکن است.", messages.ERROR)
-            return
-        for inv in queryset.filter(method=Invoice.Method.ABAN, status=Invoice.Status.PENDING).exclude(provider_id=""):
-            try:
-                client.simulate_payment(inv.provider_id)
-            except AbanError as exc:
-                self.message_user(request, f"{inv.number}: {exc}", messages.ERROR)
-                continue
-            inv = services.check_aban(inv)
+        for inv in queryset.filter(method=Invoice.Method.GATEWAY):
+            inv = services.verify_gateway(inv)
             self.message_user(request, f"{inv.number}: {inv.get_status_display()} ({inv.provider_status or '—'})")
 
     @admin.action(description="اعمال دوباره پلن (برای پرداخت‌شده‌های اعمال‌نشده)")

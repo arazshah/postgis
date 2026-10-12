@@ -16,23 +16,27 @@ class SiteSettingsForm(forms.ModelForm):
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
         help_text="فقط هنگام تغییر وارد کنید. رمزنگاری‌شده ذخیره می‌شود و دوباره نمایش داده نمی‌شود.")
     clear_smsir_api_key = forms.BooleanField(label="حذف کلید API فعلی", required=False)
-    aban_api_key = forms.CharField(
-        label="کلید API آبان گیت وی", required=False,
+    gateway_merchant = forms.CharField(
+        label="مرچنت کد درگاه", required=False,
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
-        help_text="فقط هنگام تغییر وارد کنید؛ رمزنگاری‌شده ذخیره می‌شود.")
+        help_text="از پنل زرین‌پال (۳۶ کاراکتر) یا زیبال. فقط هنگام تغییر وارد کنید؛ رمزنگاری‌شده ذخیره می‌شود.")
 
     class Meta:
         model = SiteSettings
         fields = "__all__"
 
-    def clean_aban_api_key(self):
-        from billing.aban import key_mode
+    def clean_gateway_merchant(self):
+        return "".join((self.cleaned_data.get("gateway_merchant") or "").split())
 
-        key = "".join((self.cleaned_data.get("aban_api_key") or "").split())
-        if key and not key_mode(key):
-            raise ValidationError("قالب کلید درست نیست. کلید آبان با ag_live_ (واقعی) یا ag_test_ (آزمایشی) شروع "
-                                  "می‌شود و بعد از آن دقیقاً ۴۸ حرف/عدد می‌آید. کلید کامل را دوباره کپی کنید.")
-        return key
+    def clean(self):
+        c = super().clean()
+        merchant = c.get("gateway_merchant")
+        if merchant and c.get("gateway_provider") == "zarinpal":
+            import re
+
+            if not re.fullmatch(r"[0-9a-fA-F-]{36}", merchant):
+                self.add_error("gateway_merchant", "مرچنت کد زرین‌پال ۳۶ کاراکتر به شکل xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx است.")
+        return c
 
     def save(self, commit=True):
         obj = super().save(commit=False)
@@ -40,8 +44,8 @@ class SiteSettingsForm(forms.ModelForm):
             obj.smsir_api_key_encrypted = ""
         elif self.cleaned_data.get("smsir_api_key"):
             obj.set_smsir_api_key(self.cleaned_data["smsir_api_key"].strip())
-        if self.cleaned_data.get("aban_api_key"):
-            obj.set_aban_api_key(self.cleaned_data["aban_api_key"])
+        if self.cleaned_data.get("gateway_merchant"):
+            obj.set_gateway_merchant(self.cleaned_data["gateway_merchant"])
         if commit:
             obj.save()
         return obj
@@ -50,7 +54,7 @@ class SiteSettingsForm(forms.ModelForm):
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
     form = SiteSettingsForm
-    readonly_fields = ["api_key_status", "aban_key_status", "aban_tools", "sms_tools", "updated_at"]
+    readonly_fields = ["api_key_status", "gateway_status", "gateway_tools", "sms_tools", "updated_at"]
     fieldsets = (
         ("سایت", {"fields": ("site_name", "tagline", "announcement", "announcement_level")}),
         ("پشتیبانی", {"fields": ("support_phone", "support_telegram", "support_email")}),
@@ -58,9 +62,10 @@ class SiteSettingsAdmin(admin.ModelAdmin):
                                          "renew_window_days", "expiry_warning_days", "expired_grace_days")}),
         ("پرداخت و فروش پلن‌ها", {
             "fields": ("pay_enabled", "invoice_ttl_minutes",
-                       "pay_aban_enabled", "aban_key_status", "aban_api_key", "aban_api_base", "aban_tools",
+                       "pay_gateway_enabled", "gateway_provider", "gateway_status", "gateway_merchant",
+                       "gateway_sandbox", "gateway_tools",
                        "pay_manual_enabled", "pay_card_number", "pay_card_holder", "pay_bank_name",
-                       "pay_manual_note"),
+                       "pay_link_url", "pay_manual_note"),
             "description": "قیمت پلن‌ها را از بخش «پلن‌ها» تعیین کنید. پرداخت‌های منتظر تأیید در بخش «فاکتورها» هستند.",
         }),
         ("نقشه مرورگر پایگاه داده", {"fields": ("map_tile_url", "map_tile_attribution")}),
@@ -92,24 +97,18 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             return format_html('<b style="color:#1a7f4b">ذخیره شده</b>')
         return format_html('<b style="color:#b42318">وارد نشده</b>')
 
-    @admin.display(description="وضعیت کلید آبان")
-    def aban_key_status(self, obj):
-        from billing.aban import key_mode
+    @admin.display(description="وضعیت مرچنت کد")
+    def gateway_status(self, obj):
+        if obj.gateway_merchant_encrypted:
+            return format_html('<b style="color:#1a7f4b">ذخیره شده</b>')
+        if obj.gateway_sandbox:
+            return format_html('<b style="color:#b54708">وارد نشده — فقط حالت آزمایشی کار می‌کند</b>')
+        return format_html('<b style="color:#b42318">وارد نشده</b>')
 
-        if not obj.aban_api_key_encrypted:
-            return format_html('<b style="color:#b42318">وارد نشده</b>')
-        try:
-            mode = key_mode(obj.get_aban_api_key())
-        except Exception:  # noqa: BLE001
-            mode = ""
-        label = {"live": "کلید واقعی (ag_live_)", "test": "کلید آزمایشی (ag_test_) — پرداخت واقعی انجام نمی‌شود"}
-        color = "#1a7f4b" if mode == "live" else "#b54708"
-        return format_html('<b style="color:{}">ذخیره شده — {}</b>', color, label.get(mode, "قالب ناشناخته"))
-
-    @admin.display(description="ابزار آبان")
-    def aban_tools(self, obj):
-        return format_html('<a class="button" href="{}">آزمایش اتصال به آبان گیت وی</a>',
-                           reverse("admin:core_sitesettings_abantest"))
+    @admin.display(description="ابزار درگاه")
+    def gateway_tools(self, obj):
+        return format_html('<a class="button" href="{}">آزمایش اتصال به درگاه</a>',
+                           reverse("admin:core_sitesettings_gatewaytest"))
 
     @admin.display(description="ابزار پیامک")
     def sms_tools(self, obj):
@@ -121,27 +120,30 @@ class SiteSettingsAdmin(admin.ModelAdmin):
     def get_urls(self):
         return [
             path("credit/", self.admin_site.admin_view(self.credit_view), name="core_sitesettings_credit"),
-            path("aban-test/", self.admin_site.admin_view(self.aban_test_view), name="core_sitesettings_abantest"),
+            path("gateway-test/", self.admin_site.admin_view(self.gateway_test_view),
+                 name="core_sitesettings_gatewaytest"),
             path("test-sms/", self.admin_site.admin_view(self.test_sms_view), name="core_sitesettings_testsms"),
         ] + super().get_urls()
 
     def _back(self):
         return redirect(reverse("admin:core_sitesettings_change", args=[1]))
 
-    def aban_test_view(self, request):
-        from billing.aban import AbanClient, AbanError
+    def gateway_test_view(self, request):
+        """یک درخواست پرداخت ۱۰ هزار تومانی می‌سازد (بدون پرداخت) تا مرچنت و دسترسی سرور به درگاه بررسی شود."""
+        from billing.gateways import GatewayError, get_gateway
 
+        conf = SiteSettings.get()
         try:
-            client = AbanClient()
-            mode = client.ping()
-        except AbanError as exc:
-            messages.error(request, f"اتصال به آبان ناموفق بود: {exc}" + (f" — {exc.hint}" if exc.hint else ""))
+            gw = get_gateway(conf)
+            res = gw.request(amount_rial=100000, callback_url=request.build_absolute_uri("/billing/invoices/"),
+                             description="آزمایش اتصال از پنل مدیریت", order_id="TEST")
+        except GatewayError as exc:
+            messages.error(request, f"آزمایش درگاه ناموفق بود: {exc}")
         else:
-            if mode == "test":
-                messages.warning(request, f"اتصال و کلید درست است ({client.base}). کلید «آزمایشی» است؛ پرداخت‌ها "
-                                          "شبیه‌سازی می‌شوند. برای فروش واقعی کلید ag_live_ را وارد کنید.")
-            else:
-                messages.success(request, f"اتصال و کلید آبان گیت وی درست است ({client.base}).")
+            mode = " (حالت آزمایشی)" if conf.gateway_sandbox else ""
+            messages.success(request, format_html(
+                "اتصال به {}{} درست است. <a href=\"{}\" target=\"_blank\">صفحه پرداخت آزمایشی</a> "
+                "(پرداخت نکنید).", gw.title, mode, res.pay_url))
         return self._back()
 
     def credit_view(self, request):

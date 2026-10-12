@@ -46,18 +46,24 @@ class SiteSettings(models.Model):
     pay_enabled = models.BooleanField("فروش پلن‌های پولی فعال است", default=False)
     invoice_ttl_minutes = models.PositiveSmallIntegerField("مهلت پرداخت هر فاکتور (دقیقه)", default=60,
                                                            validators=[MinValueValidator(5)])
-    pay_aban_enabled = models.BooleanField("پرداخت با آبان گیت وی (تأیید خودکار)", default=False)
-    aban_api_key_encrypted = models.TextField(blank=True, editable=False)
-    aban_api_base = models.URLField("آدرس API آبان گیت وی", blank=True,
-                                    help_text="خالی بگذارید تا آدرس پیش‌فرض https://abangateway.ir/api/v1 استفاده شود.")
-    aban_create_path = models.CharField("مسیر ساخت فاکتور", max_length=200, default="/invoices")
-    aban_status_path = models.CharField("مسیر استعلام فاکتور", max_length=200, default="/invoices/{id}",
-                                        help_text="{id} با شناسه فاکتور آبان جایگزین می‌شود.")
+    GATEWAYS = [("zarinpal", "زرین‌پال"), ("zibal", "زیبال")]
+    pay_gateway_enabled = models.BooleanField(
+        "پرداخت آنلاین با درگاه (تأیید خودکار)", default=False,
+        help_text="درگاه شاپرکی زرین‌پال یا زیبال؛ پرداخت با همه کارت‌های بانکی و تأیید خودکار.")
+    gateway_provider = models.CharField("درگاه پرداخت", max_length=20, choices=GATEWAYS, default="zibal")
+    gateway_merchant_encrypted = models.TextField(blank=True, editable=False)
+    gateway_sandbox = models.BooleanField(
+        "حالت آزمایشی (سندباکس)", default=False,
+        help_text="پرداخت واقعی انجام نمی‌شود؛ برای تست کل چرخه قبل از دریافت مرچنت کد.")
     pay_manual_enabled = models.BooleanField("پرداخت دستی با آپلود رسید", default=True,
                                              help_text="پشتیبان: مشتری کارت به کارت می‌کند، رسید را آپلود می‌کند و شما تأیید می‌کنید.")
     pay_card_number = models.CharField("شماره کارت مقصد (پرداخت دستی)", max_length=19, blank=True)
     pay_card_holder = models.CharField("نام صاحب کارت", max_length=100, blank=True)
     pay_bank_name = models.CharField("نام بانک", max_length=50, blank=True)
+    pay_link_url = models.URLField(
+        "لینک پرداخت (اختیاری)", blank=True,
+        help_text="مثلاً لینک شخصی زرین‌پال یا زرین‌لینک. مشتری با آن پرداخت می‌کند و شماره پیگیری را ثبت می‌کند؛ "
+                  "تأیید با شماست.")
     pay_manual_note = models.TextField("توضیح برای پرداخت دستی", blank=True)
 
     # --- پیامک ---
@@ -147,26 +153,28 @@ class SiteSettings(models.Model):
     def has_smsir_api_key(self) -> bool:
         return bool(self.smsir_api_key_encrypted)
 
-    def set_aban_api_key(self, raw: str):
+    def set_gateway_merchant(self, raw: str):
         from databases.crypto import encrypt
 
-        self.aban_api_key_encrypted = encrypt(raw)
+        self.gateway_merchant_encrypted = encrypt(raw) if raw else ""
 
-    def get_aban_api_key(self) -> str:
+    def get_gateway_merchant(self) -> str:
         from databases.crypto import decrypt
 
+        if not self.gateway_merchant_encrypted:
+            return ""
         try:
-            return decrypt(self.aban_api_key_encrypted)
+            return decrypt(self.gateway_merchant_encrypted)
         except ValueError:
             return ""
 
     @property
-    def aban_ready(self) -> bool:
-        return bool(self.pay_aban_enabled and self.aban_api_key_encrypted)
+    def gateway_ready(self) -> bool:
+        return bool(self.pay_gateway_enabled and (self.gateway_merchant_encrypted or self.gateway_sandbox))
 
     @property
     def manual_ready(self) -> bool:
-        return bool(self.pay_manual_enabled and self.pay_card_number)
+        return bool(self.pay_manual_enabled and (self.pay_card_number or self.pay_link_url))
 
     @property
     def card_number_display(self) -> str:

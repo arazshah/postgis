@@ -26,8 +26,9 @@ class Invoice(models.Model):
         CANCELLED = "cancelled", "لغو شده"
 
     class Method(models.TextChoices):
-        ABAN = "aban", "آبان گیت وی"
-        MANUAL = "manual", "کارت به کارت با رسید"
+        GATEWAY = "gateway", "درگاه پرداخت"
+        MANUAL = "manual", "کارت به کارت / لینک پرداخت"
+        LEGACY = "aban", "آبان گیت وی (حذف‌شده)"
 
     OPEN = [Status.PENDING, Status.REVIEW]
 
@@ -42,10 +43,12 @@ class Invoice(models.Model):
     method = models.CharField("روش پرداخت", max_length=10, choices=Method.choices, blank=True)
     status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.PENDING)
 
-    # آبان گیت وی
-    provider_id = models.CharField("شناسه نزد درگاه", max_length=100, blank=True)
+    # درگاه پرداخت
+    gateway = models.CharField("درگاه", max_length=20, blank=True)
+    provider_id = models.CharField("شناسه پرداخت نزد درگاه", max_length=100, blank=True)
     pay_url = models.URLField("لینک پرداخت", max_length=500, blank=True)
-    provider_status = models.CharField("آخرین وضعیت درگاه", max_length=50, blank=True)
+    provider_status = models.CharField("آخرین پیام درگاه", max_length=200, blank=True)
+    gateway_ref = models.CharField("کد رهگیری درگاه", max_length=60, blank=True)
 
     # پرداخت دستی
     receipt = models.ImageField("تصویر رسید", upload_to=receipt_path, blank=True)
