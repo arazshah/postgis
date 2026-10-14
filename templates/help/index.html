@@ -19,7 +19,7 @@
       <h1>هر کاری در سایت، با یک ویدیوی کوتاه</h1>
       <p class="lead">از ثبت‌نام تا اولین لایه روی نقشه. هر راهنما یک ویدیوی تصویری کوتاه دارد که دقیقاً نشان می‌دهد کجا کلیک کنید، و زیرش همان مراحل به صورت نوشته آمده است.</p>
       <ol class="help-path">
-        {% for g in guides|slice:":3" %}<li><a href="{% url 'core:help_page' g.slug %}"><b>{{ forloop.counter|fanum }}</b>{{ g.title }}<span>{{ g.duration }} دقیقه</span></a></li>{% endfor %}
+        {% for g in guides|slice:":3" %}<li><a href="{% url 'core:help_page' g.slug %}"><b>{{ forloop.counter|fanum }}</b>{{ g.title }}<span>{{ g.duration }}</span></a></li>{% endfor %}
       </ol>
     </div>
     <figure class="vplayer help-hero-video">
