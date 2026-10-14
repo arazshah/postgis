@@ -49,6 +49,31 @@ def docs_page(request, slug):
     return render(request, f"docs/{slug}.html", ctx)
 
 
+def help_index(request):
+    from .help import GROUPS, GUIDES
+
+    groups = [(g, [x for x in GUIDES if x.group == g]) for g in GROUPS]
+    return render(request, "help/index.html", {"groups": groups, "guides": GUIDES, "docs": DOCS})
+
+
+def help_page(request, slug):
+    from .help import GUIDE_MAP, GUIDES
+
+    guide = GUIDE_MAP.get(slug)
+    if guide is None:
+        raise Http404
+    idx = GUIDES.index(guide)
+    docs = {d[0]: d for d in DOCS}
+    return render(request, "help/page.html", {
+        "g": guide,
+        "guides": GUIDES,
+        "num": idx + 1,
+        "prev": GUIDES[idx - 1] if idx > 0 else None,
+        "next": GUIDES[idx + 1] if idx < len(GUIDES) - 1 else None,
+        "related": [docs[s] for s, _ in guide.related if s in docs],
+    })
+
+
 def terms(request):
     return render(request, "core/terms.html")
 
@@ -90,8 +115,12 @@ def _template_date(name: str) -> str:
 
 def sitemap_xml(request):
     base = settings.CANONICAL_URL
+    from .help import GUIDES
+
     pages = [(reverse("core:home"), "1.0", "core/home.html"),
+             (reverse("core:help"), "0.9", "help/index.html"),
              (reverse("core:docs"), "0.8", "docs/index.html")]
+    pages += [(reverse("core:help_page", args=[g.slug]), "0.7", "help/page.html") for g in GUIDES]
     pages += [(reverse("core:doc", args=[d[0]]), "0.9" if d[0] == "what-is-postgis" else "0.7", f"docs/{d[0]}.html")
               for d in DOCS]
     pages.append((reverse("core:terms"), "0.3", "core/terms.html"))

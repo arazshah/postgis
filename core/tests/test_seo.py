@@ -18,7 +18,7 @@ class SEOTests(TestCase):
         self.assertIn("پایگاه داده مکانی PostGIS", html.split("<title>")[1].split("</title>")[0])
         data = self.jsonld(html)
         types = {g["@type"] for g in data[0]["@graph"]}
-        self.assertEqual(types, {"Organization", "WebSite", "SoftwareApplication", "FAQPage"})
+        self.assertEqual(types, {"Organization", "WebSite", "SoftwareApplication", "VideoObject", "FAQPage"})
         faq = next(g for g in data[0]["@graph"] if g["@type"] == "FAQPage")
         for q in faq["mainEntity"]:
             self.assertIn(q["name"], html)  # پرسش‌های schema روی صفحه هم دیده می‌شوند

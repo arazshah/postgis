@@ -32,6 +32,7 @@
     <button class="btn ghost sm menu-toggle" aria-controls="mainnav" aria-expanded="false">منو</button>
     <nav class="nav" id="mainnav" aria-label="منوی اصلی">
       {% with u=request.resolver_match.url_name ns=request.resolver_match.namespace %}
+      <a href="{% url 'core:help' %}" {% if ns == 'core' and u == 'help' or u == 'help_page' %}aria-current="page"{% endif %}>راهنما</a>
       <a href="{% url 'core:docs' %}" {% if ns == 'core' and u == 'docs' or u == 'doc' %}aria-current="page"{% endif %}>آموزش</a>
       {% if user.is_authenticated and user.is_staff %}
         <a href="{% url 'admin:index' %}">پنل مدیریت</a>
@@ -64,6 +65,7 @@
   <div class="wrap">
     <div>{{ SITE_NAME }} · پایگاه داده مکانی برای جامعه GIS ایران</div>
     <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <a href="{% url 'core:help' %}">راهنمای تصویری</a>
       <a href="{% url 'core:docs' %}">آموزش</a>
       <a href="{% url 'core:terms' %}">قوانین استفاده</a>
       <a href="{% url 'support:new' %}">ثبت تیکت پشتیبانی</a>

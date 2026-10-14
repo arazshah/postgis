@@ -65,7 +65,7 @@
         <dl>
           <dt>پایگاه داده</dt><dd class="live-name">{{ prefix }}…</dd>
           <dt>نام کاربری</dt><dd class="live-user">{{ prefix }}…_user</dd>
-          <dt>پورت</dt><dd>5432</dd>
+          {% if public_port %}<dt>پورت</dt><dd>{{ public_port }}</dd>{% endif %}
           <dt>SSL</dt><dd>require</dd>
         </dl>
       </div>

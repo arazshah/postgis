@@ -1,0 +1,71 @@
+{% extends "base.html" %}{% load static fa %}
+{% block title %}{{ g.title }} — راهنمای تصویری {{ SITE_NAME }}{% endblock %}
+{% block description %}{{ g.summary }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_title %}{{ g.title }}{% endblock %}
+{% block og_description %}{{ g.summary }}{% endblock %}
+{% block jsonld %}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"HowTo","name":"{{ g.title|escapejs }}","description":"{{ g.summary|escapejs }}","inLanguage":"fa-IR","totalTime":"{{ g.iso_duration }}",
+  "video":{"@type":"VideoObject","name":"{{ g.title|escapejs }}","description":"{{ g.summary|escapejs }}","thumbnailUrl":"{{ BASE_URL }}{% static g.poster %}","contentUrl":"{{ BASE_URL }}{% static g.video %}","uploadDate":"2026-10-14","duration":"{{ g.iso_duration }}"},
+  "step":[{% for t, d in g.steps %}{"@type":"HowToStep","position":{{ forloop.counter }},"name":"{{ t|escapejs }}","text":"{{ d|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}]},
+ {"@type":"BreadcrumbList","itemListElement":[
+  {"@type":"ListItem","position":1,"name":"{{ SITE_NAME|escapejs }}","item":"{{ BASE_URL }}/"},
+  {"@type":"ListItem","position":2,"name":"راهنما","item":"{{ BASE_URL }}{% url 'core:help' %}"},
+  {"@type":"ListItem","position":3,"name":"{{ g.title|escapejs }}","item":"{{ CANONICAL_URL }}"}]}{% if g.faq %},
+ {"@type":"FAQPage","mainEntity":[{% for q, a in g.faq %}{"@type":"Question","name":"{{ q|escapejs }}","acceptedAnswer":{"@type":"Answer","text":"{{ a|escapejs }}"}}{% if not forloop.last %},{% endif %}{% endfor %}]}{% endif %}
+]}
+</script>
+{% endblock %}
+{% block content %}
+<div class="wrap page help-layout">
+  <nav class="help-nav" aria-label="فهرست راهنماها">
+    <p class="small"><a href="{% url 'core:help' %}">← همه راهنماها</a></p>
+    <ol>
+      {% for x in guides %}<li><a href="{% url 'core:help_page' x.slug %}" {% if x.slug == g.slug %}aria-current="page"{% endif %}><b>{{ forloop.counter|fanum }}</b><span>{{ x.title }}</span></a></li>{% endfor %}
+    </ol>
+  </nav>
+
+  <article class="help-main">
+    <p class="small muted crumbs"><a href="{% url 'core:help' %}">راهنما</a> / {{ g.group }}</p>
+    <h1>{{ g.title }}</h1>
+    <p class="lead">{{ g.summary }}</p>
+
+    <figure class="vplayer">
+      <video controls playsinline preload="metadata" poster="{% static g.poster %}" aria-label="ویدیوی راهنما: {{ g.title }}">
+        <source src="{% static g.video %}#t=0.1" type="video/mp4">
+      </video>
+      <figcaption>{% include "help/_icon.html" with name="play" %} {{ g.duration }} دقیقه · بدون گفتار؛ هر مرحله روی تصویر نوشته شده است</figcaption>
+    </figure>
+
+    <h2>مرحله به مرحله</h2>
+    <ol class="help-steps">
+      {% for t, d in g.steps %}<li><h3>{{ t }}</h3><p>{{ d }}</p></li>{% endfor %}
+    </ol>
+
+    {% if g.tips %}
+    <div class="help-tips" role="note">
+      <h2>نکته‌ها</h2>
+      <ul>{% for t in g.tips %}<li>{{ t }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+
+    {% if related %}
+    <h2>آموزش‌های مرتبط</h2>
+    <ul class="doc-links">{% for d in related %}<li><a href="{% url 'core:doc' d.0 %}">{{ d.1 }}<span>{{ d.2 }}</span></a></li>{% endfor %}</ul>
+    {% endif %}
+
+    {% if g.faq %}
+    <h2>پرسش‌های رایج</h2>
+    <div class="faq">{% for q, a in g.faq %}<details><summary>{{ q }}</summary><p>{{ a }}</p></details>{% endfor %}</div>
+    {% endif %}
+
+    <nav class="pager" aria-label="راهنمای قبلی و بعدی">
+      <span>{% if prev %}<a href="{% url 'core:help_page' prev.slug %}">قبلی: {{ prev.title }}</a>{% endif %}</span>
+      <span>{% if next %}<a href="{% url 'core:help_page' next.slug %}">بعدی: {{ next.title }}</a>{% endif %}</span>
+    </nav>
+    <p class="small muted" style="margin-top:var(--s5)">مشکل حل نشد؟ <a href="{% url 'support:new' %}">تیکت پشتیبانی ثبت کنید</a>.</p>
+  </article>
+</div>
+{% endblock %}
