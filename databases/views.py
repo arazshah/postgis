@@ -71,8 +71,10 @@ def create(request):
         selected = set(request.POST.getlist("extensions"))
     else:
         selected = {str(e.pk) for e in form.initial.get("extensions", [])}
+    server = services.pick_server()
     return render(request, "databases/create.html", {
-        "form": form, "plan": plan, "selected": selected, "prefix": settings.TENANT_PREFIX, "voucher": voucher})
+        "form": form, "plan": plan, "selected": selected, "prefix": settings.TENANT_PREFIX, "voucher": voucher,
+        "public_port": server.public_port if server else None})
 
 
 @site_user_required

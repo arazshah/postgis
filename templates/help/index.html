@@ -1,0 +1,71 @@
+{% extends "base.html" %}{% load static fa %}
+{% block title %}راهنمای تصویری کار با سایت | ویدیوهای آموزشی — {{ SITE_NAME }}{% endblock %}
+{% block description %}راهنمای کامل و تصویری {{ SITE_NAME }}: ثبت‌نام، ساخت پایگاه داده PostGIS، اتصال QGIS و پایتون، مرورگر داده و نقشه، اجرای SQL، پرداخت و پشتیبانی؛ هر بخش با ویدیوی کوتاه.{% endblock %}
+{% block og_title %}راهنمای تصویری {{ SITE_NAME }}{% endblock %}
+{% block jsonld %}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"CollectionPage","name":"راهنمای تصویری {{ SITE_NAME|escapejs }}","inLanguage":"fa-IR","url":"{{ CANONICAL_URL }}"},
+ {"@type":"VideoObject","name":"معرفی {{ SITE_NAME|escapejs }} در یک دقیقه","description":"پایگاه داده مکانی PostGIS آنلاین: ساخت، اتصال، نقشه و SQL در مرورگر.","thumbnailUrl":"{{ BASE_URL }}{% static 'help/video/intro.jpg' %}","contentUrl":"{{ BASE_URL }}{% static 'help/video/intro.mp4' %}","uploadDate":"2026-10-14","inLanguage":"fa-IR"},
+ {"@type":"ItemList","itemListElement":[{% for g in guides %}{"@type":"ListItem","position":{{ forloop.counter }},"url":"{{ BASE_URL }}{% url 'core:help_page' g.slug %}","name":"{{ g.title|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}]}
+]}
+</script>
+{% endblock %}
+{% block content %}
+<section class="help-hero">
+  <div class="wrap">
+    <div class="help-hero-text">
+      <p class="kicker">مرکز راهنما</p>
+      <h1>هر کاری در سایت، با یک ویدیوی کوتاه</h1>
+      <p class="lead">از ثبت‌نام تا اولین لایه روی نقشه. هر راهنما یک ویدیوی تصویری کوتاه دارد که دقیقاً نشان می‌دهد کجا کلیک کنید، و زیرش همان مراحل به صورت نوشته آمده است.</p>
+      <ol class="help-path">
+        {% for g in guides|slice:":3" %}<li><a href="{% url 'core:help_page' g.slug %}"><b>{{ forloop.counter|fanum }}</b>{{ g.title }}<span>{{ g.duration }}</span></a></li>{% endfor %}
+      </ol>
+    </div>
+    <figure class="vplayer help-hero-video">
+      <video controls playsinline preload="none" poster="{% static 'help/video/intro.jpg' %}" aria-label="ویدیوی معرفی {{ SITE_NAME }}">
+        <source src="{% static 'help/video/intro.mp4' %}" type="video/mp4">
+      </video>
+      <figcaption>معرفی {{ SITE_NAME }} در یک دقیقه · ویدیو بدون گفتار و با موسیقی</figcaption>
+    </figure>
+  </div>
+</section>
+
+<div class="wrap page">
+  {% for name, items in groups %}
+  <section class="help-group" aria-labelledby="g{{ forloop.counter }}">
+    <h2 id="g{{ forloop.counter }}">{{ name }}</h2>
+    <div class="help-grid">
+      {% for g in items %}
+      <a class="help-card" href="{% url 'core:help_page' g.slug %}">
+        <span class="help-thumb">
+          <img src="{% static g.poster %}" alt="" loading="lazy" width="640" height="360">
+          <span class="help-play">{% include "help/_icon.html" with name="play" %}</span>
+          <span class="help-dur">{{ g.duration }}</span>
+        </span>
+        <span class="help-card-body">
+          <span class="help-card-title">{% include "help/_icon.html" with name=g.icon %}{{ g.title }}</span>
+          <span class="help-card-sum">{{ g.summary }}</span>
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+
+  <section class="help-group help-more">
+    <div class="help-more-docs">
+      <h2>{% include "help/_icon.html" with name="book" %}آموزش‌های فنی</h2>
+      <p class="muted">برای کار با نرم‌افزارهای GIS و خود PostGIS:</p>
+      <ul class="doc-links">
+        {% for d in docs %}<li><a href="{% url 'core:doc' d.0 %}">{{ d.1 }}<span>{{ d.2 }}</span></a></li>{% endfor %}
+      </ul>
+    </div>
+    <aside class="panel help-ask">
+      <h2>جوابتان را پیدا نکردید؟</h2>
+      <p class="muted">یک تیکت ثبت کنید؛ پاسخ را در همان صفحه می‌گیرید.</p>
+      <a class="btn" href="{% url 'support:new' %}">ثبت تیکت پشتیبانی</a>
+    </aside>
+  </section>
+</div>
+{% endblock %}
