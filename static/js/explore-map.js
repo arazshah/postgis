@@ -6,7 +6,13 @@
   const map = L.map(el, { attributionControl: true }).setView([32.4, 53.7], 5);
   const tiles = el.dataset.tiles;
   if (tiles) {
-    L.tileLayer(tiles, { maxZoom: 19, attribution: el.dataset.attr || "" }).addTo(map);
+    // سیاست سایت same-origin است و بدون Referer، کاشی‌های OpenStreetMap خطای 403 «Access blocked» می‌دهند.
+    // برای کاشی‌ها فقط دامنه سایت (بدون مسیر صفحه) فرستاده می‌شود.
+    L.tileLayer(tiles, {
+      maxZoom: 19,
+      attribution: el.dataset.attr || "",
+      referrerPolicy: "strict-origin-when-cross-origin",
+    }).addTo(map);
   }
   const note = document.getElementById("map-note");
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
