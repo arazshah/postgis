@@ -93,7 +93,9 @@ def run(job: Job) -> None:
     handler = {Job.Kind.BACKUP: _do_backup, Job.Kind.RESTORE: _do_restore,
                Job.Kind.RESTORE_TEST: _do_restore_test, Job.Kind.IMPORT: _do_import,
                Job.Kind.BASEMAP: iranmap_tasks.do_basemap, Job.Kind.OSM_REFRESH: iranmap_tasks.do_osm_refresh,
-               Job.Kind.OSM_IMPORT: iranmap_tasks.do_osm_import, Job.Kind.ASK: _do_ask}[job.kind]
+               Job.Kind.OSM_IMPORT: iranmap_tasks.do_osm_import, Job.Kind.ASK: _do_ask,
+               Job.Kind.GEOSERVER: _do_enterprise, Job.Kind.RASTER: _do_enterprise,
+               Job.Kind.CLONE: _do_enterprise, Job.Kind.TOOL: _do_tool}[job.kind]
     try:
         handler(job)
     except Exception as exc:  # noqa: BLE001
@@ -104,7 +106,29 @@ def run(job: Job) -> None:
         if job.status == Job.Status.RUNNING:
             job.status = Job.Status.DONE
     job.finished_at = timezone.now()
+    if job.status == Job.Status.DONE:
+        job.progress, job.stage = 100, "تمام شد"
     job.save()
+
+
+def _do_enterprise(job: Job) -> None:
+    from enterprise import services as ent
+
+    fn = {Job.Kind.GEOSERVER: ent.provision, Job.Kind.RASTER: ent.process_raster, Job.Kind.CLONE: ent.do_clone}[job.kind]
+    try:
+        job.message = fn(job)
+    except ent.EnterpriseError as exc:
+        raise JobError(str(exc)) from exc
+
+
+def _do_tool(job: Job) -> None:
+    from analysis import tools
+
+    try:
+        res = tools.run_job(job)
+    except tools.ToolError as exc:
+        raise JobError(str(exc)) from exc
+    job.message = f"جدول {res['table']} با {res['rows']:,} عارضه ساخته شد."
 
 
 def _do_ask(job: Job) -> None:
@@ -180,7 +204,10 @@ def _do_backup(job: Job) -> None:
     rel = Path(str(db.pk)) / f"{db.db_name}-{stamp}-{job.trigger}.dump"
     job.size_bytes = dump_database(db, backup_root() / rel)
     job.file = str(rel)
-    job.expires_at = timezone.now() + timedelta(days=_keep_days(job))
+    if job.params.get("snapshot"):
+        job.expires_at = timezone.now() + timedelta(hours=settings.SNAPSHOT_KEEP_HOURS)
+    else:
+        job.expires_at = timezone.now() + timedelta(days=_keep_days(job))
     job.message = "بکاپ کامل گرفته شد."
 
 
@@ -356,8 +383,12 @@ def alerts() -> list[str]:
 def tick(now: datetime | None = None) -> dict:
     """کارهای دوره‌ای worker (هر دقیقه)."""
     from classroom import services as classroom_services
+    from enterprise import services as ent
     from iranmap import tasks as iranmap_tasks
+
+    ent.cleanup_rasters_dir()
 
     return {"classes": classroom_services.tick(now), "nightly": schedule_nightly(now),
             "restore_test": schedule_restore_test(now),
-            "cleanup": cleanup(now), "alerts": len(alerts()), "map_data": iranmap_tasks.schedule(now)}
+            "cleanup": cleanup(now), "alerts": len(alerts()), "map_data": iranmap_tasks.schedule(now),
+            "snapshots": ent.schedule_snapshots(now)}

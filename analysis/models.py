@@ -47,3 +47,21 @@ class Question(models.Model):
         verbose_name = "پرسش فارسی"
         verbose_name_plural = "پرسش‌های فارسی"
         ordering = ["-created_at"]
+
+
+class ToolRun(models.Model):
+    """یک اجرای ابزار آماده (بافر، شمارش و…) که کارگر در پس‌زمینه انجام می‌دهد؛ ردیف تاریخچه صفحه تحلیل."""
+    database = models.ForeignKey("databases.UserDatabase", on_delete=models.CASCADE, related_name="tool_runs")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
+    tool = models.CharField(max_length=20)
+    params = models.JSONField(default=dict)
+    summary = models.CharField("خلاصه پارامترها", max_length=300, blank=True)
+    output_table = models.CharField(max_length=63)
+    rows = models.IntegerField(default=0)
+    job = models.OneToOneField("jobs.Job", on_delete=models.SET_NULL, null=True, related_name="tool_run")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "اجرای ابزار تحلیل"
+        verbose_name_plural = "اجراهای ابزار تحلیل"
+        ordering = ["-created_at"]

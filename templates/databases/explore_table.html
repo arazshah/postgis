@@ -64,4 +64,15 @@
   <div class="empty" style="padding:48px 24px"><h2>این جدول خالی است</h2></div>
   {% endif %}
 {% endif %}
+{% if db.can_edit and db.status == 'active' %}
+<details class="danger-zone drop-zone">
+  <summary>حذف {{ t.kind_label }}</summary>
+  <form method="post" action="{% url 'databases:explore_drop' db.pk t.schema t.name %}" class="stack-form">{% csrf_token %}
+    <p class="small">این کار برگشت‌پذیر نیست{% if t.kind in 'rp' %} و همه سطرها پاک می‌شوند{% endif %}. اگر از این جدول لایه یا API منتشر کرده‌اید، آن هم برداشته می‌شود. پیشنهاد: اول از «پشتیبان‌گیری» بکاپ بگیرید.</p>
+    <div class="field"><label for="drop-c">برای تأیید، نام جدول را بنویسید: <b class="ltr">{{ t.name }}</b></label>
+      <input id="drop-c" type="text" name="confirm" class="ltr" autocomplete="off" required></div>
+    <div><button class="btn danger sm" type="submit">حذف همیشگی</button></div>
+  </form>
+</details>
+{% endif %}
 {% endblock %}

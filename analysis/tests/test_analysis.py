@@ -12,7 +12,7 @@ from django.urls import reverse
 
 from accounts.models import User
 from analysis import ask, tools
-from analysis.models import LlmConfig, Question
+from analysis.models import LlmConfig, Question, ToolRun
 from databases import gdal
 from databases import services as db_services
 from databases.models import DatabaseServer
@@ -63,6 +63,10 @@ class AnalysisTests(TestCase):
         with psycopg.connect(**self.kw) as c:
             return c.execute(q).fetchall()
 
+    def _sql_exec(self, q):
+        with psycopg.connect(**self.kw) as c:
+            c.execute(q)
+
     def test_tools(self):
         r = tools.run(self.db, "buffer", {"layer": "public.metro_stations", "distance": "۵۰۰", "output": "metro_500"})
         self.assertEqual(r["rows"], self._sql("SELECT count(*) FROM metro_stations")[0][0])
@@ -91,6 +95,14 @@ class AnalysisTests(TestCase):
         r = tools.run(self.db, "hexbin", {"layer": "public.schools", "size": "1000", "output": "school_hex"})
         self.assertEqual(self._sql("SELECT sum(count) FROM school_hex")[0][0],
                          self._sql("SELECT count(*) FROM schools")[0][0])
+        # ستون هندسه هر خروجی نوع و SRID دارد؛ وگرنه نقشه و QGIS آن را بدون مختصات می‌بینند
+        cols = dict(((t, (g, s)) for t, g, s in self._sql(
+            "SELECT f_table_name, type, srid FROM geometry_columns WHERE f_table_name IN "
+            "('metro_500', 'metro_zone', 'school_metro', 'd_count', 'school_hex')")))
+        self.assertEqual(cols, {"metro_500": ("POLYGON", 4326), "metro_zone": ("MULTIPOLYGON", 4326),
+                                "school_metro": ("POINT", 4326), "d_count": (cols["d_count"][0], 4326),
+                                "school_hex": ("POLYGON", 4326)})
+        self.assertIn(cols["d_count"][0], ("POLYGON", "MULTIPOLYGON"))
 
         with self.assertRaisesMessage(tools.ToolError, "وجود دارد"):
             tools.run(self.db, "hexbin", {"layer": "public.schools", "size": "1000", "output": "school_hex"})
@@ -112,7 +124,8 @@ class AnalysisTests(TestCase):
         self.assertContains(r, "تنظیم کلید مدل زبانی")
         r = self.client.post(url, {"action": "tool", "tool": "buffer", "layer": "public.parks", "distance": "100",
                                    "output": "park_100"})
-        self.assertRedirects(r, reverse("databases:explore_table", args=[self.db.pk, "public", "park_100"]))
+        self.assertRedirects(r, url + "#history", fetch_redirect_response=False)
+        self.assertEqual(self._sql("SELECT to_regclass('public.park_100') IS NULL")[0][0], True)  # هنوز ساخته نشده
         # کلید: فقط https، رمزنگاری‌شده، دوباره نمایش داده نمی‌شود
         self.client.post(url, {"action": "llm_save", "base_url": "http://evil.example/v1", "api_key": "sk-1"})
         self.assertFalse(LlmConfig.objects.exists())
@@ -130,6 +143,50 @@ class AnalysisTests(TestCase):
         other = User.objects.create_user("09120000042")
         self.client.force_login(other)
         self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_tool_runs_in_background_with_progress_and_history(self):
+        from jobs import services as jobs
+
+        url = reverse("analysis:page", args=[self.db.pk])
+        post = {"action": "tool", "tool": "buffer", "layer": "public.parks", "distance": "100", "output": "park_100"}
+        # اعتبارسنجی همان لحظه: نام نامعتبر صف نمی‌شود
+        self.client.post(url, {**post, "output": "Bad name"})
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.client.post(url, post)
+        run = ToolRun.objects.get()
+        self.assertEqual(run.job.status, "queued")
+        self.assertIn("parks", run.summary)
+        # تا تمام نشده، دومی پذیرفته نمی‌شود و صفحه نوار پیشرفت دارد
+        self.client.post(url, {**post, "output": "park_200"})
+        self.assertEqual(ToolRun.objects.count(), 1)
+        page = self.client.get(url)
+        self.assertContains(page, 'role="progressbar"')
+        self.assertContains(page, "تاریخچه تحلیل‌ها")
+        st = self.client.get(reverse("analysis:status", args=[self.db.pk])).json()
+        self.assertTrue(st["active"])
+        self.assertEqual(st["items"][0]["status"], "queued")
+        job = jobs.claim_next()
+        jobs.run(job)
+        run.refresh_from_db()
+        run.job.refresh_from_db()
+        self.assertEqual(run.job.status, "done")
+        self.assertEqual(run.job.progress, 100)
+        self.assertGreater(run.rows, 0)
+        self.assertEqual(self._sql("SELECT count(*) FROM park_100")[0][0], run.rows)
+        st = self.client.get(reverse("analysis:status", args=[self.db.pk])).json()
+        self.assertFalse(st["active"])
+        page = self.client.get(url)
+        self.assertContains(page, "park_100")
+        self.assertNotContains(page, 'role="progressbar"')
+        # خطا در کارگر: ردیف ناموفق با پیام فارسی در تاریخچه
+        self.client.post(url, {**post, "output": "park_300"})
+        run2 = ToolRun.objects.get(output_table="park_300")
+        self._sql_exec("CREATE TABLE park_300(a int)")
+        jobs.run(jobs.claim_next())
+        run2.job.refresh_from_db()
+        self.assertEqual(run2.job.status, "failed")
+        self.assertIn("park_300", run2.job.message)
+        self.assertContains(self.client.get(url), "park_300")
 
     @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
     def test_persian_question_with_static_llm(self):

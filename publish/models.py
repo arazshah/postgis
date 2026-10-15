@@ -84,6 +84,7 @@ class ApiKey(models.Model):
     key_hash = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
+    can_write = models.BooleanField("اجازه نوشتن (REST API)", default=False)
     revoked_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -99,10 +100,10 @@ class ApiKey(models.Model):
         return hashlib.sha256(raw.encode()).hexdigest()
 
     @classmethod
-    def issue(cls, database, user, name: str) -> tuple["ApiKey", str]:
+    def issue(cls, database, user, name: str, can_write: bool = False) -> tuple["ApiKey", str]:
         raw = cls.PREFIX + secrets.token_urlsafe(30)
         key = cls.objects.create(database=database, created_by=user, name=name[:80], prefix=raw[:12],
-                                 key_hash=cls.digest(raw))
+                                 key_hash=cls.digest(raw), can_write=can_write)
         return key, raw
 
     @property

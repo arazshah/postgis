@@ -6,7 +6,7 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
  {"@type":"CollectionPage","name":"راهنمای تصویری {{ SITE_NAME|escapejs }}","inLanguage":"fa-IR","url":"{{ CANONICAL_URL }}"},
- {"@type":"VideoObject","name":"معرفی {{ SITE_NAME|escapejs }} در یک دقیقه","description":"پایگاه داده مکانی PostGIS آنلاین: ساخت، اتصال، نقشه و SQL در مرورگر.","thumbnailUrl":"{{ BASE_URL }}{% static 'help/video/intro.jpg' %}","contentUrl":"{{ BASE_URL }}{% static 'help/video/intro.mp4' %}","uploadDate":"2026-10-14","inLanguage":"fa-IR"},
+ {"@type":"VideoObject","name":"معرفی {{ SITE_NAME|escapejs }} در یک و نیم دقیقه","description":"پایگاه داده مکانی PostGIS آنلاین: ساخت، اتصال QGIS، ورود فایل، SQL مکانی، نقشه قابل اشتراک و WMS/WFS.","duration":"PT1M37S","thumbnailUrl":"{{ BASE_URL }}{% static 'help/video/intro.jpg' %}","contentUrl":"{{ BASE_URL }}{% static 'help/video/intro.mp4' %}","uploadDate":"2026-10-16","inLanguage":"fa-IR"},
  {"@type":"ItemList","itemListElement":[{% for g in guides %}{"@type":"ListItem","position":{{ forloop.counter }},"url":"{{ BASE_URL }}{% url 'core:help_page' g.slug %}","name":"{{ g.title|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}]}
 ]}
 </script>
@@ -26,7 +26,7 @@
       <video controls playsinline preload="none" poster="{% static 'help/video/intro.jpg' %}" aria-label="ویدیوی معرفی {{ SITE_NAME }}">
         <source src="{% static 'help/video/intro.mp4' %}" type="video/mp4">
       </video>
-      <figcaption>معرفی {{ SITE_NAME }} در یک دقیقه · ویدیو بدون گفتار و با موسیقی</figcaption>
+      <figcaption>معرفی {{ SITE_NAME }} در یک و نیم دقیقه · ویدیو بدون گفتار و با موسیقی</figcaption>
     </figure>
   </div>
 </section>

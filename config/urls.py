@@ -30,5 +30,7 @@ urlpatterns = [
     path("", include("publish.urls")),
     path("", include("iranmap.urls")),
     path("", include("analysis.urls")),
+    path("", include("restapi.urls")),
+    path("", include("enterprise.urls")),
     path("", include("core.urls")),
 ]

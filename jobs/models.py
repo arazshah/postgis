@@ -16,6 +16,10 @@ class Job(models.Model):
         OSM_REFRESH = "osm_refresh", "به‌روزرسانی داده OSM ایران"
         OSM_IMPORT = "osm_import", "داده آماده ایران"
         ASK = "ask", "پرسش فارسی"
+        GEOSERVER = "geoserver", "GeoServer اختصاصی"
+        RASTER = "raster", "پردازش رستر"
+        CLONE = "clone", "کپی پایگاه داده"
+        TOOL = "tool", "ابزار تحلیل"
 
     class Status(models.TextChoices):
         DRAFT = "draft", "منتظر تأیید کاربر"
@@ -43,6 +47,8 @@ class Job(models.Model):
     file = models.CharField("فایل", max_length=300, blank=True)
     size_bytes = models.BigIntegerField("حجم فایل", default=0)
     message = models.TextField("پیام", blank=True)
+    progress = models.PositiveSmallIntegerField("پیشرفت (٪)", default=0)
+    stage = models.CharField("مرحله فعلی", max_length=120, blank=True)
     created_at = models.DateTimeField("ثبت", default=timezone.now, db_index=True)
     started_at = models.DateTimeField("شروع", null=True, blank=True)
     finished_at = models.DateTimeField("پایان", null=True, blank=True)
@@ -65,6 +71,11 @@ class Job(models.Model):
     @property
     def downloadable(self) -> bool:
         return self.kind == self.Kind.BACKUP and self.status == self.Status.DONE and bool(self.file)
+
+    def set_progress(self, percent: int, stage: str = "") -> None:
+        """گزارش پیشرفت برای نوار پیشرفت صفحه (کم‌هزینه: فقط دو ستون را به‌روز می‌کند)."""
+        self.progress, self.stage = max(0, min(int(percent), 99)), stage[:120]
+        Job.objects.filter(pk=self.pk).update(progress=self.progress, stage=self.stage)
 
     @property
     def active(self) -> bool:

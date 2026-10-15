@@ -1,0 +1,81 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}امکانات سازمانی {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a> / <a href="{% url 'databases:detail' db.pk %}" class="ltr">{{ db.db_name }}</a></p>
+  <h1>امکانات سازمانی</h1>
+  {% if not db.plan.dedicated_geoserver and not db.plan.raster_mb and not db.plan.snapshot_hours and not db.plan.clone_enabled %}
+  <div class="msg info">این امکانات در پلن سازمانی فعال است: GeoServer اختصاصی، سرویس رستر، بکاپ ساعتی و کپی آزمایشی پایگاه داده. <a href="{% url 'billing:plans' %}">مشاهده پلن‌ها</a></div>
+  {% endif %}
+
+  <div class="grid-2">
+  <section class="panel">
+    <h2 class="u-h">GeoServer اختصاصی</h2>
+    <p class="small muted">یک GeoServer کامل فقط برای شما، روی کانتینر جدا با حافظه و پردازنده خودش؛ با اتصال آماده به همین پایگاه داده (با کاربر فقط‌خواندنی جدا) و همه لایه‌های مکانی منتشرشده. سبک SLD، گروه لایه و افزونه‌های GeoServer در اختیار خودتان است.</p>
+    {% if not db.plan.dedicated_geoserver %}<p class="small">در پلن فعلی فعال نیست.</p>
+    {% elif not gs or gs.status == 'failed' or gs.status == 'stopped' %}
+      {% if gs %}<div class="msg error small">{{ gs.message }}</div>{% endif %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="geoserver"><button class="btn sm" type="submit">{% if gs %}تلاش دوباره{% else %}درخواست GeoServer{% endif %}</button></form>
+    {% elif gs.status == 'active' %}
+      <table class="kv">
+        <tr><th>پنل مدیریت</th><td><a href="{{ gs.url }}/web/" target="_blank" rel="noopener">{{ gs.url }}/web/</a></td></tr>
+        <tr><th>WMS</th><td><code>{{ gs.url }}/{{ db.db_name }}/wms</code></td></tr>
+        <tr><th>WFS</th><td><code>{{ gs.url }}/{{ db.db_name }}/wfs</code></td></tr>
+        <tr><th>کاربر مدیر</th><td>{{ gs.admin_user }}</td></tr>
+        <tr><th>رمز مدیر</th><td><details><summary class="small" style="font-family:var(--f-body)">نمایش</summary><code id="gs-pw">{{ gs.get_password }}</code> <button class="copy" data-copy-target="#gs-pw">کپی</button></details></td></tr>
+      </table>
+      <p class="small muted">{{ gs.message }} بعد از ورود، رمز مدیر را عوض کنید.</p>
+    {% else %}
+      <p><span class="badge">{{ gs.get_status_display }}</span> {{ gs.message }}</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2 class="u-h">بکاپ ساعتی و کپی آزمایشی</h2>
+    {% if db.plan.snapshot_hours %}<p class="small">هر {{ db.plan.snapshot_hours|fanum }} ساعت یک بکاپ کامل گرفته می‌شود و ۴۸ ساعت می‌ماند؛ پس اگر داده‌ای اشتباهی حذف شد، حداکثر {{ db.plan.snapshot_hours|fanum }} ساعت کار از دست می‌رود و آن نسخه را از <a href="{% url 'databases:backups' db.pk %}">صفحه بکاپ‌ها</a> برمی‌گردانید.</p>
+    {% else %}<p class="small muted">بکاپ ساعتی در پلن فعلی فعال نیست (بکاپ روزانه هست).</p>{% endif %}
+    {% if db.plan.clone_enabled %}
+    <p class="small">برای آزمودن تغییرات بزرگ، یک کپی کامل از پایگاه داده بسازید؛ کپی پایگاه داده جدا با رمز جداست و به اصلی دست نمی‌زند.</p>
+    <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="clone">
+      <div class="bf-row">
+        <div class="field"><label for="c-label">نام کپی</label><input id="c-label" type="text" name="label" class="ltr" required pattern="[a-z][a-z0-9_]{2,40}" placeholder="{{ db.label }}_test"></div>
+        <div class="field"><label for="c-bk">از بکاپ</label><select id="c-bk" name="backup">{% for b in backups %}<option value="{{ b.pk }}">{{ b.created_at|jdatetime_full }}{% if b.params.snapshot %} (ساعتی){% endif %}</option>{% empty %}<option value="">بکاپی نیست</option>{% endfor %}</select></div>
+      </div>
+      <button class="btn sm" type="submit" {% if not backups %}disabled{% endif %}>ساخت کپی</button>
+    </form>
+    {% endif %}
+  </section>
+  </div>
+
+  <section class="panel" style="margin-top:var(--s5)">
+    <h2 class="u-h">سرویس رستر</h2>
+    <p class="small muted">GeoTIFF (تصویر ماهواره‌ای، عکس هوایی، DEM و نقشه‌های پیوسته) را بارگذاری کنید؛ به COG تبدیل و به‌صورت کاشی تصویری روی وب، در QGIS (XYZ) و در نقشه‌های شما نمایش داده می‌شود.</p>
+    {% if db.plan.raster_mb %}
+    <p class="small">فضای رستر: {{ used|fasize }} از {{ raster_cap|fasize }}</p>
+    <form method="post" enctype="multipart/form-data" class="inline-form">{% csrf_token %}<input type="hidden" name="action" value="raster_upload">
+      <input type="text" name="title" placeholder="عنوان (اختیاری)" maxlength="120">
+      <input type="file" name="file" accept=".tif,.tiff" required>
+      <button class="btn sm" type="submit">بارگذاری</button>
+    </form>
+    {% if rasters %}
+    <div class="table-wrap"><table class="tbl" style="margin-top:var(--s4)">
+      <thead><tr><th>رستر</th><th>اندازه</th><th>نمایش</th><th></th></tr></thead>
+      <tbody>{% for r in rasters %}<tr>
+        <td><b>{{ r.title }}</b><div class="small muted">{% if r.status == 'ready' %}{{ r.width|fanum }}×{{ r.height|fanum }} · {{ r.bands|fanum }} باند · {{ r.dtype }} · <span class="ltr">{{ r.crs }}</span>{% else %}{{ r.get_status_display }} {{ r.message }}{% endif %}</div></td>
+        <td>{{ r.size_bytes|fasize }}</td>
+        <td>{% if r.status == 'ready' %}<form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="action" value="raster_save"><input type="hidden" name="raster" value="{{ r.pk }}">
+          <select name="colormap" aria-label="رنگ‌بندی">{% for v, l in colormaps %}<option value="{{ v }}" {% if r.colormap == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+          {% if r.bands >= 3 %}<label class="check small"><input type="checkbox" name="rgb" {% if r.rgb %}checked{% endif %}><span>رنگی</span></label>{% endif %}
+          <label class="check small"><input type="checkbox" name="public" {% if r.is_public %}checked{% endif %}><span>عمومی</span></label>
+          <button class="btn ghost sm" type="submit">ذخیره</button></form>{% endif %}</td>
+        <td style="white-space:nowrap">{% if r.status == 'ready' %}<a class="btn ghost sm" href="{% url 'enterprise:raster_view' r.slug %}" target="_blank" rel="noopener">نقشه</a>{% endif %}
+          <form method="post" style="display:inline" data-confirm="رستر حذف شود؟">{% csrf_token %}<input type="hidden" name="action" value="raster_delete"><input type="hidden" name="raster" value="{{ r.pk }}"><button class="btn ghost sm" type="submit">حذف</button></form></td>
+      </tr>{% if r.status == 'ready' %}<tr><td colspan="4" class="small"><span class="muted">XYZ:</span> <code class="ltr" id="rx-{{ r.pk }}">{{ base }}/raster/{{ r.slug }}/{z}/{x}/{y}.png{% if not r.is_public %}?key=کلید_API{% endif %}</code> <button class="copy" data-copy-target="#rx-{{ r.pk }}">کپی</button></td></tr>{% endif %}
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    {% else %}<p class="small muted">در پلن فعلی فعال نیست.</p>{% endif %}
+  </section>
+</div>
+{% if busy %}<script>setTimeout(() => location.reload(), 8000);</script>{% endif %}
+{% endblock %}

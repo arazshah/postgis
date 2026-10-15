@@ -37,6 +37,22 @@ TOOLS = [
 TOOL_MAP = {t.key: t for t in TOOLS}
 
 
+def _fix_geom_type(conn, target) -> None:
+    """ستون geom حاصل از عبارت، نوع و SRID ندارد (geometry خالی) و QGIS و نقشه آن را بدون مختصات می‌بینند؛
+    نوع را از خود داده (و Multi اگر تک و چندبخشی قاطی باشند) و SRID را 4326 می‌گذارد."""
+    types = {r[0] for r in conn.execute(sql.SQL("SELECT DISTINCT GeometryType(geom) FROM {} WHERE geom IS NOT NULL")
+                                        .format(target)).fetchall()}
+    base = {t.removeprefix("MULTI") for t in types}
+    if len(types) == 1:
+        gtype, expr = types.pop(), "ST_SetSRID(geom, 4326)"
+    elif len(base) == 1 and base.pop() in ("POINT", "LINESTRING", "POLYGON"):
+        gtype, expr = "MULTI" + next(iter(types)).removeprefix("MULTI"), "ST_Multi(ST_SetSRID(geom, 4326))"
+    else:
+        gtype, expr = "GEOMETRY", "ST_SetSRID(geom, 4326)"
+    conn.execute(sql.SQL("ALTER TABLE {} ALTER COLUMN geom TYPE geometry({}, 4326) USING " + expr).format(
+        target, sql.SQL(gtype)))
+
+
 def _geom4326(alias: str, col: str, srid: int):
     g = sql.SQL("{}.{}").format(sql.Identifier(alias), sql.Identifier(col))
     if srid in (0, 4326):
@@ -75,7 +91,8 @@ def _cols(ex, t):
     return {c["name"] for c in ex.columns(t)}
 
 
-def run(db, key: str, params: dict) -> dict:
+def _prepare(db, key: str, params: dict):
+    """اعتبارسنجی پارامترها و ساخت SELECT نهایی؛ به پایگاه داده کاربر فقط کاتالوگ را می‌خواند."""
     if key not in TOOL_MAP:
         raise ToolError("ابزار ناشناخته است.")
     out = (params.get("output") or "").strip().lower()
@@ -175,6 +192,48 @@ def run(db, key: str, params: dict) -> dict:
             "ST_Multi(ST_ConcaveHull(ST_Collect(e.the_geom), 0.3))::geometry(MultiPolygon, 4326) AS geom FROM e").format(
             lon=sql.Literal(lon), lat=sql.Literal(lat), dist=sql.Literal(dist))
 
+    return ex, out, target, body
+
+
+def validate(db, key: str, params: dict) -> str:
+    """همان بررسی‌های اجرا، بدون اجرا؛ نام جدول خروجی را برمی‌گرداند."""
+    return _prepare(db, key, params)[1]
+
+
+def summarize(db, key: str, params: dict) -> str:
+    """توضیح کوتاه فارسی از ورودی‌ها برای ردیف تاریخچه."""
+    parts = []
+    if params.get("layer"):
+        parts.append(params["layer"].removeprefix("public."))
+    if params.get("other"):
+        parts.append("با " + params["other"].removeprefix("public."))
+    for k, label, unit in (("distance", "فاصله", "متر"), ("size", "اندازه خانه", "متر")):
+        if params.get(k):
+            parts.append(f"{label} {params[k]} {unit}")
+    if key == "isochrone" and params.get("lon"):
+        parts.append(f"نقطه {params.get('lon')}, {params.get('lat')}")
+    if params.get("dissolve") == "on":
+        parts.append("یکپارچه")
+    return " · ".join(parts)[:300]
+
+
+PUBLIC_PARAMS = ("layer", "other", "label", "distance", "size", "lon", "lat", "dissolve", "output", "replace")
+
+
+def run_job(job) -> dict:
+    """اجرا در کارگر؛ پارامترها از ToolRun خوانده می‌شود."""
+    run_ = job.tool_run
+    return run(job.database, run_.tool, run_.params, job=job, run_row=run_)
+
+
+def run(db, key: str, params: dict, job=None, run_row=None) -> dict:
+    def step(pct: int, text: str):
+        if job is not None:
+            job.set_progress(pct, text)
+
+    step(5, "بررسی ورودی‌ها")
+    ex, out, target, body = _prepare(db, key, params)
+    step(12, "ساخت جدول نتیجه (سنگین‌ترین مرحله)")
     from databases.provisioner import Provisioner
 
     try:
@@ -183,8 +242,13 @@ def run(db, key: str, params: dict) -> dict:
             conn.execute(sql.SQL("SET statement_timeout = {}").format(sql.Literal(TIMEOUT)))
             conn.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(target))
             conn.execute(sql.SQL("CREATE TABLE {} AS {}").format(target, body))
+            step(65, "تنظیم نوع هندسه و سیستم مختصات")
+            _fix_geom_type(conn, target)
+            step(78, "افزودن کلید اصلی")
             conn.execute(sql.SQL("ALTER TABLE {} ADD COLUMN gid serial PRIMARY KEY").format(target))
+            step(86, "ساخت نمایه مکانی")
             conn.execute(sql.SQL("CREATE INDEX ON {} USING gist (geom)").format(target))
+            step(94, "آماده‌سازی نهایی")
             conn.execute(sql.SQL("ANALYZE {}").format(target))
             n = conn.execute(sql.SQL("SELECT count(*) FROM {}").format(target)).fetchone()[0]
             conn.commit()
@@ -196,4 +260,7 @@ def run(db, key: str, params: dict) -> dict:
             msg = "تحلیل بیش از ۳ دقیقه طول کشید؛ داده را کوچک‌تر کنید یا پارامتر را تغییر دهید."
         raise ToolError(f"تحلیل انجام نشد: {msg}") from exc
     Provisioner.for_server(db.server).reassign_browser_objects(db.db_name, db.role_name)
+    if run_row is not None:
+        run_row.rows = n
+        run_row.save(update_fields=["rows"])
     return {"table": out, "rows": n}

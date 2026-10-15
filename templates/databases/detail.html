@@ -5,30 +5,42 @@
 <div class="wrap page">
   <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a></p>
   <div class="page-head">
-    <h1 class="ltr" style="font-family:var(--f-mono)">{{ db.db_name }}</h1>
-    <span class="badge {{ db.status }}">{{ db.get_status_display }}</span>
-    {% if db.is_live %}<a class="btn sm" href="{% url 'databases:explore' db.pk %}" style="margin-inline-start:auto">مشاهده جدول‌ها و داده‌ها</a>
-    <a class="btn ghost sm" href="{% url 'publish:manage' db.pk %}">انتشار نقشه و API</a>{% endif %}
-    <a class="btn ghost sm" href="{% url 'databases:team' db.pk %}">تیم و کاربران</a>
-    <a class="btn ghost sm" href="{% url 'databases:usage' db.pk %}">مصرف و کارایی</a>
+    <div>
+      <h1 class="ltr" style="font-family:var(--f-mono)">{{ db.db_name }}</h1>
+      <div class="db-tags"><span class="badge {{ db.status }}">{{ db.get_status_display }}</span><span class="tag">پلن {{ db.plan.name }}</span>
+        <span class="tag">{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span></div>
+    </div>
   </div>
+  {% if db.is_live %}
+  <nav class="tiles" aria-label="دسترسی سریع">
+    <a href="{% url 'databases:explore' db.pk %}"><b>جدول‌ها و داده‌ها</b><span>مشاهده، نقشه و حذف جدول</span></a>
+    <a href="{% url 'databases:explore_sql' db.pk %}"><b>اجرای SQL</b><span>کنسول کوئری امن</span></a>
+    <a href="{% url 'databases:import' db.pk %}"><b>ورود فایل</b><span>Shapefile، GeoJSON، CSV…</span></a>
+    <a href="{% url 'analysis:page' db.pk %}"><b>تحلیل</b><span>بدون SQL یا پرسش فارسی</span></a>
+    <a href="{% url 'publish:manage' db.pk %}"><b>انتشار نقشه و API</b><span>لینک، WMS/WFS و REST</span></a>
+    <a href="{% url 'databases:backups' db.pk %}"><b>بکاپ‌ها</b><span>{% if last_backup %}آخرین: {{ last_backup.created_at|jdate }}{% else %}بکاپ و بازگردانی{% endif %} · نگهداری {{ db.plan.backup_retention_days|fanum }} روز</span></a>
+    <a href="{% url 'databases:team' db.pk %}"><b>تیم و کاربران</b><span>دعوت و دسترسی</span></a>
+    <a href="{% url 'databases:usage' db.pk %}"><b>مصرف و کارایی</b><span>نمودار و نمایه</span></a>
+    {% if db.owner_id == request.user.pk %}<a href="{% url 'enterprise:page' db.pk %}"><b>امکانات سازمانی</b><span>GeoServer، رستر، کپی</span></a>{% endif %}
+  </nav>
+  {% endif %}
 
   {% if db.status == 'readonly' %}<div class="msg warning">حجم این پایگاه داده پر شده و فعلاً فقط‌خواندنی است. خواندن داده‌ها و اتصال QGIS و GeoServer کار می‌کند. برای آزاد کردن فضا <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید و بگویید کدام جدول‌ها حذف شوند؛ وقتی حجم به زیر ۹۵٪ برسد، خودکار دوباره قابل نوشتن می‌شود.</div>{% endif %}
   {% if db.status == 'expired' %}<div class="msg error">اعتبار این پایگاه داده تمام شده و اتصال غیرفعال است. با تمدید رایگان، دوباره فعال می‌شود.</div>{% endif %}
   {% if db.status == 'suspended' %}<div class="msg error">این پایگاه داده توسط مدیریت معلق شده است. برای اطلاع از علت <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید.</div>{% endif %}
   {% if db.status == 'error' %}<div class="msg error">ساخت این پایگاه داده کامل نشد. آن را حذف کنید و دوباره بسازید؛ اگر تکرار شد <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید.</div>{% endif %}
 
-  <div class="detail-grid">
-    <div class="stack">
-      {% if once_password %}
-      <section class="once" aria-labelledby="once-title">
+
+  {% if once_password %}
+  <section class="once" aria-labelledby="once-title">
         <h2 id="once-title">رمز پایگاه داده را همین حالا ذخیره کنید</h2>
         <p class="small" style="margin:0">این رمز فقط همین یک بار نمایش داده می‌شود و ما نسخه‌ای از آن نگه نمی‌داریم. اگر گم شد، از همین صفحه رمز جدید بسازید.</p>
         <div class="secret"><code id="once-pw">{{ once_password }}</code><button class="copy" data-copy-target="#once-pw">کپی</button></div>
       </section>
-      {% endif %}
+  {% endif %}
 
-      <section class="panel" aria-labelledby="conn-title">
+  <div class="duo">
+    <section class="panel" aria-labelledby="conn-title">
         <h2 id="conn-title">اطلاعات اتصال</h2>
         <table class="kv">
           <tr><th>میزبان (Host)</th><td><span id="v-host">{{ db.host }}</span> <button class="copy" data-copy="{{ db.host }}">کپی</button></td></tr>
@@ -39,17 +51,43 @@
           <tr><th>SSL Mode</th><td>{{ db.sslmode }}</td></tr>
         </table>
       </section>
+    <section class="panel">
+        <h3>مصرف و اعتبار</h3>
+        <div class="meter {{ db.usage_level }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ db.usage_percent|pct_width }}" aria-label="مصرف حجم"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
+        <div class="meter-label"><span>{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span><span>{{ db.usage_percent|fanum }}٪</span></div>
+        <p class="small muted" style="margin-top:8px">آخرین اندازه‌گیری: {% if db.size_checked_at %}{{ db.size_checked_at|jdatetime_full }}{% else %}هنوز انجام نشده{% endif %}</p>
+        <table class="kv small">
+          <tr><th>پلن</th><td class="rtl">{{ db.plan.name }}</td></tr>
+          <tr><th>تاریخ ساخت</th><td class="rtl">{{ db.created_at|jdate }}</td></tr>
+          <tr><th>اعتبار تا</th><td class="rtl">{{ db.expires_at|jdate }}{% if db.days_left is not None %} ({{ db.days_left|fanum }} روز){% endif %}</td></tr>
+          <tr><th>اتصال همزمان</th><td class="rtl">{{ db.plan.max_connections|fanum }}</td></tr>
+        </table>
+        {% if db.plan.is_free %}
+          {% if db.can_renew %}
+          <form method="post" action="{% url 'databases:renew' db.pk %}" style="margin-top:12px">{% csrf_token %}
+            <button class="btn sm" type="submit">تمدید رایگان {{ db.plan.duration_days|fanum }} روزه</button>
+          </form>
+          {% else %}<p class="small muted" style="margin:12px 0 0">تمدید رایگان نزدیک پایان اعتبار فعال می‌شود.</p>{% endif %}
+        {% endif %}
+        {% if SITE.pay_enabled and db.status != 'suspended' %}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          {% if not db.plan.is_free %}<a class="btn sm" href="{% url 'billing:plans' %}?plan={{ db.plan.slug }}&db={{ db.pk }}">تمدید پلن</a>{% endif %}
+          <a class="btn ghost sm" href="{% url 'billing:plans' %}?db={{ db.pk }}">ارتقای پلن</a>
+        </div>
+        {% endif %}
+      </section>
+  </div>
 
-      {% if db.pooled %}
-      <section class="panel" aria-labelledby="pool-title">
+  {% if db.pooled %}
+  <section class="panel" aria-labelledby="pool-title">
         <h2 id="pool-title">اتصال برای وب‌سایت و برنامه‌ها (PgBouncer)</h2>
         <p class="small">برای سایت، API یا اپلیکیشنی که اتصال‌های زیاد و کوتاه می‌سازد، از این آدرس استفاده کنید؛ صدها درخواست هم‌زمان با چند اتصال واقعی به سرور جواب داده می‌شوند و از سقف اتصال پلن عبور نمی‌کنید. نام کاربری و رمز همان قبلی است.</p>
         <div class="secret"><code id="pool-uri" class="ltr">{{ db.pooled_uri }}</code><button class="copy" data-copy-target="#pool-uri">کپی</button></div>
         <p class="small muted">در این حالت (transaction) دستورهای وابسته به نشست مثل <span class="ltr">LISTEN</span>، <span class="ltr">SET</span> بیرون از تراکنش و جدول موقت میان تراکنش‌ها کار نمی‌کنند. QGIS، pg_dump و ابزارهای مدیریتی را با همان اتصال مستقیم بالا وصل کنید.</p>
       </section>
-      {% endif %}
+  {% endif %}
 
-      <section class="panel" aria-labelledby="howto-title">
+  <section class="panel" aria-labelledby="howto-title">
         <h2 id="howto-title">اتصال از نرم‌افزار شما</h2>
         <div class="tabs" role="tablist" aria-label="روش اتصال">
           <button role="tab" id="t-qgis" aria-controls="p-qgis" aria-selected="true">QGIS</button>
@@ -115,36 +153,9 @@ print(gpd.read_postgis("SELECT * FROM parcels LIMIT 5", engine, geom_col="geomet
 <pre class="code"><button class="copy" data-copy>کپی</button><code>psql "host={{ db.host }} port={{ db.port }} dbname={{ db.db_name }} user={{ db.role_name }} sslmode={{ db.sslmode }}"</code></pre>
         </div>
       </section>
-    </div>
 
-    <aside class="stack">
-      <section class="panel">
-        <h3>مصرف و اعتبار</h3>
-        <div class="meter {{ db.usage_level }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ db.usage_percent|pct_width }}" aria-label="مصرف حجم"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
-        <div class="meter-label"><span>{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span><span>{{ db.usage_percent|fanum }}٪</span></div>
-        <p class="small muted" style="margin-top:8px">آخرین اندازه‌گیری: {% if db.size_checked_at %}{{ db.size_checked_at|jdatetime_full }}{% else %}هنوز انجام نشده{% endif %}</p>
-        <table class="kv small">
-          <tr><th>پلن</th><td class="rtl">{{ db.plan.name }}</td></tr>
-          <tr><th>تاریخ ساخت</th><td class="rtl">{{ db.created_at|jdate }}</td></tr>
-          <tr><th>اعتبار تا</th><td class="rtl">{{ db.expires_at|jdate }}{% if db.days_left is not None %} ({{ db.days_left|fanum }} روز){% endif %}</td></tr>
-          <tr><th>اتصال همزمان</th><td class="rtl">{{ db.plan.max_connections|fanum }}</td></tr>
-        </table>
-        {% if db.plan.is_free %}
-          {% if db.can_renew %}
-          <form method="post" action="{% url 'databases:renew' db.pk %}" style="margin-top:12px">{% csrf_token %}
-            <button class="btn sm" type="submit">تمدید رایگان {{ db.plan.duration_days|fanum }} روزه</button>
-          </form>
-          {% else %}<p class="small muted" style="margin:12px 0 0">تمدید رایگان نزدیک پایان اعتبار فعال می‌شود.</p>{% endif %}
-        {% endif %}
-        {% if SITE.pay_enabled and db.status != 'suspended' %}
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-          {% if not db.plan.is_free %}<a class="btn sm" href="{% url 'billing:plans' %}?plan={{ db.plan.slug }}&db={{ db.pk }}">تمدید پلن</a>{% endif %}
-          <a class="btn ghost sm" href="{% url 'billing:plans' %}?db={{ db.pk }}">ارتقای پلن</a>
-        </div>
-        {% endif %}
-      </section>
-
-      <section class="panel">
+  <div class="duo">
+    <section class="panel">
         <h3>افزونه‌های نصب‌شده</h3>
         <div class="chips">{% for e in db.extensions.all %}<span class="chip">{{ e.title }}</span>{% empty %}<span class="muted small">هیچ افزونه‌ای نصب نشده</span>{% endfor %}</div>
         {% if db.is_live and ext_form.fields.extension.queryset.exists %}
@@ -154,8 +165,7 @@ print(gpd.read_postgis("SELECT * FROM parcels LIMIT 5", engine, geom_col="geomet
         </form>
         {% endif %}
       </section>
-
-      {% if db.is_live %}
+    {% if db.is_live %}
       <section class="panel">
         <h3>رمز جدید</h3>
         <p class="small muted">اگر رمز را فراموش کرده‌اید، یک رمز جدید بسازید. اتصال‌های فعلی قطع نمی‌شوند ولی اتصال بعدی رمز جدید را می‌خواهد.</p>
@@ -168,22 +178,17 @@ print(gpd.read_postgis("SELECT * FROM parcels LIMIT 5", engine, geom_col="geomet
         </form>
       </section>
       {% endif %}
+    
+  </div>
 
-      <section class="panel">
-        <h3>بکاپ</h3>
-        <p class="small muted" style="margin-bottom:8px">هر شب بکاپ کامل گرفته و {{ db.plan.backup_retention_days|fanum }} روز نگه داشته می‌شود.
-          {% if last_backup %}آخرین بکاپ: {{ last_backup.created_at|jdatetime_full }}{% else %}هنوز بکاپی گرفته نشده.{% endif %}</p>
-        <a class="btn ghost sm" href="{% url 'databases:backups' db.pk %}">بکاپ‌ها، دانلود و بازگردانی</a>
-      </section>
-
-      {% if logs %}
+  <div class="after">
+    {% if logs %}
       <section class="panel">
         <h3>رویدادهای اخیر</h3>
         <ul class="log">{% for l in logs %}<li class="{% if not l.success %}fail{% endif %}"><span>{{ l.message|truncatechars:60 }}</span><span class="muted">{{ l.created_at|jdate }}</span></li>{% endfor %}</ul>
       </section>
-      {% endif %}
-
-      <section class="panel">
+    {% endif %}
+    <section class="panel danger-panel">
         <details class="danger-zone">
           <summary>حذف پایگاه داده</summary>
           <p class="small" style="margin-top:12px">همه جدول‌ها و داده‌ها برای همیشه پاک می‌شوند و قابل بازگشت نیستند.</p>
@@ -196,7 +201,6 @@ print(gpd.read_postgis("SELECT * FROM parcels LIMIT 5", engine, geom_col="geomet
           </form>
         </details>
       </section>
-    </aside>
   </div>
 </div>
 {% endblock %}

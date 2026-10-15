@@ -42,7 +42,7 @@ body{background:#EEF2EC}
 <script src="{% static 'js/map-page.js' %}"></script>
 <script>
   const cfg = JSON.parse(document.getElementById("map-config").textContent);
-  GPMap.create(document.getElementById("map"), cfg);
+  window.gpMap = GPMap.create(document.getElementById("map"), cfg);
 </script>
 </body>
 </html>

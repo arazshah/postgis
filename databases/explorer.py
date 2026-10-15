@@ -400,6 +400,32 @@ class Explorer:
                 break
         return done, failed
 
+    # ------------------------------------------------------------------ حذف جدول
+    def drop_table(self, table: TableRef) -> None:
+        """جدول (یا نما) را با نقش خود کاربر حذف می‌کند؛ بدون CASCADE تا چیز دیگری بی‌خبر پاک نشود."""
+        kinds = {"r": "TABLE", "p": "TABLE", "v": "VIEW", "m": "MATERIALIZED VIEW", "f": "FOREIGN TABLE"}
+        if table.kind not in kinds:
+            raise ExplorerError("این شیء قابل حذف نیست.")
+        stmt = sql.SQL("DROP {} {}").format(sql.SQL(kinds[table.kind]), sql.Identifier(table.schema, table.name))
+        with self.connect(read_only=False) as conn:
+            try:
+                conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(self.db.role_name)))
+                conn.execute(sql.SQL("SET LOCAL lock_timeout = '5s'"))
+                conn.execute(stmt)
+                conn.commit()
+            except psycopg.errors.DependentObjectsStillExist as exc:
+                conn.rollback()
+                raise ExplorerError("نما یا جدول دیگری به این جدول وابسته است؛ اول آن‌ها را حذف کنید.") from exc
+            except psycopg.errors.InsufficientPrivilege as exc:
+                conn.rollback()
+                raise ExplorerError("اجازه حذف این جدول را ندارید.") from exc
+            except psycopg.errors.LockNotAvailable as exc:
+                conn.rollback()
+                raise ExplorerError("جدول در حال استفاده است؛ چند لحظه بعد دوباره تلاش کنید.") from exc
+            except psycopg.Error as exc:
+                conn.rollback()
+                raise ExplorerError(f"خطا: {getattr(exc.diag, 'message_primary', None) or exc}") from exc
+
     # ------------------------------------------------------------------ کنسول SQL
     def run_sql(self, query: str, allow_write: bool = False) -> dict:
         query = (query or "").strip().rstrip(";").strip()

@@ -28,6 +28,7 @@ services:
       - BACKUP_ROOT=/app/backups
       - OWS_ROOT=/app/ows
       - OSM_ROOT=/app/osm
+      - RASTER_ROOT=/app/rasters
       - QGIS_SERVER_URL=${QGIS_SERVER_URL:-http://qgis/ows/}
       - PGBOUNCER_AUTH_PASSWORD=${PGBOUNCER_AUTH_PASSWORD:-}
     volumes:
@@ -35,6 +36,7 @@ services:
       - db-backups:/app/backups
       - ows-projects:/app/ows
       - osm-data:/app/osm
+      - rasters:/app/rasters
     networks:
       - default
       - coolify
@@ -65,14 +67,21 @@ services:
       - BACKUP_ROOT=/app/backups
       - OWS_ROOT=/app/ows
       - OSM_ROOT=/app/osm
+      - RASTER_ROOT=/app/rasters
       - OSM_SOURCE_URL=${OSM_SOURCE_URL:-https://download.geofabrik.de/asia/iran-latest.osm.pbf}
       - BASEMAP_SOURCE_URL=${BASEMAP_SOURCE_URL:-https://build.protomaps.com/{date}.pmtiles}
       - RUN_MIGRATIONS=0
+      - COOLIFY_API_URL=${COOLIFY_API_URL:-}
+      - COOLIFY_API_TOKEN=${COOLIFY_API_TOKEN:-}
+      - COOLIFY_PROJECT_UUID=${COOLIFY_PROJECT_UUID:-}
+      - COOLIFY_SERVER_UUID=${COOLIFY_SERVER_UUID:-}
+      - GEOSERVER_DOMAIN=${GEOSERVER_DOMAIN:-}
     volumes:
       - panel-media:/app/media
       - db-backups:/app/backups
       - ows-projects:/app/ows
       - osm-data:/app/osm
+      - rasters:/app/rasters
     networks:
       - default
       - coolify
@@ -143,6 +152,8 @@ volumes:
   ows-projects:
   # فایل OSM ایران (~۳۰۰ مگابایت) و نقشه پایه PMTiles (چند گیگابایت)
   osm-data:
+  # رسترهای پلن سازمانی (Cloud Optimized GeoTIFF)
+  rasters:
 
 networks:
   coolify:

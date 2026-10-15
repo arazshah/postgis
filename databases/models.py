@@ -187,6 +187,11 @@ class Plan(models.Model):
     basemap_api = models.BooleanField(
         "نقشه پایه ایران برای سایت خود کاربر", default=False,
         help_text="آدرس style.json با کلید API برای استفاده در سایت‌های دیگر (نقشه‌های داخل postgis.ir همیشه دارند).")
+    dedicated_geoserver = models.BooleanField("GeoServer اختصاصی", default=False)
+    raster_mb = models.PositiveIntegerField("فضای رستر (مگابایت)", default=0, help_text="۰ یعنی سرویس رستر ندارد.")
+    clone_enabled = models.BooleanField("کپی آزمایشی پایگاه داده از بکاپ", default=False)
+    snapshot_hours = models.PositiveSmallIntegerField(
+        "بکاپ هر چند ساعت", default=0, help_text="۰ یعنی فقط بکاپ شبانه؛ مثلاً ۶ یعنی هر ۶ ساعت یک نسخه (۴۸ ساعت نگه‌داری).")
     price_toman = models.PositiveIntegerField("قیمت (تومان)", default=0)
     is_free = models.BooleanField("رایگان", default=True)
     is_public = models.BooleanField("نمایش در سایت", default=True)

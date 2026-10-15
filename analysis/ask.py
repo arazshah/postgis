@@ -115,6 +115,7 @@ def run(job: Job, client=None) -> str:
 
     q = job.question
     db = job.database
+    job.set_progress(8, "خواندن لایه‌ها")
     ex = Explorer(db)
     tables = {f"{t.schema}.{t.name}": t for t in ex.tables()}
     layers = {}
@@ -130,6 +131,7 @@ def run(job: Job, client=None) -> str:
             raise AskError("کلید مدل زبانی پیدا نشد.")
         client = _client(cfg)
     extent = derive_input_data_extent(layers)
+    job.set_progress(25, "مدل زبانی برنامه تحلیل را می‌نویسد")
     generator = LLMQuerySpecGenerator(client, max_repair_attempts=1)
     try:
         spec = generator.generate(q.text, context={}, system_hints="پاسخ و نام ستون‌های جدید می‌تواند فارسی یا لاتین باشد.",
@@ -141,6 +143,7 @@ def run(job: Job, client=None) -> str:
         elif "request failed" in msg:
             msg = "اتصال به سرویس مدل زبانی برقرار نشد؛ آدرس سرویس را بررسی کنید."
         raise AskError(f"مدل زبانی برنامه تحلیل را نساخت: {msg[:400]}") from exc
+    job.set_progress(55, "اجرای مراحل تحلیل")
     q.goal = spec.goal
     q.operations = [o.op for o in spec.operations]
     plan = DeterministicPlanner(PlannerConfig(strict_params=True)).build(spec)
@@ -154,6 +157,7 @@ def run(job: Job, client=None) -> str:
     if not feats:
         q.save(update_fields=["goal", "operations"])
         return f"{spec.goal} — نتیجه مکانی نداشت: {str(out)[:600]}"
+    job.set_progress(82, "ذخیره نتیجه در جدول")
     srid = 4326
     if _max_abs_x(feats) > 180:
         srid = int(str(extent.suggested_crs or "EPSG:32639").split(":")[-1])
