@@ -1,8 +1,6 @@
 """کاشی PNG از رستر COG با rio-tiler: کشش بین کمینه و بیشینه باند و رنگ‌بندی، یا RGB برای تصویر رنگی."""
 from __future__ import annotations
 
-import numpy as np
-
 CMAPS = {"gray": None, "terrain": "terrain", "viridis": "viridis", "rdylgn": "rdylgn", "blues": "blues",
          "spectral": "spectral"}
 
@@ -13,6 +11,7 @@ class TileError(Exception):
 
 def render(raster, z: int, x: int, y: int) -> bytes | None:
     """None اگر کاشی بیرون از محدوده رستر باشد."""
+    import numpy as np  # تنبل: اگر NumPy روی این پردازنده بالا نیامد، فقط رستر از کار می‌افتد نه کل سایت
     from rio_tiler.colormap import cmap
     from rio_tiler.errors import TileOutsideBounds
     from rio_tiler.io import Reader
