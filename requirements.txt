@@ -8,3 +8,4 @@ jdatetime>=5.0
 Pillow>=10
 defusedxml>=0.7
 pmtiles>=3.4
+smart-spatial-system>=0.5.8  # s3geo: پرسش فارسی از داده

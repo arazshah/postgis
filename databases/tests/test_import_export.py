@@ -138,6 +138,18 @@ class ImportExportIntegrationTests(TestCase):
         issues = [i for i in Explorer(self.db).health() if i["table"] == "schools"]
         self.assertEqual([i["fix"] for i in issues if i["fix"] != "analyze"], [])
 
+    def test_assign_and_reproject(self):
+        """SRID اعلام‌شده کاربر + تبدیل به 4326 باید مختصات را واقعاً تبدیل کند (نه فقط برچسب)."""
+        src = self.tmp / "utm.geojson"
+        src.write_text('{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"a":1},'
+                       '"geometry":{"type":"Point","coordinates":[535000,3950000]}}]}')
+        gdal.import_layer(self.db, src, {"name": "utm", "table": "utm_pts", "srid": 32639, "assign_srid": True,
+                                         "to4326": True, "mode": "create", "geom_type": "Point"}, None)
+        lon, lat, srid = self._sql("SELECT ST_X(ST_GeometryN(geom, 1)), ST_Y(ST_GeometryN(geom, 1)), ST_SRID(geom) FROM utm_pts")[0]
+        self.assertEqual(srid, 4326)
+        self.assertAlmostEqual(lon, 51.38, places=1)
+        self.assertAlmostEqual(lat, 35.69, places=1)
+
     def test_existing_table_needs_mode(self):
         self._sql("CREATE TABLE pts(id int)")
         z = _shapefile_zip(self.tmp, "UTF-8", with_cpg=True)

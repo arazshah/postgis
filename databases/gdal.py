@@ -208,9 +208,13 @@ def import_layer(db, path: Path, layer: dict, encoding: str | None) -> None:
         cmd += ["-overwrite"]
     elif layer.get("mode") == "append":
         cmd += ["-append"]
-    if layer.get("srid") and layer.get("assign_srid"):
+    assign = layer.get("srid") and layer.get("assign_srid")
+    if assign and layer.get("to4326"):
+        # -a_srs فقط برچسب می‌زند و تبدیل نمی‌کند؛ برای تبدیل باید سیستم مبدأ با -s_srs گفته شود
+        cmd += ["-s_srs", f"EPSG:{int(layer['srid'])}", "-t_srs", "EPSG:4326"]
+    elif assign:
         cmd += ["-a_srs", f"EPSG:{int(layer['srid'])}"]
-    if layer.get("to4326"):
+    elif layer.get("to4326"):
         cmd += ["-t_srs", "EPSG:4326"]
     if path.suffix.lower() == ".csv" and not layer.get("srid"):
         cmd += ["-a_srs", "EPSG:4326"]

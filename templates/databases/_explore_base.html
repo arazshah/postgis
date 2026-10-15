@@ -10,6 +10,7 @@
       <a href="{% url 'databases:explore_sql' db.pk %}" {% if section == 'sql' %}aria-current="page"{% endif %}>اجرای SQL</a>
       {% if db.can_edit %}<a href="{% url 'databases:import' db.pk %}" {% if section == 'import' %}aria-current="page"{% endif %}>ورود فایل</a>
       <a href="{% url 'iranmap:ready' db.pk %}" {% if section == 'ready' %}aria-current="page"{% endif %}>داده آماده ایران</a>{% endif %}
+      {% if db.can_edit %}<a href="{% url 'analysis:page' db.pk %}" {% if section == 'analysis' %}aria-current="page"{% endif %}>تحلیل</a>{% endif %}
       <a href="{% url 'databases:explore_health' db.pk %}" {% if section == 'health' %}aria-current="page"{% endif %}>سلامت داده</a>
       {% if db.can_edit %}<a href="{% url 'publish:manage' db.pk %}">انتشار</a>{% endif %}
     </nav>
