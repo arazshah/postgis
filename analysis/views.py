@@ -10,10 +10,9 @@ from django.views.decorators.http import require_http_methods
 from accounts.decorators import site_user_required
 from databases.explorer import ExplorerError
 from databases.views import _explorer_db
-
-from . import ask, tools
 from jobs.models import Job
 
+from . import ask, tools
 from .models import LlmConfig, Question, ToolRun
 
 HISTORY_LIMIT = 15
