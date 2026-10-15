@@ -164,7 +164,7 @@ code,.mono,kbd{font-family:var(--f-mono);font-size:.88em}
 .field{margin-bottom:var(--s5)}
 .field label{display:block;font-weight:700;margin-bottom:var(--s2)}
 .field input[type=text],.field input[type=email],.field input[type=password],.field input[type=tel],.field input[type=search],.field input[type=number],.field input[type=date],.field input[type=datetime-local],.field input:not([type]),.field select,.field textarea,
-.inline-form input[type=tel],.inline-form select{
+.inline-form input[type=tel],.inline-form input[type=text],.inline-form select{
   width:100%;min-height:46px;padding:0 var(--s3);border:1.5px solid var(--line);border-radius:var(--r-sm);
   background:#fff;color:var(--ink);font:inherit}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--teal);outline:none;box-shadow:0 0 0 3px var(--teal-soft)}
@@ -578,6 +578,7 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 .field .prefixed input{border:0;box-shadow:none;border-radius:0;flex:1;min-width:0;font-family:var(--f-mono)}
 .inline-form input[type=tel]{width:15ch;font-family:var(--f-mono);direction:ltr}
 .inline-form select{width:auto}
+.inline-form input[type=text]{width:auto;flex:1 1 16ch}
 
 /* داشبورد مصرف */
 .u-h{font-size:1.1rem;margin:0 0 var(--s3)}

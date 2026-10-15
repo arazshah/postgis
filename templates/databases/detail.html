@@ -11,6 +11,7 @@
     <a class="btn ghost sm" href="{% url 'publish:manage' db.pk %}">انتشار نقشه و API</a>{% endif %}
     <a class="btn ghost sm" href="{% url 'databases:team' db.pk %}">تیم و کاربران</a>
     <a class="btn ghost sm" href="{% url 'databases:usage' db.pk %}">مصرف و کارایی</a>
+    {% if db.owner_id == request.user.pk %}<a class="btn ghost sm" href="{% url 'enterprise:page' db.pk %}">امکانات سازمانی</a>{% endif %}
   </div>
 
   {% if db.status == 'readonly' %}<div class="msg warning">حجم این پایگاه داده پر شده و فعلاً فقط‌خواندنی است. خواندن داده‌ها و اتصال QGIS و GeoServer کار می‌کند. برای آزاد کردن فضا <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید و بگویید کدام جدول‌ها حذف شوند؛ وقتی حجم به زیر ۹۵٪ برسد، خودکار دوباره قابل نوشتن می‌شود.</div>{% endif %}

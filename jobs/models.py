@@ -16,6 +16,9 @@ class Job(models.Model):
         OSM_REFRESH = "osm_refresh", "به‌روزرسانی داده OSM ایران"
         OSM_IMPORT = "osm_import", "داده آماده ایران"
         ASK = "ask", "پرسش فارسی"
+        GEOSERVER = "geoserver", "GeoServer اختصاصی"
+        RASTER = "raster", "پردازش رستر"
+        CLONE = "clone", "کپی پایگاه داده"
 
     class Status(models.TextChoices):
         DRAFT = "draft", "منتظر تأیید کاربر"

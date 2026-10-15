@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     "classroom",
     "analysis",
     "restapi",
+    "enterprise",
 ]
 
 MIDDLEWARE = [
@@ -174,6 +175,18 @@ BASEMAP_SOURCE_URL = os.environ.get("BASEMAP_SOURCE_URL", "https://build.protoma
 BASEMAP_BBOX = os.environ.get("BASEMAP_BBOX", "43.9,24.8,63.5,39.9")
 BASEMAP_MAXZOOM = int(os.environ.get("BASEMAP_MAXZOOM", "15"))
 BASEMAP_REFRESH_DAYS = int(os.environ.get("BASEMAP_REFRESH_DAYS", "30"))  # 0 = فقط دستی
+# پلن سازمانی: رسترها (COG) روی volume جدا، و GeoServer اختصاصی با API سرویس Coolify (اختیاری؛
+# اگر خالی باشد مدیر GeoServer را دستی می‌سازد و آدرس و رمز را در پنل مدیریت وارد می‌کند)
+RASTER_ROOT = Path(os.environ.get("RASTER_ROOT", MEDIA_ROOT / "rasters"))
+RASTER_MAX_MB = int(os.environ.get("RASTER_MAX_MB", "1024"))
+SNAPSHOT_KEEP_HOURS = int(os.environ.get("SNAPSHOT_KEEP_HOURS", "48"))
+COOLIFY_API_URL = os.environ.get("COOLIFY_API_URL", "")
+COOLIFY_API_TOKEN = os.environ.get("COOLIFY_API_TOKEN", "")
+COOLIFY_PROJECT_UUID = os.environ.get("COOLIFY_PROJECT_UUID", "")
+COOLIFY_SERVER_UUID = os.environ.get("COOLIFY_SERVER_UUID", "")
+COOLIFY_ENVIRONMENT = os.environ.get("COOLIFY_ENVIRONMENT", "production")
+GEOSERVER_DOMAIN = os.environ.get("GEOSERVER_DOMAIN", "")
+GEOSERVER_IMAGE = os.environ.get("GEOSERVER_IMAGE", "docker.osgeo.org/geoserver:2.26.1")
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 

@@ -1,0 +1,41 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ r.title }} — نقشه رستر</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/favicon.svg' %}">
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
+<style>html,body{height:100%;margin:0}#map{position:fixed;inset:0}
+.rv-card{position:fixed;top:12px;inset-inline-start:12px;z-index:3;background:rgba(249,251,248,.96);border:1px solid var(--line);border-radius:12px;padding:10px 14px;max-width:min(360px,calc(100vw - 80px))}
+.rv-card h1{font-size:1.05rem;margin:0 0 6px}.rv-card input{width:100%}</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="rv-card"><h1>{{ r.title }}</h1><label class="small" for="op">شفافیت رستر</label><input id="op" type="range" min="0" max="1" step="0.05" value="0.9"></div>
+{{ cfg|json_script:"rv-config" }}
+<script src="{% static 'vendor/maplibre/maplibre-gl.js' %}"></script>
+<script>
+(() => {
+  const cfg = JSON.parse(document.getElementById("rv-config").textContent);
+  if (cfg.rtlPlugin) maplibregl.setRTLTextPlugin(cfg.rtlPlugin, true).catch(() => {});
+  const raster = {version: 8, sources: {o: {type: "raster", tiles: [cfg.basemap], tileSize: 256, attribution: "© OpenStreetMap"}},
+    layers: [{id: "o", type: "raster", source: "o"}]};
+  const b = cfg.bounds && cfg.bounds.length === 4 ? cfg.bounds : [44, 25, 63.5, 40];
+  const map = new maplibregl.Map({container: "map", style: cfg.iranStyle || raster, bounds: [[b[0], b[1]], [b[2], b[3]]],
+    fitBoundsOptions: {padding: 40}, attributionControl: {compact: true}});
+  map.addControl(new maplibregl.NavigationControl(), "top-left");
+  map.addControl(new maplibregl.ScaleControl({unit: "metric"}), "bottom-left");
+  const add = () => {
+    if (map.getSource("r")) return;
+    map.addSource("r", {type: "raster", tiles: [cfg.tiles], tileSize: 256, bounds: b, attribution: "postgis.ir"});
+    map.addLayer({id: "r", type: "raster", source: "r", paint: {"raster-opacity": 0.9}});
+  };
+  map.on("style.load", add);
+  document.getElementById("op").addEventListener("input", (e) => map.getLayer("r") && map.setPaintProperty("r", "raster-opacity", +e.target.value));
+})();
+</script>
+</body>
+</html>
