@@ -8,7 +8,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
-from .models import ActivityLog, DatabaseServer, Extension, Plan, UserDatabase
+from .models import ActivityLog, DatabaseServer, Extension, Plan, SizeSample, UserDatabase
 from .provisioner import Provisioner, ProvisionError, TenantLimits
 
 log = logging.getLogger(__name__)
@@ -257,6 +257,8 @@ def check_quotas() -> dict:
                 stats["errors"] += 1
                 logevent("quota", str(exc), database=db, success=False)
             db.save(update_fields=["size_bytes", "size_checked_at", "status", "quota_warned_at"])
+            SizeSample.objects.update_or_create(database=db, day=timezone.localdate(now),
+                                                defaults={"size_bytes": db.size_bytes})
     return stats
 
 

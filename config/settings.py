@@ -160,6 +160,9 @@ OWS_ROOT = Path(os.environ.get("OWS_ROOT", MEDIA_ROOT / "ows"))
 QGIS_SERVER_URL = os.environ.get("QGIS_SERVER_URL", "http://qgis/ows/")
 QGIS_SERVER_TIMEOUT = int(os.environ.get("QGIS_SERVER_TIMEOUT", "60"))
 
+# PgBouncer جلوی سرور PostGIS مشتریان (سرویس pgbouncer در docker-compose)
+PGBOUNCER_AUTH_PASSWORD = os.environ.get("PGBOUNCER_AUTH_PASSWORD", "")
+
 # نقشه پایه ایران و داده آماده OSM (مجوز ODbL). فایل‌ها روی volume جدا (osm-data) می‌مانند.
 OSM_ROOT = Path(os.environ.get("OSM_ROOT", MEDIA_ROOT / "osm"))
 OSM_SOURCE_URL = os.environ.get("OSM_SOURCE_URL", "https://download.geofabrik.de/asia/iran-latest.osm.pbf")

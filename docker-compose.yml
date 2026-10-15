@@ -29,6 +29,7 @@ services:
       - OWS_ROOT=/app/ows
       - OSM_ROOT=/app/osm
       - QGIS_SERVER_URL=${QGIS_SERVER_URL:-http://qgis/ows/}
+      - PGBOUNCER_AUTH_PASSWORD=${PGBOUNCER_AUTH_PASSWORD:-}
     volumes:
       - panel-media:/app/media
       - db-backups:/app/backups
@@ -113,6 +114,27 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  # اشتراک اتصال برای وب‌سایت‌ها و برنامه‌های کاربران (اختیاری). تا PGBOUNCER_DB_HOST و
+  # PGBOUNCER_AUTH_PASSWORD تنظیم نشوند بیکار می‌ماند. سپس در پنل مدیریت: سرور ← «راه‌اندازی PgBouncer» و
+  # وارد کردن پورت عمومی. حالت transaction: برای وب و API؛ QGIS و pg_dump مستقیم وصل شوند.
+  pgbouncer:
+    build: ./docker/pgbouncer
+    restart: unless-stopped
+    environment:
+      - DB_HOST=${PGBOUNCER_DB_HOST:-}
+      - DB_PORT=${PGBOUNCER_DB_PORT:-5432}
+      - AUTH_PASSWORD=${PGBOUNCER_AUTH_PASSWORD:-}
+      - AUTH_DBNAME=${PGBOUNCER_AUTH_DBNAME:-postgres}
+      - PUBLIC_HOST=${PGBOUNCER_PUBLIC_HOST:-db.postgis.ir}
+      - DEFAULT_POOL_SIZE=${PGBOUNCER_POOL_SIZE:-5}
+      - MAX_DB_CONNECTIONS=${PGBOUNCER_MAX_DB_CONNECTIONS:-15}
+    ports:
+      - "${PGBOUNCER_PUBLIC_PORT:-6432}:6432"
+    networks:
+      - default
+      - coolify
+    mem_limit: 256m
 
 volumes:
   panel-db-data:

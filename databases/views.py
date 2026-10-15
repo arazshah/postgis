@@ -600,3 +600,51 @@ def team_page(request, pk):
         "new_pw": request.session.pop(SESSION_ROLE_PW.format(db.pk), None),
         "role_prefix": team.role_name_for(db, ""),
     })
+
+
+# ---------------------------------------------------------------------- داشبورد مصرف
+@site_user_required
+@require_http_methods(["GET", "POST"])
+def usage_page(request, pk):
+    from . import usage
+
+    db = _user_db(request, pk, "editor")
+    if request.method == "POST":
+        try:
+            pid = int(request.POST.get("pid", "0"))
+        except ValueError:
+            pid = 0
+        if pid and usage.cancel(db, pid):
+            messages.success(request, "درخواست توقف کوئری فرستاده شد.")
+        else:
+            messages.error(request, "این کوئری پیدا نشد یا تمام شده است.")
+        return redirect("databases:usage", pk=db.pk)
+    stats, error = usage.safe_collect(db) if db.is_live else (None, "پایگاه داده فعال نیست.")
+    hist = usage.history(db)
+    reqs = usage.requests(db)
+    return render(request, "databases/usage.html", {
+        "db": db, "stats": stats, "error": error, "history": hist, "requests": reqs,
+        "size_chart": _bars([h["size"] for h in hist], [h["day"] for h in hist], db.quota_bytes),
+        "req_chart": _bars([r["n"] for r in reqs], [r["day"] for r in reqs], db.plan.publish_daily_requests),
+    })
+
+
+def _bars(values, days, cap=None, width=600, height=140):
+    """نمودار ستونی ساده SVG (بدون کتابخانه): مقادیر و خط سقف."""
+    if not values:
+        return None
+    top = max(max(values), 1)
+    if cap and cap < top * 3:
+        top = max(top, cap)
+    n = len(values)
+    gap = 4
+    bw = max(2, (width - gap * (n - 1)) / n)
+    bars = []
+    from datetime import datetime, time
+
+    for i, (v, d) in enumerate(zip(values, days, strict=True)):
+        d = timezone.make_aware(datetime.combine(d, time(12)))  # فیلتر jdate تاریخ‌وزمان می‌خواهد
+        h = 0 if not v else max(2, round(v / top * (height - 6)))
+        bars.append({"x": round(i * (bw + gap), 1), "y": height - h, "w": round(bw, 1), "h": h, "v": v, "day": d})
+    cap_y = round(height - cap / top * (height - 6), 1) if cap and cap <= top else None
+    return {"bars": bars, "w": width, "h": height, "cap_y": cap_y}

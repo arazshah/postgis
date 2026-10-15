@@ -1,0 +1,37 @@
+;; PgBouncer برای postgis.ir — از روی متغیرهای محیطی ساخته می‌شود (start.sh)
+;; هر کاربر با همان نام کاربری و رمز پایگاه داده خودش وصل می‌شود؛ رمزها با auth_query از خود
+;; PostgreSQL خوانده می‌شوند (SCRAM)، پس فایل رمز جداگانه‌ای لازم نیست.
+
+[databases]
+* = host=${DB_HOST} port=${DB_PORT}
+
+[pgbouncer]
+listen_addr = 0.0.0.0
+listen_port = 6432
+unix_socket_dir =
+
+auth_type = scram-sha-256
+auth_file = ${CONF_DIR}/userlist.txt
+auth_user = ${AUTH_USER}
+auth_dbname = ${AUTH_DBNAME}
+auth_query = SELECT username, password FROM pgbouncer.get_auth($1)
+
+pool_mode = transaction
+max_client_conn = ${MAX_CLIENT_CONN}
+default_pool_size = ${DEFAULT_POOL_SIZE}
+max_db_connections = ${MAX_DB_CONNECTIONS}
+reserve_pool_size = 2
+server_idle_timeout = 120
+query_wait_timeout = 30
+client_idle_timeout = 0
+ignore_startup_parameters = extra_float_digits,search_path,options
+
+server_tls_sslmode = ${SERVER_TLS_SSLMODE}
+client_tls_sslmode = ${CLIENT_TLS_SSLMODE}
+client_tls_key_file = ${CONF_DIR}/server.key
+client_tls_cert_file = ${CONF_DIR}/server.crt
+
+admin_users =
+stats_users =
+log_connections = 0
+log_disconnections = 0

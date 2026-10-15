@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: sudo apt-get update -q && sudo apt-get install -y -q gdal-bin osmium-tool osm2pgrouting
+      - run: sudo apt-get update -q && sudo apt-get install -y -q gdal-bin osmium-tool osm2pgrouting pgbouncer gettext-base
       - run: pip install -r requirements-dev.txt
       - name: Lint
         run: ruff check .

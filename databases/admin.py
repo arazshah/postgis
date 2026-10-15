@@ -85,7 +85,7 @@ class DatabaseServerAdmin(admin.ModelAdmin):
     list_display = ["name", "public_host", "health", "usage", "is_active", "is_default", "server_version",
                     "postgis_version", "last_check_at"]
     list_filter = ["is_active"]
-    actions = ["test_connection", "harden"]
+    actions = ["test_connection", "harden", "setup_pooler"]
     readonly_fields = ["last_check_at", "last_check_ok", "last_check_message", "server_version", "postgis_version",
                        "created_at", "updated_at"]
     fieldsets = (
@@ -95,6 +95,11 @@ class DatabaseServerAdmin(admin.ModelAdmin):
                            "کاربر ادمین باید superuser باشد.",
         }),
         ("اطلاعاتی که به کاربران نمایش داده می‌شود", {"fields": ("public_host", "public_port", "public_sslmode")}),
+        ("PgBouncer (اشتراک اتصال)", {
+            "fields": ("pooler_port", "pooler_host"),
+            "description": "۱) در Coolify متغیرهای PGBOUNCER_DB_HOST و PGBOUNCER_AUTH_PASSWORD را بگذارید. "
+                           "۲) اقدام «راه‌اندازی PgBouncer» را روی این سرور اجرا کنید. ۳) پورت عمومی را اینجا وارد کنید.",
+        }),
         ("ظرفیت و وضعیت", {"fields": ("is_active", "is_default", "max_databases", "disk_capacity_gb", "notes")}),
         ("آخرین بررسی", {"fields": ("last_check_at", "last_check_ok", "last_check_message", "server_version",
                                      "postgis_version", "created_at", "updated_at")}),
@@ -127,6 +132,21 @@ class DatabaseServerAdmin(admin.ModelAdmin):
                 done = services.harden_server(server)
                 services.refresh_server(server)
                 self.message_user(request, f"{server.name}: ایمن شد ({len(done)} تغییر).", messages.SUCCESS)
+            except ProvisionError as exc:
+                self.message_user(request, f"{server.name}: {exc}", messages.ERROR)
+
+    @admin.action(description="راه‌اندازی احراز هویت PgBouncer روی سرورهای انتخاب‌شده")
+    def setup_pooler(self, request, queryset):
+        from django.conf import settings
+
+        if not settings.PGBOUNCER_AUTH_PASSWORD:
+            self.message_user(request, "متغیر PGBOUNCER_AUTH_PASSWORD در Coolify تنظیم نشده است.", messages.ERROR)
+            return
+        for server in queryset:
+            try:
+                services.provisioner_for(server).ensure_pooler_auth(settings.PGBOUNCER_AUTH_PASSWORD)
+                self.message_user(request, f"{server.name}: نقش gp_pgbouncer و تابع احراز هویت آماده شد.",
+                                  messages.SUCCESS)
             except ProvisionError as exc:
                 self.message_user(request, f"{server.name}: {exc}", messages.ERROR)
 
