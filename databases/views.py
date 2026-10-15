@@ -34,13 +34,25 @@ def dashboard(request):
     dbs = (request.user.databases.exclude(status=UserDatabase.Status.DELETED)
            .select_related("server", "plan").prefetch_related("extensions"))
     shared = team.shared_with(request.user)
+    dbs = list(dbs)
+    from jobs.models import Job
+
+    last = {}
+    for j in Job.objects.filter(database__in=dbs, kind=Job.Kind.BACKUP, status=Job.Status.DONE).order_by("-created_at"):
+        last.setdefault(j.database_id, j)
+    for d in dbs:
+        d.last_backup = last.get(d.pk)
+    stats = {"count": len(dbs), "size": sum(d.size_bytes or 0 for d in dbs),
+             "quota": sum(d.plan.quota_bytes for d in dbs if getattr(d.plan, "quota_bytes", None)),
+             "running": Job.objects.filter(database__in=dbs, status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).count(),
+             "backups": sum(1 for d in dbs if d.last_backup)}
     from classroom.services import teacher_contracts
 
     is_teacher = teacher_contracts(request.user).exists() or request.user.taught_classes.exists()
     can_create, reason = services.user_can_create(request.user)
     from billing.services import unused_vouchers
 
-    return render(request, "databases/dashboard.html", {"dbs": dbs, "shared": shared, "can_create": can_create,
+    return render(request, "databases/dashboard.html", {"dbs": dbs, "shared": shared, "can_create": can_create, "stats": stats,
                                                         "is_teacher": is_teacher,
                                                         "reason": reason,
                                                         "vouchers": unused_vouchers(request.user)})
@@ -278,6 +290,34 @@ def explore_table(request, pk, schema, table):
         messages.error(request, str(exc))
         return redirect("databases:explore", pk=db.pk)
     return render(request, "databases/explore_table.html", ctx)
+
+
+@site_user_required
+@require_POST
+def explore_drop(request, pk, schema, table):
+    db, ex = _explorer_db(request, pk, "editor")
+    if ex is None:
+        return redirect("databases:detail", pk=db.pk)
+    if db.status != db.Status.ACTIVE:
+        messages.error(request, "پایگاه داده فقط‌خواندنی یا غیرفعال است.")
+        return redirect("databases:explore", pk=db.pk)
+    try:
+        t = ex.find(schema, table)
+        if request.POST.get("confirm", "").strip() != t.name:
+            messages.error(request, "برای حذف، نام جدول را دقیقاً وارد کنید.")
+            return redirect("databases:explore_table", pk=db.pk, schema=schema, table=table)
+        ex.drop_table(t)
+    except ExplorerError as exc:
+        messages.error(request, str(exc))
+        return redirect("databases:explore", pk=db.pk)
+    # لایه‌ها و APIهای منتشرشده از این جدول دیگر معنا ندارند
+    from publish.models import Layer
+    from restapi.models import ApiTable
+
+    gone = Layer.objects.filter(service__database=db, schema=schema, table=table).delete()[0]
+    gone += ApiTable.objects.filter(service__database=db, schema=schema, table=table).delete()[0]
+    messages.success(request, f"جدول {table} حذف شد." + (" انتشار آن هم برداشته شد." if gone else ""))
+    return redirect("databases:explore", pk=db.pk)
 
 
 @site_user_required

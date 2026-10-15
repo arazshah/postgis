@@ -2,7 +2,9 @@
 from urllib.parse import urlsplit
 
 from django.contrib import messages
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from accounts.decorators import site_user_required
@@ -10,7 +12,51 @@ from databases.explorer import ExplorerError
 from databases.views import _explorer_db
 
 from . import ask, tools
-from .models import LlmConfig, Question
+from jobs.models import Job
+
+from .models import LlmConfig, Question, ToolRun
+
+HISTORY_LIMIT = 15
+GLYPHS = {"buffer": "◎", "nearest": "⌖", "count": "#", "hexbin": "⬡", "isochrone": "◔"}
+
+
+def _busy(db) -> bool:
+    return Job.objects.filter(database=db, kind__in=[Job.Kind.ASK, Job.Kind.TOOL],
+                              status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).exists()
+
+
+def _entries(db):
+    """تاریخچه یکپارچه ابزارها و پرسش‌ها، تازه‌ترین اول."""
+    out = []
+    for r in ToolRun.objects.filter(database=db).select_related("job")[:HISTORY_LIMIT]:
+        t = tools.TOOL_MAP.get(r.tool)
+        out.append({"kind": "tool", "id": f"t{r.pk}", "title": t.title if t else r.tool, "glyph": GLYPHS.get(r.tool, "◇"),
+                    "detail": r.summary, "table": r.output_table, "rows": r.rows, "job": r.job,
+                    "created": r.created_at})
+    for q in Question.objects.filter(database=db).select_related("job")[:HISTORY_LIMIT]:
+        out.append({"kind": "ask", "id": f"q{q.pk}", "title": q.text, "glyph": "؟", "detail": q.goal,
+                    "ops": q.operations, "table": q.output_table, "rows": q.rows, "job": q.job,
+                    "created": q.created_at})
+    out.sort(key=lambda e: e["created"], reverse=True)
+    return out[:HISTORY_LIMIT]
+
+
+@site_user_required
+def status(request, pk):
+    """وضعیت کارهای در جریان برای نوار پیشرفت (هر چند ثانیه از صفحه پرسیده می‌شود)."""
+    db, ex = _explorer_db(request, pk, "editor")
+    if ex is None:
+        return JsonResponse({"error": "unavailable"}, status=404)
+    now = timezone.now()
+    items = []
+    for e in _entries(db):
+        j = e["job"]
+        if j is None:
+            continue
+        started = j.started_at or j.created_at
+        items.append({"id": e["id"], "status": j.status, "progress": j.progress, "stage": j.stage,
+                      "elapsed": int(((j.finished_at or now) - started).total_seconds()), "message": j.message})
+    return JsonResponse({"items": items, "active": any(i["status"] in ("queued", "running") for i in items)})
 
 
 @site_user_required
@@ -46,6 +92,9 @@ def page(request, pk):
             messages.success(request, "کلید مدل زبانی حذف شد.")
             return here
         if action == "ask":
+            if _busy(db):
+                messages.error(request, "یک تحلیل در حال اجراست؛ صبر کنید تمام شود.")
+                return here
             try:
                 ask.request(db, request.user, request.POST.get("question", ""), request.POST.getlist("layers"),
                             request.POST.get("output", ""))
@@ -58,13 +107,21 @@ def page(request, pk):
             if db.status != db.Status.ACTIVE:
                 messages.error(request, "پایگاه داده فقط‌خواندنی یا غیرفعال است.")
                 return here
+            key = request.POST.get("tool", "")
+            params = {k: request.POST.get(k, "").strip() for k in tools.PUBLIC_PARAMS if request.POST.get(k)}
+            if _busy(db):
+                messages.error(request, "یک تحلیل در حال اجراست؛ صبر کنید تمام شود.")
+                return redirect(f"{request.path}?tool={key}#tools")
             try:
-                res = tools.run(db, request.POST.get("tool", ""), request.POST.dict())
-            except tools.ToolError as exc:
+                out = tools.validate(db, key, params)
+                summary = tools.summarize(db, key, params)
+            except (tools.ToolError, ExplorerError) as exc:
                 messages.error(request, str(exc))
-                return redirect(f"{request.path}?tool={request.POST.get('tool', '')}#tools")
-            messages.success(request, f"جدول {res['table']} با {res['rows']:,} عارضه ساخته شد.")
-            return redirect("databases:explore_table", pk=db.pk, schema="public", table=res["table"])
+                return redirect(f"{request.path}?tool={key}#tools")
+            job = Job.objects.create(kind=Job.Kind.TOOL, database=db, user=request.user, status=Job.Status.QUEUED)
+            ToolRun.objects.create(database=db, user=request.user, tool=key, params=params, summary=summary,
+                                   output_table=out, job=job)
+            return redirect(f"{request.path}#history")
         return here
     try:
         tables = ex.tables()
@@ -72,11 +129,11 @@ def page(request, pk):
         messages.error(request, str(exc))
         tables = []
     spatial = [t for t in tables if t.geometry]
-    questions = Question.objects.filter(database=db).select_related("job")[:10]
+    history = _entries(db)
     return render(request, "analysis/page.html", {
-        "db": db, "tables": tables, "spatial": spatial, "section": "analysis", "cfg": cfg, "questions": questions,
-        "active": any(q.job and q.job.active for q in questions), "tools": tools.TOOLS,
-        "open_tool": request.GET.get("tool", ""), "has_routing": any(t.schema == "routing" and t.name == "ways"
+        "db": db, "tables": tables, "spatial": spatial, "section": "analysis", "cfg": cfg, "history": history,
+        "active": any(e["job"] and e["job"].active for e in history), "tools": tools.TOOLS,
+        "open_tool": request.GET.get("tool") if request.GET.get("tool") in tools.TOOL_MAP else tools.TOOLS[0].key, "has_routing": any(t.schema == "routing" and t.name == "ways"
                                                                     for t in tables),
         "max_layers": ask.MAX_LAYERS,
     })

@@ -18,25 +18,48 @@
   {% endfor %}
   {% if dbs %}
     {% if not can_create %}<p class="muted small">{{ reason }}</p>{% endif %}
+    <div class="stat-row" aria-label="خلاصه حساب">
+      <div class="stat"><span class="stat-n">{{ stats.count|fanum }}</span><span class="stat-l">پایگاه داده</span></div>
+      <div class="stat"><span class="stat-n">{{ stats.size|fasize }}</span><span class="stat-l">مصرف کل{% if stats.quota %} از {{ stats.quota|fasize }}{% endif %}</span></div>
+      <div class="stat"><span class="stat-n">{{ stats.backups|fanum }}<small> از {{ stats.count|fanum }}</small></span><span class="stat-l">دارای بکاپ</span></div>
+      <div class="stat {% if stats.running %}live{% endif %}"><span class="stat-n">{{ stats.running|fanum }}</span><span class="stat-l">کار در حال انجام</span></div>
+    </div>
     <div class="db-list">
     {% for db in dbs %}
-      <article class="db-item">
-        <div>
-          <h2><a href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a></h2>
-          <div class="small muted ltr" style="font-family:var(--f-mono)">user: {{ db.role_name }}</div>
-          <span class="badge {{ db.status }}">{{ db.get_status_display }}</span>
-          {% if db.enrollment %}<span class="badge">کلاس: {{ db.enrollment.classroom.title }}</span>{% endif %}
-          <span class="muted small" style="margin-inline-start:8px">ساخته‌شده در {{ db.created_at|jdate }}</span>
-        </div>
-        <div>
+      <article class="db-card">
+        <header class="db-card-head">
+          <div>
+            <h2><a href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a></h2>
+            <div class="db-tags">
+              <span class="badge {{ db.status }}">{{ db.get_status_display }}</span>
+              <span class="tag">پلن {{ db.plan.name }}</span>
+              {% if db.enrollment %}<span class="tag">کلاس: {{ db.enrollment.classroom.title }}</span>{% endif %}
+            </div>
+          </div>
+          <a class="btn sm" href="{% url 'databases:detail' db.pk %}">اطلاعات اتصال</a>
+        </header>
+        <div class="db-card-usage">
           <div class="meter {{ db.usage_level }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ db.usage_percent|pct_width }}" aria-label="مصرف حجم"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
-          <div class="meter-label"><span>{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span>
-            <span>{% if db.days_left is not None %}{{ db.days_left|fanum }} روز اعتبار{% endif %}</span></div>
+          <div class="meter-label"><span>{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span><span>{{ db.usage_percent|fanum }}٪</span></div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <a class="btn ghost sm" href="{% url 'databases:detail' db.pk %}">اطلاعات اتصال</a>
-          {% if db.is_live %}<a class="btn ghost sm" href="{% url 'databases:explore' db.pk %}">جدول‌ها و داده‌ها</a>{% endif %}
-        </div>
+        <dl class="db-facts">
+          <div><dt>اعتبار</dt><dd>{% if db.days_left is not None %}{{ db.days_left|fanum }} روز مانده{% else %}—{% endif %}</dd></div>
+          <div><dt>آخرین بکاپ</dt><dd>{% if db.last_backup %}{{ db.last_backup.created_at|jdate }}{% else %}هنوز نه{% endif %}</dd></div>
+          <div><dt>ساخته‌شده</dt><dd>{{ db.created_at|jdate }}</dd></div>
+          <div><dt>اتصال همزمان</dt><dd>{{ db.plan.max_connections|fanum }}</dd></div>
+        </dl>
+        {% if db.is_live %}
+        <nav class="db-actions" aria-label="میانبرها">
+          <a href="{% url 'databases:explore' db.pk %}">جدول‌ها و داده‌ها</a>
+          <a href="{% url 'databases:explore_sql' db.pk %}">اجرای SQL</a>
+          <a href="{% url 'databases:import' db.pk %}">ورود فایل</a>
+          <a href="{% url 'analysis:page' db.pk %}">تحلیل</a>
+          <a href="{% url 'publish:manage' db.pk %}">انتشار نقشه و API</a>
+          <a href="{% url 'databases:backups' db.pk %}">بکاپ‌ها</a>
+          <a href="{% url 'databases:usage' db.pk %}">مصرف</a>
+          <a href="{% url 'databases:team' db.pk %}">تیم</a>
+        </nav>
+        {% endif %}
       </article>
     {% endfor %}
     </div>
@@ -49,19 +72,17 @@
   {% endif %}
 
   {% if shared %}
-  <h2 style="margin-top:var(--s6);font-size:1.25rem">به اشتراک گذاشته شده با من</h2>
+  <h2 class="sec-title">به اشتراک گذاشته شده با من</h2>
   <div class="db-list">
   {% for db in shared %}
-    <article class="db-item">
-      <div>
-        <h2><a href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a></h2>
-        <div class="small muted">مالک: <span class="ltr">{{ db.owner.phone }}</span></div>
-        <span class="badge {{ db.status }}">{{ db.get_status_display }}</span>
-      </div>
-      <div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        {% if db.is_live %}<a class="btn ghost sm" href="{% url 'databases:explore' db.pk %}">جدول‌ها و داده‌ها</a>{% endif %}
-      </div>
+    <article class="db-card compact">
+      <header class="db-card-head">
+        <div>
+          <h2><a href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a></h2>
+          <div class="db-tags"><span class="badge {{ db.status }}">{{ db.get_status_display }}</span><span class="tag">مالک: <span class="ltr">{{ db.owner.phone }}</span></span></div>
+        </div>
+        {% if db.is_live %}<a class="btn sm" href="{% url 'databases:explore' db.pk %}">جدول‌ها و داده‌ها</a>{% endif %}
+      </header>
     </article>
   {% endfor %}
   </div>

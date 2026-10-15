@@ -113,3 +113,35 @@ class ExplorerIntegrationTests(TestCase):
             left = c.execute("SELECT rolname FROM pg_roles WHERE rolname = ANY(%s)",
                              ([role, Provisioner.browser_role_name(role)],)).fetchall()
         self.assertEqual(left, [])
+
+    def test_drop_table_view_and_publish_cleanup(self):
+        from publish.models import Layer, Service
+
+        self.client.force_login(self.user)
+        svc, _ = Service.objects.get_or_create(database=self.db)
+        Layer.objects.create(service=svc, schema="public", table="parcels", geom_column="geom", srid=32639)
+        url = reverse("databases:explore_drop", args=[self.db.pk, "public", "parcels"])
+        # بدون تأیید نام، حذف نمی‌شود
+        self.client.post(url, {"confirm": "wrong"})
+        self.assertTrue(any(t.name == "parcels" for t in self.ex.tables()))
+        # GET مجاز نیست
+        self.assertEqual(self.client.get(url).status_code, 405)
+        r = self.client.post(url, {"confirm": "parcels"})
+        self.assertRedirects(r, reverse("databases:explore", args=[self.db.pk]))
+        self.assertFalse(any(t.name == "parcels" for t in self.ex.tables()))
+        self.assertFalse(Layer.objects.filter(table="parcels").exists())
+        # مشاهده‌گر تیم اجازه ندارد
+        viewer = User.objects.create_user("09120000098")
+        self.client.force_login(viewer)
+        self.assertEqual(self.client.post(reverse("databases:explore_drop", args=[self.db.pk, "public", "notes"]),
+                                          {"confirm": "notes"}).status_code, 404)
+        self.assertTrue(any(t.name == "notes" for t in self.ex.tables()))
+
+    def test_drop_with_dependent_view_is_refused(self):
+        with psycopg.connect(host=self.db.server.host, port=self.db.server.port, user=self.db.role_name,
+                             password="Explorer-Pass-1", dbname=self.db.db_name, autocommit=True) as c:
+            c.execute("CREATE VIEW v_notes AS SELECT * FROM notes")
+        with self.assertRaisesMessage(ExplorerError, "وابسته"):
+            self.ex.drop_table(self.ex.find("public", "notes"))
+        self.ex.drop_table(self.ex.find("public", "v_notes"))
+        self.ex.drop_table(self.ex.find("public", "notes"))
