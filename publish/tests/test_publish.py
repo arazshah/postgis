@@ -1,4 +1,5 @@
 """انتشار لایه: کاشی برداری، OGC API Features، کلید API و سقف روزانه روی PostGIS واقعی."""
+import json
 import os
 import unittest
 import uuid
@@ -183,3 +184,91 @@ class PublishIntegrationTests(TestCase):
         stranger = User.objects.create_user("09120000095")
         self.client.force_login(stranger)
         self.assertEqual(self.client.get(reverse("publish:manage", args=[self.db.pk])).status_code, 404)
+
+    # ------------------------------------------------------------------ صفحه نقشه
+    def test_map_builder_validates_style(self):
+        self.client.force_login(self.user)
+        url = reverse("publish:map_builder", args=[self.db.pk, self.schools.pk])
+        r = self.client.get(url)
+        self.assertContains(r, "students")
+        self.assertContains(r, f"/m/{self.schools.slug}/embed/")
+        bad = {"mode": "graduated", "field": "students", "palette": "Nope", "color": "red;}", "outline": "#FFFFFF",
+               "opacity": 7, "size": "x", "classes": 50, "breaks": [100, "200", 300],
+               "categories": [{"value": "a", "color": "javascript:"}], "popup": ["name", "geom", "missing"],
+               "evil": "<script>"}
+        r = self.client.post(url, {"style": json.dumps(bad), "title": "مدارس تهران"})
+        self.assertRedirects(r, url)
+        self.schools.refresh_from_db()
+        st = self.schools.style
+        self.assertEqual((st["mode"], st["field"], st["palette"], st["color"]), ("graduated", "students", "YlOrRd",
+                                                                               "#0F5C59"))
+        self.assertEqual((st["opacity"], st["size"], st["classes"]), (1, 6, 9))
+        self.assertEqual(st["breaks"], [100.0, 200.0, 300.0])
+        self.assertEqual(st["categories"], [])
+        self.assertEqual(st["popup"], ["name"])
+        self.assertNotIn("evil", st)
+        self.assertEqual(self.schools.title, "مدارس تهران")
+        # ستونی که وجود ندارد: برمی‌گردد به تک‌رنگ
+        self.client.post(url, {"style": json.dumps({"mode": "categorized", "field": "nope"})})
+        self.schools.refresh_from_db()
+        self.assertEqual((self.schools.style["mode"], self.schools.style["field"]), ("single", ""))
+
+    def test_map_builder_only_owner(self):
+        other = User.objects.create_user("09120000095")
+        self.client.force_login(other)
+        r = self.client.get(reverse("publish:map_builder", args=[self.db.pk, self.schools.pk]))
+        self.assertEqual(r.status_code, 404)
+
+    def test_map_stats(self):
+        self.client.force_login(self.user)
+        url = reverse("publish:map_stats", args=[self.db.pk, self.schools.pk])
+        r = self.client.get(url, {"field": "students", "mode": "graduated", "classes": 4})
+        self.assertEqual(r.status_code, 200)
+        breaks = r.json()["breaks"]
+        self.assertEqual(len(breaks), 3)
+        self.assertEqual(breaks, sorted(breaks))
+        r = self.client.get(url, {"field": "name", "mode": "categorized"})
+        self.assertEqual(len(r.json()["values"]), len(r.json()["colors"]))
+        r = self.client.get(url, {"field": "nope; drop table", "mode": "graduated"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_public_map_and_embed(self):
+        r = self.client.get(f"/m/{self.schools.slug}/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r["Referrer-Policy"], "strict-origin-when-cross-origin")
+        self.assertEqual(r["X-Frame-Options"], "DENY")
+        self.assertContains(r, f"/tiles/{self.schools.slug}/")
+        self.assertContains(r, "ساخته‌شده با")  # پلن رایگان: نشان سایت
+        r = self.client.get(f"/m/{self.schools.slug}/embed/")
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn("X-Frame-Options", r)
+        # لایه خصوصی برای بیرونی‌ها وجود ندارد؛ مالک می‌بیند
+        self.assertEqual(self.client.get(f"/m/{self.parks.slug}/").status_code, 404)
+        self.assertEqual(self.client.get(f"/m/{self.parks.slug}/embed/").status_code, 404)
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(f"/m/{self.parks.slug}/").status_code, 200)
+        self.client.logout()
+        # پایگاه داده غیرفعال: نقشه هم بسته می‌شود
+        self.db.status = "suspended"
+        self.db.save(update_fields=["status"])
+        self.assertEqual(self.client.get(f"/m/{self.schools.slug}/").status_code, 404)
+
+    def test_parallel_tiles_share_connection_limit(self):
+        """بیشتر از سقف ۳ اتصال نقش مرورگر، کاشی هم‌زمان؛ هیچ‌کدام نباید 503 بدهد."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        from django.db import connections
+
+        from publish import engine
+
+        layer = Layer.objects.select_related("service__database__server").get(pk=self.schools.pk)
+        z, x, y = (int(v) for v in T.split("/"))
+
+        def one(i):
+            try:
+                return len(engine.tile(layer, z, x + (i % 2), y)) >= 0
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(8) as pool:
+            self.assertTrue(all(pool.map(one, range(16))))

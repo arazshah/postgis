@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
+from contextlib import ExitStack, contextmanager
 
 import psycopg
 from psycopg import sql
@@ -18,8 +21,41 @@ class EngineError(Exception):
     pass
 
 
+# نقش مرورگر (_web) حداکثر ۳ اتصال دارد و نقشه چند کاشی را هم‌زمان می‌خواهد:
+# در هر پروسه حداکثر ۲ اتصال هم‌زمان برای هر پایگاه داده، و اگر پروسه‌های دیگر
+# سقف را پر کرده بودند، چند بار با فاصله کوتاه دوباره تلاش می‌کنیم.
+PER_DB_CONCURRENCY = 2
+_RETRY_DELAYS = (0.05, 0.1, 0.2, 0.4, 0.8)
+_slots: dict[int, threading.BoundedSemaphore] = {}
+_slots_lock = threading.Lock()
+
+
+def _slot(db_id: int) -> threading.BoundedSemaphore:
+    with _slots_lock:
+        if db_id not in _slots:
+            _slots[db_id] = threading.BoundedSemaphore(PER_DB_CONCURRENCY)
+        return _slots[db_id]
+
+
+@contextmanager
 def _connect(layer):
-    return Explorer(layer.service.database).connect()
+    db = layer.service.database
+    slot = _slot(db.pk)
+    if not slot.acquire(timeout=20):
+        raise ExplorerError("سرور مشغول است؛ چند لحظه بعد دوباره تلاش کنید.")
+    try:
+        with ExitStack() as stack:
+            for delay in (*_RETRY_DELAYS, None):
+                try:
+                    conn = stack.enter_context(Explorer(db).connect())
+                    break
+                except ExplorerError as exc:
+                    if delay is None or "too many connections" not in str(exc):
+                        raise
+                    time.sleep(delay)
+            yield conn
+    finally:
+        slot.release()
 
 
 def table_meta(conn, schema: str, table: str) -> dict:
@@ -146,3 +182,37 @@ def describe(layer) -> dict:
             return table_meta(conn, layer.schema, layer.table)
     except ExplorerError as exc:
         raise EngineError(str(exc)) from exc
+
+
+def field_stats(layer, field: str, mode: str, classes: int = 5) -> dict:
+    """برای سبک نقشه: مرزهای طبقه‌ها (چندک) برای ستون عددی، یا مقدارهای پرتکرار برای ستون متنی."""
+    with _connect(layer) as conn:
+        meta = table_meta(conn, layer.schema, layer.table)
+        types = dict(meta["columns"])
+        if field not in types or field == layer.geom_column:
+            raise EngineError("ستون پیدا نشد.")
+        col = sql.Identifier(field)
+        rel = sql.Identifier(layer.schema, layer.table)
+        if mode == "graduated":
+            if types[field] not in NUMERIC_TYPES:
+                raise EngineError("برای طبقه‌بندی عددی یک ستون عددی انتخاب کنید.")
+            classes = max(2, min(int(classes), 9))
+            qs = [round(i / classes, 4) for i in range(1, classes)]
+            row = conn.execute(sql.SQL(
+                "SELECT min({c})::float8, max({c})::float8, "
+                "percentile_cont(%s::float8[]) WITHIN GROUP (ORDER BY {c}::float8) FROM {r} WHERE {c} IS NOT NULL"
+            ).format(c=col, r=rel), (qs,)).fetchone()
+            breaks = sorted({round(float(b), 6) for b in (row[2] or [])})
+            return {"min": row[0], "max": row[1], "breaks": breaks}
+        rows = conn.execute(sql.SQL(
+            "SELECT {c}::text, count(*) FROM {r} WHERE {c} IS NOT NULL GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 12"
+        ).format(c=col, r=rel)).fetchall()
+        return {"values": [r[0] for r in rows], "counts": [r[1] for r in rows]}
+
+
+def field_names(layer) -> list[tuple[str, str]]:
+    meta = describe(layer)
+    wanted = set(layer.columns or [])
+    return [(n, t) for n, t in meta["columns"]
+            if n != layer.geom_column and t not in ("geometry", "geography", "raster", "bytea")
+            and (not wanted or n in wanted)]

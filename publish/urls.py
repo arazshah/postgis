@@ -10,7 +10,11 @@ urlpatterns = [
     path("dashboard/<int:pk>/publish/layer/<int:layer_id>/", views.update_layer, name="update_layer"),
     path("dashboard/<int:pk>/publish/keys/", views.create_key, name="create_key"),
     path("dashboard/<int:pk>/publish/keys/<int:key_id>/revoke/", views.revoke_key, name="revoke_key"),
+    path("dashboard/<int:pk>/publish/layer/<int:layer_id>/map/", views.map_builder, name="map_builder"),
+    path("dashboard/<int:pk>/publish/layer/<int:layer_id>/map/stats/", views.map_stats, name="map_stats"),
     # آدرس‌های عمومی
+    path("m/<slug:slug>/", views.public_map, name="map"),
+    path("m/<slug:slug>/embed/", views.embed_map, name="embed"),
     path("tiles/<slug:slug>/<int:z>/<int:x>/<int:y>.mvt", api.tile, name="tile"),
     path("tiles/<slug:slug>/<int:z>/<int:x>/<int:y>.pbf", api.tile),
     path("tiles/<slug:slug>.json", api.tilejson, name="tilejson"),

@@ -1,0 +1,13 @@
+/* نقشه عمومی و پیش‌نمایش طراحی (MapLibre) */
+.gpm{position:relative;width:100%;height:100%;background:#EEF2EC}
+.gpm-legend{position:absolute;inset-inline-end:12px;bottom:28px;z-index:2;background:rgba(249,251,248,.96);border:1px solid #C5D2C2;border-radius:10px;padding:10px 12px;font:13px/1.7 Vazirmatn,Tahoma,sans-serif;color:#12313A;direction:rtl;max-width:220px;box-shadow:0 6px 18px -8px rgba(18,49,58,.35)}
+.gpm-legend-title{font-weight:700;margin-bottom:4px}
+.gpm-legend ul{list-style:none;margin:0;padding:0}
+.gpm-legend li{display:flex;align-items:center;gap:8px}
+.gpm-legend i{width:14px;height:14px;border-radius:4px;flex:none;border:1px solid rgba(0,0,0,.15)}
+.gpm-pop{font:13px/1.8 Vazirmatn,Tahoma,sans-serif;color:#12313A}
+.gpm-pop table{border-collapse:collapse}
+.gpm-pop th{text-align:right;color:#4B6269;font-weight:500;padding:2px 0 2px 12px;vertical-align:top;white-space:nowrap}
+.gpm-pop td{padding:2px 0;word-break:break-word}
+.maplibregl-popup-content{border-radius:10px;padding:12px 14px}
+.maplibregl-ctrl-attrib{font-family:Vazirmatn,Tahoma,sans-serif}

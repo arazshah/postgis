@@ -57,6 +57,8 @@
       <h2 class="ltr" style="font-size:1.2rem;margin:0">{{ l.table }}</h2>
       <span class="badge {% if l.is_public %}active{% else %}pending{% endif %}">{% if l.is_public %}عمومی{% else %}خصوصی · با کلید{% endif %}</span>
     </div>
+    <p style="margin:0 0 var(--s3)"><a class="btn sm" href="{% url 'publish:map_builder' db.pk l.pk %}">طراحی و اشتراک نقشه</a>
+      {% if l.is_public %}<a class="btn ghost sm" href="{% url 'publish:map' l.slug %}" target="_blank" rel="noopener">مشاهده نقشه عمومی</a>{% endif %}</p>
     <dl class="pub-urls">
       <dt>TileJSON (MapLibre)</dt><dd><code id="tj-{{ l.pk }}">{{ base }}/tiles/{{ l.slug }}.json</code><button class="copy" data-copy-target="#tj-{{ l.pk }}">کپی</button></dd>
       <dt>کاشی برداری (XYZ)</dt><dd><code id="xyz-{{ l.pk }}">{{ base }}/tiles/{{ l.slug }}/{z}/{x}/{y}.mvt</code><button class="copy" data-copy-target="#xyz-{{ l.pk }}">کپی</button></dd>

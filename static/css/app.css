@@ -522,3 +522,22 @@ details.pay-option summary{cursor:pointer}
 .inline-form{display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap}
 @media (max-width:640px){.pub-urls{grid-template-columns:1fr}}
 td.ltr,th.ltr{display:table-cell}
+
+/* ---------- طراحی نقشه ---------- */
+.builder{display:grid;grid-template-columns:340px 1fr;gap:var(--s5);align-items:start}
+.builder-form{display:flex;flex-direction:column;gap:var(--s3)}
+.builder-map{position:sticky;top:84px;height:min(72vh,640px);border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--line)}
+.bf-group{border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3) var(--s4);margin:0;display:flex;flex-direction:column;gap:var(--s3)}
+.bf-group legend{font-weight:700;font-size:.92rem;padding:0 6px}
+.bf-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.bf-group .cols{display:flex;flex-wrap:wrap;gap:4px var(--s4)}
+.seg-choice{display:flex;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden}
+.seg-choice label{flex:1;text-align:center;cursor:pointer}
+.seg-choice input{position:absolute;opacity:0;pointer-events:none}
+.seg-choice span{display:block;padding:7px 4px;font-size:.85rem}
+.seg-choice input:checked+span{background:var(--teal);color:#fff}
+.seg-choice input:focus-visible+span{outline:3px solid var(--ochre);outline-offset:-3px}
+input[type=color]{width:100%;height:36px;padding:2px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+input[type=range]{width:100%;accent-color:var(--teal)}
+@media (max-width:900px){.builder{grid-template-columns:1fr}.builder-map{position:static;height:420px}}
+.builder-form [hidden]{display:none!important}
