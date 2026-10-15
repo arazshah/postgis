@@ -578,3 +578,16 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 .field .prefixed input{border:0;box-shadow:none;border-radius:0;flex:1;min-width:0;font-family:var(--f-mono)}
 .inline-form input[type=tel]{width:15ch;font-family:var(--f-mono);direction:ltr}
 .inline-form select{width:auto}
+
+/* داشبورد مصرف */
+.u-h{font-size:1.1rem;margin:0 0 var(--s3)}
+.u-big{font-size:1.6rem;font-weight:700;margin:0 0 var(--s3)}
+.u-chart{width:100%;height:auto;margin-top:var(--s4);display:block}
+.u-chart rect{fill:var(--teal)}
+.u-chart rect:hover{fill:var(--teal-dark)}
+.u-chart .cap{stroke:var(--red);stroke-dasharray:5 4;stroke-width:1.5}
+.u-sugg{margin:0;padding-inline-start:1.2em;line-height:1.9}
+.u-sugg li.unused,.u-sugg li.vacuum{color:var(--ink-2)}
+.u-run{border-bottom:1px solid var(--line);padding:8px 0}
+.u-run pre{margin:4px 0;white-space:pre-wrap;font-size:.8rem;max-height:6em;overflow:auto}
+.table-wrap{overflow-x:auto}

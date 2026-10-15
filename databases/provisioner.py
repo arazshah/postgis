@@ -166,6 +166,43 @@ class Provisioner:
                 pass
         return done
 
+    # ------------------------------------------------------------------ PgBouncer
+    POOLER_ROLE = "gp_pgbouncer"
+
+    def ensure_pooler_auth(self, password: str) -> list[str]:
+        """
+        نقش و تابع auth_query برای PgBouncer در دیتابیس مدیریتی: تابع SECURITY DEFINER فقط رمز SCRAM
+        نقش‌های عادی (نه superuser و نه replication) را برمی‌گرداند. چندباره اجراشدنی است.
+        """
+        role = sql.Identifier(self.POOLER_ROLE)
+        verifier = sql.Literal(scram_sha256_verifier(password))
+        done = []
+        with self.connect() as conn:
+            cur = conn.cursor()
+            if cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (self.POOLER_ROLE,)).fetchone():
+                cur.execute(sql.SQL("ALTER ROLE {} LOGIN PASSWORD {}").format(role, verifier))
+            else:
+                cur.execute(sql.SQL("CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT "
+                                    "CONNECTION LIMIT 10 PASSWORD {}").format(role, verifier))
+                done.append(f"CREATE ROLE {self.POOLER_ROLE}")
+            cur.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(sql.Identifier(self.admin_db), role))
+            cur.execute("CREATE SCHEMA IF NOT EXISTS pgbouncer")
+            cur.execute("REVOKE ALL ON SCHEMA pgbouncer FROM PUBLIC")
+            cur.execute("""
+                CREATE OR REPLACE FUNCTION pgbouncer.get_auth(p_usename text)
+                RETURNS TABLE(username text, password text)
+                LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog AS $$
+                    SELECT a.rolname::text, a.rolpassword::text FROM pg_catalog.pg_authid a
+                    WHERE a.rolname = p_usename AND a.rolcanlogin
+                      AND NOT a.rolsuper AND NOT a.rolreplication AND NOT a.rolbypassrls
+                      AND a.rolname <> current_user
+                $$""")
+            cur.execute("REVOKE ALL ON FUNCTION pgbouncer.get_auth(text) FROM PUBLIC")
+            cur.execute(sql.SQL("GRANT USAGE ON SCHEMA pgbouncer TO {}").format(role))
+            cur.execute(sql.SQL("GRANT EXECUTE ON FUNCTION pgbouncer.get_auth(text) TO {}").format(role))
+            done.append("pgbouncer.get_auth")
+        return done
+
     # ------------------------------------------------------------------ ساخت
     def create_tenant(self, db_name: str, role_name: str, password: str, extensions: list[str],
                       limits: TenantLimits) -> list[str]:
@@ -250,12 +287,13 @@ class Provisioner:
     # ------------------------------------------------------------------ کاربران اضافه هر پایگاه داده
     EXTRA_TAG = "postgis.ir extra role of "
 
-    def extra_roles(self, conn, role_name: str) -> list[str]:
+    @classmethod
+    def extra_roles(cls, conn, role_name: str) -> list[str]:
         """کاربران اضافه‌ای که برای این پایگاه داده ساخته شده‌اند (با COMMENT ON ROLE نشانه‌گذاری شده‌اند)."""
         rows = conn.execute(
             "SELECT r.rolname FROM pg_roles r JOIN pg_shdescription d "
             "ON d.objoid = r.oid AND d.classoid = 'pg_authid'::regclass WHERE d.description = %s",
-            (self.EXTRA_TAG + role_name,)).fetchall()
+            (cls.EXTRA_TAG + role_name,)).fetchall()
         return [r[0] for r in rows]
 
     def create_extra_role(self, db_name: str, owner_role: str, name: str, password: str, write: bool,

@@ -10,6 +10,7 @@
     {% if db.is_live %}<a class="btn sm" href="{% url 'databases:explore' db.pk %}" style="margin-inline-start:auto">مشاهده جدول‌ها و داده‌ها</a>
     <a class="btn ghost sm" href="{% url 'publish:manage' db.pk %}">انتشار نقشه و API</a>{% endif %}
     <a class="btn ghost sm" href="{% url 'databases:team' db.pk %}">تیم و کاربران</a>
+    <a class="btn ghost sm" href="{% url 'databases:usage' db.pk %}">مصرف و کارایی</a>
   </div>
 
   {% if db.status == 'readonly' %}<div class="msg warning">حجم این پایگاه داده پر شده و فعلاً فقط‌خواندنی است. خواندن داده‌ها و اتصال QGIS و GeoServer کار می‌کند. برای آزاد کردن فضا <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید و بگویید کدام جدول‌ها حذف شوند؛ وقتی حجم به زیر ۹۵٪ برسد، خودکار دوباره قابل نوشتن می‌شود.</div>{% endif %}
@@ -38,6 +39,15 @@
           <tr><th>SSL Mode</th><td>{{ db.sslmode }}</td></tr>
         </table>
       </section>
+
+      {% if db.pooled %}
+      <section class="panel" aria-labelledby="pool-title">
+        <h2 id="pool-title">اتصال برای وب‌سایت و برنامه‌ها (PgBouncer)</h2>
+        <p class="small">برای سایت، API یا اپلیکیشنی که اتصال‌های زیاد و کوتاه می‌سازد، از این آدرس استفاده کنید؛ صدها درخواست هم‌زمان با چند اتصال واقعی به سرور جواب داده می‌شوند و از سقف اتصال پلن عبور نمی‌کنید. نام کاربری و رمز همان قبلی است.</p>
+        <div class="secret"><code id="pool-uri" class="ltr">{{ db.pooled_uri }}</code><button class="copy" data-copy-target="#pool-uri">کپی</button></div>
+        <p class="small muted">در این حالت (transaction) دستورهای وابسته به نشست مثل <span class="ltr">LISTEN</span>، <span class="ltr">SET</span> بیرون از تراکنش و جدول موقت میان تراکنش‌ها کار نمی‌کنند. QGIS، pg_dump و ابزارهای مدیریتی را با همان اتصال مستقیم بالا وصل کنید.</p>
+      </section>
+      {% endif %}
 
       <section class="panel" aria-labelledby="howto-title">
         <h2 id="howto-title">اتصال از نرم‌افزار شما</h2>

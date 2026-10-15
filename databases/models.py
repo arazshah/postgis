@@ -79,6 +79,11 @@ class DatabaseServer(models.Model):
     public_sslmode = models.CharField("حالت SSL پیشنهادی به کاربران", max_length=20, choices=SSL_CHOICES,
                                       default="require")
 
+    pooler_port = models.PositiveIntegerField(
+        "پورت PgBouncer", default=0, help_text="پورت عمومی سرویس pgbouncer در docker-compose؛ ۰ یعنی غیرفعال.")
+    pooler_host = models.CharField("آدرس PgBouncer", max_length=255, blank=True,
+                                   help_text="خالی = همان آدرس عمومی سرور.")
+
     is_active = models.BooleanField("فعال برای ساخت دیتابیس جدید", default=True)
     is_default = models.BooleanField("سرور پیش‌فرض", default=False)
     max_databases = models.PositiveIntegerField("حداکثر تعداد دیتابیس", default=150)
@@ -342,6 +347,15 @@ class UserDatabase(models.Model):
         return (f"postgresql://{self.role_name}:{pw}@{self.host}:{self.port}/{self.db_name}"
                 f"?sslmode={self.sslmode}")
 
+    @property
+    def pooled(self) -> bool:
+        return bool(self.server.pooler_port)
+
+    def pooled_uri(self, password: str = "YOUR_PASSWORD") -> str:
+        host = self.server.pooler_host or self.server.public_host
+        return (f"postgresql://{self.role_name}:{password}@{host}:{self.server.pooler_port}/{self.db_name}"
+                f"?sslmode={self.sslmode}")
+
     def ogr_pg(self) -> str:
         return (f'PG:"host={self.host} port={self.port} dbname={self.db_name} '
                 f'user={self.role_name} password=YOUR_PASSWORD sslmode={self.sslmode}"')
@@ -416,3 +430,15 @@ class Member(models.Model):
 
     def __str__(self):
         return f"{self.phone} → {self.database}"
+
+
+class SizeSample(models.Model):
+    """حجم روزانه هر پایگاه داده برای نمودار مصرف (آخرین اندازه‌گیری هر روز)."""
+
+    database = models.ForeignKey(UserDatabase, on_delete=models.CASCADE, related_name="size_samples")
+    day = models.DateField()
+    size_bytes = models.BigIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["database", "day"], name="uniq_size_day")]
+        ordering = ["day"]
