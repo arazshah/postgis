@@ -29,5 +29,6 @@ urlpatterns = [
     path("class/", include("classroom.urls")),
     path("", include("publish.urls")),
     path("", include("iranmap.urls")),
+    path("", include("analysis.urls")),
     path("", include("core.urls")),
 ]

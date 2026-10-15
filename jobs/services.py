@@ -93,7 +93,7 @@ def run(job: Job) -> None:
     handler = {Job.Kind.BACKUP: _do_backup, Job.Kind.RESTORE: _do_restore,
                Job.Kind.RESTORE_TEST: _do_restore_test, Job.Kind.IMPORT: _do_import,
                Job.Kind.BASEMAP: iranmap_tasks.do_basemap, Job.Kind.OSM_REFRESH: iranmap_tasks.do_osm_refresh,
-               Job.Kind.OSM_IMPORT: iranmap_tasks.do_osm_import}[job.kind]
+               Job.Kind.OSM_IMPORT: iranmap_tasks.do_osm_import, Job.Kind.ASK: _do_ask}[job.kind]
     try:
         handler(job)
     except Exception as exc:  # noqa: BLE001
@@ -105,6 +105,15 @@ def run(job: Job) -> None:
             job.status = Job.Status.DONE
     job.finished_at = timezone.now()
     job.save()
+
+
+def _do_ask(job: Job) -> None:
+    from analysis import ask
+
+    try:
+        job.message = ask.run(job)
+    except ask.AskError as exc:
+        raise JobError(str(exc)) from exc
 
 
 def _clean(text: str) -> str:

@@ -15,6 +15,7 @@ class Job(models.Model):
         BASEMAP = "basemap", "ساخت نقشه پایه ایران"
         OSM_REFRESH = "osm_refresh", "به‌روزرسانی داده OSM ایران"
         OSM_IMPORT = "osm_import", "داده آماده ایران"
+        ASK = "ask", "پرسش فارسی"
 
     class Status(models.TextChoices):
         DRAFT = "draft", "منتظر تأیید کاربر"
