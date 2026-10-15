@@ -25,8 +25,10 @@ services:
       - TENANT_PREFIX=${TENANT_PREFIX:-gp_}
       - WEB_CONCURRENCY=${WEB_CONCURRENCY:-3}
       - MEDIA_ROOT=/app/media
+      - BACKUP_ROOT=/app/backups
     volumes:
       - panel-media:/app/media
+      - db-backups:/app/backups
     networks:
       - default
       - coolify
@@ -36,6 +38,38 @@ services:
       timeout: 5s
       retries: 3
       start_period: 40s
+
+  # کارهای پس‌زمینه: بکاپ شبانه، بکاپ و بازگردانی درخواستی، آزمون بازگردانی، هشدارها
+  # برای انتقال به سرور دیگر کافی است همین سرویس با همان متغیرها و volume بکاپ آنجا اجرا شود.
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["python", "manage.py", "run_worker"]
+    depends_on:
+      panel-db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://panel:${SERVICE_PASSWORD_POSTGRES}@panel-db:5432/panel
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
+      - SITE_URL=${SITE_URL:-https://postgis.ir}
+      - SMS_BACKEND=${SMS_BACKEND:-smsir}
+      - TENANT_PREFIX=${TENANT_PREFIX:-gp_}
+      - MEDIA_ROOT=/app/media
+      - BACKUP_ROOT=/app/backups
+      - RUN_MIGRATIONS=0
+    volumes:
+      - panel-media:/app/media
+      - db-backups:/app/backups
+    networks:
+      - default
+      - coolify
+    healthcheck:
+      test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/worker.alive) )) -lt 180"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   panel-db:
     image: postgres:16-alpine
@@ -55,6 +89,7 @@ services:
 volumes:
   panel-db-data:
   panel-media:
+  db-backups:
 
 networks:
   coolify:

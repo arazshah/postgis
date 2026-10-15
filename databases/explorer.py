@@ -255,6 +255,9 @@ class Explorer:
         with self.connect(read_only=not allow_write) as conn:
             cur = psycopg.RawCursor(conn)
             try:
+                # جدول‌هایی که از این صفحه ساخته می‌شوند باید مال نقش خود کاربر باشند، نه نقش مرورگر؛
+                # وگرنه کاربر در QGIS به آن‌ها دسترسی ندارد. نقش مرورگر عضو نقش کاربر است.
+                conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(self.db.role_name)))
                 cur.execute(query, prepare=True)
                 result = {"columns": [], "rows": [], "truncated": False,
                           "rowcount": cur.rowcount, "status": cur.statusmessage or ""}

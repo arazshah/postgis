@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     "databases",
     "billing",
     "support",
+    "jobs",
 ]
 
 MIDDLEWARE = [
@@ -146,6 +147,8 @@ USE_TZ = True
 
 # فایل‌های آپلودی (رسید پرداخت)؛ عمومی سرو نمی‌شوند و فقط ادمین/صاحب فاکتور می‌بیند
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))
+# بکاپ پایگاه‌های داده کاربران (volume مشترک بین web و worker)
+BACKUP_ROOT = Path(os.environ.get("BACKUP_ROOT", MEDIA_ROOT / "backups"))
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 

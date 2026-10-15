@@ -45,8 +45,31 @@ def build():
 
     open_tickets = Ticket.objects.filter(status=Ticket.Status.OPEN).count()
     stats.append({"label": "تیکت منتظر پاسخ", "value": open_tickets, "bad": open_tickets > 0})
+    from jobs.models import Job
+
+    backups_day = Job.objects.filter(kind=Job.Kind.BACKUP, created_at__gte=day)
+    bk_fail = backups_day.filter(status=Job.Status.FAILED).count()
+    last_test = Job.objects.filter(kind=Job.Kind.RESTORE_TEST).exclude(status=Job.Status.QUEUED).first()
+    stats += [
+        {"label": "بکاپ موفق در ۲۴ ساعت", "value": backups_day.filter(status=Job.Status.DONE).count()},
+        {"label": "بکاپ ناموفق در ۲۴ ساعت", "value": bk_fail, "bad": bk_fail > 0},
+    ]
+    try:
+        from jobs.services import disk_usage
+
+        disk = disk_usage()
+        stats.append({"label": "دیسک بکاپ", "value": f"{disk['percent']}٪ ({filesizeformat(disk['free'])} آزاد)",
+                      "bad": disk["percent"] >= 85})
+    except OSError:
+        disk = None
     conf = SiteSettings.get()
     warnings = []
+    if bk_fail:
+        warnings.append(f"{bk_fail} بکاپ در ۲۴ ساعت گذشته ناموفق بود (بخش کارهای پس‌زمینه و بکاپ‌ها).")
+    if live.exists() and not Job.objects.filter(kind=Job.Kind.BACKUP, created_at__gte=now - timedelta(days=2)).exists():
+        warnings.append("در ۴۸ ساعت گذشته هیچ بکاپی گرفته نشده؛ سرویس worker اجرا نمی‌شود؟")
+    if last_test and last_test.status == Job.Status.FAILED:
+        warnings.append(f"آخرین آزمون بازگردانی بکاپ ناموفق بود: {last_test.message[:120]}")
     if open_tickets:
         warnings.append(f"{open_tickets} تیکت پشتیبانی منتظر پاسخ شماست (بخش تیکت‌ها).")
     if review:

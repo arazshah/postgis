@@ -6,8 +6,6 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from core.models import SiteSettings
-
 from .models import Ticket, TicketMessage
 
 log = logging.getLogger(__name__)
@@ -74,21 +72,6 @@ def close(ticket: Ticket):
 
 def _notify_staff(ticket: Ticket, what: str):
     """پیامک به تلفن پشتیبانی (اگر در تنظیمات سایت موبایل باشد) و ایمیل به ایمیل پشتیبانی."""
-    from django.core.mail import send_mail
+    from core.alerts import notify_admins
 
-    from accounts.models import normalize_mobile
-    from accounts.sms import send_text
-
-    conf = SiteSettings.get()
-    text = f"{what} {ticket.number}: {ticket.subject[:60]}"
-    try:
-        phone = normalize_mobile(conf.support_phone or "")
-    except Exception:  # noqa: BLE001
-        phone = ""
-    if phone:
-        try:
-            send_text(phone, f"{conf.site_name}: {text}")
-        except Exception:  # noqa: BLE001
-            log.exception("staff sms failed")
-    if conf.support_email:
-        send_mail(f"[{conf.site_name}] {text}", text, None, [conf.support_email], fail_silently=True)
+    notify_admins(f"{what} {ticket.number}", ticket.subject[:60])
