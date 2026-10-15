@@ -1,0 +1,49 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}{{ c.title }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <p class="small"><a href="{% url 'classroom:teach' %}">کلاس‌های من</a></p>
+  <div class="page-head">
+    <h1>{{ c.title }}</h1>
+    <span class="badge {% if c.status == 'active' %}active{% else %}expired{% endif %}">{{ c.get_status_display }}</span>
+  </div>
+  <div class="grid-2">
+    <section class="panel">
+      <h2 class="u-h">ثبت‌نام دانشجوها</h2>
+      <p class="small">این لینک را در گروه کلاس بگذارید، یا کد را روی تخته بنویسید تا دانشجو در <span class="ltr">postgis.ir/class/join/</span> وارد کند:</p>
+      <div class="secret"><code id="j-url" class="ltr">{{ join_url }}</code><button class="copy" data-copy-target="#j-url">کپی</button></div>
+      <p class="class-code ltr">{{ c.code }}</p>
+      <p class="small muted">داده آغازین: {{ c.get_template_display }}{% if c.osm_area %} — {{ c.osm_area.label }}{% endif %} · پایان ترم {{ c.ends_at|jdate }}</p>
+      {% if c.status == 'active' %}
+      <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="toggle"><button class="btn ghost sm" type="submit">{% if c.is_open %}بستن ثبت‌نام{% else %}باز کردن ثبت‌نام{% endif %}</button></form>
+      {% endif %}
+    </section>
+    <section class="panel">
+      <h2 class="u-h">بررسی کار دانشجوها</h2>
+      <p class="small">شما به پایگاه داده هر دانشجو دسترسی «مشاهده‌گر» دارید: جدول‌ها، نقشه‌ها و SQL خواندنی، بدون امکان تغییر. فایل CSV فهرست، نام کاربری پایگاه داده هر نفر را هم دارد.</p>
+      <a class="btn ghost sm" href="?format=csv">دانلود فهرست (CSV)</a>
+      {% if c.status == 'active' %}
+      <form method="post" style="display:inline" onsubmit="return confirm('کلاس بایگانی شود؟ از پایگاه داده همه دانشجوها بکاپ گرفته می‌شود و ثبت‌نام بسته می‌شود.')">{% csrf_token %}<input type="hidden" name="action" value="archive"><button class="btn ghost sm" type="submit">بایگانی زودتر از پایان ترم</button></form>
+      <p class="small muted">در شب آخر ترم، بایگانی خودکار انجام می‌شود و بکاپ‌ها ۶ ماه نگه داشته می‌شوند.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="panel" style="margin-top:var(--s5)">
+    <h2 class="u-h">دانشجوها ({{ rows|length|fanum }} از {{ c.capacity|fanum }})</h2>
+    <div class="table-wrap"><table class="tbl">
+      <thead><tr><th>نام</th><th>شماره دانشجویی</th><th>پایگاه داده</th><th>حجم</th><th>وضعیت</th><th></th></tr></thead>
+      <tbody>{% for e in rows %}<tr>
+        <td>{{ e.full_name }}</td><td>{{ e.student_no|fanum|default:"—" }}</td>
+        <td>{% if e.database %}<span class="ltr small" style="font-family:var(--f-mono)">{{ e.database.db_name }}</span>{% endif %}</td>
+        <td>{% if e.database %}{{ e.database.size_bytes|fasize }}{% endif %}</td>
+        <td class="small">{% if e.database %}{{ e.database.get_status_display }}{% endif %}</td>
+        <td style="white-space:nowrap">
+          {% if e.database and e.database.is_live %}<a class="btn ghost sm" href="{% url 'databases:explore' e.database.pk %}">مشاهده</a>{% endif %}
+          {% if e.archive %}{% if e.archive.downloadable %}<a class="btn ghost sm" href="{% url 'classroom:archive' c.pk e.pk %}">بکاپ پایان ترم</a>{% else %}<span class="small muted">بکاپ: {{ e.archive.get_status_display }}</span>{% endif %}{% endif %}
+        </td></tr>
+      {% empty %}<tr><td colspan="6" class="muted">هنوز کسی ثبت‌نام نکرده است.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

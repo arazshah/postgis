@@ -68,7 +68,7 @@ def user_can_create(user, ignore_limit: bool = False) -> tuple[bool, str]:
 
 
 def create_database(user, label: str, password: str, extension_names: list[str], plan: Plan | None = None,
-                    username: str | None = None, voucher=None) -> UserDatabase:
+                    username: str | None = None, voucher=None, ignore_limit: bool = False) -> UserDatabase:
     if voucher is not None:
         if voucher.user_id != user.pk or voucher.used_by_id:
             raise ServiceError("این اعتبار قابل استفاده نیست.")
@@ -76,7 +76,7 @@ def create_database(user, label: str, password: str, extension_names: list[str],
     plan = plan or default_plan()
     if plan is None:
         raise ServiceError("هنوز هیچ پلنی تعریف نشده است. لطفاً بعداً تلاش کنید.")
-    ok, reason = user_can_create(user, ignore_limit=voucher is not None)
+    ok, reason = user_can_create(user, ignore_limit=ignore_limit or voucher is not None)
     if not ok:
         raise ServiceError(reason)
     server = pick_server()

@@ -75,6 +75,7 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             "description": "قیمت پلن‌ها را از بخش «پلن‌ها» تعیین کنید. پرداخت‌های منتظر تأیید در بخش «فاکتورها» هستند.",
         }),
         ("نقشه مرورگر پایگاه داده", {"fields": ("map_tile_url", "map_tile_attribution")}),
+        ("پلن کلاس و دانشگاه", {"fields": ("class_price_per_student",)}),
         ("پنل پیامک (sms.ir)", {
             "fields": ("sms_backend", "api_key_status", "smsir_api_key", "clear_smsir_api_key",
                        "smsir_template_id", "smsir_code_param", "smsir_line_number", "sms_tools"),

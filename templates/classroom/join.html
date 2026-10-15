@@ -1,0 +1,44 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}ثبت‌نام در {{ c.title }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page narrow">
+  <p class="kicker">کلاس {{ c.contract.institution }}</p>
+  <h1>{{ c.title }}</h1>
+  {% if mine %}
+    {% if password %}
+    <section class="once" aria-labelledby="pw-title">
+      <h2 id="pw-title">پایگاه داده شما آماده است؛ رمز را همین حالا ذخیره کنید</h2>
+      <p>این رمز فقط یک بار نمایش داده می‌شود (اگر فراموش شد، از صفحه پایگاه داده رمز جدید بسازید).</p>
+      <div class="secret"><code id="pw">{{ password }}</code><button class="copy" data-copy-target="#pw">کپی</button></div>
+    </section>
+    {% endif %}
+    <section class="panel" style="margin-top:var(--s4)">
+      <p>شما با نام <b>{{ mine.full_name }}</b> در این کلاس ثبت‌نام کرده‌اید.</p>
+      {% if mine.database %}
+      <table class="kv">
+        <tr><th>آدرس سرور</th><td>{{ mine.database.host }}</td></tr>
+        <tr><th>پورت</th><td>{{ mine.database.port }}</td></tr>
+        <tr><th>نام پایگاه داده</th><td>{{ mine.database.db_name }}</td></tr>
+        <tr><th>نام کاربری</th><td>{{ mine.database.role_name }}</td></tr>
+        <tr><th>اعتبار تا</th><td class="rtl">{{ mine.database.expires_at|jdate }}</td></tr>
+      </table>
+      <div class="actions" style="margin-top:var(--s4)">
+        <a class="btn" href="{% url 'databases:explore' mine.database.pk %}">مشاهده جدول‌ها و داده‌ها</a>
+        <a class="btn ghost" href="{% url 'databases:detail' mine.database.pk %}">اطلاعات اتصال و آموزش QGIS</a>
+      </div>
+      <p class="small muted">استاد کلاس جدول‌ها و نقشه‌های شما را می‌بیند (بدون امکان تغییر). پایان ترم از پایگاه داده شما بکاپ گرفته می‌شود و سپس غیرفعال می‌شود؛ پیش از آن، اگر خواستید از صفحه «بکاپ‌ها» نسخه خودتان را دانلود کنید.</p>
+      {% else %}<div class="msg error">ساخت پایگاه داده شما کامل نشد؛ به پشتیبانی تیکت بزنید.</div>{% endif %}
+    </section>
+  {% elif c.status != 'active' or not c.is_open %}
+    <div class="msg warning">ثبت‌نام این کلاس بسته است.</div>
+  {% else %}
+    <p class="muted">با ثبت‌نام، یک پایگاه داده PostGIS {% if c.template != 'empty' %}با داده تمرینی {% endif %}برای شما ساخته می‌شود که تا پایان ترم ({{ c.ends_at|jdate }}) فعال است. این پایگاه داده جدا از پایگاه داده‌های شخصی شماست و از سهمیه‌تان کم نمی‌کند.</p>
+    {% if error %}<div class="msg error" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" class="panel">{% csrf_token %}
+      <div class="field"><label for="j-name">نام و نام خانوادگی</label><input id="j-name" type="text" name="full_name" required maxlength="120"></div>
+      <div class="field"><label for="j-no">شماره دانشجویی (اختیاری)</label><input id="j-no" type="text" name="student_no" maxlength="30" class="ltr"></div>
+      <button class="btn" type="submit">ثبت‌نام و ساخت پایگاه داده</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}
