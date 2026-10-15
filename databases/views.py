@@ -34,10 +34,14 @@ def dashboard(request):
     dbs = (request.user.databases.exclude(status=UserDatabase.Status.DELETED)
            .select_related("server", "plan").prefetch_related("extensions"))
     shared = team.shared_with(request.user)
+    from classroom.services import teacher_contracts
+
+    is_teacher = teacher_contracts(request.user).exists() or request.user.taught_classes.exists()
     can_create, reason = services.user_can_create(request.user)
     from billing.services import unused_vouchers
 
     return render(request, "databases/dashboard.html", {"dbs": dbs, "shared": shared, "can_create": can_create,
+                                                        "is_teacher": is_teacher,
                                                         "reason": reason,
                                                         "vouchers": unused_vouchers(request.user)})
 

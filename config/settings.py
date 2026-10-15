@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     "jobs",
     "publish",
     "iranmap",
+    "classroom",
 ]
 
 MIDDLEWARE = [

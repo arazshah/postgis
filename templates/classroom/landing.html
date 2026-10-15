@@ -1,0 +1,69 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}پلن کلاس و دانشگاه — {{ SITE_NAME }}{% endblock %}
+{% block description %}برای هر دانشجو یک پایگاه داده PostGIS جدا با داده تمرینی؛ پنل استاد، بایگانی پایان ترم و قرارداد رسمی با دانشگاه و آموزشگاه.{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <h1>درس GIS را بدون آزمایشگاه و سرور برگزار کنید</h1>
+      <p class="lead">هر دانشجو با یک کد کلاس، پایگاه داده PostGIS خودش را با داده تمرینی می‌گیرد. شما از یک صفحه همه را می‌بینید، کارشان را بررسی می‌کنید و پایان ترم از کار همه بکاپ دارید.</p>
+      <div class="actions">
+        <a class="btn" href="#request">درخواست قرارداد</a>
+        {% if user.is_authenticated %}<a class="btn ghost" href="{% url 'classroom:teach' %}">کلاس‌های من</a>{% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head"><h2>یک ترم با postgis.ir</h2></div>
+    <ol class="steps">
+      <li><h3>قرارداد</h3><p>تعداد دانشجو و تاریخ پایان ترم را مشخص می‌کنیم؛ فاکتور رسمی به نام دانشگاه یا آموزشگاه صادر می‌شود.</p></li>
+      <li><h3>ساخت کلاس</h3><p>استاد کلاس می‌سازد و داده آغازین را انتخاب می‌کند: خالی، داده تمرینی تهران یا داده آماده یک شهر از OSM.</p></li>
+      <li><h3>ثبت‌نام دانشجو</h3><p>دانشجو با موبایل وارد می‌شود و کد کلاس را می‌زند؛ پایگاه داده‌اش در چند ثانیه آماده است.</p></li>
+      <li><h3>پایان ترم</h3><p>از پایگاه داده همه دانشجوها بکاپ گرفته می‌شود و تا شش ماه برای استاد قابل دانلود است.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="section alt">
+  <div class="wrap">
+    <div class="section-head"><h2>چه چیزی به دانشجو می‌رسد</h2></div>
+    <div class="ext-grid">
+      <div class="ext-row"><b>PostGIS کامل</b><span class="muted small">اتصال از QGIS، Python و مرورگر داده با اجرای SQL</span></div>
+      <div class="ext-row"><b>داده تمرینی</b><span class="muted small">مدارس، ایستگاه‌های مترو و پارک‌ها یا معابر و مکان‌های واقعی یک شهر</span></div>
+      <div class="ext-row"><b>انتشار نقشه</b><span class="muted small">نقشه وب و WMS/WFS برای پروژه پایانی و پایان‌نامه</span></div>
+      <div class="ext-row"><b>شبکه مسیریابی</b><span class="muted small">تمرین pgRouting روی معابر واقعی</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="request">
+  <div class="wrap narrow">
+    <div class="section-head">
+      <h2>درخواست قرارداد</h2>
+      <p class="muted">{% if price %}از {{ price|fanum }} تومان برای هر دانشجو در یک ترم؛ {% endif %}مبلغ نهایی به تعداد دانشجو و حجم داده بستگی دارد. فرم را پر کنید تا تماس بگیریم.</p>
+    </div>
+    {% if sent %}<div class="msg success" role="status">درخواست شما ثبت شد؛ در یکی دو روز کاری تماس می‌گیریم.</div>{% endif %}
+    <form method="post" class="panel">{% csrf_token %}
+      <div class="hp" aria-hidden="true"><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
+      <div class="bf-row">
+        <div class="field"><label for="f-inst">دانشگاه یا آموزشگاه</label><input id="f-inst" type="text" name="institution" value="{{ data.institution }}" required>{% if errors.institution %}<p class="err">{{ errors.institution }}</p>{% endif %}</div>
+        <div class="field"><label for="f-name">نام و سمت</label><input id="f-name" type="text" name="name" value="{{ data.name }}" required placeholder="مثلاً دکتر رضایی، استاد درس GIS">{% if errors.name %}<p class="err">{{ errors.name }}</p>{% endif %}</div>
+      </div>
+      <div class="bf-row">
+        <div class="field"><label for="f-phone">موبایل</label><input id="f-phone" type="tel" name="phone" value="{{ data.phone }}" required class="ltr">{% if errors.phone %}<p class="err">{{ errors.phone }}</p>{% endif %}</div>
+        <div class="field"><label for="f-email">ایمیل (اختیاری)</label><input id="f-email" type="email" name="email" value="{{ data.email }}" class="ltr"></div>
+      </div>
+      <div class="bf-row">
+        <div class="field"><label for="f-n">تعداد تقریبی دانشجو</label><input id="f-n" type="text" inputmode="numeric" name="students" value="{{ data.students|default:'30' }}">{% if errors.students %}<p class="err">{{ errors.students }}</p>{% endif %}</div>
+        <div class="field"><label for="f-term">ترم</label><input id="f-term" type="text" name="term" value="{{ data.term }}" placeholder="مثلاً نیم‌سال دوم ۱۴۰۵-۱۴۰۶"></div>
+      </div>
+      <div class="field"><label for="f-course">درس</label><input id="f-course" type="text" name="course" value="{{ data.course }}" placeholder="مثلاً پایگاه داده مکانی"></div>
+      <div class="field"><label for="f-msg">توضیح</label><textarea id="f-msg" name="message" rows="3">{{ data.message }}</textarea></div>
+      <button class="btn" type="submit">ثبت درخواست</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

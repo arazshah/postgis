@@ -4,7 +4,10 @@
 <div class="wrap page">
   <div class="page-head">
     <h1>پایگاه‌های داده من</h1>
-    {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">ساخت پایگاه داده</a>{% endif %}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      {% if is_teacher %}<a class="btn ghost" href="{% url 'classroom:teach' %}">کلاس‌های من</a>{% endif %}
+      {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">ساخت پایگاه داده</a>{% endif %}
+    </div>
   </div>
 
   {% for v in vouchers %}
@@ -22,6 +25,7 @@
           <h2><a href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a></h2>
           <div class="small muted ltr" style="font-family:var(--f-mono)">user: {{ db.role_name }}</div>
           <span class="badge {{ db.status }}">{{ db.get_status_display }}</span>
+          {% if db.enrollment %}<span class="badge">کلاس: {{ db.enrollment.classroom.title }}</span>{% endif %}
           <span class="muted small" style="margin-inline-start:8px">ساخته‌شده در {{ db.created_at|jdate }}</span>
         </div>
         <div>

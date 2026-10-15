@@ -1,4 +1,6 @@
 """فیلترهای قالب فارسی: تاریخ شمسی، اعداد فارسی، حجم."""
+import datetime
+
 import jdatetime
 from django import template
 from django.utils import timezone
@@ -19,6 +21,8 @@ def fanum(value):
 def jdate(value, fmt="%Y/%m/%d"):
     if not value:
         return "—"
+    if not isinstance(value, datetime.datetime):  # تاریخ بدون ساعت
+        return jdatetime.date.fromgregorian(date=value).strftime(fmt).translate(_FA_DIGITS)
     if timezone.is_aware(value):
         value = timezone.localtime(value)
     return jdatetime.datetime.fromgregorian(datetime=value).strftime(fmt).translate(_FA_DIGITS)

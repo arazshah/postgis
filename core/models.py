@@ -98,6 +98,9 @@ class SiteSettings(models.Model):
     otp_max_per_ip_hour = models.PositiveSmallIntegerField("سقف کد برای هر IP در ساعت", default=20,
                                                            validators=[MinValueValidator(1)])
 
+    class_price_per_student = models.PositiveIntegerField(
+        "قیمت پایه پلن کلاس (تومان، هر دانشجو در ترم)", default=0,
+        help_text="در صفحه «پلن کلاس» به‌عنوان «از … تومان» نمایش داده می‌شود؛ ۰ یعنی «تماس بگیرید».")
     updated_at = models.DateTimeField("آخرین تغییر", auto_now=True)
 
     class Meta:

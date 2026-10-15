@@ -591,3 +591,10 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 .u-run{border-bottom:1px solid var(--line);padding:8px 0}
 .u-run pre{margin:4px 0;white-space:pre-wrap;font-size:.8rem;max-height:6em;overflow:auto}
 .table-wrap{overflow-x:auto}
+
+/* پلن کلاس */
+.class-code{font-family:var(--f-mono);font-size:2.4rem;letter-spacing:.25em;font-weight:700;color:var(--teal-dark);margin:var(--s3) 0;text-align:center}
+.contract{padding:var(--s3) 0;border-bottom:1px solid var(--line)}
+.contract:last-child{border-bottom:0}
+.err{color:var(--red);font-size:.85rem;margin:4px 0 0}
+.hp{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}

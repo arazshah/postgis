@@ -1,0 +1,49 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}کلاس‌های من — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <h1>کلاس‌های من</h1>
+  <div class="grid-2">
+    <section class="panel">
+      <h2 class="u-h">قراردادها</h2>
+      {% for k in contracts %}
+      <div class="contract">
+        <b>{{ k.institution }}</b>{% if k.number %} <span class="muted small">شماره {{ k.number|fanum }}</span>{% endif %}
+        <div class="meter"><i style="width:{% widthratio k.used_seats k.seats 100 %}%"></i></div>
+        <div class="meter-label"><span>{{ k.used_seats|fanum }} از {{ k.seats|fanum }} دانشجو</span><span>تا {{ k.ends_at|jdate }}</span></div>
+      </div>
+      {% empty %}<p class="muted small">قرارداد جاری ندارید؛ کلاس‌های قبلی پایین هستند.</p>{% endfor %}
+    </section>
+    {% if contracts %}
+    <section class="panel">
+      <h2 class="u-h">کلاس جدید</h2>
+      {% if error %}<div class="msg error">{{ error }}</div>{% endif %}
+      <form method="post" class="stack-form" id="cform">{% csrf_token %}
+        <div class="field"><label for="c-title">عنوان</label><input id="c-title" type="text" name="title" required placeholder="مثلاً پایگاه داده مکانی — گروه ۲"></div>
+        <div class="bf-row">
+          <div class="field"><label for="c-contract">قرارداد</label><select id="c-contract" name="contract">{% for k in contracts %}<option value="{{ k.pk }}">{{ k.institution }} ({{ k.free_seats|fanum }} صندلی خالی)</option>{% endfor %}</select></div>
+          <div class="field"><label for="c-cap">ظرفیت</label><input id="c-cap" type="text" inputmode="numeric" name="capacity" value="30"></div>
+        </div>
+        <div class="field"><label for="c-tpl">داده آغازین هر دانشجو</label><select id="c-tpl" name="template">{% for v, l in templates %}<option value="{{ v }}" {% if v == 'sample' %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+        <div class="field" id="c-area-row" hidden><label for="c-area">شهر</label><select id="c-area" name="area"><option value="">— انتخاب —</option>{% for a in cities %}<option value="{{ a.pk }}">{{ a.label }}</option>{% endfor %}</select></div>
+        <button class="btn" type="submit">ساخت کلاس</button>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+
+  {% if classes %}
+  <section class="panel" style="margin-top:var(--s5)">
+    <h2 class="u-h">کلاس‌ها</h2>
+    <table class="tbl"><thead><tr><th>کلاس</th><th>کد</th><th>دانشجو</th><th>پایان ترم</th><th>وضعیت</th></tr></thead>
+      <tbody>{% for c in classes %}<tr><td><a href="{% url 'classroom:detail' c.pk %}">{{ c.title }}</a></td><td><span class="ltr" style="font-family:var(--f-mono)">{{ c.code }}</span></td>
+        <td>{{ c.enrollments.count|fanum }} / {{ c.capacity|fanum }}</td><td>{{ c.contract.ends_at|jdate }}</td><td>{{ c.get_status_display }}{% if c.status == 'active' and not c.is_open %} (ثبت‌نام بسته){% endif %}</td></tr>{% endfor %}</tbody></table>
+  </section>
+  {% endif %}
+</div>
+<script>
+(() => { const t = document.getElementById("c-tpl"); if (!t) return;
+  const row = document.getElementById("c-area-row");
+  const sync = () => { row.hidden = t.value !== "osm"; }; t.addEventListener("change", sync); sync(); })();
+</script>
+{% endblock %}

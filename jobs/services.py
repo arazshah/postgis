@@ -160,6 +160,8 @@ def _keep_days(job: Job) -> int:
         return max(1, job.database.plan.backup_retention_days)
     if job.params.get("safety"):
         return SAFETY_KEEP_DAYS
+    if job.params.get("archive"):  # بایگانی پایان ترم کلاس
+        return 180
     return MANUAL_KEEP_DAYS
 
 
@@ -344,7 +346,9 @@ def alerts() -> list[str]:
 
 def tick(now: datetime | None = None) -> dict:
     """کارهای دوره‌ای worker (هر دقیقه)."""
+    from classroom import services as classroom_services
     from iranmap import tasks as iranmap_tasks
 
-    return {"nightly": schedule_nightly(now), "restore_test": schedule_restore_test(now),
+    return {"classes": classroom_services.tick(now), "nightly": schedule_nightly(now),
+            "restore_test": schedule_restore_test(now),
             "cleanup": cleanup(now), "alerts": len(alerts()), "map_data": iranmap_tasks.schedule(now)}
