@@ -2,16 +2,16 @@
 {% block title %}مرورگر {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page ex-page">
-  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a> / <a href="{% url 'databases:detail' db.pk %}" class="ltr">{{ db.db_name }}</a></p>
+  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a> / <a href="{% url 'databases:detail' db.pk %}" class="ltr">{{ db.db_name }}</a>{% if not db.is_mine %} · <span class="badge">{% if db.can_edit %}ویرایشگر{% else %}مشاهده‌گر{% endif %}</span>{% endif %}</p>
   <div class="page-head">
     <h1>مرورگر پایگاه داده</h1>
     <nav class="seg" aria-label="بخش‌های مرورگر">
       <a href="{% url 'databases:explore' db.pk %}" {% if section == 'tables' %}aria-current="page"{% endif %}>جدول‌ها</a>
       <a href="{% url 'databases:explore_sql' db.pk %}" {% if section == 'sql' %}aria-current="page"{% endif %}>اجرای SQL</a>
-      <a href="{% url 'databases:import' db.pk %}" {% if section == 'import' %}aria-current="page"{% endif %}>ورود فایل</a>
-      <a href="{% url 'iranmap:ready' db.pk %}" {% if section == 'ready' %}aria-current="page"{% endif %}>داده آماده ایران</a>
+      {% if db.can_edit %}<a href="{% url 'databases:import' db.pk %}" {% if section == 'import' %}aria-current="page"{% endif %}>ورود فایل</a>
+      <a href="{% url 'iranmap:ready' db.pk %}" {% if section == 'ready' %}aria-current="page"{% endif %}>داده آماده ایران</a>{% endif %}
       <a href="{% url 'databases:explore_health' db.pk %}" {% if section == 'health' %}aria-current="page"{% endif %}>سلامت داده</a>
-      <a href="{% url 'publish:manage' db.pk %}">انتشار</a>
+      {% if db.can_edit %}<a href="{% url 'publish:manage' db.pk %}">انتشار</a>{% endif %}
     </nav>
   </div>
   <div class="ex-layout">

@@ -19,20 +19,26 @@ from .provisioner import ProvisionError
 SESSION_PW_KEY = "gp_once_password_{}"
 
 
-def _user_db(request, pk) -> UserDatabase:
-    return get_object_or_404(
-        UserDatabase.objects.select_related("server", "plan").exclude(status=UserDatabase.Status.DELETED),
-        pk=pk, owner=request.user)
+def _user_db(request, pk, need: str = "owner") -> UserDatabase:
+    """پایگاه داده با بررسی سطح دسترسی (مالک، ویرایشگر یا مشاهده‌گر عضو تیم)؛ در غیر این صورت ۴۰۴."""
+    from . import team
+
+    return team.get_db(request, pk, need)
 
 
 @site_user_required
 def dashboard(request):
+    from . import team
+
+    team.link_pending(request.user)
     dbs = (request.user.databases.exclude(status=UserDatabase.Status.DELETED)
            .select_related("server", "plan").prefetch_related("extensions"))
+    shared = team.shared_with(request.user)
     can_create, reason = services.user_can_create(request.user)
     from billing.services import unused_vouchers
 
-    return render(request, "databases/dashboard.html", {"dbs": dbs, "can_create": can_create, "reason": reason,
+    return render(request, "databases/dashboard.html", {"dbs": dbs, "shared": shared, "can_create": can_create,
+                                                        "reason": reason,
                                                         "vouchers": unused_vouchers(request.user)})
 
 
@@ -80,7 +86,9 @@ def create(request):
 
 @site_user_required
 def detail(request, pk):
-    db = _user_db(request, pk)
+    db = _user_db(request, pk, "viewer")
+    if not db.is_mine:
+        return render(request, "databases/shared.html", {"db": db})
     once_password = request.session.pop(SESSION_PW_KEY.format(db.pk), None)
     return render(request, "databases/detail.html", {
         "db": db,
@@ -221,8 +229,8 @@ def backup_restore(request, pk, job_id):
 
 
 # ---------------------------------------------------------------------- مرورگر پایگاه داده
-def _explorer_db(request, pk):
-    db = _user_db(request, pk)
+def _explorer_db(request, pk, need: str = "viewer"):
+    db = _user_db(request, pk, need)
     if not db.is_live:
         messages.error(request, "مرورگر فقط برای پایگاه داده فعال در دسترس است.")
         return db, None
@@ -318,7 +326,7 @@ def explore_sql(request, pk):
     if ex is None:
         return redirect("databases:detail", pk=db.pk)
     query = request.POST.get("query", "") if request.method == "POST" else request.GET.get("q", "")
-    allow_write = request.POST.get("allow_write") == "on"
+    allow_write = request.POST.get("allow_write") == "on" and db.can_edit
     result = error = None
     if request.method == "POST":
         try:
@@ -374,7 +382,9 @@ def explore_health(request, pk):
     if ex is None:
         return redirect("databases:detail", pk=db.pk)
     if request.method == "POST":
-        if db.status != UserDatabase.Status.ACTIVE:
+        if not db.can_edit:
+            messages.error(request, "برای اصلاح داده باید ویرایشگر یا مالک باشید.")
+        elif db.status != UserDatabase.Status.ACTIVE:
             messages.error(request, "پایگاه داده فقط‌خواندنی یا غیرفعال است؛ اصلاح ممکن نیست.")
         else:
             try:
@@ -426,7 +436,7 @@ def import_start(request, pk):
 
     from . import gdal
 
-    db, ex = _explorer_db(request, pk)
+    db, ex = _explorer_db(request, pk, "editor")
     if ex is None:
         return redirect("databases:detail", pk=db.pk)
     max_mb = settings.IMPORT_MAX_MB
@@ -483,7 +493,7 @@ def import_review(request, pk, job_id):
 
     from . import gdal
 
-    db, ex = _explorer_db(request, pk)
+    db, ex = _explorer_db(request, pk, "editor")
     if ex is None:
         return redirect("databases:detail", pk=db.pk)
     job = _import_job(db, job_id)
@@ -544,3 +554,49 @@ def import_review(request, pk, job_id):
         "db": db, "tables": ex.tables(), "section": "import", "job": job, "layers": layers, "errors": errors,
         "srid_choices": gdal.SRID_CHOICES})
 
+
+
+# ---------------------------------------------------------------------- تیم و کاربران پایگاه داده
+SESSION_ROLE_PW = "gp_role_pw_{}"
+
+
+@site_user_required
+@require_http_methods(["GET", "POST"])
+def team_page(request, pk):
+    from . import team
+    from .models import DbRole, Member
+
+    db = _user_db(request, pk)
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+        try:
+            if action == "invite":
+                m = team.invite(db, request.user, request.POST.get("phone", ""), request.POST.get("role", "viewer"))
+                messages.success(request, f"{m.phone} با نقش {m.get_role_display()} اضافه شد."
+                                 + ("" if m.user_id else " وقتی با همین شماره وارد سایت شود، پایگاه داده را می‌بیند."))
+            elif action == "remove":
+                team.remove_member(db, request.user, get_object_or_404(Member, pk=request.POST.get("id"), database=db))
+                messages.success(request, "عضو حذف شد.")
+            elif action == "role_create":
+                pw = generate_password()
+                role = team.create_role(db, request.user, request.POST.get("suffix", ""),
+                                        request.POST.get("access", "read"), pw, request.POST.get("note", ""))
+                request.session[SESSION_ROLE_PW.format(db.pk)] = {"name": role.name, "password": pw}
+            elif action == "role_password":
+                role = get_object_or_404(DbRole, pk=request.POST.get("id"), database=db)
+                pw = generate_password()
+                team.reset_role_password(db, request.user, role, pw)
+                request.session[SESSION_ROLE_PW.format(db.pk)] = {"name": role.name, "password": pw}
+            elif action == "role_drop":
+                team.drop_role(db, request.user, get_object_or_404(DbRole, pk=request.POST.get("id"), database=db))
+                messages.success(request, "کاربر حذف شد و اتصال‌هایش قطع شد.")
+        except team.TeamError as exc:
+            messages.error(request, str(exc))
+        except ProvisionError as exc:
+            messages.error(request, f"عملیات روی سرور ناموفق بود: {exc}")
+        return redirect("databases:team", pk=db.pk)
+    return render(request, "databases/team.html", {
+        "db": db, "members": db.members.select_related("user"), "roles": db.db_roles.all(),
+        "new_pw": request.session.pop(SESSION_ROLE_PW.format(db.pk), None),
+        "role_prefix": team.role_name_for(db, ""),
+    })

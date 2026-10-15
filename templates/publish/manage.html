@@ -175,6 +175,7 @@ const map = new maplibregl.Map({
   </section>
   {% endif %}
 
+{% if db.is_mine %}
   <section class="panel">
     <h2 style="font-size:1.2rem">کلیدهای API</h2>
     <p class="small muted">برای لایه‌های خصوصی. کلید را با هدر <span class="ltr">Authorization: Bearer …</span>، هدر <span class="ltr">X-API-Key</span>، رمز Basic در QGIS یا پارامتر <span class="ltr">?key=</span> بفرستید.</p>
@@ -194,6 +195,7 @@ const map = new maplibregl.Map({
       <button class="btn sm" type="submit">ساخت کلید جدید</button>
     </form>
   </section>
+  {% endif %}
 </div>
 {% endwith %}
 {% endblock %}

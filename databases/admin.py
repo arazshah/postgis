@@ -4,7 +4,17 @@ from django.template.defaultfilters import filesizeformat
 from django.utils.html import format_html
 
 from . import services
-from .models import ActivityLog, DatabaseServer, Extension, Plan, UserDatabase, parse_postgres_url, validate_host
+from .models import (
+    ActivityLog,
+    DatabaseServer,
+    DbRole,
+    Extension,
+    Member,
+    Plan,
+    UserDatabase,
+    parse_postgres_url,
+    validate_host,
+)
 from .provisioner import ProvisionError
 
 
@@ -167,8 +177,28 @@ class ActivityInline(admin.TabularInline):
         return False
 
 
+class MemberInline(admin.TabularInline):
+    model = Member
+    fk_name = "database"
+    extra = 0
+    fields = ("phone", "user", "role", "created_at")
+    readonly_fields = ("user", "created_at")
+
+
+class DbRoleInline(admin.TabularInline):
+    model = DbRole
+    extra = 0
+    fields = ("name", "access", "note", "created_at")
+    readonly_fields = ("name", "access", "created_at")
+    can_delete = False  # حذف باید از پنل کاربر (با DROP ROLE روی سرور) انجام شود
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(UserDatabase)
 class UserDatabaseAdmin(admin.ModelAdmin):
+    inlines = [MemberInline, DbRoleInline]
     list_display = ["db_name", "owner", "server", "plan", "status", "size", "usage_pct", "expires_at", "created_at"]
     list_filter = ["status", "server", "plan"]
     search_fields = ["db_name", "label", "owner__email", "owner__full_name"]

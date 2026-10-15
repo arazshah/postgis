@@ -247,6 +247,59 @@ class Provisioner:
         """نقش‌های داخلی هر پایگاه داده: مرورگر پنل و QGIS Server."""
         return [cls.browser_role_name(role_name), cls.ows_role_name(role_name)]
 
+    # ------------------------------------------------------------------ کاربران اضافه هر پایگاه داده
+    EXTRA_TAG = "postgis.ir extra role of "
+
+    def extra_roles(self, conn, role_name: str) -> list[str]:
+        """کاربران اضافه‌ای که برای این پایگاه داده ساخته شده‌اند (با COMMENT ON ROLE نشانه‌گذاری شده‌اند)."""
+        rows = conn.execute(
+            "SELECT r.rolname FROM pg_roles r JOIN pg_shdescription d "
+            "ON d.objoid = r.oid AND d.classoid = 'pg_authid'::regclass WHERE d.description = %s",
+            (self.EXTRA_TAG + role_name,)).fetchall()
+        return [r[0] for r in rows]
+
+    def create_extra_role(self, db_name: str, owner_role: str, name: str, password: str, write: bool,
+                          limits: TenantLimits) -> None:
+        """
+        کاربر LOGIN جدا: فقط به همین دیتابیس CONNECT دارد (PUBLIC در harden() گرفته شده)، عضو
+        pg_read_all_data (و برای ویرایشگر pg_write_all_data) است؛ پس جدول نمی‌سازد و حذف نمی‌کند و
+        به دیتابیس دیگری راه ندارد. فقط‌خواندنی‌ها تراکنش فقط‌خواندنی هم دارند.
+        """
+        for x in (db_name, owner_role, name):
+            _check_ident(x)
+        ident = sql.Identifier(name)
+        with self.connect() as conn:
+            cur = conn.cursor()
+            if int(cur.execute("SHOW server_version_num").fetchone()[0]) < 140000:
+                raise ProvisionError("کاربر اضافه به PostgreSQL نسخه ۱۴ یا بالاتر نیاز دارد.")
+            if cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (name,)).fetchone():
+                raise ProvisionError("این نام کاربری روی سرور وجود دارد.")
+            cur.execute(sql.SQL(
+                "CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS "
+                "INHERIT PASSWORD {}").format(ident, sql.Literal(scram_sha256_verifier(password))))
+            cur.execute(sql.SQL("COMMENT ON ROLE {} IS {}").format(ident, sql.Literal(self.EXTRA_TAG + owner_role)))
+            cur.execute(sql.SQL("GRANT pg_read_all_data TO {}").format(ident))
+            if write:
+                cur.execute(sql.SQL("GRANT pg_write_all_data TO {}").format(ident))
+            cur.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(sql.Identifier(db_name), ident))
+            # بیشتر از ۳ اتصال برای یک کاربر جانبی لازم نیست؛ بقیه محدودیت‌ها مثل کاربر اصلی
+            self._apply_role_limits(cur, name, TenantLimits(
+                connection_limit=min(3, limits.connection_limit), statement_timeout_s=limits.statement_timeout_s,
+                temp_file_limit_mb=limits.temp_file_limit_mb,
+                extra={"default_transaction_read_only": "off" if write else "on"}))
+
+    def drop_extra_role(self, db_name: str, name: str) -> None:
+        _check_ident(db_name)
+        _check_ident(name)
+        with self.connect() as conn:
+            if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (name,)).fetchone():
+                return
+            ident = sql.Identifier(name)
+            conn.execute(sql.SQL("ALTER ROLE {} NOLOGIN").format(ident))
+            conn.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = %s", (name,))
+            conn.execute(sql.SQL("REVOKE CONNECT ON DATABASE {} FROM {}").format(sql.Identifier(db_name), ident))
+            conn.execute(sql.SQL("DROP ROLE {}").format(ident))
+
     def ensure_ows_role(self, db_name: str, role_name: str, password: str) -> str:
         """
         نقش فقط‌خواندنی برای QGIS Server (WMS/WFS): فقط به دیتابیس همین کاربر وصل می‌شود، تراکنش‌هایش
@@ -357,7 +410,7 @@ class Provisioner:
                 conn.execute(
                     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
                     "WHERE usename = ANY(%s) AND pid <> pg_backend_pid()",
-                    ([role_name, *self.helper_roles(role_name)],))
+                    ([role_name, *self.helper_roles(role_name), *self.extra_roles(conn, role_name)],))
 
     def set_readonly(self, name: str, readonly: bool):
         _check_ident(name)
@@ -373,7 +426,7 @@ class Provisioner:
         """تعلیق/فعال‌سازی ورود کاربر."""
         _check_ident(name)
         with self.connect() as conn:
-            for role in (name, *self.helper_roles(name)):
+            for role in (name, *self.helper_roles(name), *self.extra_roles(conn, name)):
                 if conn.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,)).fetchone():
                     conn.execute(sql.SQL("ALTER ROLE {} " + ("LOGIN" if enabled else "NOLOGIN"))
                                  .format(sql.Identifier(role)))
@@ -385,8 +438,9 @@ class Provisioner:
         role_name = role_name or db_name
         _check_ident(role_name)
         with self.connect() as conn:
+            extras = self.extra_roles(conn, role_name)
             conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(db_name)))
-            for role in (*self.helper_roles(role_name), role_name):
+            for role in (*extras, *self.helper_roles(role_name), role_name):
                 conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
 
     def database_sizes(self, names: list[str]) -> dict[str, int]:
@@ -501,7 +555,7 @@ class Provisioner:
             db = sql.Identifier(db_name)
             cur.execute(sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(db))
             cur.execute(sql.SQL("GRANT CONNECT, TEMPORARY ON DATABASE {} TO {}").format(db, sql.Identifier(role_name)))
-            for helper in self.helper_roles(role_name):
+            for helper in (*self.helper_roles(role_name), *self.extra_roles(conn, role_name)):
                 if cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (helper,)).fetchone():
                     cur.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(db, sql.Identifier(helper)))
         return old
