@@ -21,4 +21,8 @@ urlpatterns = [
     path("<int:pk>/explore/t/<str:schema>/<str:table>/", views.explore_table, name="explore_table"),
     path("<int:pk>/explore/t/<str:schema>/<str:table>/geojson/", views.explore_geojson, name="explore_geojson"),
     path("<int:pk>/explore/t/<str:schema>/<str:table>/csv/", views.explore_csv, name="explore_csv"),
+    path("<int:pk>/explore/t/<str:schema>/<str:table>/export/<str:fmt>/", views.explore_export, name="explore_export"),
+    path("<int:pk>/explore/health/", views.explore_health, name="explore_health"),
+    path("<int:pk>/import/", views.import_start, name="import"),
+    path("<int:pk>/import/<int:job_id>/", views.import_review, name="import_review"),
 ]

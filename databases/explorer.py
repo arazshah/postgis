@@ -246,6 +246,160 @@ class Explorer:
                 for row in cur:
                     yield ["" if v is None else v for v in row]
 
+    # ------------------------------------------------------------------ پزشک داده
+    INVALID_CHECK_MAX_ROWS = 300_000
+    FIXES = {
+        "add_pk": "افزودن کلید اصلی",
+        "add_index": "ساخت نمایه مکانی",
+        "set_srid": "تعیین سیستم مختصات",
+        "make_valid": "اصلاح هندسه‌های نامعتبر",
+        "analyze": "به‌روزرسانی آمار",
+        "fix_owner": "برگرداندن مالکیت به شما",
+    }
+
+    def health(self) -> list[dict]:
+        """مشکلات رایج جدول‌ها که QGIS، GeoServer یا سرعت کوئری را خراب می‌کنند."""
+        issues = []
+        with self.connect() as conn:
+            rows = conn.execute("""
+                SELECT n.nspname, c.relname, c.reltuples::bigint,
+                       EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = c.oid AND i.indisprimary),
+                       pg_has_role(c.relowner, 'USAGE'), pg_get_userbyid(c.relowner)
+                FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind IN ('r','p') AND NOT c.relispartition
+                  AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg\\_%%'
+                  AND has_table_privilege(c.oid, 'SELECT')
+                ORDER BY 1, 2
+            """).fetchall()
+            geoms = self._geometry_columns(conn)
+            web = Provisioner.browser_role_name(self.db.role_name)
+            for schema, name, est, has_pk, owned, owner in rows:
+                if schema in HIDDEN_SCHEMAS or (schema, name) in HIDDEN_TABLES or not owned:
+                    continue
+                base = {"schema": schema, "table": name}
+                if owner == web:
+                    issues.append({**base, "fix": "fix_owner", "level": "error",
+                                   "text": "این جدول با کنسول SQL قدیمی ساخته شده و مال شما نیست؛ "
+                                           "در QGIS و پایتون خطای دسترسی می‌دهد."})
+                    continue
+                cols = [g for g in geoms.get((schema, name), []) if not g["geography"]]
+                if not has_pk:
+                    issues.append({**base, "fix": "add_pk", "level": "warning",
+                                   "text": "کلید اصلی ندارد؛ QGIS نمی‌تواند آن را ویرایش کند و GeoServer کند می‌شود."})
+                if est < 0:
+                    issues.append({**base, "fix": "analyze", "level": "info",
+                                   "text": "آمار جدول به‌روز نیست؛ تعداد سطرها تقریبی و برنامه‌ریزی کوئری‌ها ضعیف است."})
+                for g in cols:
+                    col = g["column"]
+                    gbase = {**base, "column": col}
+                    indexed = conn.execute("""
+                        SELECT 1 FROM pg_index i JOIN pg_class ic ON ic.oid = i.indexrelid
+                        JOIN pg_am am ON am.oid = ic.relam
+                        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+                        WHERE i.indrelid = %s::regclass AND a.attname = %s AND am.amname IN ('gist','spgist','brin')
+                    """, (sql.Identifier(schema, name).as_string(conn), col)).fetchone()
+                    if not indexed:
+                        issues.append({**gbase, "fix": "add_index", "level": "warning",
+                                       "text": f"ستون {col} نمایه مکانی ندارد؛ نقشه و کوئری‌های مکانی کند می‌شوند."})
+                    if not g["srid"]:
+                        issues.append({**gbase, "fix": "set_srid", "level": "error",
+                                       "text": f"سیستم مختصات ستون {col} مشخص نیست (SRID 0)؛ روی نقشه نمایش داده نمی‌شود."})
+                    if est <= self.INVALID_CHECK_MAX_ROWS:  # بدون آمار (-1) هم با سقف زمانی بررسی می‌شود
+                        try:
+                            with conn.transaction():
+                                conn.execute("SET LOCAL statement_timeout = '15s'")
+                                bad = conn.execute(sql.SQL(
+                                    "SELECT count(*) FROM {} WHERE {} IS NOT NULL AND NOT ST_IsValid({})").format(
+                                    sql.Identifier(schema, name), sql.Identifier(col), sql.Identifier(col))).fetchone()[0]
+                        except psycopg.Error:
+                            bad = 0
+                        if bad:
+                            issues.append({**gbase, "fix": "make_valid", "level": "warning", "count": bad,
+                                           "text": f"{bad} هندسه نامعتبر در ستون {col} (مثلاً خودبرخوردی)؛ "
+                                                   "تحلیل‌هایی مثل تقاطع و مساحت خطا می‌دهند."})
+        return issues
+
+    def fix(self, kind: str, schema: str, name: str, column: str | None = None, srid: int | None = None) -> str:
+        table = self.find(schema, name)
+        if kind == "fix_owner":
+            try:
+                Provisioner.for_server(self.server).reassign_browser_objects(self.db.db_name, self.db.role_name)
+            except ProvisionError as exc:
+                raise ExplorerError(f"اصلاح انجام نشد: {exc}") from exc
+            return "مالکیت جدول‌ها به شما برگشت."
+        rel = sql.Identifier(table.schema, table.name)
+        geo = {g["column"]: g for g in table.geometry if not g["geography"]}
+        if kind in ("add_index", "set_srid", "make_valid") and column not in geo:
+            raise ExplorerError("ستون مکانی پیدا نشد.")
+        col = sql.Identifier(column) if column else None
+        if kind == "add_pk":
+            existing = {c["name"] for c in self.columns(table)}
+            pk = next(n for n in ("gid", "gp_id", "row_id") if n not in existing)
+            stmt = sql.SQL("ALTER TABLE {} ADD COLUMN {} bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY").format(
+                rel, sql.Identifier(pk))
+            done = f"ستون {pk} به‌عنوان کلید اصلی اضافه شد."
+        elif kind == "add_index":
+            stmt = sql.SQL("CREATE INDEX ON {} USING gist ({})").format(rel, col)
+            done = "نمایه مکانی ساخته شد."
+        elif kind == "set_srid":
+            if not srid or not (1000 <= int(srid) <= 999999):
+                raise ExplorerError("SRID نامعتبر است.")
+            stmt = sql.SQL("SELECT UpdateGeometrySRID({}, {}, {}, {})").format(
+                sql.Literal(table.schema), sql.Literal(table.name), sql.Literal(column), sql.Literal(int(srid)))
+            done = f"سیستم مختصات {int(srid)} تعیین شد (مختصات تغییر نکرد، فقط برچسب SRID)."
+        elif kind == "make_valid":
+            gtype = (geo[column]["type"] or "").upper()
+            dim = 3 if "POLYGON" in gtype else 2 if "LINE" in gtype else 1 if "POINT" in gtype else None
+            expr = sql.SQL("ST_MakeValid({})").format(col)
+            pre = None
+            done = "هندسه‌های نامعتبر اصلاح شدند."
+            if dim:
+                expr = sql.SQL("ST_Multi(ST_CollectionExtract({}, {}))").format(expr, sql.Literal(dim))
+                if not gtype.startswith("MULTI"):
+                    # اصلاح یک چندضلعی خودبرخورد معمولاً چندبخشی می‌شود؛ ستون باید Multi باشد
+                    multi = {3: "MultiPolygon", 2: "MultiLineString", 1: "MultiPoint"}[dim]
+                    pre = sql.SQL("ALTER TABLE {} ALTER COLUMN {} TYPE geometry({}, {}) USING ST_Multi({})").format(
+                        rel, col, sql.SQL(multi), sql.Literal(int(geo[column]["srid"] or 0)), col)
+                    done += f" نوع ستون به {multi} تبدیل شد."
+            stmt = sql.SQL("UPDATE {} SET {} = {} WHERE {} IS NOT NULL AND NOT ST_IsValid({})").format(
+                rel, col, expr, col, col)
+        elif kind == "analyze":
+            stmt = sql.SQL("ANALYZE {}").format(rel)
+            done = "آمار جدول به‌روز شد."
+        else:
+            raise ExplorerError("اصلاح ناشناخته.")
+        with self.connect(read_only=False) as conn:
+            try:
+                conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(self.db.role_name)))
+                conn.execute("SET LOCAL statement_timeout = '120s'")
+                if kind == "make_valid" and pre is not None:
+                    conn.execute(pre)
+                conn.execute(stmt)
+                conn.commit()
+            except psycopg.Error as exc:
+                conn.rollback()
+                msg = getattr(exc.diag, "message_primary", None) or str(exc)
+                raise ExplorerError(f"اصلاح انجام نشد: {msg}") from exc
+        return done
+
+    def fix_all(self) -> tuple[list[str], list[str]]:
+        """همه اصلاح‌های بدون نیاز به انتخاب کاربر (همه جز تعیین SRID)."""
+        done, failed = [], []
+        for _ in range(2):  # بعد از برگرداندن مالکیت، بقیه اصلاح‌های همان جدول هم ممکن می‌شود
+            issues = [i for i in self.health() if i["fix"] != "set_srid"]
+            if not issues:
+                break
+            again = False
+            for i in issues:
+                try:
+                    done.append(f"{i['table']}: {self.fix(i['fix'], i['schema'], i['table'], i.get('column'))}")
+                    again = again or i["fix"] == "fix_owner"
+                except ExplorerError as exc:
+                    failed.append(f"{i['table']}: {exc}")
+            if not again:
+                break
+        return done, failed
+
     # ------------------------------------------------------------------ کنسول SQL
     def run_sql(self, query: str, allow_write: bool = False) -> dict:
         query = (query or "").strip().rstrip(";").strip()

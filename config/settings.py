@@ -149,6 +149,9 @@ USE_TZ = True
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))
 # بکاپ پایگاه‌های داده کاربران (volume مشترک بین web و worker)
 BACKUP_ROOT = Path(os.environ.get("BACKUP_ROOT", MEDIA_ROOT / "backups"))
+# فایل‌های آپلودی برای ورود به پایگاه داده (روی volume مشترک media بین web و worker)
+IMPORT_ROOT = Path(os.environ.get("IMPORT_ROOT", MEDIA_ROOT / "imports"))
+IMPORT_MAX_MB = int(os.environ.get("IMPORT_MAX_MB", "200"))
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 

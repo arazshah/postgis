@@ -10,6 +10,16 @@
   <div class="ex-actions">
     <a class="btn ghost sm" href="{% url 'databases:explore_csv' db.pk t.schema t.name %}">دانلود CSV</a>
     {% if t.geometry %}<a class="btn ghost sm" href="{% url 'databases:explore_geojson' db.pk t.schema t.name %}?download=1">دانلود GeoJSON</a>{% endif %}
+    <details class="dl-more">
+      <summary class="btn ghost sm">قالب‌های دیگر</summary>
+      <div class="dl-menu">
+        {% if t.geometry %}<a href="{% url 'databases:explore_export' db.pk t.schema t.name 'gpkg' %}">GeoPackage</a>
+        <a href="{% url 'databases:explore_export' db.pk t.schema t.name 'shp' %}">Shapefile (zip)</a>
+        <a href="{% url 'databases:explore_export' db.pk t.schema t.name 'kml' %}">KML (گوگل ارث)</a>
+        <a href="{% url 'databases:explore_export' db.pk t.schema t.name 'dxf' %}">DXF (اتوکد)</a>{% endif %}
+        <a href="{% url 'databases:explore_export' db.pk t.schema t.name 'xlsx' %}">اکسل{% if t.geometry %} (هندسه به WKT){% endif %}</a>
+      </div>
+    </details>
   </div>
 </div>
 
