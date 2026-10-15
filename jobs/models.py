@@ -12,6 +12,9 @@ class Job(models.Model):
         RESTORE = "restore", "بازگردانی"
         RESTORE_TEST = "restore_test", "آزمون بازگردانی"
         IMPORT = "import", "ورود فایل"
+        BASEMAP = "basemap", "ساخت نقشه پایه ایران"
+        OSM_REFRESH = "osm_refresh", "به‌روزرسانی داده OSM ایران"
+        OSM_IMPORT = "osm_import", "داده آماده ایران"
 
     class Status(models.TextChoices):
         DRAFT = "draft", "منتظر تأیید کاربر"

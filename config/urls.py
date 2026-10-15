@@ -27,5 +27,6 @@ urlpatterns = [
     path("billing/", include("billing.urls")),
     path("support/", include("support.urls")),
     path("", include("publish.urls")),
+    path("", include("iranmap.urls")),
     path("", include("core.urls")),
 ]

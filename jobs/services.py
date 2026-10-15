@@ -88,8 +88,12 @@ def claim_next() -> Job | None:
 
 
 def run(job: Job) -> None:
+    from iranmap import tasks as iranmap_tasks
+
     handler = {Job.Kind.BACKUP: _do_backup, Job.Kind.RESTORE: _do_restore,
-               Job.Kind.RESTORE_TEST: _do_restore_test, Job.Kind.IMPORT: _do_import}[job.kind]
+               Job.Kind.RESTORE_TEST: _do_restore_test, Job.Kind.IMPORT: _do_import,
+               Job.Kind.BASEMAP: iranmap_tasks.do_basemap, Job.Kind.OSM_REFRESH: iranmap_tasks.do_osm_refresh,
+               Job.Kind.OSM_IMPORT: iranmap_tasks.do_osm_import}[job.kind]
     try:
         handler(job)
     except Exception as exc:  # noqa: BLE001
@@ -340,5 +344,7 @@ def alerts() -> list[str]:
 
 def tick(now: datetime | None = None) -> dict:
     """کارهای دوره‌ای worker (هر دقیقه)."""
+    from iranmap import tasks as iranmap_tasks
+
     return {"nightly": schedule_nightly(now), "restore_test": schedule_restore_test(now),
-            "cleanup": cleanup(now), "alerts": len(alerts())}
+            "cleanup": cleanup(now), "alerts": len(alerts()), "map_data": iranmap_tasks.schedule(now)}

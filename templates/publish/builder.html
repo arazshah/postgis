@@ -45,7 +45,18 @@
         </div>
         <div class="bf-row">
           <div class="field"><label for="b-outline">رنگ حاشیه</label><input id="b-outline" type="color" data-k="outline"></div>
-          <div class="field"><label for="b-base">نقشه پایه</label><select id="b-base" data-k="basemap"><option value="osm">OpenStreetMap</option><option value="none">بدون نقشه پایه</option></select></div>
+          <div class="field"><label for="b-base">نقشه پایه</label><select id="b-base" data-k="basemap">{% if iran_basemap %}<option value="iran">نقشه پایه ایران (فارسی)</option>{% endif %}<option value="osm">OpenStreetMap (تصویری)</option><option value="none">بدون نقشه پایه</option></select></div>
+        </div>
+      </fieldset>
+
+      <fieldset class="bf-group"><legend>برچسب</legend>
+        <div class="field"><label for="b-label">ستون برچسب</label>
+          <select id="b-label" data-k="label"><option value="">— بدون برچسب —</option>
+            {% for name, typ in fields %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+          </select></div>
+        <div class="bf-row" data-when-label>
+          <div class="field"><label for="b-lsize">اندازه متن</label><input id="b-lsize" type="range" min="8" max="24" step="1" data-k="label_size"></div>
+          <div class="field"><label for="b-lcolor">رنگ متن</label><input id="b-lcolor" type="color" data-k="label_color"></div>
         </div>
       </fieldset>
 
@@ -83,8 +94,10 @@
   f.querySelectorAll("[data-k]").forEach((el) => { el.value = st[el.dataset.k]; });
   f.querySelector(`input[name=mode][value=${st.mode}]`).checked = true;
   f.querySelectorAll("[data-popup]").forEach((el) => { el.checked = (st.popup || []).includes(el.value); });
-  const showWhen = () => f.querySelectorAll("[data-when]").forEach((el) => {
-    el.hidden = !el.dataset.when.split(" ").includes(st.mode); });
+  const showWhen = () => {
+    f.querySelectorAll("[data-when]").forEach((el) => { el.hidden = !el.dataset.when.split(" ").includes(st.mode); });
+    f.querySelector("[data-when-label]").hidden = !st.label;
+  };
   async function refreshStats() {
     msg.textContent = "";
     if (st.mode === "single" || !st.field) { gm.setStyle(st); return; }
@@ -102,8 +115,9 @@
     if (t.dataset.popup !== undefined) { st.popup = [...f.querySelectorAll("[data-popup]:checked")].map((x) => x.value); return; }
     if (!t.dataset.k) return;
     const k = t.dataset.k;
-    st[k] = ["size", "opacity", "classes"].includes(k) ? Number(t.value) : t.value;
-    if (k === "basemap") gm.setBasemap(t.value === "none" ? "" : "{{ SITE.map_tile_url|escapejs }}");
+    st[k] = ["size", "opacity", "classes", "label_size"].includes(k) ? Number(t.value) : t.value;
+    if (k === "basemap") { gm.setBasemap(t.value); return; }
+    if (k === "label") showWhen();
     if (k === "field" || k === "classes") refreshStats(); else gm.setStyle(st);
   });
   f.addEventListener("submit", () => { document.getElementById("style-json").value = JSON.stringify(st); });

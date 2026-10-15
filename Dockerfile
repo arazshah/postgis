@@ -4,6 +4,8 @@ ARG BASE_IMAGE=python:3.13-slim
 FROM ${BASE_IMAGE}
 
 ARG PIP_INDEX_URL=https://pypi.org/simple
+# برنامه pmtiles برای ساخت نقشه پایه ایران (اگر GitHub در دسترس نیست، آینه یا خالی بگذارید)
+ARG PMTILES_URL=https://github.com/protomaps/go-pmtiles/releases/download/v1.28.3/go-pmtiles_1.28.3_Linux_x86_64.tar.gz
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -13,8 +15,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl postgresql-client gdal-bin \
+ && apt-get install -y --no-install-recommends curl postgresql-client gdal-bin osmium-tool osm2pgrouting \
  && rm -rf /var/lib/apt/lists/* \
+ && if [ -n "$PMTILES_URL" ]; then curl -fsSL "$PMTILES_URL" | tar -xz -C /usr/local/bin pmtiles || echo "pmtiles not installed"; fi \
  && useradd --create-home --uid 1000 app
 
 COPY requirements.txt .
@@ -23,7 +26,7 @@ RUN pip install --index-url "$PIP_INDEX_URL" -r requirements.txt
 COPY . .
 RUN DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput \
  && chmod +x docker/entrypoint.sh \
- && mkdir -p /app/media /app/ows \
+ && mkdir -p /app/media /app/ows /app/osm \
  && chown -R app:app /app
 
 USER app

@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     "support",
     "jobs",
     "publish",
+    "iranmap",
 ]
 
 MIDDLEWARE = [
@@ -158,6 +159,15 @@ IMPORT_MAX_MB = int(os.environ.get("IMPORT_MAX_MB", "200"))
 OWS_ROOT = Path(os.environ.get("OWS_ROOT", MEDIA_ROOT / "ows"))
 QGIS_SERVER_URL = os.environ.get("QGIS_SERVER_URL", "http://qgis/ows/")
 QGIS_SERVER_TIMEOUT = int(os.environ.get("QGIS_SERVER_TIMEOUT", "60"))
+
+# نقشه پایه ایران و داده آماده OSM (مجوز ODbL). فایل‌ها روی volume جدا (osm-data) می‌مانند.
+OSM_ROOT = Path(os.environ.get("OSM_ROOT", MEDIA_ROOT / "osm"))
+OSM_SOURCE_URL = os.environ.get("OSM_SOURCE_URL", "https://download.geofabrik.de/asia/iran-latest.osm.pbf")
+OSM_REFRESH_DAYS = int(os.environ.get("OSM_REFRESH_DAYS", "7"))  # 0 = فقط دستی
+BASEMAP_SOURCE_URL = os.environ.get("BASEMAP_SOURCE_URL", "https://build.protomaps.com/{date}.pmtiles")
+BASEMAP_BBOX = os.environ.get("BASEMAP_BBOX", "43.9,24.8,63.5,39.9")
+BASEMAP_MAXZOOM = int(os.environ.get("BASEMAP_MAXZOOM", "15"))
+BASEMAP_REFRESH_DAYS = int(os.environ.get("BASEMAP_REFRESH_DAYS", "30"))  # 0 = فقط دستی
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 

@@ -195,7 +195,7 @@ class PublishIntegrationTests(TestCase):
         bad = {"mode": "graduated", "field": "students", "palette": "Nope", "color": "red;}", "outline": "#FFFFFF",
                "opacity": 7, "size": "x", "classes": 50, "breaks": [100, "200", 300],
                "categories": [{"value": "a", "color": "javascript:"}], "popup": ["name", "geom", "missing"],
-               "evil": "<script>"}
+               "evil": "<script>", "label": "name", "label_size": 99, "label_color": "blue", "basemap": "iran"}
         r = self.client.post(url, {"style": json.dumps(bad), "title": "مدارس تهران"})
         self.assertRedirects(r, url)
         self.schools.refresh_from_db()
@@ -207,6 +207,8 @@ class PublishIntegrationTests(TestCase):
         self.assertEqual(st["categories"], [])
         self.assertEqual(st["popup"], ["name"])
         self.assertNotIn("evil", st)
+        self.assertEqual((st["label"], st["label_size"], st["label_color"], st["basemap"]),
+                         ("name", 24, "#1B2B2F", "iran"))
         self.assertEqual(self.schools.title, "مدارس تهران")
         # ستونی که وجود ندارد: برمی‌گردد به تک‌رنگ
         self.client.post(url, {"style": json.dumps({"mode": "categorized", "field": "nope"})})
