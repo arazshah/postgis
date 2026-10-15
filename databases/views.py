@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
@@ -332,3 +333,214 @@ def explore_sql(request, pk):
     return render(request, "databases/explore_sql.html", {
         "db": db, "tables": tables, "query": query, "allow_write": allow_write, "result": result,
         "error": error, "section": "sql", "max_rows": SQL_MAX_ROWS})
+
+
+# ---------------------------------------------------------------------- خروجی چندقالبی
+@site_user_required
+def explore_export(request, pk, schema, table, fmt):
+    from django.http import FileResponse
+
+    from . import gdal
+
+    db, ex = _explorer_db(request, pk)
+    if ex is None or fmt not in gdal.EXPORT_FORMATS:
+        raise Http404
+    try:
+        t = ex.find(schema, table)
+    except ExplorerError as exc:
+        raise Http404 from exc
+    workdir = gdal.new_workdir()
+    try:
+        geom = t.geometry[0]["column"] if t.geometry else None
+        path = gdal.export_table(db, t.schema, t.name, fmt, workdir, geom_col=geom)
+        fh = path.open("rb")  # فایل باز می‌ماند؛ پوشه موقت همین حالا پاک می‌شود
+    except gdal.GdalError as exc:
+        messages.error(request, f"ساخت خروجی ممکن نشد: {exc}")
+        return redirect("databases:explore_table", pk=db.pk, schema=schema, table=table)
+    finally:
+        import shutil
+
+        shutil.rmtree(workdir, ignore_errors=True)
+    return FileResponse(fh, as_attachment=True, filename=path.name)
+
+
+# ---------------------------------------------------------------------- پزشک داده
+@site_user_required
+@require_http_methods(["GET", "POST"])
+def explore_health(request, pk):
+    from .gdal import SRID_CHOICES
+
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        return redirect("databases:detail", pk=db.pk)
+    if request.method == "POST":
+        if db.status != UserDatabase.Status.ACTIVE:
+            messages.error(request, "پایگاه داده فقط‌خواندنی یا غیرفعال است؛ اصلاح ممکن نیست.")
+        else:
+            try:
+                if request.POST.get("fix") == "all":
+                    done, failed = ex.fix_all()
+                    if done:
+                        messages.success(request, f"{len(done)} مورد اصلاح شد.".translate(_FA))
+                    for f in failed:
+                        messages.error(request, f)
+                    return redirect("databases:explore_health", pk=db.pk)
+                srid = int(request.POST.get("srid") or 0) or None
+                msg = ex.fix(request.POST.get("fix", ""), request.POST.get("schema", ""),
+                             request.POST.get("table", ""), request.POST.get("column") or None, srid)
+                messages.success(request, f"{request.POST.get('table')}: {msg}")
+            except (ExplorerError, ValueError) as exc:
+                messages.error(request, str(exc))
+        return redirect("databases:explore_health", pk=db.pk)
+    try:
+        tables = ex.tables()
+        issues = ex.health()
+    except ExplorerError as exc:
+        messages.error(request, str(exc))
+        tables, issues = [], []
+    return render(request, "databases/explore_health.html", {
+        "db": db, "tables": tables, "issues": issues, "section": "health", "fixes": Explorer.FIXES,
+        "srid_choices": SRID_CHOICES})
+
+
+# ---------------------------------------------------------------------- ورود فایل
+_FA = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
+
+def _import_job(db, job_id):
+    from jobs.models import Job
+
+    return get_object_or_404(db.jobs, pk=job_id, kind=Job.Kind.IMPORT)
+
+
+@site_user_required
+@require_http_methods(["GET", "POST"])
+def import_start(request, pk):
+    import shutil
+    from pathlib import Path
+
+    from django.conf import settings
+
+    from jobs.models import Job
+    from jobs.services import import_dir
+
+    from . import gdal
+
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        return redirect("databases:detail", pk=db.pk)
+    max_mb = settings.IMPORT_MAX_MB
+    error = None
+    if request.method == "POST":
+        f = request.FILES.get("file")
+        ext = Path(f.name).suffix.lower() if f else ""
+        free = max(0, db.quota_bytes - db.size_bytes)
+        if db.status != UserDatabase.Status.ACTIVE:
+            error = "پایگاه داده فقط‌خواندنی یا غیرفعال است؛ ورود داده ممکن نیست."
+        elif not f:
+            error = "فایلی انتخاب نشده است."
+        elif ext not in gdal.ALLOWED_EXT:
+            error = "این قالب پشتیبانی نمی‌شود. Shapefile را zip کنید؛ یا GeoPackage، GeoJSON، KML، CSV و DXF بفرستید."
+        elif f.size > max_mb * 1024 * 1024:
+            error = f"حجم فایل بیشتر از {max_mb} مگابایت است."
+        elif f.size * 1.3 > free:
+            error = "فضای خالی پایگاه داده برای این فایل کافی نیست. پلن را ارتقا دهید یا داده‌های اضافه را حذف کنید."
+        else:
+            job = Job.objects.create(kind=Job.Kind.IMPORT, status=Job.Status.DRAFT, database=db, user=request.user,
+                                     params={"file": f"upload{ext}", "original": f.name[:200]})
+            folder = import_dir(job)
+            folder.mkdir(parents=True, exist_ok=True)
+            with open(folder / f"upload{ext}", "wb") as out:
+                for chunk in f.chunks():
+                    out.write(chunk)
+            try:
+                info = gdal.inspect(folder / f"upload{ext}")
+            except gdal.GdalError as exc:
+                shutil.rmtree(folder, ignore_errors=True)
+                job.delete()
+                error = f"فایل خوانده نشد: {exc}"
+            else:
+                existing = {t.name for t in ex.tables() if t.schema == "public"}
+                for lyr in info["layers"]:
+                    lyr["selected"] = bool(lyr["geom_type"] or ext == ".csv")
+                    lyr["exists"] = lyr["table"] in existing
+                    lyr["mode"] = "create"
+                    lyr["to4326"] = False
+                job.params = {**job.params, **info}
+                job.save(update_fields=["params"])
+                return redirect("databases:import_review", pk=db.pk, job_id=job.pk)
+    recent = db.jobs.filter(kind="import").exclude(status="draft")[:5]
+    return render(request, "databases/import.html", {
+        "db": db, "tables": ex.tables(), "section": "import", "error": error, "max_mb": max_mb,
+        "accept": ",".join(sorted(gdal.ALLOWED_EXT)), "recent": recent})
+
+
+@site_user_required
+@require_http_methods(["GET", "POST"])
+def import_review(request, pk, job_id):
+    from jobs.models import Job
+    from jobs.services import import_dir
+
+    from . import gdal
+
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        return redirect("databases:detail", pk=db.pk)
+    job = _import_job(db, job_id)
+    layers = job.params.get("layers", [])
+    errors = []
+    if request.method == "POST" and job.status == Job.Status.DRAFT:
+        if request.POST.get("action") == "cancel":
+            import shutil
+
+            shutil.rmtree(import_dir(job), ignore_errors=True)
+            job.delete()
+            return redirect("databases:import", pk=db.pk)
+        enc = request.POST.get("encoding") or None
+        if job.params.get("encoding") and enc in ("UTF-8", "CP1256") and enc != job.params["encoding"]:
+            job.params["encoding"] = enc
+            path = import_dir(job) / job.params["file"]
+            for lyr in layers:
+                lyr["sample"] = gdal.sample(path, lyr["name"], enc)
+            job.save(update_fields=["params"])
+            if request.POST.get("action") == "resample":
+                return redirect("databases:import_review", pk=db.pk, job_id=job.pk)
+        existing = {t.name for t in ex.tables() if t.schema == "public"}
+        names = []
+        for i, lyr in enumerate(layers):
+            lyr["selected"] = request.POST.get(f"sel_{i}") == "on"
+            lyr["table"] = (request.POST.get(f"table_{i}") or lyr["table"]).strip().lower()
+            lyr["mode"] = request.POST.get(f"mode_{i}", "create")
+            lyr["to4326"] = request.POST.get(f"to4326_{i}") == "on"
+            srid = request.POST.get(f"srid_{i}") or ""
+            lyr["assign_srid"] = bool(srid) and (not lyr.get("srid") or int(srid) != lyr["srid"])
+            lyr["srid"] = int(srid) if srid.isdigit() else lyr.get("srid")
+            if not lyr["selected"]:
+                continue
+            if not gdal.TABLE_RE.match(lyr["table"]):
+                errors.append(f"نام جدول «{lyr['table']}» مجاز نیست: فقط حروف کوچک انگلیسی، عدد و _، شروع با حرف.")
+            elif lyr["table"] in names:
+                errors.append(f"نام جدول «{lyr['table']}» دو بار انتخاب شده است.")
+            elif lyr["table"] in existing and lyr["mode"] == "create":
+                errors.append(f"جدول «{lyr['table']}» از قبل وجود دارد؛ نام دیگری بدهید یا «جایگزینی» یا «افزودن» را انتخاب کنید.")
+            if lyr["geom_type"] and not lyr["srid"]:
+                errors.append(f"سیستم مختصات لایه «{lyr['name']}» مشخص نیست؛ آن را انتخاب کنید.")
+            names.append(lyr["table"])
+        if not names:
+            errors.append("حداقل یک لایه را انتخاب کنید.")
+        job.params["layers"] = layers
+        if errors:
+            job.save(update_fields=["params"])
+        else:
+            job.status = Job.Status.QUEUED
+            job.created_at = timezone.now()
+            job.save(update_fields=["params", "status", "created_at"])
+            messages.success(request, "ورود فایل در صف قرار گرفت.")
+            return redirect("databases:import_review", pk=db.pk, job_id=job.pk)
+    known = {code for code, _ in gdal.SRID_CHOICES}
+    for lyr in layers:
+        lyr["srid_in_list"] = lyr.get("srid") in known
+    return render(request, "databases/import_review.html", {
+        "db": db, "tables": ex.tables(), "section": "import", "job": job, "layers": layers, "errors": errors,
+        "srid_choices": gdal.SRID_CHOICES})
+

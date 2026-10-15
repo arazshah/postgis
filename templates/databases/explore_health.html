@@ -1,0 +1,36 @@
+{% extends "databases/_explore_base.html" %}{% load fa %}
+{% block ex %}
+<h2 style="margin-top:0">سلامت داده</h2>
+<p class="muted">مشکلات رایجی که اتصال QGIS، انتشار نقشه یا سرعت کوئری را خراب می‌کنند. هر کدام با یک کلیک اصلاح می‌شود.</p>
+{% if issues %}
+{% if db.status == 'active' %}
+<form method="post" style="margin-bottom:var(--s4)">{% csrf_token %}<input type="hidden" name="fix" value="all">
+  <button class="btn sm" type="submit">اصلاح خودکار همه موارد</button>
+  <span class="small muted">کلید اصلی، نمایه مکانی، آمار و هندسه نامعتبر. سیستم مختصات را باید خودتان انتخاب کنید.</span>
+</form>
+{% endif %}
+{% regroup issues by table as groups %}
+<ul class="health">
+  {% for g in groups %}
+  <li>
+    <b class="ltr h-table">{{ g.grouper }}</b>
+    {% for i in g.list %}
+    <div class="h-row h-{{ i.level }}">
+      <p class="small">{% if i.column %}<span class="muted ltr">{{ i.column }}</span> · {% endif %}{{ i.text }}</p>
+      {% if db.status == 'active' %}
+      <form method="post">{% csrf_token %}
+        <input type="hidden" name="fix" value="{{ i.fix }}"><input type="hidden" name="schema" value="{{ i.schema }}">
+        <input type="hidden" name="table" value="{{ i.table }}"><input type="hidden" name="column" value="{{ i.column|default:'' }}">
+        {% if i.fix == 'set_srid' %}<select name="srid" required aria-label="SRID">{% for code, label in srid_choices %}<option value="{{ code }}">{{ code }} · {{ label }}</option>{% endfor %}</select>{% endif %}
+        <button class="btn ghost sm" type="submit">{% for k, v in fixes.items %}{% if k == i.fix %}{{ v }}{% endif %}{% endfor %}</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="msg success" role="status">مشکلی پیدا نشد؛ جدول‌ها کلید اصلی، نمایه مکانی و سیستم مختصات درست دارند.</div>
+{% endif %}
+{% endblock %}

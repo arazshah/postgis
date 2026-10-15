@@ -1,0 +1,65 @@
+{% extends "databases/_explore_base.html" %}{% load fa %}
+{% block head %}{% if job.active %}<meta http-equiv="refresh" content="4">{% endif %}{% endblock %}
+{% block ex %}
+<p class="small"><a href="{% url 'databases:import' db.pk %}">← ورود فایل</a></p>
+<h2 style="margin-top:0">{{ job.params.original }}</h2>
+
+{% if job.status == 'draft' %}
+  <p class="muted">{{ layers|length|fanum }} لایه پیدا شد{% if job.params.driver %} ({{ job.params.driver }}){% endif %}. تنظیمات را بررسی کنید و «ورود به پایگاه داده» را بزنید.</p>
+  {% for e in errors %}<div class="msg error" role="alert">{{ e }}</div>{% endfor %}
+  <form method="post">{% csrf_token %}
+    {% if job.params.encoding %}
+    <div class="panel enc-row">
+      <label for="enc" class="small"><b>انکودینگ نوشته‌ها</b> (تشخیص خودکار: {{ job.params.encoding }})</label>
+      <select id="enc" name="encoding">
+        <option value="UTF-8" {% if job.params.encoding == 'UTF-8' %}selected{% endif %}>UTF-8</option>
+        <option value="CP1256" {% if job.params.encoding == 'CP1256' %}selected{% endif %}>ویندوز فارسی/عربی (CP1256)</option>
+      </select>
+      <button class="btn ghost sm" name="action" value="resample" type="submit">نمایش دوباره نمونه</button>
+      <span class="small muted">اگر نوشته‌های فارسی نمونه به‌هم‌ریخته است، انکودینگ دیگر را امتحان کنید.</span>
+    </div>
+    {% endif %}
+    {% for l in layers %}
+    <fieldset class="panel imp-layer">
+      <legend><label class="check"><input type="checkbox" name="sel_{{ forloop.counter0 }}" {% if l.selected %}checked{% endif %}><span class="ltr">{{ l.name }}</span></label>
+        <span class="small muted">{{ l.count|fanum }} عارضه · <span class="ltr">{{ l.geom_type|default:"بدون هندسه" }}</span></span></legend>
+      <div class="imp-grid">
+        <div class="field"><label class="small" for="t{{ forloop.counter0 }}">نام جدول</label>
+          <input id="t{{ forloop.counter0 }}" type="text" name="table_{{ forloop.counter0 }}" value="{{ l.table }}" dir="ltr" pattern="[a-z_][a-z0-9_]*" required></div>
+        <div class="field"><label class="small" for="s{{ forloop.counter0 }}">سیستم مختصات فایل</label>
+          <select id="s{{ forloop.counter0 }}" name="srid_{{ forloop.counter0 }}">
+            {% if not l.srid %}<option value="">— انتخاب کنید —</option>{% endif %}
+            {% for code, label in srid_choices %}<option value="{{ code }}" {% if l.srid == code %}selected{% endif %}>{{ code }} · {{ label }}</option>{% endfor %}
+            {% if l.srid and not l.srid_in_list %}<option value="{{ l.srid }}" selected>{{ l.srid }} · تشخیص از فایل</option>{% endif %}
+          </select></div>
+        <div class="field"><label class="small" for="m{{ forloop.counter0 }}">اگر جدول وجود داشت</label>
+          <select id="m{{ forloop.counter0 }}" name="mode_{{ forloop.counter0 }}">
+            <option value="create" {% if l.mode == 'create' %}selected{% endif %}>خطا بده (جدول جدید)</option>
+            <option value="overwrite" {% if l.mode == 'overwrite' %}selected{% endif %}>جایگزین کن</option>
+            <option value="append" {% if l.mode == 'append' %}selected{% endif %}>به انتهای آن اضافه کن</option>
+          </select>{% if l.exists %}<small class="help">جدولی با این نام از قبل وجود دارد.</small>{% endif %}</div>
+        <label class="check small"><input type="checkbox" name="to4326_{{ forloop.counter0 }}" {% if l.to4326 %}checked{% endif %}><span>تبدیل به طول و عرض جغرافیایی (EPSG:4326)</span></label>
+      </div>
+      {% if l.sample %}
+      <div class="table-scroll"><table class="data-table small">
+        <thead><tr>{% for k in l.sample.0.keys %}<th>{{ k }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in l.sample %}<tr>{% for v in row.values %}<td>{{ v|default_if_none:"" }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+      </table></div>
+      {% endif %}
+    </fieldset>
+    {% endfor %}
+    <div style="display:flex;gap:var(--s3)">
+      <button class="btn" type="submit" name="action" value="go">ورود به پایگاه داده</button>
+      <button class="btn ghost" type="submit" name="action" value="cancel" formnovalidate>انصراف</button>
+    </div>
+  </form>
+{% elif job.active %}
+  <div class="msg info" role="status">در حال ورود داده… این صفحه خودکار تازه می‌شود.</div>
+{% elif job.status == 'done' %}
+  <div class="msg success" role="status">{{ job.message }}</div>
+  <p>{% for t in job.params.imported %}<a class="btn ghost sm" href="{% url 'databases:explore_table' db.pk 'public' t %}?tab=map">نقشه {{ t }}</a> {% endfor %}</p>
+{% else %}
+  <div class="msg error" role="alert">ورود ناموفق بود: {{ job.message }}</div>
+  <p><a class="btn ghost sm" href="{% url 'databases:import' db.pk %}">تلاش دوباره</a></p>
+{% endif %}
+{% endblock %}

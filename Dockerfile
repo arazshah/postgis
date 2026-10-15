@@ -13,7 +13,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl postgresql-client \
+ && apt-get install -y --no-install-recommends curl postgresql-client gdal-bin \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 1000 app
 

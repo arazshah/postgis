@@ -11,8 +11,10 @@ class Job(models.Model):
         BACKUP = "backup", "بکاپ"
         RESTORE = "restore", "بازگردانی"
         RESTORE_TEST = "restore_test", "آزمون بازگردانی"
+        IMPORT = "import", "ورود فایل"
 
     class Status(models.TextChoices):
+        DRAFT = "draft", "منتظر تأیید کاربر"
         QUEUED = "queued", "در صف"
         RUNNING = "running", "در حال اجرا"
         DONE = "done", "انجام شد"

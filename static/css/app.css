@@ -477,3 +477,31 @@ details.pay-option summary{cursor:pointer}
   .help-nav{position:static;order:2}
   .help-nav ol{display:none}
 }
+
+/* ---------- ورود فایل، خروجی، سلامت داده ---------- */
+.upload-box{display:flex;flex-direction:column;gap:var(--s4);align-items:flex-start}
+.drop{display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;width:100%;padding:var(--s7) var(--s5);border:2px dashed var(--line);border-radius:var(--r-lg);background:var(--paper);cursor:pointer;text-align:center;transition:border-color .2s,background .2s}
+.drop:hover,.drop:focus-within{border-color:var(--teal);background:var(--teal-soft)}
+.drop input[type=file]{max-width:100%}
+.drop-title{font-weight:700;font-size:1.05rem}
+.enc-row{display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap;margin-bottom:var(--s4)}
+.imp-layer{margin:0 0 var(--s4);min-width:0}
+.imp-layer legend{display:flex;gap:var(--s3);align-items:center;padding:0 6px}
+.imp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s4);align-items:end;margin-bottom:var(--s4)}
+.imp-grid .check{grid-column:1/-1}
+.table-scroll{overflow-x:auto}
+.dl-more{position:relative;display:inline-block}
+.dl-more summary{list-style:none;cursor:pointer}
+.dl-more summary::-webkit-details-marker{display:none}
+.dl-menu{position:absolute;inset-inline-end:0;top:calc(100% + 6px);z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:0 12px 28px -12px rgba(18,49,58,.35);min-width:200px;padding:6px;display:flex;flex-direction:column}
+.dl-menu a{padding:8px 12px;border-radius:var(--r-sm);text-decoration:none;color:var(--ink);font-size:.92rem}
+.dl-menu a:hover{background:var(--paper-2)}
+.health{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:var(--s3)}
+.health li{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s4) var(--s5)}
+.h-table{display:block;margin-bottom:var(--s2)}
+.h-row{display:flex;gap:var(--s4);justify-content:space-between;align-items:center;padding:8px 12px;margin-top:6px;border-inline-start:3px solid var(--ochre);background:var(--paper);border-radius:var(--r-sm)}
+.h-row p{margin:0}
+.h-row.h-error{border-inline-start-color:var(--red)}
+.h-row.h-info{border-inline-start-color:var(--teal)}
+.health form{display:flex;gap:var(--s2);align-items:center;flex:none}
+@media (max-width:900px){.imp-grid{grid-template-columns:1fr}.h-row{flex-direction:column;align-items:flex-start}}

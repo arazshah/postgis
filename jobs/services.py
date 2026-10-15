@@ -89,7 +89,7 @@ def claim_next() -> Job | None:
 
 def run(job: Job) -> None:
     handler = {Job.Kind.BACKUP: _do_backup, Job.Kind.RESTORE: _do_restore,
-               Job.Kind.RESTORE_TEST: _do_restore_test}[job.kind]
+               Job.Kind.RESTORE_TEST: _do_restore_test, Job.Kind.IMPORT: _do_import}[job.kind]
     try:
         handler(job)
     except Exception as exc:  # noqa: BLE001
@@ -221,6 +221,37 @@ def _do_restore_test(job: Job) -> None:
     job.message = f"بکاپ {db.db_name} با موفقیت بازگردانی آزمایشی شد ({info['tables']} جدول)."
 
 
+# ---------------------------------------------------------------------- ورود فایل
+def import_dir(job: Job) -> Path:
+    return Path(settings.IMPORT_ROOT) / str(job.pk)
+
+
+def _do_import(job: Job) -> None:
+    from databases import gdal
+
+    db = job.database
+    if db.status != UserDatabase.Status.ACTIVE:
+        raise JobError("پایگاه داده فعال نیست یا حجمش پر است؛ ورود فایل ممکن نیست.")
+    path = import_dir(job) / job.params["file"]
+    done, errors = [], []
+    try:
+        for layer in job.params["layers"]:
+            if not layer.get("selected"):
+                continue
+            try:
+                gdal.import_layer(db, path, layer, job.params.get("encoding"))
+                done.append(layer["table"])
+            except gdal.GdalError as exc:
+                errors.append(f"{layer['name']}: {exc}")
+    finally:
+        shutil.rmtree(import_dir(job), ignore_errors=True)
+    job.params = {**job.params, "imported": done, "errors": errors}
+    if not done:
+        raise JobError("هیچ لایه‌ای وارد نشد. " + " | ".join(errors))
+    count = str(len(done)).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+    job.message = f"{count} لایه وارد شد: {'، '.join(done)}" + (f". خطا: {' | '.join(errors)}" if errors else "")
+
+
 def run_inline(job: Job) -> Job:
     if job.status == Job.Status.QUEUED:
         job.status, job.started_at = Job.Status.RUNNING, timezone.now()
@@ -270,6 +301,10 @@ def cleanup(now: datetime | None = None) -> int:
         job.status = Job.Status.EXPIRED
         job.save(update_fields=["status"])
         removed += 1
+    for job in Job.objects.filter(kind=Job.Kind.IMPORT, status=Job.Status.DRAFT, created_at__lt=now - timedelta(days=1)):
+        shutil.rmtree(import_dir(job), ignore_errors=True)
+        job.status = Job.Status.EXPIRED
+        job.save(update_fields=["status"])
     Job.objects.filter(status=Job.Status.RUNNING, started_at__lt=now - timedelta(seconds=DUMP_TIMEOUT + 600)).update(
         status=Job.Status.FAILED, message="کار بیش از حد طول کشید یا worker متوقف شد.", finished_at=now)
     return removed
