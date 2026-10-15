@@ -1,6 +1,11 @@
 """صفحه «انتشار» هر پایگاه داده: انتشار جدول‌های مکانی، عمومی/خصوصی، کلیدهای API و نمونه کد."""
+import json
+import re
+
 from django.contrib import messages
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.clickjacking import xframe_options_exempt
 from django.views.decorators.http import require_POST
 
 from accounts.decorators import site_user_required
@@ -131,3 +136,140 @@ def revoke_key(request, pk, key_id):
     key.revoke()
     messages.success(request, f"کلید «{key.name}» باطل شد.")
     return redirect("publish:manage", pk=db.pk)
+
+
+# ---------------------------------------------------------------------- طراحی و نمایش نقشه
+STYLE_DEFAULT = {"mode": "single", "color": "#0F5C59", "opacity": 0.75, "size": 6, "outline": "#FFFFFF",
+                 "field": "", "classes": 5, "palette": "YlOrRd", "breaks": [], "categories": [], "popup": [],
+                 "basemap": "osm"}
+PALETTES = {
+    "YlOrRd": ["#ffffb2", "#fed976", "#feb24c", "#fd8d3c", "#fc4e2a", "#e31a1c", "#bd0026", "#800026", "#4d0019"],
+    "Blues": ["#eff3ff", "#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#08519c", "#08306b", "#041d43"],
+    "Greens": ["#edf8e9", "#c7e9c0", "#a1d99b", "#74c476", "#41ab5d", "#238b45", "#006d2c", "#00441b", "#00290f"],
+    "Viridis": ["#440154", "#472d7b", "#3b528b", "#2c728e", "#21918c", "#28ae80", "#5ec962", "#addc30", "#fde725"],
+    "RdYlGn": ["#d73027", "#f46d43", "#fdae61", "#fee08b", "#ffffbf", "#d9ef8b", "#a6d96a", "#66bd63", "#1a9850"],
+    "Teal": ["#e6f2ef", "#c2e0d8", "#9dcdc1", "#78baa9", "#53a792", "#2e947a", "#0f7e66", "#0f5c59", "#073b3a"],
+}
+CATEGORY_COLORS = ["#0F5C59", "#E0A526", "#B42318", "#2B6CB0", "#7A4FB5", "#1A7F4B", "#D9480F", "#5C7080",
+                   "#C2185B", "#0097A7", "#8D6E63", "#9E9D24"]
+
+
+HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def _style(layer) -> dict:
+    return {**STYLE_DEFAULT, **(layer.style or {})}
+
+
+def map_config(request, layer, embed=False) -> dict:
+    from core.models import SiteSettings
+
+    db = layer.service.database
+    tiles = request.build_absolute_uri(f"/tiles/{layer.slug}/") + "{z}/{x}/{y}.mvt"
+    conf = SiteSettings.get()
+    style = _style(layer)
+    return {
+        "tiles": tiles, "sourceLayer": layer.collection_id, "geomType": (layer.geom_type or "").upper(),
+        "bbox": layer.bbox, "style": style, "palettes": PALETTES,
+        "basemap": conf.map_tile_url if style.get("basemap") != "none" else "",
+        "basemapAttribution": conf.map_tile_attribution or "© OpenStreetMap",
+        "title": layer.display_title, "description": layer.description, "embed": embed,
+        "badge": db.plan.map_badge, "home": request.build_absolute_uri("/"),
+    }
+
+
+@site_user_required
+def map_builder(request, pk, layer_id):
+    db = _db(request, pk)
+    layer = get_object_or_404(Layer.objects.select_related("service__database__plan"), pk=layer_id,
+                              service__database=db)
+    if request.method == "POST":
+        try:
+            data = json.loads(request.POST.get("style", "{}"))
+        except ValueError:
+            data = {}
+        style = {k: data[k] for k in STYLE_DEFAULT if k in data}
+        style["mode"] = style.get("mode") if style.get("mode") in ("single", "graduated", "categorized") else "single"
+        style["palette"] = style.get("palette") if style.get("palette") in PALETTES else "YlOrRd"
+        style["basemap"] = "none" if style.get("basemap") == "none" else "osm"
+        for k, lo, hi in (("opacity", 0.05, 1), ("size", 1, 40), ("classes", 2, 9)):
+            try:
+                style[k] = max(lo, min(hi, float(style.get(k, STYLE_DEFAULT[k]))))
+            except (TypeError, ValueError):
+                style[k] = STYLE_DEFAULT[k]
+        style["classes"] = int(style["classes"])
+        for k in ("color", "outline"):
+            if not HEX_RE.match(str(style.get(k, ""))):
+                style[k] = STYLE_DEFAULT[k]
+        try:
+            style["breaks"] = [float(b) for b in style.get("breaks", [])][:8]
+        except (TypeError, ValueError):
+            style["breaks"] = []
+        style["categories"] = [{"value": str(c.get("value", ""))[:200], "color": c["color"]}
+                               for c in style.get("categories", [])[:12]
+                               if isinstance(c, dict) and HEX_RE.match(str(c.get("color", "")))]
+        try:
+            names = {n for n, _ in engine.field_names(layer)}
+        except engine.EngineError as exc:
+            messages.error(request, str(exc))
+            return redirect("publish:map_builder", pk=db.pk, layer_id=layer.pk)
+        style["popup"] = [c for c in style.get("popup", []) if c in names][:12]
+        if style.get("field") not in names:
+            style["field"], style["mode"] = "", "single"
+        layer.style = style
+        layer.title = request.POST.get("title", layer.title)[:120]
+        layer.description = request.POST.get("description", layer.description)[:1000]
+        layer.save()
+        messages.success(request, "سبک نقشه ذخیره شد.")
+        return redirect("publish:map_builder", pk=db.pk, layer_id=layer.pk)
+    try:
+        fields = engine.field_names(layer)
+    except engine.EngineError as exc:
+        messages.error(request, str(exc))
+        fields = []
+    return render(request, "publish/builder.html", {
+        "db": db, "layer": layer, "fields": fields, "palettes": PALETTES,
+        "config": map_config(request, layer),
+        "public_url": request.build_absolute_uri(f"/m/{layer.slug}/"),
+        "embed_url": request.build_absolute_uri(f"/m/{layer.slug}/embed/"),
+    })
+
+
+@site_user_required
+def map_stats(request, pk, layer_id):
+    db = _db(request, pk)
+    layer = get_object_or_404(Layer, pk=layer_id, service__database=db)
+    mode = request.GET.get("mode", "graduated")
+    try:
+        stats = engine.field_stats(layer, request.GET.get("field", ""), mode, int(request.GET.get("classes", 5)))
+    except (engine.EngineError, ValueError) as exc:
+        return JsonResponse({"error": str(exc)}, status=400, json_dumps_params={"ensure_ascii": False})
+    if mode == "categorized":
+        stats["colors"] = CATEGORY_COLORS[:len(stats["values"])]
+    return JsonResponse(stats, json_dumps_params={"ensure_ascii": False})
+
+
+def _public_layer(request, slug) -> Layer:
+    layer = get_object_or_404(Layer.objects.select_related("service__database__plan"), slug=slug)
+    db = layer.service.database
+    if db.status not in UserDatabase.LIVE_STATUSES:
+        raise Http404
+    if not layer.is_public and not access.is_owner(request, db):
+        raise Http404
+    return layer
+
+
+def public_map(request, slug, embed=False):
+    layer = _public_layer(request, slug)
+    resp = render(request, "publish/map.html", {
+        "layer": layer, "embed": embed, "config": map_config(request, layer, embed),
+        "public_url": request.build_absolute_uri(f"/m/{layer.slug}/"),
+    })
+    # نقشه پایه OSM بدون Referer کاشی نمی‌دهد؛ فقط دامنه فرستاده می‌شود
+    resp["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return resp
+
+
+@xframe_options_exempt
+def embed_map(request, slug):
+    return public_map(request, slug, embed=True)
