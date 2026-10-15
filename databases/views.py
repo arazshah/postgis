@@ -88,6 +88,7 @@ def detail(request, pk):
         "ext_form": AddExtensionForm(db=db),
         "delete_form": DeleteConfirmForm(expected=db.label),
         "logs": db.logs.all()[:8],
+        "last_backup": db.jobs.filter(kind="backup", status="done").first(),
     })
 
 
@@ -154,6 +155,68 @@ def delete(request, pk):
         return redirect("databases:detail", pk=db.pk)
     messages.success(request, "پایگاه داده و همه داده‌های آن حذف شد.")
     return redirect("databases:dashboard")
+
+
+# ---------------------------------------------------------------------- بکاپ و بازگردانی
+@site_user_required
+def backups(request, pk):
+    from jobs.models import Job
+
+    db = _user_db(request, pk)
+    jobs = list(db.jobs.filter(kind__in=[Job.Kind.BACKUP, Job.Kind.RESTORE]).select_related("source")[:40])
+    return render(request, "databases/backups.html", {
+        "db": db, "jobs": jobs, "busy": any(j.active for j in jobs),
+        "available": [j for j in jobs if j.downloadable],
+        "restore_form": DeleteConfirmForm(expected=db.label),
+        "keep_days": db.plan.backup_retention_days,
+    })
+
+
+@site_user_required
+@require_POST
+def backup_new(request, pk):
+    from jobs import services as jobs
+
+    db = _user_db(request, pk)
+    try:
+        jobs.request_backup(db, request.user)
+    except jobs.JobError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, "بکاپ در صف قرار گرفت. معمولاً چند دقیقه طول می‌کشد؛ این صفحه را تازه کنید.")
+    return redirect("databases:backups", pk=db.pk)
+
+
+@site_user_required
+def backup_download(request, pk, job_id):
+    from django.http import FileResponse, Http404
+
+    db = _user_db(request, pk)
+    job = get_object_or_404(db.jobs, pk=job_id)
+    if not job.downloadable or not job.path.exists():
+        raise Http404
+    return FileResponse(job.path.open("rb"), as_attachment=True, filename=job.path.name,
+                        content_type="application/octet-stream")
+
+
+@site_user_required
+@require_POST
+def backup_restore(request, pk, job_id):
+    from jobs import services as jobs
+
+    db = _user_db(request, pk)
+    backup = get_object_or_404(db.jobs, pk=job_id)
+    form = DeleteConfirmForm(request.POST, expected=db.label)
+    if not form.is_valid():
+        messages.error(request, "نام وارد‌شده مطابقت نداشت؛ بازگردانی انجام نشد.")
+        return redirect("databases:backups", pk=db.pk)
+    try:
+        jobs.request_restore(db, backup, request.user)
+    except jobs.JobError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, "بازگردانی در صف قرار گرفت. قبل از آن یک بکاپ ایمنی از وضع فعلی گرفته می‌شود.")
+    return redirect("databases:backups", pk=db.pk)
 
 
 # ---------------------------------------------------------------------- مرورگر پایگاه داده

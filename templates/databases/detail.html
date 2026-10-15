@@ -157,6 +157,13 @@ print(gpd.read_postgis("SELECT * FROM parcels LIMIT 5", engine, geom_col="geomet
       </section>
       {% endif %}
 
+      <section class="panel">
+        <h3>بکاپ</h3>
+        <p class="small muted" style="margin-bottom:8px">هر شب بکاپ کامل گرفته و {{ db.plan.backup_retention_days|fanum }} روز نگه داشته می‌شود.
+          {% if last_backup %}آخرین بکاپ: {{ last_backup.created_at|jdatetime_full }}{% else %}هنوز بکاپی گرفته نشده.{% endif %}</p>
+        <a class="btn ghost sm" href="{% url 'databases:backups' db.pk %}">بکاپ‌ها، دانلود و بازگردانی</a>
+      </section>
+
       {% if logs %}
       <section class="panel">
         <h3>رویدادهای اخیر</h3>

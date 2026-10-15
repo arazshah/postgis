@@ -355,3 +355,106 @@ class Provisioner:
         _check_ident(name)
         with self.connect() as conn:
             return conn.execute("SELECT count(*) FROM pg_stat_activity WHERE datname=%s", (name,)).fetchone()[0]
+
+    # ------------------------------------------------------------------ مالکیت و بازگردانی
+    def reassign_browser_objects(self, db_name: str, role_name: str) -> None:
+        """اشیایی که نقش مرورگر ساخته (نسخه‌های قدیمی کنسول SQL) را به مالکیت نقش کاربر برمی‌گرداند."""
+        _check_ident(db_name)
+        _check_ident(role_name)
+        web = self.browser_role_name(role_name)
+        with self.connect(dbname=db_name) as conn:
+            if conn.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (web,)).fetchone():
+                conn.execute(sql.SQL("REASSIGN OWNED BY {} TO {}").format(sql.Identifier(web),
+                                                                          sql.Identifier(role_name)))
+
+    def _give_to_role(self, cur, role_name: str) -> None:
+        """همه اشیای کاربری (نه اشیای افزونه‌ها) در دیتابیس فعلی را به نقش کاربر می‌دهد."""
+        role = sql.Identifier(role_name)
+        rows = cur.execute("""
+            SELECT n.nspname, c.relname, c.relkind FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind IN ('r','p','v','m','S','f')
+              AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg\\_%%'
+              AND pg_get_userbyid(c.relowner) <> %s
+              AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = c.oid AND d.deptype = 'e')
+        """, (role_name,)).fetchall()
+        kinds = {"r": "TABLE", "p": "TABLE", "v": "VIEW", "m": "MATERIALIZED VIEW", "S": "SEQUENCE",
+                 "f": "FOREIGN TABLE"}
+        for nsp, rel, kind in rows:
+            if kind == "S" and cur.execute(
+                    "SELECT 1 FROM pg_depend d JOIN pg_class s ON s.oid=d.objid JOIN pg_namespace n ON "
+                    "n.oid=s.relnamespace WHERE n.nspname=%s AND s.relname=%s AND d.deptype IN ('a','i')",
+                    (nsp, rel)).fetchone():
+                continue  # دنباله وابسته به ستون همراه جدولش منتقل می‌شود
+            cur.execute(sql.SQL("ALTER {} {} OWNER TO {}").format(sql.SQL(kinds[kind]),
+                                                                 sql.Identifier(nsp, rel), role))
+        for (nsp,) in cur.execute("""
+            SELECT n.nspname FROM pg_namespace n
+            WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg\\_%%'
+              AND pg_get_userbyid(n.nspowner) <> %s
+              AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = n.oid AND d.deptype = 'e')
+        """, (role_name,)).fetchall():
+            cur.execute(sql.SQL("ALTER SCHEMA {} OWNER TO {}").format(sql.Identifier(nsp), role))
+        for (fid,) in cur.execute("""
+            SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg\\_%%'
+              AND pg_get_userbyid(p.proowner) <> %s
+              AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
+        """, (role_name,)).fetchall():
+            kw = "PROCEDURE" if cur.execute("SELECT prokind FROM pg_proc WHERE oid=%s::regprocedure",
+                                            (fid,)).fetchone()[0] == "p" else "FUNCTION"
+            cur.execute(sql.SQL("ALTER {} {} OWNER TO {}").format(sql.SQL(kw), sql.SQL(fid), role))
+
+    def create_scratch_database(self, scratch: str, role_name: str) -> None:
+        _check_ident(scratch)
+        _check_ident(role_name)
+        with self.connect() as conn:
+            conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(scratch)))
+            conn.execute(sql.SQL("CREATE DATABASE {} OWNER {} ENCODING 'UTF8' TEMPLATE template0").format(
+                sql.Identifier(scratch), sql.Identifier(role_name)))
+            conn.execute(sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(sql.Identifier(scratch)))
+
+    def drop_database(self, db_name: str) -> None:
+        _check_ident(db_name)
+        with self.connect() as conn:
+            conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(db_name)))
+
+    def finish_restore(self, scratch: str, role_name: str) -> dict:
+        """بعد از pg_restore در دیتابیس موقت: مالکیت به کاربر، شمارش جدول‌ها برای بررسی سلامت."""
+        with self.connect(dbname=scratch) as conn:
+            cur = conn.cursor()
+            self._give_to_role(cur, role_name)
+            cur.execute(sql.SQL("ALTER SCHEMA public OWNER TO {}").format(sql.Identifier(role_name)))
+            cur.execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
+            if cur.execute("SELECT to_regclass('public.spatial_ref_sys')").fetchone()[0]:
+                cur.execute(sql.SQL("GRANT SELECT, INSERT, UPDATE, DELETE ON public.spatial_ref_sys TO {}").format(
+                    sql.Identifier(role_name)))
+            tables = cur.execute("""
+                SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+                WHERE c.relkind IN ('r','p') AND n.nspname NOT IN ('pg_catalog','information_schema')
+                  AND n.nspname NOT LIKE 'pg\\_%%'
+                  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = c.oid AND d.deptype = 'e')
+            """).fetchone()[0]
+        return {"tables": tables}
+
+    def swap_in_restored(self, db_name: str, scratch: str, role_name: str) -> str:
+        """دیتابیس بازگردانی‌شده را جای دیتابیس فعلی می‌گذارد؛ نسخه قبلی با پسوند _old نگه داشته می‌شود."""
+        _check_ident(db_name)
+        _check_ident(scratch)
+        _check_ident(role_name)
+        old = (db_name[:54] + "_old_rst")
+        web = self.browser_role_name(role_name)
+        with self.connect() as conn:
+            cur = conn.cursor()
+            cur.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(old)))
+            cur.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ANY(%s) "
+                        "AND pid <> pg_backend_pid()", ([db_name, scratch],))
+            cur.execute(sql.SQL("ALTER DATABASE {} RENAME TO {}").format(sql.Identifier(db_name), sql.Identifier(old)))
+            cur.execute(sql.SQL("ALTER DATABASE {} RENAME TO {}").format(sql.Identifier(scratch),
+                                                                       sql.Identifier(db_name)))
+            db = sql.Identifier(db_name)
+            cur.execute(sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(db))
+            cur.execute(sql.SQL("GRANT CONNECT, TEMPORARY ON DATABASE {} TO {}").format(db, sql.Identifier(role_name)))
+            if cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (web,)).fetchone():
+                cur.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(db, sql.Identifier(web)))
+        return old
+

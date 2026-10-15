@@ -53,6 +53,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t geopaygah:ci .
+      - name: Backup tools present in image
+        run: docker run --rm geopaygah:ci sh -c "pg_dump --version && pg_restore --version"
       - name: Smoke test container
         run: |
           docker run -d --name app -p 8000:8000 \
