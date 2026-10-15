@@ -64,3 +64,11 @@ def money(value):
     except (TypeError, ValueError):
         return value
     return f"{n:,}".replace(",", "٬").translate(_FA_DIGITS)
+
+
+@register.filter
+def get_item(mapping, key):
+    try:
+        return mapping.get(key)
+    except AttributeError:
+        return None

@@ -133,7 +133,8 @@ def create_key(request, pk):
     if db.api_keys.filter(revoked_at__isnull=True).count() >= 10:
         messages.error(request, "حداکثر ۱۰ کلید فعال؛ یک کلید قدیمی را باطل کنید.")
         return redirect("publish:manage", pk=db.pk)
-    _key, raw = ApiKey.issue(db, request.user, request.POST.get("name") or "کلید")
+    _key, raw = ApiKey.issue(db, request.user, request.POST.get("name") or "کلید",
+                             can_write=request.POST.get("can_write") == "on")
     request.session[SESSION_KEY.format(db.pk)] = raw
     return redirect("publish:manage", pk=db.pk)
 

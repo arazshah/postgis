@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     "iranmap",
     "classroom",
     "analysis",
+    "restapi",
 ]
 
 MIDDLEWARE = [
