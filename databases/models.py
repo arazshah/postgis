@@ -80,7 +80,7 @@ class DatabaseServer(models.Model):
                                       default="require")
 
     pooler_port = models.PositiveIntegerField(
-        "پورت PgBouncer", default=0, help_text="پورت عمومی سرویس pgbouncer در docker-compose؛ ۰ یعنی غیرفعال.")
+        "پورت PgBouncer", null=True, blank=True, help_text="پورت عمومی سرویس pgbouncer در docker-compose؛ خالی یعنی غیرفعال.")
     pooler_host = models.CharField("آدرس PgBouncer", max_length=255, blank=True,
                                    help_text="خالی = همان آدرس عمومی سرور.")
 
