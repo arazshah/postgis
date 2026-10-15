@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 import time
 import unittest
+import urllib.error
+import urllib.request
 import uuid
 import zipfile
 from pathlib import Path
@@ -275,7 +277,15 @@ class OwsIntegrationTests(TestCase):
         proc = subprocess.Popen([QGIS_BIN, f"127.0.0.1:{port}"], env=env, stdout=subprocess.DEVNULL,
                                 stderr=subprocess.DEVNULL)
         self.addCleanup(proc.kill)
-        time.sleep(2)
+        deadline = time.time() + 60  # آغاز QGIS زیر بار ممکن است چند ثانیه طول بکشد
+        while time.time() < deadline:
+            try:
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/ows/?SERVICE=WMS&REQUEST=GetCapabilities", timeout=5)
+                break
+            except urllib.error.HTTPError:
+                break  # سرور بالا است (بدون MAP خطا می‌دهد)
+            except OSError:
+                time.sleep(0.5)
         p = self._upload(public=True)
         self.client.logout()
         with override_settings(QGIS_SERVER_URL=f"http://127.0.0.1:{port}/ows/"):
