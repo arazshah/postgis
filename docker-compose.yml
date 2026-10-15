@@ -27,11 +27,13 @@ services:
       - MEDIA_ROOT=/app/media
       - BACKUP_ROOT=/app/backups
       - OWS_ROOT=/app/ows
+      - OSM_ROOT=/app/osm
       - QGIS_SERVER_URL=${QGIS_SERVER_URL:-http://qgis/ows/}
     volumes:
       - panel-media:/app/media
       - db-backups:/app/backups
       - ows-projects:/app/ows
+      - osm-data:/app/osm
     networks:
       - default
       - coolify
@@ -61,11 +63,15 @@ services:
       - MEDIA_ROOT=/app/media
       - BACKUP_ROOT=/app/backups
       - OWS_ROOT=/app/ows
+      - OSM_ROOT=/app/osm
+      - OSM_SOURCE_URL=${OSM_SOURCE_URL:-https://download.geofabrik.de/asia/iran-latest.osm.pbf}
+      - BASEMAP_SOURCE_URL=${BASEMAP_SOURCE_URL:-https://build.protomaps.com/{date}.pmtiles}
       - RUN_MIGRATIONS=0
     volumes:
       - panel-media:/app/media
       - db-backups:/app/backups
       - ows-projects:/app/ows
+      - osm-data:/app/osm
     networks:
       - default
       - coolify
@@ -113,6 +119,8 @@ volumes:
   panel-media:
   db-backups:
   ows-projects:
+  # فایل OSM ایران (~۳۰۰ مگابایت) و نقشه پایه PMTiles (چند گیگابایت)
+  osm-data:
 
 networks:
   coolify:

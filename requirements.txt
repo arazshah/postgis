@@ -7,3 +7,4 @@ dj-database-url>=2.2
 jdatetime>=5.0
 Pillow>=10
 defusedxml>=0.7
+pmtiles>=3.4

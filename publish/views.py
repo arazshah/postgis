@@ -2,9 +2,11 @@
 import json
 import re
 
+from django.conf import settings
 from django.contrib import messages
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.templatetags.static import static
 from django.views.decorators.clickjacking import xframe_options_exempt
 from django.views.decorators.http import require_POST
 
@@ -52,8 +54,14 @@ def manage(request, pk):
         "db": db, "service": service, "rows": rows, "published": published,
         "keys": db.api_keys.all(), "new_key": request.session.pop(SESSION_KEY.format(db.pk), None),
         "used": access.usage_today(db), "cap": db.plan.publish_daily_requests, "max_layers": db.plan.publish_layers,
-        "base": request.build_absolute_uri("/")[:-1], "section": "publish",
+        "base": request.build_absolute_uri("/")[:-1], "section": "publish", "iran_basemap": _iran_basemap(),
     })
+
+
+def _iran_basemap() -> bool:
+    from iranmap import basemap
+
+    return basemap.available()
 
 
 @site_user_required
@@ -141,7 +149,8 @@ def revoke_key(request, pk, key_id):
 # ---------------------------------------------------------------------- طراحی و نمایش نقشه
 STYLE_DEFAULT = {"mode": "single", "color": "#0F5C59", "opacity": 0.75, "size": 6, "outline": "#FFFFFF",
                  "field": "", "classes": 5, "palette": "YlOrRd", "breaks": [], "categories": [], "popup": [],
-                 "basemap": "osm"}
+                 "basemap": "iran", "label": "", "label_color": "#1B2B2F", "label_size": 12}
+BASEMAPS = ("iran", "osm", "none")
 PALETTES = {
     "YlOrRd": ["#ffffb2", "#fed976", "#feb24c", "#fd8d3c", "#fc4e2a", "#e31a1c", "#bd0026", "#800026", "#4d0019"],
     "Blues": ["#eff3ff", "#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#08519c", "#08306b", "#041d43"],
@@ -158,11 +167,17 @@ HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
 def _style(layer) -> dict:
-    return {**STYLE_DEFAULT, **(layer.style or {})}
+    from iranmap import basemap
+
+    style = {**STYLE_DEFAULT, **(layer.style or {})}
+    if style["basemap"] == "iran" and not basemap.available():
+        style["basemap"] = "osm"
+    return style
 
 
 def map_config(request, layer, embed=False) -> dict:
     from core.models import SiteSettings
+    from iranmap import basemap
 
     db = layer.service.database
     tiles = request.build_absolute_uri(f"/tiles/{layer.slug}/") + "{z}/{x}/{y}.mvt"
@@ -171,8 +186,12 @@ def map_config(request, layer, embed=False) -> dict:
     return {
         "tiles": tiles, "sourceLayer": layer.collection_id, "geomType": (layer.geom_type or "").upper(),
         "bbox": layer.bbox, "style": style, "palettes": PALETTES,
-        "basemap": conf.map_tile_url if style.get("basemap") != "none" else "",
+        "basemap": conf.map_tile_url,
         "basemapAttribution": conf.map_tile_attribution or "© OpenStreetMap",
+        "iranStyle": request.build_absolute_uri("/basemap/style.json") if basemap.available() else "",
+        # پوشه است، نه فایل؛ static() با manifest برای آن خطا می‌دهد
+        "glyphs": request.build_absolute_uri(settings.STATIC_URL + "basemap/fonts/") + "{fontstack}/{range}.pbf",
+        "rtlPlugin": request.build_absolute_uri(static("vendor/rtl-text/mapbox-gl-rtl-text.js")),
         "title": layer.display_title, "description": layer.description, "embed": embed,
         "badge": db.plan.map_badge, "home": request.build_absolute_uri("/"),
     }
@@ -191,14 +210,18 @@ def map_builder(request, pk, layer_id):
         style = {k: data[k] for k in STYLE_DEFAULT if k in data}
         style["mode"] = style.get("mode") if style.get("mode") in ("single", "graduated", "categorized") else "single"
         style["palette"] = style.get("palette") if style.get("palette") in PALETTES else "YlOrRd"
-        style["basemap"] = "none" if style.get("basemap") == "none" else "osm"
+        style["basemap"] = style.get("basemap") if style.get("basemap") in BASEMAPS else "osm"
         for k, lo, hi in (("opacity", 0.05, 1), ("size", 1, 40), ("classes", 2, 9)):
             try:
                 style[k] = max(lo, min(hi, float(style.get(k, STYLE_DEFAULT[k]))))
             except (TypeError, ValueError):
                 style[k] = STYLE_DEFAULT[k]
         style["classes"] = int(style["classes"])
-        for k in ("color", "outline"):
+        try:
+            style["label_size"] = int(max(8, min(24, float(style.get("label_size", 12)))))
+        except (TypeError, ValueError):
+            style["label_size"] = 12
+        for k in ("color", "outline", "label_color"):
             if not HEX_RE.match(str(style.get(k, ""))):
                 style[k] = STYLE_DEFAULT[k]
         try:
@@ -216,6 +239,8 @@ def map_builder(request, pk, layer_id):
         style["popup"] = [c for c in style.get("popup", []) if c in names][:12]
         if style.get("field") not in names:
             style["field"], style["mode"] = "", "single"
+        if style.get("label") not in names:
+            style["label"] = ""
         layer.style = style
         layer.title = request.POST.get("title", layer.title)[:120]
         layer.description = request.POST.get("description", layer.description)[:1000]
@@ -227,8 +252,10 @@ def map_builder(request, pk, layer_id):
     except engine.EngineError as exc:
         messages.error(request, str(exc))
         fields = []
+    from iranmap import basemap
+
     return render(request, "publish/builder.html", {
-        "db": db, "layer": layer, "fields": fields, "palettes": PALETTES,
+        "db": db, "layer": layer, "fields": fields, "palettes": PALETTES, "iran_basemap": basemap.available(),
         "config": map_config(request, layer),
         "public_url": request.build_absolute_uri(f"/m/{layer.slug}/"),
         "embed_url": request.build_absolute_uri(f"/m/{layer.slug}/embed/"),

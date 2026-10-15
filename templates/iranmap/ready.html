@@ -1,0 +1,79 @@
+{% extends "databases/_explore_base.html" %}{% load fa %}
+{% block ex %}
+<h2 style="margin-top:0">داده آماده ایران</h2>
+<p class="muted">معابر، مکان‌های مهم، ساختمان‌ها، کاربری زمین و مرزهای اداری هر استان، شهرستان یا شهر را با یک کلیک در پایگاه داده خودتان داشته باشید؛ همراه با شبکه آماده مسیریابی.</p>
+{% if error %}<div class="msg error" role="alert">{{ error }}</div>{% endif %}
+{% if not source or not has_areas %}
+<div class="msg warning">داده OSM ایران هنوز روی سرور آماده نشده است. معمولاً در چند ساعت آینده در دسترس قرار می‌گیرد.</div>
+{% else %}
+<form method="post" class="panel ready-form" id="rform">{% csrf_token %}
+  <div class="field">
+    <label for="area-q">محدوده</label>
+    <input id="area-q" type="search" autocomplete="off" placeholder="نام استان، شهرستان یا شهر را بنویسید؛ مثلاً اصفهان">
+    <input type="hidden" name="area" id="area-id">
+    <ul class="area-results" id="area-results" role="listbox" aria-label="نتیجه جستجو"></ul>
+    <p class="small" id="area-picked" hidden>انتخاب شده: <b></b></p>
+  </div>
+  <fieldset class="bf-group"><legend>داده‌ها</legend>
+    <div class="ready-sets">
+      {% for d in datasets %}
+      <label class="check"><input type="checkbox" name="datasets" value="{{ d.key }}" {% if d.key in "roads pois" %}checked{% endif %}>
+        <span><b>{{ d.title }}</b> <span class="ltr small muted">osm_{{ d.key }}</span><br><span class="small muted">{{ d.description }}</span></span></label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  <label class="check" id="routing-row"><input type="checkbox" name="routing" id="routing" {% if not pgrouting %}disabled data-off{% endif %}>
+    <span><b>شبکه معابر آماده مسیریابی (pgRouting)</b><br><span class="small muted">جدول <span class="ltr">routing.ways</span> با هزینه و جهت، برای کوتاه‌ترین مسیر و حوزه دسترسی. فقط برای شهر یا شهرستان.</span>{% if not pgrouting %}<br><span class="small" style="color:var(--red)">افزونه pgRouting روی سرور این پایگاه داده نصب نیست.</span>{% endif %}</span></label>
+  <p class="small muted">جدول‌هایی با همین نام اگر از قبل وجود داشته باشند جایگزین می‌شوند. داده روی فضای پایگاه داده شما حساب می‌شود.</p>
+  <button class="btn" type="submit" {% if db.status != 'active' or active %}disabled{% endif %}>دریافت داده</button>
+</form>
+{% endif %}
+
+<div class="help-tips" style="margin-top:var(--s5)">
+  <h3 style="font-size:1rem">منبع و مجوز</h3>
+  <p class="small">داده‌ها از <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> هستند و با مجوز <span class="ltr">ODbL 1.0</span> منتشر می‌شوند. در هر نقشه یا گزارشی که از آن‌ها می‌سازید، منبع را ذکر کنید: <span class="ltr">«© OpenStreetMap contributors»</span>. اگر پایگاه داده‌ای مشتق از آن را عمومی کنید، باید با همان مجوز باشد. کامل بودن داده در شهرهای مختلف یکسان نیست.</p>
+  <h3 style="font-size:1rem">نمونه: کوتاه‌ترین مسیر</h3>
+  <p class="small">نزدیک‌ترین گره شبکه به دو نقطه را پیدا می‌کند و مسیر بین آن‌ها را با طول هر قطعه برمی‌گرداند (در «اجرای SQL» یا QGIS):</p>
+<pre class="code ltr"><button class="copy" data-copy>کپی</button><code>WITH a AS (SELECT id FROM routing.ways_vertices_pgr
+           ORDER BY the_geom &lt;-&gt; ST_SetSRID(ST_MakePoint(51.389, 35.700), 4326) LIMIT 1),
+     b AS (SELECT id FROM routing.ways_vertices_pgr
+           ORDER BY the_geom &lt;-&gt; ST_SetSRID(ST_MakePoint(51.420, 35.760), 4326) LIMIT 1)
+SELECT r.seq, w.name, w.length_m, w.the_geom
+FROM pgr_dijkstra('SELECT gid AS id, source, target, cost, reverse_cost FROM routing.ways',
+                  (SELECT id FROM a), (SELECT id FROM b)) r
+JOIN routing.ways w ON w.gid = r.edge;</code></pre>
+</div>
+
+{% if recent %}
+<h3 style="margin-top:var(--s6)">درخواست‌های اخیر</h3>
+<ul class="log">{% for j in recent %}<li class="{% if j.status == 'failed' %}fail{% endif %}">{{ j.params.area_label }} · <b>{{ j.get_status_display }}</b><span class="muted">{{ j.created_at|jdatetime_full }}</span>{% if j.message %}<div class="small log-msg">{{ j.message }}</div>{% endif %}</li>{% endfor %}</ul>
+{% if active %}<script>setTimeout(() => location.reload(), 8000);</script>{% endif %}
+{% endif %}
+<script>
+(() => {
+  const q = document.getElementById("area-q"); if (!q) return;
+  const list = document.getElementById("area-results"), id = document.getElementById("area-id");
+  const picked = document.getElementById("area-picked"), routing = document.getElementById("routing");
+  const url = "{% url 'iranmap:areas' %}";
+  let timer;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  async function search() {
+    const r = await fetch(`${url}?q=${encodeURIComponent(q.value.trim())}`);
+    const d = await r.json();
+    list.innerHTML = d.results.map((a) => `<li role="option" tabindex="0" data-id="${a.id}" data-routing="${a.routing}">${esc(a.label)}</li>`).join("")
+      || '<li class="muted">چیزی پیدا نشد</li>';
+  }
+  function choose(li) {
+    if (!li.dataset.id) return;
+    id.value = li.dataset.id; picked.hidden = false; picked.querySelector("b").textContent = li.textContent;
+    list.innerHTML = ""; q.value = li.textContent;
+    const ok = li.dataset.routing === "true";
+    routing.disabled = !ok || routing.hasAttribute("data-off"); if (routing.disabled) routing.checked = false;
+  }
+  q.addEventListener("input", () => { clearTimeout(timer); id.value = ""; timer = setTimeout(search, 200); });
+  q.addEventListener("focus", () => { if (!list.children.length) search(); });
+  list.addEventListener("click", (e) => { const li = e.target.closest("li"); if (li) choose(li); });
+  list.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); choose(e.target); } });
+})();
+</script>
+{% endblock %}

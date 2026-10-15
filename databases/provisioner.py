@@ -335,6 +335,10 @@ class Provisioner:
         with self.connect(dbname=name) as conn:
             conn.execute(sql.SQL("CREATE EXTENSION IF NOT EXISTS {} CASCADE").format(sql.Identifier(ext)))
 
+    def extension_available(self, ext: str) -> bool:
+        with self.connect() as conn:
+            return conn.execute("SELECT 1 FROM pg_available_extensions WHERE name = %s", (ext,)).fetchone() is not None
+
     def installed_extensions(self, name: str) -> list[str]:
         _check_ident(name)
         with self.connect(dbname=name) as conn:

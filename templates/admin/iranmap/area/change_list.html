@@ -1,0 +1,17 @@
+{% extends "admin/change_list.html" %}
+{% block content %}
+<div class="module" style="padding:12px 16px;margin-bottom:16px">
+  <h2 style="margin:0 0 8px">وضعیت داده نقشه</h2>
+  <table style="width:100%">
+    {% for title, value, job in map_status %}
+    <tr><th style="width:240px">{{ title }}</th><td>{{ value }}</td>
+      <td>{% if job %}آخرین کار: {{ job.get_status_display }} ({{ job.created_at|date:"Y-m-d H:i" }}){% if job.message %} — {{ job.message|truncatechars:160 }}{% endif %}{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  <form method="post" action="{% url 'admin:iranmap_rebuild' 'basemap' %}" style="display:inline">{% csrf_token %}<button class="button" type="submit">ساخت دوباره نقشه پایه</button></form>
+  <form method="post" action="{% url 'admin:iranmap_rebuild' 'osm' %}" style="display:inline">{% csrf_token %}<button class="button" type="submit">دانلود دوباره داده OSM ایران</button></form>
+  <form method="post" action="{% url 'admin:iranmap_rebuild' 'areas' %}" style="display:inline">{% csrf_token %}<button class="button" type="submit">ساخت دوباره فهرست نواحی</button></form>
+  <p class="help">داده‌ها از OpenStreetMap با مجوز ODbL 1.0 هستند. worker این کارها را خودکار هم انجام می‌دهد (نقشه پایه ماهانه، داده OSM هفتگی، ساعت ۴ بامداد).</p>
+</div>
+{{ block.super }}
+{% endblock %}
