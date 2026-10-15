@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     "billing",
     "support",
     "jobs",
+    "publish",
 ]
 
 MIDDLEWARE = [
