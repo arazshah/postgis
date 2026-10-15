@@ -1,0 +1,121 @@
+{% extends "base.html" %}{% load static fa %}
+{% block title %}{{ p.title }} — WMS/WFS — {{ SITE_NAME }}{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
+<link rel="stylesheet" href="{% static 'css/map.css' %}">
+{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <p class="small"><a href="{% url 'publish:ows' db.pk %}">← WMS و WFS</a></p>
+  <div class="page-head">
+    <h1>{{ p.title }}</h1>
+    <span class="badge {% if p.is_public %}active{% else %}pending{% endif %}">{% if p.is_public %}عمومی{% else %}خصوصی · با کلید{% endif %}</span>
+  </div>
+
+  {% if p.warnings %}
+  <div class="msg warning" role="status">
+    <b>هنگام آماده‌سازی پروژه:</b>
+    <ul class="small" style="margin:6px 0 0">{% for w in p.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <div class="ows-grid">
+    <section class="panel">
+      <h2 style="font-size:1.1rem;margin-top:0">پیش‌نمایش WMS</h2>
+      <div id="ows-map" class="ows-map" aria-label="پیش‌نمایش نقشه WMS"></div>
+      <p class="small muted" style="margin:var(--s2) 0 0">همان تصویری که QGIS Server برای هر برنامه دیگری می‌کشد. روی عارضه کلیک کنید تا اطلاعاتش (GetFeatureInfo) را ببینید.</p>
+    </section>
+
+    <section class="panel">
+      <h2 style="font-size:1.1rem;margin-top:0">آدرس‌ها</h2>
+      <dl class="pub-urls">
+        <dt>WMS</dt><dd><code id="u-wms">{{ url }}</code><button class="copy" data-copy-target="#u-wms">کپی</button></dd>
+        <dt>WFS</dt><dd>{% if p.wfs_enabled %}<code id="u-wfs">{{ url }}</code><button class="copy" data-copy-target="#u-wfs">کپی</button>{% else %}<span class="small muted">خاموش</span>{% endif %}</dd>
+        <dt>GetCapabilities</dt><dd><code id="u-cap">{{ url }}?SERVICE=WMS&amp;REQUEST=GetCapabilities</code><button class="copy" data-copy-target="#u-cap">کپی</button></dd>
+      </dl>
+      <p class="small">نام لایه کل نقشه: <code class="ltr">{{ root }}</code> · لایه‌ها:
+        {% for l in p.layers %}<code class="ltr">{{ l.name }}</code>{% if not forloop.last %}، {% endif %}{% endfor %}</p>
+      {% if not p.is_public %}<p class="small muted">این سرویس خصوصی است: در QGIS کلید API را در بخش <b>Authentication › Basic</b> به‌عنوان رمز (Password) وارد کنید (نام کاربری هر چیزی می‌تواند باشد)؛ در کد، <span class="ltr">?key=</span> را به آدرس اضافه کنید. کلید را از <a href="{% url 'publish:manage' db.pk %}">صفحه انتشار</a> بسازید.</p>{% endif %}
+
+      <details style="margin-top:var(--s3)">
+        <summary class="small">اتصال در QGIS، ArcGIS و کد</summary>
+        <ol class="small">
+          <li><b>QGIS:</b> در Browser روی <span class="ltr">WMS/WMTS</span> (یا <span class="ltr">WFS / OGC API - Features</span>) راست‌کلیک › <span class="ltr">New Connection</span>، آدرس بالا را بدهید.</li>
+          <li><b>ArcGIS Pro:</b> <span class="ltr">Insert › Connections › Server › New WMS Server</span>.</li>
+          <li><b>Leaflet:</b></li>
+        </ol>
+<pre class="code"><button class="copy" data-copy>کپی</button><code>L.tileLayer.wms("{{ url }}", {
+  layers: "{{ root }}", format: "image/png", transparent: true, version: "1.3.0"
+}).addTo(map);</code></pre>
+<pre class="code"><button class="copy" data-copy>کپی</button><code># OpenLayers
+new ol.layer.Tile({source: new ol.source.TileWMS({
+  url: "{{ url }}", params: {LAYERS: "{{ root }}", TILED: true}
+})});</code></pre>
+      </details>
+    </section>
+  </div>
+
+  <div class="ows-grid">
+    <section class="panel">
+      <h2 style="font-size:1.1rem;margin-top:0">تنظیمات</h2>
+      <form method="post" class="pub-form">{% csrf_token %}
+        <div class="field"><label class="small" for="o-title">عنوان سرویس</label><input id="o-title" type="text" name="title" value="{{ p.title }}" maxlength="120"></div>
+        <label class="check small"><input type="checkbox" name="public" {% if p.is_public %}checked{% endif %}><span>عمومی (بدون کلید API)</span></label>
+        <label class="check small"><input type="checkbox" name="wfs" {% if p.wfs_enabled %}checked{% endif %}><span>WFS روشن باشد (دانلود عوارض برداری؛ حداکثر ۱۰٬۰۰۰ عارضه در هر درخواست)</span></label>
+        <button class="btn sm" type="submit">ذخیره</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2 style="font-size:1.1rem;margin-top:0">به‌روزرسانی پروژه</h2>
+      {% if p.source == 'database' %}
+      <p class="small muted">این پروژه از پایگاه داده (<span class="ltr">{{ p.source_schema }}.qgis_projects › {{ p.source_name }}</span>) آمده است. بعد از ذخیره دوباره در QGIS، نسخه منتشرشده را به‌روز کنید.</p>
+      <form method="post" action="{% url 'publish:ows_refresh' db.pk p.pk %}">{% csrf_token %}<button class="btn sm" type="submit">به‌روزرسانی از پایگاه داده</button></form>
+      {% else %}
+      <p class="small muted">فایل جدید پروژه را بدهید؛ آدرس‌ها عوض نمی‌شوند.</p>
+      <form method="post" action="{% url 'publish:ows_refresh' db.pk p.pk %}" enctype="multipart/form-data" class="inline-form">{% csrf_token %}
+        <input type="file" name="file" accept=".qgz,.qgs" required>
+        <button class="btn sm" type="submit">جایگزینی</button>
+      </form>
+      {% endif %}
+      <form method="post" action="{% url 'publish:ows_delete' db.pk p.pk %}" style="margin-top:var(--s4)" onsubmit="return confirm('این پروژه و آدرس‌هایش حذف شود؟')">{% csrf_token %}
+        <button class="btn danger sm" type="submit">حذف پروژه</button>
+      </form>
+    </section>
+  </div>
+</div>
+{{ preview|json_script:"ows-preview" }}
+<script src="{% static 'vendor/maplibre/maplibre-gl.js' %}"></script>
+<script>
+(function () {
+  const cfg = JSON.parse(document.getElementById("ows-preview").textContent);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+  const wms = cfg.url + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=" + encodeURIComponent(cfg.root) +
+    "&STYLES=&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=512&HEIGHT=512&FORMAT=image/png&TRANSPARENT=true";
+  const view = cfg.bbox && cfg.bbox.length === 4
+    ? {bounds: [[cfg.bbox[0], cfg.bbox[1]], [cfg.bbox[2], cfg.bbox[3]]], fitBoundsOptions: {padding: 30}}
+    : {center: [53.7, 32.4], zoom: 4.3};
+  const map = new maplibregl.Map({container: "ows-map", ...view, attributionControl: {compact: true},
+    style: {version: 8, sources: {wms: {type: "raster", tiles: [wms], tileSize: 512, attribution: "QGIS Server · postgis.ir"}},
+            layers: [{id: "bg", type: "background", paint: {"background-color": "#F4F6F2"}}, {id: "wms", type: "raster", source: "wms"}]}});
+  map.addControl(new maplibregl.NavigationControl({showCompass: false}), "top-left");
+  map.on("click", async (e) => {
+    const b = map.getBounds(), c = map.getCanvas(), p = e.point;
+    const sw = maplibregl.MercatorCoordinate.fromLngLat(b.getSouthWest()), ne = maplibregl.MercatorCoordinate.fromLngLat(b.getNorthEast());
+    const R = 20037508.342789244, mx = (v) => v * 2 * R - R, my = (v) => R - v * 2 * R;
+    const bbox = [mx(sw.x), my(sw.y), mx(ne.x), my(ne.y)].join(",");
+    const w = c.clientWidth, h = c.clientHeight;
+    const q = `${cfg.url}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=${encodeURIComponent(cfg.root)}&QUERY_LAYERS=${encodeURIComponent(cfg.root)}` +
+      `&CRS=EPSG:3857&BBOX=${bbox}&WIDTH=${w}&HEIGHT=${h}&I=${Math.round(p.x)}&J=${Math.round(p.y)}&INFO_FORMAT=application/json&FEATURE_COUNT=1&FI_POINT_TOLERANCE=12&FI_LINE_TOLERANCE=8&FI_POLYGON_TOLERANCE=2`;
+    try {
+      const r = await fetch(q, {credentials: "same-origin"}); const d = await r.json();
+      const f = (d.features || [])[0]; if (!f) return;
+      const rows = Object.entries(f.properties || {}).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("");
+      const layer = String(f.id || "").split(".")[0];
+      new maplibregl.Popup({maxWidth: "320px"}).setLngLat(e.lngLat)
+        .setHTML(`<div class="gpm-pop" dir="rtl"><div class="small muted">${esc(layer)}</div><table>${rows}</table></div>`).addTo(map);
+    } catch (err) { /* پاسخ غیر JSON */ }
+  });
+})();
+</script>
+{% endblock %}

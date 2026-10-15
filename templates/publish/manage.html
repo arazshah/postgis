@@ -10,6 +10,12 @@
   </div>
   <p class="lead muted" style="max-width:72ch">هر جدول مکانی را با یک کلیک منتشر کنید تا بدون نصب GeoServer در صفحه وب (MapLibre، OpenLayers، Leaflet)، QGIS و ArcGIS دیده شود. لایه عمومی بدون کلید باز است؛ لایه خصوصی کلید API می‌خواهد.</p>
 
+  <section class="panel ows-callout">
+    <div><h2 style="font-size:1.1rem;margin:0 0 4px">WMS و WFS با QGIS Server</h2>
+      <p class="small muted" style="margin:0">پروژه QGIS خودتان را با همان سبک و برچسب‌ها منتشر کنید؛ برای GeoServer، ArcGIS و سامانه‌هایی که WMS می‌خواهند.</p></div>
+    <a class="btn sm" href="{% url 'publish:ows' db.pk %}">انتشار پروژه QGIS</a>
+  </section>
+
   <div class="pub-stats">
     <div><b>{{ published|length|fanum }}</b> از {{ max_layers|fanum }} لایه منتشرشده</div>
     <div><b>{{ used|fanum }}</b> از {{ cap|fanum }} درخواست امروز

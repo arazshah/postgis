@@ -143,10 +143,16 @@ class Provisioner:
         done = []
         with self.connect() as conn:
             cur = conn.cursor()
-            for db in ("postgres", "template1", self.admin_db):
-                if cur.execute("SELECT 1 FROM pg_database WHERE datname=%s", (db,)).fetchone():
-                    cur.execute(sql.SQL("REVOKE CONNECT, TEMPORARY ON DATABASE {} FROM PUBLIC").format(sql.Identifier(db)))
-                    done.append(f"REVOKE CONNECT ON {db}")
+            # هیچ دیتابیسی روی این سرور نباید برای همه (PUBLIC) باز باشد؛ نقش‌های فقط‌خواندنی QGIS Server
+            # (عضو pg_read_all_data) فقط به دیتابیسی وصل می‌شوند که صریحاً CONNECT گرفته‌اند.
+            public_dbs = [r[0] for r in cur.execute(
+                "SELECT datname FROM pg_database WHERE datallowconn AND (datacl IS NULL OR "
+                "EXISTS (SELECT 1 FROM aclexplode(datacl) a WHERE a.grantee = 0 AND a.privilege_type = 'CONNECT'))"
+            ).fetchall()]
+            for db in sorted(set(public_dbs) | ({"postgres", "template1", self.admin_db} & set(
+                    r[0] for r in cur.execute("SELECT datname FROM pg_database").fetchall()))):
+                cur.execute(sql.SQL("REVOKE CONNECT, TEMPORARY ON DATABASE {} FROM PUBLIC").format(sql.Identifier(db)))
+                done.append(f"REVOKE CONNECT ON {db}")
             if cur.execute("SHOW password_encryption").fetchone()[0] != "scram-sha-256":
                 cur.execute("ALTER SYSTEM SET password_encryption = 'scram-sha-256'")
                 cur.execute("SELECT pg_reload_conf()")
@@ -232,6 +238,44 @@ class Provisioner:
     def browser_role_name(role_name: str) -> str:
         return role_name[:59] + "_web"
 
+    @staticmethod
+    def ows_role_name(role_name: str) -> str:
+        return role_name[:59] + "_ows"
+
+    @classmethod
+    def helper_roles(cls, role_name: str) -> list[str]:
+        """نقش‌های داخلی هر پایگاه داده: مرورگر پنل و QGIS Server."""
+        return [cls.browser_role_name(role_name), cls.ows_role_name(role_name)]
+
+    def ensure_ows_role(self, db_name: str, role_name: str, password: str) -> str:
+        """
+        نقش فقط‌خواندنی برای QGIS Server (WMS/WFS): فقط به دیتابیس همین کاربر وصل می‌شود، تراکنش‌هایش
+        فقط‌خواندنی است و در PostgreSQL 14+ فقط عضو pg_read_all_data است (هیچ حق نوشتنی ندارد).
+        """
+        _check_ident(db_name)
+        _check_ident(role_name)
+        ows = self.ows_role_name(role_name)
+        ident = sql.Identifier(ows)
+        with self.connect() as conn:
+            cur = conn.cursor()
+            verifier = sql.Literal(scram_sha256_verifier(password))
+            if cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (ows,)).fetchone():
+                cur.execute(sql.SQL("ALTER ROLE {} LOGIN PASSWORD {}").format(ident, verifier))
+            else:
+                cur.execute(sql.SQL(
+                    "CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS "
+                    "INHERIT CONNECTION LIMIT 8 PASSWORD {}").format(ident, verifier))
+            if int(cur.execute("SHOW server_version_num").fetchone()[0]) >= 140000:
+                cur.execute(sql.SQL("GRANT pg_read_all_data TO {}").format(ident))
+            else:
+                cur.execute(sql.SQL("GRANT {} TO {}").format(sql.Identifier(role_name), ident))
+            cur.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(sql.Identifier(db_name), ident))
+            for key, value in (("default_transaction_read_only", "on"), ("statement_timeout", "30s"),
+                               ("idle_in_transaction_session_timeout", "30s"), ("temp_file_limit", "256MB")):
+                cur.execute(sql.SQL("ALTER ROLE {} SET {} = {}").format(ident, sql.Identifier(key),
+                                                                     sql.Literal(value)))
+        return ows
+
     def ensure_browser_role(self, db_name: str, role_name: str, password: str) -> str:
         """
         نقش محدود برای «مرورگر پایگاه داده» پنل: عضو نقش کاربر است (همان دسترسی‌ها)،
@@ -309,7 +353,7 @@ class Provisioner:
                 conn.execute(
                     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
                     "WHERE usename = ANY(%s) AND pid <> pg_backend_pid()",
-                    ([role_name, self.browser_role_name(role_name)],))
+                    ([role_name, *self.helper_roles(role_name)],))
 
     def set_readonly(self, name: str, readonly: bool):
         _check_ident(name)
@@ -325,7 +369,7 @@ class Provisioner:
         """تعلیق/فعال‌سازی ورود کاربر."""
         _check_ident(name)
         with self.connect() as conn:
-            for role in (name, self.browser_role_name(name)):
+            for role in (name, *self.helper_roles(name)):
                 if conn.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,)).fetchone():
                     conn.execute(sql.SQL("ALTER ROLE {} " + ("LOGIN" if enabled else "NOLOGIN"))
                                  .format(sql.Identifier(role)))
@@ -338,7 +382,7 @@ class Provisioner:
         _check_ident(role_name)
         with self.connect() as conn:
             conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(db_name)))
-            for role in (self.browser_role_name(role_name), role_name):
+            for role in (*self.helper_roles(role_name), role_name):
                 conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
 
     def database_sizes(self, names: list[str]) -> dict[str, int]:
@@ -442,7 +486,6 @@ class Provisioner:
         _check_ident(scratch)
         _check_ident(role_name)
         old = (db_name[:54] + "_old_rst")
-        web = self.browser_role_name(role_name)
         with self.connect() as conn:
             cur = conn.cursor()
             cur.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(old)))
@@ -454,7 +497,8 @@ class Provisioner:
             db = sql.Identifier(db_name)
             cur.execute(sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(db))
             cur.execute(sql.SQL("GRANT CONNECT, TEMPORARY ON DATABASE {} TO {}").format(db, sql.Identifier(role_name)))
-            if cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (web,)).fetchone():
-                cur.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(db, sql.Identifier(web)))
+            for helper in self.helper_roles(role_name):
+                if cur.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (helper,)).fetchone():
+                    cur.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(db, sql.Identifier(helper)))
         return old
 
