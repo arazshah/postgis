@@ -26,9 +26,12 @@ services:
       - WEB_CONCURRENCY=${WEB_CONCURRENCY:-3}
       - MEDIA_ROOT=/app/media
       - BACKUP_ROOT=/app/backups
+      - OWS_ROOT=/app/ows
+      - QGIS_SERVER_URL=${QGIS_SERVER_URL:-http://qgis/ows/}
     volumes:
       - panel-media:/app/media
       - db-backups:/app/backups
+      - ows-projects:/app/ows
     networks:
       - default
       - coolify
@@ -57,10 +60,12 @@ services:
       - TENANT_PREFIX=${TENANT_PREFIX:-gp_}
       - MEDIA_ROOT=/app/media
       - BACKUP_ROOT=/app/backups
+      - OWS_ROOT=/app/ows
       - RUN_MIGRATIONS=0
     volumes:
       - panel-media:/app/media
       - db-backups:/app/backups
+      - ows-projects:/app/ows
     networks:
       - default
       - coolify
@@ -70,6 +75,23 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+
+  # QGIS Server برای WMS/WFS پروژه‌های کاربران. پورتی بیرون نمی‌دهد؛ فقط web به آن درخواست می‌فرستد.
+  # به شبکه coolify وصل است تا به سرور PostGIS مشتریان برسد (با نقش فقط‌خواندنی هر پایگاه داده).
+  # برای انتقال به سرور جدا: همین سرویس آنجا اجرا شود، volume پروژه‌ها همگام شود و QGIS_SERVER_URL عوض شود.
+  qgis:
+    build:
+      context: docker/qgis
+    restart: unless-stopped
+    environment:
+      - QGIS_PROCESSES=${QGIS_PROCESSES:-2}
+    volumes:
+      - ows-projects:/app/ows:ro
+    networks:
+      - default
+      - coolify
+    mem_limit: ${QGIS_MEM_LIMIT:-1536m}
+    cpus: ${QGIS_CPUS:-1.5}
 
   panel-db:
     image: postgres:16-alpine
@@ -90,6 +112,7 @@ volumes:
   panel-db-data:
   panel-media:
   db-backups:
+  ows-projects:
 
 networks:
   coolify:

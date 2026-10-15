@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import api, views
+from . import api, ows, ows_views, views
 
 app_name = "publish"
 
@@ -12,7 +12,13 @@ urlpatterns = [
     path("dashboard/<int:pk>/publish/keys/<int:key_id>/revoke/", views.revoke_key, name="revoke_key"),
     path("dashboard/<int:pk>/publish/layer/<int:layer_id>/map/", views.map_builder, name="map_builder"),
     path("dashboard/<int:pk>/publish/layer/<int:layer_id>/map/stats/", views.map_stats, name="map_stats"),
+    path("dashboard/<int:pk>/publish/ows/", ows_views.index, name="ows"),
+    path("dashboard/<int:pk>/publish/ows/saved/", ows_views.import_saved, name="ows_import_saved"),
+    path("dashboard/<int:pk>/publish/ows/<int:project_id>/", ows_views.detail, name="ows_detail"),
+    path("dashboard/<int:pk>/publish/ows/<int:project_id>/refresh/", ows_views.refresh, name="ows_refresh"),
+    path("dashboard/<int:pk>/publish/ows/<int:project_id>/delete/", ows_views.delete, name="ows_delete"),
     # آدرس‌های عمومی
+    path("ows/<slug:slug>/", ows.ows, name="ows_service"),
     path("m/<slug:slug>/", views.public_map, name="map"),
     path("m/<slug:slug>/embed/", views.embed_map, name="embed"),
     path("tiles/<slug:slug>/<int:z>/<int:x>/<int:y>.mvt", api.tile, name="tile"),

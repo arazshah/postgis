@@ -62,7 +62,7 @@ jobs:
             -e DJANGO_SECRET_KEY=ci -e DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1 geopaygah:ci
           for i in $(seq 1 30); do curl -fsS http://localhost:8000/healthz && exit 0; sleep 2; done
           docker logs app; exit 1
-      - name: Coolify compose stack (web + panel-db)
+      - name: Coolify compose stack (web + worker + qgis + panel-db)
         env:
           SERVICE_PASSWORD_POSTGRES: ci-panel-pass
           DJANGO_SECRET_KEY: ci-secret
@@ -75,7 +75,16 @@ jobs:
             if docker compose -f docker-compose.yml exec -T web curl -fsS http://127.0.0.1:8000/healthz; then
               docker compose -f docker-compose.yml exec -T web python manage.py shell -c \
                 "from accounts.models import User; assert User.objects.filter(username='admin', is_superuser=True).exists(); print('admin ok')"
-              exit 0
+              # QGIS Server: پروژه‌ای که web در volume مشترک می‌نویسد باید از کانتینر qgis خوانده شود
+              docker compose -f docker-compose.yml exec -T web sh -c \
+                "printf '%s' '<qgis version=\"3.34.4\" projectname=\"ci\"><title>ci</title><projectlayers/><properties><WMSServiceCapabilities type=\"bool\">true</WMSServiceCapabilities></properties></qgis>' > /app/ows/ci.qgs && chmod 640 /app/ows/ci.qgs"
+              for j in $(seq 1 20); do
+                if docker compose -f docker-compose.yml exec -T web curl -fsS "http://qgis/ows/?MAP=/app/ows/ci.qgs&SERVICE=WMS&REQUEST=GetCapabilities" | grep -q WMS_Capabilities; then
+                  echo "qgis ok"; exit 0
+                fi
+                sleep 3
+              done
+              docker compose -f docker-compose.yml logs qgis; exit 1
             fi
             sleep 3
           done

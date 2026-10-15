@@ -1,0 +1,97 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}WMS و WFS — {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <p class="small"><a href="{% url 'publish:manage' db.pk %}">← انتشار نقشه و API</a></p>
+  <div class="page-head">
+    <h1>WMS و WFS با QGIS Server</h1>
+  </div>
+  <p class="lead muted" style="max-width:74ch">نقشه را در QGIS دسکتاپ با همان سبک، برچسب و طبقه‌بندی که بلدید بسازید و اینجا منتشر کنید. همان نقشه به‌صورت WMS (تصویر) و WFS (عوارض) در هر نرم‌افزار و کتابخانه‌ای دیده می‌شود؛ بدون نصب GeoServer و بدون نوشتن SLD.</p>
+
+  <div class="pub-stats">
+    <div><b>{{ projects|length|fanum }}</b> از {{ limit|fanum }} پروژه منتشرشده</div>
+    <div class="small muted" style="align-self:center">درخواست‌های WMS و WFS در همان سقف روزانه انتشار شمرده می‌شوند.</div>
+  </div>
+
+  {% if projects %}
+  <section class="panel">
+    <h2 style="font-size:1.2rem">پروژه‌های منتشرشده</h2>
+    <table class="data-table">
+      <thead><tr><th>پروژه</th><th>لایه‌ها</th><th>دسترسی</th><th>به‌روزرسانی</th><th></th></tr></thead>
+      <tbody>
+      {% for p in projects %}
+      <tr>
+        <td><a href="{% url 'publish:ows_detail' db.pk p.pk %}">{{ p.title }}</a>
+          <div class="small muted">{% if p.source == 'database' %}از پایگاه داده{% else %}فایل <span class="ltr">{{ p.source_name }}</span>{% endif %}</div></td>
+        <td>{{ p.layers|length|fanum }}</td>
+        <td><span class="badge {% if p.is_public %}active{% else %}pending{% endif %}">{% if p.is_public %}عمومی{% else %}خصوصی · با کلید{% endif %}</span>
+          {% if p.warnings %}<span class="badge warn" title="هشدار دارد">{{ p.warnings|length|fanum }} هشدار</span>{% endif %}</td>
+        <td class="small">{{ p.updated_at|jdatetime_full }}</td>
+        <td><a class="btn ghost sm" href="{% url 'publish:ows_detail' db.pk p.pk %}">آدرس‌ها و تنظیمات</a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% if projects|length < limit %}
+  <div class="ows-new">
+    <section class="panel">
+      <h2 style="font-size:1.2rem">انتشار فایل پروژه</h2>
+      <form method="post" enctype="multipart/form-data" class="upload-box">{% csrf_token %}
+        <label class="drop" for="ows-file">
+          <span class="drop-title">فایل پروژه QGIS را اینجا بکشید یا کلیک کنید</span>
+          <span class="small muted"><span class="ltr">.qgz</span> یا <span class="ltr">.qgs</span> · حداکثر ۲۰ مگابایت</span>
+          <input id="ows-file" type="file" name="file" required accept=".qgz,.qgs">
+          <span class="drop-name small" data-file-name></span>
+        </label>
+        <div class="field"><label class="small" for="ows-title">عنوان سرویس (اختیاری)</label>
+          <input id="ows-title" type="text" name="title" maxlength="120" placeholder="از عنوان پروژه QGIS"></div>
+        <label class="check small"><input type="checkbox" name="public"><span>عمومی (بدون کلید API)</span></label>
+        <button class="btn" type="submit">انتشار پروژه</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2 style="font-size:1.2rem">پروژه‌های ذخیره‌شده در همین پایگاه داده</h2>
+      {% if saved %}
+      <p class="small muted">پروژه‌هایی که در QGIS با <span class="ltr">Project › Save To › PostgreSQL</span> در این پایگاه داده ذخیره کرده‌اید. بعد از هر ذخیره دوباره در QGIS، با یک کلیک نسخه منتشرشده را به‌روز کنید.</p>
+      <ul class="saved-projects">
+        {% for s in saved %}
+        <li>
+          <div><b>{{ s.name }}</b> <span class="small muted ltr">{{ s.schema }}</span></div>
+          <form method="post" action="{% url 'publish:ows_import_saved' db.pk %}" class="inline-form">{% csrf_token %}
+            <input type="hidden" name="schema" value="{{ s.schema }}"><input type="hidden" name="name" value="{{ s.name }}">
+            <label class="check small"><input type="checkbox" name="public"><span>عمومی</span></label>
+            <button class="btn sm" type="submit">انتشار</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="small muted">هنوز پروژه‌ای در این پایگاه داده ذخیره نشده است. در QGIS از منوی <span class="ltr">Project › Save To › PostgreSQL</span> اتصال همین پایگاه داده را انتخاب کنید؛ پروژه اینجا ظاهر می‌شود.</p>
+      {% endif %}
+    </section>
+  </div>
+  {% else %}
+  <div class="msg warning">به سقف {{ limit|fanum }} پروژه پلن خود رسیده‌اید. برای انتشار پروژه تازه یکی را حذف یا پلن را ارتقا دهید.</div>
+  {% endif %}
+
+  <section class="help-tips" style="margin-top:var(--s5)">
+    <h3 style="font-size:1rem">پروژه را چطور آماده کنم؟</h3>
+    <ol class="small">
+      <li>در QGIS لایه‌ها را از اتصال PostGIS <b>همین پایگاه داده</b> اضافه کنید و سبک، برچسب و ترتیب را همان‌طور که می‌خواهید روی وب دیده شود بچینید.</li>
+      <li>پروژه را ذخیره کنید (<span class="ltr">.qgz</span>) و اینجا آپلود کنید؛ یا مستقیم در پایگاه داده ذخیره کنید.</li>
+      <li>فقط لایه‌های همین پایگاه داده منتشر می‌شوند. نقشه پایه اینترنتی (OSM، Google)، فایل‌های روی کامپیوتر شما و ماکروهای پایتون روی سرور حذف می‌شوند.</li>
+      <li>رمز و نام کاربری اتصال در فایل پروژه اهمیتی ندارد و دور ریخته می‌شود؛ سرور با یک کاربر فقط‌خواندنی به پایگاه داده شما وصل می‌شود.</li>
+      <li>برچسب‌های فارسی با قلم وزیرمتن کشیده می‌شوند؛ قلم‌هایی مثل B Nazanin، Tahoma یا IRANSans خودکار با آن جایگزین می‌شوند.</li>
+    </ol>
+  </section>
+</div>
+<script>
+document.querySelectorAll('#ows-file').forEach(i => i.addEventListener('change', () => {
+  document.querySelector('[data-file-name]').textContent = i.files[0] ? i.files[0].name : '';
+}));
+</script>
+{% endblock %}

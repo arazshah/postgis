@@ -153,6 +153,11 @@ BACKUP_ROOT = Path(os.environ.get("BACKUP_ROOT", MEDIA_ROOT / "backups"))
 # فایل‌های آپلودی برای ورود به پایگاه داده (روی volume مشترک media بین web و worker)
 IMPORT_ROOT = Path(os.environ.get("IMPORT_ROOT", MEDIA_ROOT / "imports"))
 IMPORT_MAX_MB = int(os.environ.get("IMPORT_MAX_MB", "200"))
+# پروژه‌های QGIS Server: پوشه مشترک بین web و کانتینر qgis (در هر دو با همین مسیر) و آدرس داخلی آن.
+# برای انتقال QGIS Server به سرور جدا، OWS_ROOT را روی آن سرور هم در دسترس بگذارید و QGIS_SERVER_URL را عوض کنید.
+OWS_ROOT = Path(os.environ.get("OWS_ROOT", MEDIA_ROOT / "ows"))
+QGIS_SERVER_URL = os.environ.get("QGIS_SERVER_URL", "http://qgis/ows/")
+QGIS_SERVER_TIMEOUT = int(os.environ.get("QGIS_SERVER_TIMEOUT", "60"))
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 

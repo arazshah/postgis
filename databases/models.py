@@ -173,6 +173,7 @@ class Plan(models.Model):
         "سقف درخواست روزانه لایه‌های منتشرشده", default=5000,
         help_text="مجموع درخواست‌های کاشی و OGC API همه لایه‌های این پایگاه داده در یک روز.")
     map_badge = models.BooleanField("نشان postgis.ir روی نقشه‌های عمومی", default=True)
+    ows_projects = models.PositiveIntegerField("حداکثر پروژه WMS/WFS (QGIS Server)", default=1)
     price_toman = models.PositiveIntegerField("قیمت (تومان)", default=0)
     is_free = models.BooleanField("رایگان", default=True)
     is_public = models.BooleanField("نمایش در سایت", default=True)

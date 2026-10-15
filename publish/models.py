@@ -23,6 +23,7 @@ class Service(models.Model):
                                     verbose_name="پایگاه داده")
     slug = models.SlugField("شناسه عمومی", unique=True, default=_slug)
     title = models.CharField("عنوان", max_length=120, blank=True)
+    ows_password_encrypted = models.TextField(blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -122,3 +123,35 @@ class DailyUsage(models.Model):
         unique_together = [("database", "day")]
         verbose_name = "مصرف روزانه انتشار"
         verbose_name_plural = "مصرف روزانه انتشار"
+
+
+class OwsProject(models.Model):
+    """پروژه QGIS منتشرشده با QGIS Server (WMS و WFS)."""
+
+    class Source(models.TextChoices):
+        UPLOAD = "upload", "فایل آپلودی"
+        DATABASE = "database", "ذخیره‌شده در پایگاه داده"
+
+    service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name="ows_projects",
+                                verbose_name="سرویس")
+    slug = models.SlugField("شناسه عمومی", unique=True, default=_slug)
+    title = models.CharField("عنوان", max_length=120)
+    source = models.CharField("منبع", max_length=10, choices=Source.choices, default=Source.UPLOAD)
+    source_name = models.CharField("نام فایل یا پروژه", max_length=255, blank=True)
+    source_schema = models.CharField(max_length=63, blank=True)
+    xml = models.TextField("پروژه پاک‌شده (بدون رمز)", editable=False)
+    layers = models.JSONField("لایه‌ها", default=list, blank=True)
+    warnings = models.JSONField("هشدارها", default=list, blank=True)
+    bbox = models.JSONField("محدوده (طول و عرض)", default=list, blank=True)
+    is_public = models.BooleanField("عمومی (بدون کلید)", default=False)
+    wfs_enabled = models.BooleanField("WFS فعال", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "پروژه WMS/WFS"
+        verbose_name_plural = "پروژه‌های WMS/WFS"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.title} ({self.slug})"

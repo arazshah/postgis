@@ -23,7 +23,7 @@ RUN pip install --index-url "$PIP_INDEX_URL" -r requirements.txt
 COPY . .
 RUN DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput \
  && chmod +x docker/entrypoint.sh \
- && mkdir -p /app/media \
+ && mkdir -p /app/media /app/ows \
  && chown -R app:app /app
 
 USER app
