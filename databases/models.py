@@ -168,6 +168,11 @@ class Plan(models.Model):
     statement_timeout_s = models.PositiveIntegerField("حداکثر زمان اجرای کوئری (ثانیه)", default=60)
     temp_file_limit_mb = models.PositiveIntegerField("سقف فایل موقت هر کوئری (مگابایت)", default=2048)
     backup_retention_days = models.PositiveIntegerField("نگهداری بکاپ (روز)", default=3)
+    publish_layers = models.PositiveIntegerField("حداکثر لایه منتشرشده", default=3)
+    publish_daily_requests = models.PositiveIntegerField(
+        "سقف درخواست روزانه لایه‌های منتشرشده", default=5000,
+        help_text="مجموع درخواست‌های کاشی و OGC API همه لایه‌های این پایگاه داده در یک روز.")
+    map_badge = models.BooleanField("نشان postgis.ir روی نقشه‌های عمومی", default=True)
     price_toman = models.PositiveIntegerField("قیمت (تومان)", default=0)
     is_free = models.BooleanField("رایگان", default=True)
     is_public = models.BooleanField("نمایش در سایت", default=True)

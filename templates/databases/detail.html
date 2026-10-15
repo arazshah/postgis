@@ -7,7 +7,8 @@
   <div class="page-head">
     <h1 class="ltr" style="font-family:var(--f-mono)">{{ db.db_name }}</h1>
     <span class="badge {{ db.status }}">{{ db.get_status_display }}</span>
-    {% if db.is_live %}<a class="btn sm" href="{% url 'databases:explore' db.pk %}" style="margin-inline-start:auto">مشاهده جدول‌ها و داده‌ها</a>{% endif %}
+    {% if db.is_live %}<a class="btn sm" href="{% url 'databases:explore' db.pk %}" style="margin-inline-start:auto">مشاهده جدول‌ها و داده‌ها</a>
+    <a class="btn ghost sm" href="{% url 'publish:manage' db.pk %}">انتشار نقشه و API</a>{% endif %}
   </div>
 
   {% if db.status == 'readonly' %}<div class="msg warning">حجم این پایگاه داده پر شده و فعلاً فقط‌خواندنی است. خواندن داده‌ها و اتصال QGIS و GeoServer کار می‌کند. برای آزاد کردن فضا <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید و بگویید کدام جدول‌ها حذف شوند؛ وقتی حجم به زیر ۹۵٪ برسد، خودکار دوباره قابل نوشتن می‌شود.</div>{% endif %}

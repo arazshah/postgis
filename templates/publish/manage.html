@@ -1,0 +1,172 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}انتشار نقشه {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+{% with sample=published.0 %}
+<div class="wrap page">
+  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a> / <a href="{% url 'databases:detail' db.pk %}" class="ltr">{{ db.db_name }}</a></p>
+  <div class="page-head">
+    <h1>انتشار نقشه و API</h1>
+    <a class="btn ghost sm" href="{% url 'databases:explore' db.pk %}" style="margin-inline-start:auto">مرورگر داده</a>
+  </div>
+  <p class="lead muted" style="max-width:72ch">هر جدول مکانی را با یک کلیک منتشر کنید تا بدون نصب GeoServer در صفحه وب (MapLibre، OpenLayers، Leaflet)، QGIS و ArcGIS دیده شود. لایه عمومی بدون کلید باز است؛ لایه خصوصی کلید API می‌خواهد.</p>
+
+  <div class="pub-stats">
+    <div><b>{{ published|length|fanum }}</b> از {{ max_layers|fanum }} لایه منتشرشده</div>
+    <div><b>{{ used|fanum }}</b> از {{ cap|fanum }} درخواست امروز
+      <span class="meter" aria-hidden="true"><i style="width:{% widthratio used cap 100 %}%"></i></span></div>
+  </div>
+
+  {% if new_key %}
+  <section class="once" aria-labelledby="key-title" style="margin-bottom:var(--s5)">
+    <h2 id="key-title">کلید API ساخته شد؛ همین حالا ذخیره‌اش کنید</h2>
+    <p class="small" style="margin:0">این کلید فقط همین یک بار نمایش داده می‌شود. آن را در کد سمت سرور یا تنظیمات QGIS نگه دارید، نه در صفحه وب عمومی.</p>
+    <div class="secret"><code id="new-key">{{ new_key }}</code><button class="copy" data-copy-target="#new-key">کپی</button></div>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2 style="font-size:1.2rem">جدول‌های مکانی</h2>
+    {% if rows %}
+    <table class="data-table">
+      <thead><tr><th>جدول</th><th>هندسه</th><th>سطر</th><th>وضعیت</th><th></th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><span class="ltr">{% if r.t.schema != 'public' %}{{ r.t.schema }}.{% endif %}{{ r.t.name }}</span></td>
+        <td class="small"><span class="ltr">{{ r.geom.type }} · {{ r.geom.srid }}</span></td>
+        <td>{{ r.t.rows_estimate|fanum }}</td>
+        <td>{% if r.layer %}<span class="badge active">منتشرشده · {% if r.layer.is_public %}عمومی{% else %}خصوصی{% endif %}</span>{% else %}<span class="muted small">منتشر نشده</span>{% endif %}</td>
+        <td>{% if not r.layer %}
+          <form method="post" action="{% url 'publish:publish_table' db.pk %}" class="inline-form">{% csrf_token %}
+            <input type="hidden" name="schema" value="{{ r.t.schema }}"><input type="hidden" name="table" value="{{ r.t.name }}">
+            <label class="check small"><input type="checkbox" name="public"><span>عمومی</span></label>
+            <button class="btn sm" type="submit" {% if not r.geom.srid %}disabled title="SRID مشخص نیست"{% endif %}>انتشار</button>
+          </form>{% else %}<a class="small" href="#layer-{{ r.layer.pk }}">تنظیمات و آدرس‌ها</a>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">هنوز جدول مکانی ندارید. از <a href="{% url 'databases:import' db.pk %}">ورود فایل</a> یک لایه وارد کنید.</p>
+    {% endif %}
+  </section>
+
+  {% for l in published %}
+  <section class="panel pub-layer" id="layer-{{ l.pk }}">
+    <div class="pub-head">
+      <h2 class="ltr" style="font-size:1.2rem;margin:0">{{ l.table }}</h2>
+      <span class="badge {% if l.is_public %}active{% else %}pending{% endif %}">{% if l.is_public %}عمومی{% else %}خصوصی · با کلید{% endif %}</span>
+    </div>
+    <dl class="pub-urls">
+      <dt>TileJSON (MapLibre)</dt><dd><code id="tj-{{ l.pk }}">{{ base }}/tiles/{{ l.slug }}.json</code><button class="copy" data-copy-target="#tj-{{ l.pk }}">کپی</button></dd>
+      <dt>کاشی برداری (XYZ)</dt><dd><code id="xyz-{{ l.pk }}">{{ base }}/tiles/{{ l.slug }}/{z}/{x}/{y}.mvt</code><button class="copy" data-copy-target="#xyz-{{ l.pk }}">کپی</button></dd>
+      <dt>GeoJSON (OGC API)</dt><dd><code id="gj-{{ l.pk }}">{{ base }}/ogc/{{ service.slug }}/collections/{{ l.collection_id }}/items</code><button class="copy" data-copy-target="#gj-{{ l.pk }}">کپی</button></dd>
+    </dl>
+    <details>
+      <summary class="small">تنظیمات لایه</summary>
+      <form method="post" action="{% url 'publish:update_layer' db.pk l.pk %}" class="pub-form">{% csrf_token %}
+        <div class="field"><label class="small" for="title-{{ l.pk }}">عنوان نمایشی</label><input id="title-{{ l.pk }}" type="text" name="title" value="{{ l.title }}" placeholder="{{ l.table }}"></div>
+        <label class="check small"><input type="checkbox" name="public" {% if l.is_public %}checked{% endif %}><span>عمومی (بدون کلید API)</span></label>
+        <fieldset class="cols"><legend class="small">ستون‌های منتشرشده</legend>
+          {% for name, typ in l.meta.columns %}{% if name != l.geom_column %}
+          <label class="check small"><input type="checkbox" name="columns" value="{{ name }}" {% if not l.columns or name in l.columns %}checked{% endif %}><span class="ltr">{{ name }}</span></label>
+          {% endif %}{% endfor %}
+        </fieldset>
+        <div style="display:flex;gap:var(--s3)">
+          <button class="btn sm" type="submit" name="action" value="save">ذخیره</button>
+          <button class="btn danger sm" type="submit" name="action" value="unpublish" formnovalidate>لغو انتشار</button>
+        </div>
+      </form>
+    </details>
+  </section>
+  {% endfor %}
+
+  {% if service and published %}
+  <section class="panel">
+    <h2 style="font-size:1.2rem">اتصال از نرم‌افزار و کد</h2>
+    <p class="small muted">آدرس سرویس OGC API این پایگاه داده (همه لایه‌ها):</p>
+    <div class="secret"><code id="ogc-base">{{ base }}/ogc/{{ service.slug }}/</code><button class="copy" data-copy-target="#ogc-base">کپی</button></div>
+    <div class="tabs" role="tablist" aria-label="نمونه کد" style="margin-top:var(--s4)">
+      <button role="tab" id="t-ml" aria-controls="p-ml" aria-selected="true">MapLibre</button>
+      <button role="tab" id="t-ol" aria-controls="p-ol" aria-selected="false" tabindex="-1">OpenLayers</button>
+      <button role="tab" id="t-lf" aria-controls="p-lf" aria-selected="false" tabindex="-1">Leaflet</button>
+      <button role="tab" id="t-qg" aria-controls="p-qg" aria-selected="false" tabindex="-1">QGIS</button>
+      <button role="tab" id="t-py" aria-controls="p-py" aria-selected="false" tabindex="-1">Python</button>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="p-ml" aria-labelledby="t-ml">
+<pre class="code"><button class="copy" data-copy>کپی</button><code>&lt;link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"&gt;
+&lt;script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"&gt;&lt;/script&gt;
+&lt;div id="map" style="height:500px"&gt;&lt;/div&gt;
+&lt;script&gt;
+const map = new maplibregl.Map({
+  container: "map",
+  style: {version: 8, sources: {}, layers: []},
+  center: [51.39, 35.69], zoom: 10
+});
+map.on("load", () =&gt; {
+  map.addSource("{{ sample.table }}", {type: "vector", url: "{{ base }}/tiles/{{ sample.slug }}.json"});
+  map.addLayer({id: "{{ sample.table }}", type: "circle", source: "{{ sample.table }}",
+                "source-layer": "{{ sample.collection_id }}", paint: {"circle-color": "#0F5C59"}});
+});
+&lt;/script&gt;</code></pre>
+      <p class="small muted">برای خط از <span class="ltr">type: "line"</span> و برای چندضلعی از <span class="ltr">"fill"</span> استفاده کنید.</p>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="p-ol" aria-labelledby="t-ol" hidden>
+<pre class="code"><button class="copy" data-copy>کپی</button><code>import VectorTileLayer from "ol/layer/VectorTile";
+import VectorTileSource from "ol/source/VectorTile";
+import MVT from "ol/format/MVT";
+
+const layer = new VectorTileLayer({
+  source: new VectorTileSource({
+    format: new MVT(),
+    url: "{{ base }}/tiles/{{ sample.slug }}/{z}/{x}/{y}.mvt",
+  }),
+});
+map.addLayer(layer);</code></pre>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="p-lf" aria-labelledby="t-lf" hidden>
+<pre class="code"><button class="copy" data-copy>کپی</button><code>fetch("{{ base }}/ogc/{{ service.slug }}/collections/{{ sample.collection_id }}/items?limit=1000")
+  .then(r =&gt; r.json())
+  .then(data =&gt; L.geoJSON(data, {
+    onEachFeature: (f, l) =&gt; l.bindPopup(JSON.stringify(f.properties))
+  }).addTo(map));</code></pre>
+      <p class="small muted">برای لایه‌های بزرگ در Leaflet از افزونه <span class="ltr">Leaflet.VectorGrid</span> با آدرس کاشی برداری استفاده کنید.</p>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="p-qg" aria-labelledby="t-qg" hidden>
+      <ol class="small">
+        <li><b>OGC API - Features:</b> در Data Source Manager بخش <span class="ltr">WFS / OGC API - Features</span> را باز کنید، اتصال جدید بسازید و آدرس سرویس بالا را بگذارید. برای لایه خصوصی در بخش Authentication یک پیکربندی Basic بسازید و کلید API را در Password بگذارید.</li>
+        <li><b>کاشی برداری:</b> در Browser روی <span class="ltr">Vector Tiles</span> راست‌کلیک کنید، <span class="ltr">New Generic Connection</span> و آدرس XYZ لایه را بگذارید.</li>
+      </ol>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="p-py" aria-labelledby="t-py" hidden>
+<pre class="code"><button class="copy" data-copy>کپی</button><code>import geopandas as gpd
+
+url = "{{ base }}/ogc/{{ service.slug }}/collections/{{ sample.collection_id }}/items?limit=5000"
+gdf = gpd.read_file(url)   # برای لایه خصوصی: url + "&amp;key=کلید_شما"
+print(gdf.head())</code></pre>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2 style="font-size:1.2rem">کلیدهای API</h2>
+    <p class="small muted">برای لایه‌های خصوصی. کلید را با هدر <span class="ltr">Authorization: Bearer …</span>، هدر <span class="ltr">X-API-Key</span>، رمز Basic در QGIS یا پارامتر <span class="ltr">?key=</span> بفرستید.</p>
+    {% if keys %}
+    <table class="data-table">
+      <thead><tr><th>نام</th><th>شروع کلید</th><th>ساخت</th><th>آخرین استفاده</th><th></th></tr></thead>
+      <tbody>{% for k in keys %}
+        <tr>
+          <td>{{ k.name }}</td><td><span class="ltr">{{ k.prefix }}…</span></td><td>{{ k.created_at|jdate }}</td>
+          <td>{{ k.last_used_at|jdate }}</td>
+          <td>{% if k.active %}<form method="post" action="{% url 'publish:revoke_key' db.pk k.pk %}" data-confirm="این کلید باطل شود؟ برنامه‌هایی که از آن استفاده می‌کنند دیگر کار نمی‌کنند.">{% csrf_token %}<button class="btn ghost sm" type="submit">باطل کردن</button></form>{% else %}<span class="badge expired">باطل‌شده</span>{% endif %}</td>
+        </tr>{% endfor %}</tbody>
+    </table>
+    {% endif %}
+    <form method="post" action="{% url 'publish:create_key' db.pk %}" class="inline-form" style="margin-top:var(--s4)">{% csrf_token %}
+      <input type="text" name="name" placeholder="نام کلید (مثلاً سایت شهرداری)" maxlength="80" required>
+      <button class="btn sm" type="submit">ساخت کلید جدید</button>
+    </form>
+  </section>
+</div>
+{% endwith %}
+{% endblock %}

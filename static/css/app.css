@@ -505,3 +505,20 @@ details.pay-option summary{cursor:pointer}
 .h-row.h-info{border-inline-start-color:var(--teal)}
 .health form{display:flex;gap:var(--s2);align-items:center;flex:none}
 @media (max-width:900px){.imp-grid{grid-template-columns:1fr}.h-row{flex-direction:column;align-items:flex-start}}
+
+/* ---------- انتشار ---------- */
+.pub-stats{display:flex;gap:var(--s6);flex-wrap:wrap;margin:0 0 var(--s5);padding:var(--s4) var(--s5);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md)}
+.pub-stats b{font-family:var(--f-display);font-size:1.3rem;color:var(--teal)}
+.meter{display:block;width:200px;height:6px;border-radius:3px;background:var(--paper-2);overflow:hidden;margin-top:6px}
+.meter i{display:block;height:100%;background:var(--teal)}
+.panel+.panel,.pub-layer{margin-top:var(--s5)}
+.pub-head{display:flex;gap:var(--s3);align-items:center;margin-bottom:var(--s3)}
+.pub-urls{display:grid;grid-template-columns:max-content 1fr;gap:6px var(--s4);margin:0 0 var(--s3);align-items:center}
+.pub-urls dt{font-size:.85rem;color:var(--ink-2)}
+.pub-urls dd{margin:0;display:flex;gap:8px;align-items:center;min-width:0}
+.pub-urls code{direction:ltr;background:var(--paper);padding:4px 8px;border-radius:6px;font-size:.8rem;overflow-x:auto;white-space:nowrap;flex:1;min-width:0}
+.pub-form{display:flex;flex-direction:column;gap:var(--s3);margin-top:var(--s3)}
+.pub-form .cols{display:flex;flex-wrap:wrap;gap:6px var(--s4);border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--s3)}
+.inline-form{display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap}
+@media (max-width:640px){.pub-urls{grid-template-columns:1fr}}
+td.ltr,th.ltr{display:table-cell}
