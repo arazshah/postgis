@@ -1,0 +1,74 @@
+{% extends "base.html" %}{% load fa %}
+{% block title %}تیم و کاربران {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a> / <a href="{% url 'databases:detail' db.pk %}" class="ltr">{{ db.db_name }}</a></p>
+  <h1>تیم و کاربران پایگاه داده</h1>
+  <p class="muted">دو راه برای کار چندنفره: «اعضای تیم» با حساب خودشان در همین سایت وارد می‌شوند؛ «کاربران پایگاه داده» نام کاربری و رمز PostgreSQL جدا برای QGIS، GeoServer یا برنامه‌ها هستند.</p>
+
+  {% if new_pw %}
+  <section class="once" aria-labelledby="pw-title" style="margin-bottom:var(--s5)">
+    <h2 id="pw-title">رمز کاربر <span class="ltr">{{ new_pw.name }}</span> را همین حالا ذخیره کنید</h2>
+    <p>این رمز فقط یک بار نمایش داده می‌شود.</p>
+    <div class="secret"><code id="new-pw">{{ new_pw.password }}</code><button class="copy" data-copy-target="#new-pw">کپی</button></div>
+    <p class="small" style="margin-top:8px">رشته اتصال:</p>
+    <div class="secret"><code id="new-uri" class="ltr">postgresql://{{ new_pw.name }}:{{ new_pw.password|urlencode:'' }}@{{ db.host }}:{{ db.port }}/{{ db.db_name }}?sslmode={{ db.sslmode }}</code><button class="copy" data-copy-target="#new-uri">کپی</button></div>
+  </section>
+  {% endif %}
+
+  <div class="grid-2">
+    <section class="panel" aria-labelledby="m-title">
+      <h2 id="m-title" style="font-size:1.2rem">اعضای تیم</h2>
+      <p class="small muted">با شماره موبایل دعوت کنید. مشاهده‌گر جدول‌ها و نقشه‌ها را می‌بیند و SQL خواندنی اجرا می‌کند؛ ویرایشگر داده وارد و اصلاح می‌کند و لایه منتشر می‌کند. رمز، تمدید، بکاپ و حذف فقط با شماست.</p>
+      {% if db.plan.team_members %}
+      <form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="action" value="invite">
+        <input type="tel" name="phone" placeholder="۰۹۱۲۱۲۳۴۵۶۷" inputmode="numeric" required aria-label="شماره موبایل" class="ltr">
+        <select name="role" aria-label="نقش"><option value="viewer">مشاهده‌گر</option><option value="editor">ویرایشگر</option></select>
+        <button class="btn sm" type="submit">افزودن</button>
+      </form>
+      <p class="small muted">{{ members|length|fanum }} از {{ db.plan.team_members|fanum }} عضو</p>
+      {% else %}
+      <div class="msg info">اشتراک با اعضای تیم در پلن‌های پولی فعال است. <a href="{% url 'billing:plans' %}">مشاهده پلن‌ها</a></div>
+      {% endif %}
+      {% if members %}
+      <table class="tbl">
+        <thead><tr><th>موبایل</th><th>نقش</th><th>وضعیت</th><th></th></tr></thead>
+        <tbody>{% for m in members %}
+          <tr><td><span class="ltr">{{ m.phone }}</span></td><td>{{ m.get_role_display }}</td>
+            <td class="small">{% if m.user %}فعال{% else %}منتظر ثبت‌نام{% endif %}</td>
+            <td><form method="post">{% csrf_token %}<input type="hidden" name="action" value="remove"><input type="hidden" name="id" value="{{ m.pk }}"><button class="btn ghost sm" type="submit">حذف</button></form></td></tr>
+        {% endfor %}</tbody>
+      </table>
+      {% endif %}
+    </section>
+
+    <section class="panel" aria-labelledby="r-title">
+      <h2 id="r-title" style="font-size:1.2rem">کاربران پایگاه داده</h2>
+      <p class="small muted">برای GeoServer یا داشبورد یک کاربر فقط‌خواندنی بسازید تا رمز اصلی را به هیچ برنامه‌ای ندهید. ویرایشگر فقط داده را تغییر می‌دهد و جدول نمی‌سازد یا حذف نمی‌کند. هیچ‌کدام به پایگاه داده دیگری دسترسی ندارند.</p>
+      <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="role_create">
+        <div class="field"><label for="r-suffix">نام کوتاه</label>
+          <div class="prefixed ltr"><span>{{ role_prefix }}</span><input id="r-suffix" type="text" name="suffix" required pattern="[a-z][a-z0-9]{1,11}" placeholder="reader" maxlength="12"></div></div>
+        <div class="bf-row">
+          <div class="field"><label for="r-access">دسترسی</label><select id="r-access" name="access"><option value="read">فقط‌خواندنی</option><option value="write">خواندن و ویرایش داده</option></select></div>
+          <div class="field"><label for="r-note">توضیح (اختیاری)</label><input id="r-note" type="text" name="note" maxlength="120" placeholder="مثلاً GeoServer شرکت"></div>
+        </div>
+        <button class="btn sm" type="submit" {% if roles|length >= db.plan.db_roles or not db.is_live %}disabled{% endif %}>ساخت کاربر</button>
+        <span class="small muted">{{ roles|length|fanum }} از {{ db.plan.db_roles|fanum }} کاربر</span>
+      </form>
+      {% if roles %}
+      <table class="tbl" style="margin-top:var(--s4)">
+        <thead><tr><th>نام کاربری</th><th>دسترسی</th><th></th></tr></thead>
+        <tbody>{% for r in roles %}
+          <tr><td><span class="ltr" style="font-family:var(--f-mono)">{{ r.name }}</span>{% if r.note %}<div class="small muted">{{ r.note }}</div>{% endif %}</td>
+            <td>{{ r.get_access_display }}</td>
+            <td style="white-space:nowrap">
+              <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="role_password"><input type="hidden" name="id" value="{{ r.pk }}"><button class="btn ghost sm" type="submit">رمز جدید</button></form>
+              <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="role_drop"><input type="hidden" name="id" value="{{ r.pk }}"><button class="btn ghost sm" type="submit">حذف</button></form>
+            </td></tr>
+        {% endfor %}</tbody>
+      </table>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

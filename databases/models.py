@@ -174,6 +174,11 @@ class Plan(models.Model):
         help_text="مجموع درخواست‌های کاشی و OGC API همه لایه‌های این پایگاه داده در یک روز.")
     map_badge = models.BooleanField("نشان postgis.ir روی نقشه‌های عمومی", default=True)
     ows_projects = models.PositiveIntegerField("حداکثر پروژه WMS/WFS (QGIS Server)", default=1)
+    db_roles = models.PositiveIntegerField(
+        "حداکثر کاربر اضافه پایگاه داده", default=1,
+        help_text="کاربر فقط‌خواندنی یا ویرایشگر برای اتصال برنامه‌ها، GeoServer یا همکاران.")
+    team_members = models.PositiveIntegerField(
+        "حداکثر عضو تیم", default=0, help_text="حساب‌های دیگر سایت که به این پایگاه داده دسترسی دارند.")
     basemap_api = models.BooleanField(
         "نقشه پایه ایران برای سایت خود کاربر", default=False,
         help_text="آدرس style.json با کلید API برای استفاده در سایت‌های دیگر (نقشه‌های داخل postgis.ir همیشه دارند).")
@@ -359,3 +364,55 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.action} – {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class DbRole(models.Model):
+    """کاربر اضافه PostgreSQL برای یک پایگاه داده (فقط‌خواندنی یا ویرایشگر داده)."""
+
+    class Access(models.TextChoices):
+        READ = "read", "فقط‌خواندنی"
+        WRITE = "write", "خواندن و ویرایش داده"
+
+    database = models.ForeignKey(UserDatabase, on_delete=models.CASCADE, related_name="db_roles",
+                                 verbose_name="پایگاه داده")
+    name = models.CharField("نام کاربری", max_length=63, unique=True)
+    access = models.CharField("دسترسی", max_length=5, choices=Access.choices, default=Access.READ)
+    note = models.CharField("توضیح", max_length=120, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
+    created_at = models.DateTimeField("ساخت", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "کاربر اضافه پایگاه داده"
+        verbose_name_plural = "کاربران اضافه پایگاه داده"
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return self.name
+
+
+class Member(models.Model):
+    """حساب دیگری از سایت که به پایگاه داده دسترسی دارد (با شماره موبایل دعوت می‌شود)."""
+
+    class Role(models.TextChoices):
+        VIEWER = "viewer", "مشاهده‌گر"
+        EDITOR = "editor", "ویرایشگر"
+
+    database = models.ForeignKey(UserDatabase, on_delete=models.CASCADE, related_name="members",
+                                 verbose_name="پایگاه داده")
+    phone = models.CharField("شماره موبایل", max_length=11)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE,
+                             related_name="memberships", verbose_name="حساب")
+    role = models.CharField("نقش", max_length=6, choices=Role.choices, default=Role.VIEWER)
+    invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
+    created_at = models.DateTimeField("دعوت", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "عضو تیم"
+        verbose_name_plural = "اعضای تیم"
+        ordering = ["created_at"]
+        constraints = [models.UniqueConstraint(fields=["database", "phone"], name="uniq_member_phone")]
+
+    def __str__(self):
+        return f"{self.phone} → {self.database}"

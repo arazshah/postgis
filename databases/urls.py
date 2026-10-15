@@ -12,6 +12,7 @@ urlpatterns = [
     path("<int:pk>/extensions/", views.add_extension, name="add_extension"),
     path("<int:pk>/renew/", views.renew, name="renew"),
     path("<int:pk>/delete/", views.delete, name="delete"),
+    path("<int:pk>/team/", views.team_page, name="team"),
     path("<int:pk>/backups/", views.backups, name="backups"),
     path("<int:pk>/backups/new/", views.backup_new, name="backup_new"),
     path("<int:pk>/backups/<int:job_id>/download/", views.backup_download, name="backup_download"),

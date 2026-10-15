@@ -16,7 +16,7 @@ from .models import Area
 @site_user_required
 @require_http_methods(["GET", "POST"])
 def ready_data(request, pk):
-    db, ex = _explorer_db(request, pk)
+    db, ex = _explorer_db(request, pk, "editor")
     if ex is None:
         return redirect("databases:detail", pk=db.pk)
     error = None

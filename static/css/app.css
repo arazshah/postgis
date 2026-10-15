@@ -163,7 +163,8 @@ code,.mono,kbd{font-family:var(--f-mono);font-size:.88em}
 .auth{max-width:440px;margin:0 auto}
 .field{margin-bottom:var(--s5)}
 .field label{display:block;font-weight:700;margin-bottom:var(--s2)}
-.field input[type=text],.field input[type=email],.field input[type=password],.field select,.field textarea{
+.field input[type=text],.field input[type=email],.field input[type=password],.field input[type=tel],.field input[type=search],.field input:not([type]),.field select,.field textarea,
+.inline-form input[type=tel],.inline-form select{
   width:100%;min-height:46px;padding:0 var(--s3);border:1.5px solid var(--line);border-radius:var(--r-sm);
   background:#fff;color:var(--ink);font:inherit}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--teal);outline:none;box-shadow:0 0 0 3px var(--teal-soft)}
@@ -564,3 +565,16 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 .ready-form input[type=search]{width:100%}
 .log li{flex-wrap:wrap}
 .log .log-msg{flex-basis:100%;color:var(--ink-2)}
+
+/* تیم و کاربران پایگاه داده */
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:var(--s5);align-items:start}
+.tbl{width:100%;border-collapse:collapse;font-size:.92rem;margin-top:var(--s3)}
+.tbl th,.tbl td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}
+.tbl th{font-weight:500;color:var(--ink-2);font-size:.85rem}
+.stack-form{display:flex;flex-direction:column;gap:var(--s3);align-items:flex-start}
+.stack-form .field,.stack-form .bf-row{width:100%}
+.prefixed{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.prefixed span{padding:10px 12px;background:var(--paper-2,#F1F4EF);color:var(--ink-2);font-family:var(--f-mono);font-size:.85rem;white-space:nowrap;display:flex;align-items:center}
+.field .prefixed input{border:0;box-shadow:none;border-radius:0;flex:1;min-width:0;font-family:var(--f-mono)}
+.inline-form input[type=tel]{width:15ch;font-family:var(--f-mono);direction:ltr}
+.inline-form select{width:auto}

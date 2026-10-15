@@ -20,9 +20,11 @@ from .models import ApiKey, Layer, Service
 SESSION_KEY = "publish_new_key_{}"
 
 
-def _db(request, pk) -> UserDatabase:
-    return get_object_or_404(UserDatabase.objects.select_related("server", "plan")
-                             .exclude(status=UserDatabase.Status.DELETED), pk=pk, owner=request.user)
+def _db(request, pk, need: str = "editor") -> UserDatabase:
+    """انتشار: مالک و ویرایشگرهای تیم؛ کلیدهای API فقط مالک."""
+    from databases import team
+
+    return team.get_db(request, pk, need)
 
 
 @site_user_required
@@ -127,7 +129,7 @@ def update_layer(request, pk, layer_id):
 @site_user_required
 @require_POST
 def create_key(request, pk):
-    db = _db(request, pk)
+    db = _db(request, pk, "owner")
     if db.api_keys.filter(revoked_at__isnull=True).count() >= 10:
         messages.error(request, "حداکثر ۱۰ کلید فعال؛ یک کلید قدیمی را باطل کنید.")
         return redirect("publish:manage", pk=db.pk)
@@ -139,7 +141,7 @@ def create_key(request, pk):
 @site_user_required
 @require_POST
 def revoke_key(request, pk, key_id):
-    db = _db(request, pk)
+    db = _db(request, pk, "owner")
     key = get_object_or_404(ApiKey, pk=key_id, database=db)
     key.revoke()
     messages.success(request, f"کلید «{key.name}» باطل شد.")

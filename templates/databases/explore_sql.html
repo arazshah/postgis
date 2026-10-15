@@ -5,7 +5,7 @@
   <label for="sql-q" class="sr-label">دستور SQL</label>
   <textarea id="sql-q" name="query" dir="ltr" spellcheck="false" rows="7" placeholder="SELECT * FROM my_table LIMIT 10">{{ query }}</textarea>
   <div class="sql-bar">
-    <label class="check small"><input type="checkbox" name="allow_write" {% if allow_write %}checked{% endif %}><span>اجازه تغییر داده (INSERT، UPDATE، DELETE، CREATE…)</span></label>
+    {% if db.can_edit %}<label class="check small"><input type="checkbox" name="allow_write" {% if allow_write %}checked{% endif %}><span>اجازه تغییر داده (INSERT، UPDATE، DELETE، CREATE…)</span></label>{% else %}<span class="small muted">دسترسی شما مشاهده‌گر است؛ فقط پرس‌وجوی خواندنی اجرا می‌شود.</span>{% endif %}
     <button class="btn" type="submit">اجرا</button>
   </div>
   <div class="chips sql-examples" aria-label="نمونه کوئری">
