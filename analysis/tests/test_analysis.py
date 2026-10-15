@@ -91,6 +91,14 @@ class AnalysisTests(TestCase):
         r = tools.run(self.db, "hexbin", {"layer": "public.schools", "size": "1000", "output": "school_hex"})
         self.assertEqual(self._sql("SELECT sum(count) FROM school_hex")[0][0],
                          self._sql("SELECT count(*) FROM schools")[0][0])
+        # ستون هندسه هر خروجی نوع و SRID دارد؛ وگرنه نقشه و QGIS آن را بدون مختصات می‌بینند
+        cols = dict(((t, (g, s)) for t, g, s in self._sql(
+            "SELECT f_table_name, type, srid FROM geometry_columns WHERE f_table_name IN "
+            "('metro_500', 'metro_zone', 'school_metro', 'd_count', 'school_hex')")))
+        self.assertEqual(cols, {"metro_500": ("POLYGON", 4326), "metro_zone": ("MULTIPOLYGON", 4326),
+                                "school_metro": ("POINT", 4326), "d_count": (cols["d_count"][0], 4326),
+                                "school_hex": ("POLYGON", 4326)})
+        self.assertIn(cols["d_count"][0], ("POLYGON", "MULTIPOLYGON"))
 
         with self.assertRaisesMessage(tools.ToolError, "وجود دارد"):
             tools.run(self.db, "hexbin", {"layer": "public.schools", "size": "1000", "output": "school_hex"})

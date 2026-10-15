@@ -37,6 +37,22 @@ TOOLS = [
 TOOL_MAP = {t.key: t for t in TOOLS}
 
 
+def _fix_geom_type(conn, target) -> None:
+    """ستون geom حاصل از عبارت، نوع و SRID ندارد (geometry خالی) و QGIS و نقشه آن را بدون مختصات می‌بینند؛
+    نوع را از خود داده (و Multi اگر تک و چندبخشی قاطی باشند) و SRID را 4326 می‌گذارد."""
+    types = {r[0] for r in conn.execute(sql.SQL("SELECT DISTINCT GeometryType(geom) FROM {} WHERE geom IS NOT NULL")
+                                        .format(target)).fetchall()}
+    base = {t.removeprefix("MULTI") for t in types}
+    if len(types) == 1:
+        gtype, expr = types.pop(), "ST_SetSRID(geom, 4326)"
+    elif len(base) == 1 and base.pop() in ("POINT", "LINESTRING", "POLYGON"):
+        gtype, expr = "MULTI" + next(iter(types)).removeprefix("MULTI"), "ST_Multi(ST_SetSRID(geom, 4326))"
+    else:
+        gtype, expr = "GEOMETRY", "ST_SetSRID(geom, 4326)"
+    conn.execute(sql.SQL("ALTER TABLE {} ALTER COLUMN geom TYPE geometry({}, 4326) USING " + expr).format(
+        target, sql.SQL(gtype)))
+
+
 def _geom4326(alias: str, col: str, srid: int):
     g = sql.SQL("{}.{}").format(sql.Identifier(alias), sql.Identifier(col))
     if srid in (0, 4326):
@@ -183,6 +199,7 @@ def run(db, key: str, params: dict) -> dict:
             conn.execute(sql.SQL("SET statement_timeout = {}").format(sql.Literal(TIMEOUT)))
             conn.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(target))
             conn.execute(sql.SQL("CREATE TABLE {} AS {}").format(target, body))
+            _fix_geom_type(conn, target)
             conn.execute(sql.SQL("ALTER TABLE {} ADD COLUMN gid serial PRIMARY KEY").format(target))
             conn.execute(sql.SQL("CREATE INDEX ON {} USING gist (geom)").format(target))
             conn.execute(sql.SQL("ANALYZE {}").format(target))

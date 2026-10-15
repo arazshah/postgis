@@ -17,9 +17,9 @@
       </div>
       <div class="field"><label for="l-key">کلید API {% if cfg %}(خالی بگذارید تا تغییر نکند){% endif %}</label><input id="l-key" type="password" name="api_key" class="ltr" autocomplete="off" {% if not cfg %}required{% endif %}></div>
       <p class="small muted">کلید رمزنگاری‌شده ذخیره می‌شود و دیگر نمایش داده نمی‌شود.</p>
-      <div><button class="btn sm" type="submit">ذخیره</button>
-      {% if cfg %}</div></form><form method="post" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="action" value="llm_delete"><button class="btn ghost sm" type="submit">حذف کلید</button>{% endif %}</div>
+      <div><button class="btn sm" type="submit">ذخیره</button></div>
     </form>
+    {% if cfg %}<form method="post" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="action" value="llm_delete"><button class="btn ghost sm" type="submit">حذف کلید</button></form>{% endif %}
   </details>
 
   {% if cfg %}
