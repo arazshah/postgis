@@ -152,3 +152,16 @@ class NoSourceTests(TestCase):
             self.assertIsNone(osm.source_info())
             with self.assertRaises(osm.OsmError):
                 osm.refresh_areas()
+
+
+@unittest.skipUnless(HAS_TOOLS, "osmium or ogr2ogr missing")
+class DownloadSourceTests(TestCase):
+    def test_download_validates_part_file_with_osmium(self):
+        """فایل موقت باید پسوند .osm.pbf داشته باشد، وگرنه osmium نوعش را نمی‌شناسد (خطای واقعی production)."""
+        with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as root:
+            pbf = sample_pbf(Path(src))
+            with override_settings(OSM_ROOT=root, OSM_SOURCE_URL=pbf.as_uri()):
+                dest = osm.download_source()
+            self.assertTrue(dest.exists())
+            self.assertGreater(dest.stat().st_size, 1024)
+            self.assertEqual([p.name for p in Path(root).rglob("*.part*")], [])
