@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% load fa ws %}
+{% block content %}
+<div class="wrap ws">
+  <aside class="ws-side">
+    <a class="ws-back" href="{% url 'databases:dashboard' %}">← همه پایگاه‌های داده</a>
+    <div class="ws-db">
+      <a href="{% url 'databases:detail' db.pk %}" class="ws-name ltr">{{ db.db_name }}</a>
+      <div class="ws-meta"><span class="badge {{ db.status }}">{{ db.get_status_display }}</span><span class="small muted">{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span></div>
+      <div class="meter {{ db.usage_level }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ db.usage_percent|pct_width }}" aria-label="مصرف حجم"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
+    </div>
+    {% ws_nav db %}
+  </aside>
+  <main class="ws-main" id="main">
+    <nav class="crumbs" aria-label="مسیر">
+      <a href="{% url 'databases:dashboard' %}">پایگاه‌ها</a><span>/</span>
+      <a class="ltr" href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a>{% ws_title db as wt %}{% if wt %}<span>/</span><b>{{ wt }}</b>{% endif %}
+    </nav>
+    {% block ws %}{% endblock %}
+  </main>
+</div>
+<script>
+(() => { const d = document.querySelector('.ws-menu'); if (!d) return; const mq = matchMedia('(min-width:901px)');
+  const sync = () => { d.open = mq.matches; }; sync(); mq.addEventListener('change', sync); })();
+</script>
+{% endblock %}

@@ -1,8 +1,7 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "databases/_ws.html" %}{% load fa %}
 {% block title %}تیم و کاربران {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
-{% block content %}
+{% block ws %}
 <div class="wrap page">
-  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a> / <a href="{% url 'databases:detail' db.pk %}" class="ltr">{{ db.db_name }}</a></p>
   <h1>تیم و کاربران پایگاه داده</h1>
   <p class="muted">دو راه برای کار چندنفره: «اعضای تیم» با حساب خودشان در همین سایت وارد می‌شوند؛ «کاربران پایگاه داده» نام کاربری و رمز PostgreSQL جدا برای QGIS، GeoServer یا برنامه‌ها هستند.</p>
 

@@ -1,9 +1,8 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "databases/_ws.html" %}{% load fa %}
 {% block title %}انتشار نقشه {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
-{% block content %}
+{% block ws %}
 {% with sample=published.0 %}
 <div class="wrap page">
-  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a> / <a href="{% url 'databases:detail' db.pk %}" class="ltr">{{ db.db_name }}</a></p>
   <div class="page-head">
     <h1>انتشار نقشه و API</h1>
     <a class="btn ghost sm" href="{% url 'databases:explore' db.pk %}" style="margin-inline-start:auto">مرورگر داده</a>
