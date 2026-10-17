@@ -1,29 +1,9 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "databases/_ws.html" %}{% load fa %}
 {% block title %}{{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
-{% block content %}
+{% block ws %}
 {% firstof once_password "YOUR_PASSWORD" as pw %}
 <div class="wrap page">
-  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a></p>
-  <div class="page-head">
-    <div>
-      <h1 class="ltr" style="font-family:var(--f-mono)">{{ db.db_name }}</h1>
-      <div class="db-tags"><span class="badge {{ db.status }}">{{ db.get_status_display }}</span><span class="tag">پلن {{ db.plan.name }}</span>
-        <span class="tag">{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span></div>
-    </div>
-  </div>
-  {% if db.is_live %}
-  <nav class="tiles" aria-label="دسترسی سریع">
-    <a href="{% url 'databases:explore' db.pk %}"><b>جدول‌ها و داده‌ها</b><span>مشاهده، نقشه و حذف جدول</span></a>
-    <a href="{% url 'databases:explore_sql' db.pk %}"><b>اجرای SQL</b><span>کنسول کوئری امن</span></a>
-    <a href="{% url 'databases:import' db.pk %}"><b>ورود فایل</b><span>Shapefile، GeoJSON، CSV…</span></a>
-    <a href="{% url 'analysis:page' db.pk %}"><b>تحلیل</b><span>بدون SQL یا پرسش فارسی</span></a>
-    <a href="{% url 'publish:manage' db.pk %}"><b>انتشار نقشه و API</b><span>لینک، WMS/WFS و REST</span></a>
-    <a href="{% url 'databases:backups' db.pk %}"><b>بکاپ‌ها</b><span>{% if last_backup %}آخرین: {{ last_backup.created_at|jdate }}{% else %}بکاپ و بازگردانی{% endif %} · نگهداری {{ db.plan.backup_retention_days|fanum }} روز</span></a>
-    <a href="{% url 'databases:team' db.pk %}"><b>تیم و کاربران</b><span>دعوت و دسترسی</span></a>
-    <a href="{% url 'databases:usage' db.pk %}"><b>مصرف و کارایی</b><span>نمودار و نمایه</span></a>
-    {% if db.owner_id == request.user.pk %}<a href="{% url 'enterprise:page' db.pk %}"><b>امکانات سازمانی</b><span>GeoServer، رستر، کپی</span></a>{% endif %}
-  </nav>
-  {% endif %}
+  <div class="page-head"><h1>نمای کلی و اتصال</h1></div>
 
   {% if db.status == 'readonly' %}<div class="msg warning">حجم این پایگاه داده پر شده و فعلاً فقط‌خواندنی است. خواندن داده‌ها و اتصال QGIS و GeoServer کار می‌کند. برای آزاد کردن فضا <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید و بگویید کدام جدول‌ها حذف شوند؛ وقتی حجم به زیر ۹۵٪ برسد، خودکار دوباره قابل نوشتن می‌شود.</div>{% endif %}
   {% if db.status == 'expired' %}<div class="msg error">اعتبار این پایگاه داده تمام شده و اتصال غیرفعال است. با تمدید رایگان، دوباره فعال می‌شود.</div>{% endif %}

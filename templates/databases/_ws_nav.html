@@ -1,0 +1,16 @@
+{% load fa %}
+<details class="ws-menu" open>
+  <summary><span>{% if current %}{{ current.label }}{% else %}منوی پایگاه داده{% endif %}</span><i aria-hidden="true">▾</i></summary>
+  <nav aria-label="بخش‌های پایگاه داده">
+    {% for g in groups %}
+    <div class="ws-group">
+      {% if g.title %}<div class="ws-gt">{{ g.title }}</div>{% endif %}
+      {% for it in g.items %}
+      <a href="{% url it.url db.pk %}" class="ws-item{% if it.on %} on{% endif %}"{% if it.on %} aria-current="page"{% endif %}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ it.icon }}"/></svg><span>{{ it.label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </nav>
+</details>

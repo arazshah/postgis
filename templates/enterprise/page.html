@@ -1,8 +1,7 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "databases/_ws.html" %}{% load fa %}
 {% block title %}امکانات سازمانی {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
-{% block content %}
+{% block ws %}
 <div class="wrap page">
-  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a> / <a href="{% url 'databases:detail' db.pk %}" class="ltr">{{ db.db_name }}</a></p>
   <h1>امکانات سازمانی</h1>
   {% if not db.plan.dedicated_geoserver and not db.plan.raster_mb and not db.plan.snapshot_hours and not db.plan.clone_enabled %}
   <div class="msg info">این امکانات در پلن سازمانی فعال است: GeoServer اختصاصی، سرویس رستر، بکاپ ساعتی و کپی آزمایشی پایگاه داده. <a href="{% url 'billing:plans' %}">مشاهده پلن‌ها</a></div>

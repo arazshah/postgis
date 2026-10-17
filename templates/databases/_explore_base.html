@@ -1,21 +1,8 @@
-{% extends "base.html" %}{% load fa static %}
+{% extends "databases/_ws.html" %}{% load fa static %}
 {% block title %}مرورگر {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
-{% block content %}
-<div class="wrap page ex-page">
-  <p class="small"><a href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a> / <a href="{% url 'databases:detail' db.pk %}" class="ltr">{{ db.db_name }}</a>{% if not db.is_mine %} · <span class="badge">{% if db.can_edit %}ویرایشگر{% else %}مشاهده‌گر{% endif %}</span>{% endif %}</p>
-  <div class="page-head">
-    <h1>مرورگر پایگاه داده</h1>
-    <nav class="seg" aria-label="بخش‌های مرورگر">
-      <a href="{% url 'databases:explore' db.pk %}" {% if section == 'tables' %}aria-current="page"{% endif %}>جدول‌ها</a>
-      <a href="{% url 'databases:explore_sql' db.pk %}" {% if section == 'sql' %}aria-current="page"{% endif %}>اجرای SQL</a>
-      {% if db.can_edit %}<a href="{% url 'databases:import' db.pk %}" {% if section == 'import' %}aria-current="page"{% endif %}>ورود فایل</a>
-      <a href="{% url 'iranmap:ready' db.pk %}" {% if section == 'ready' %}aria-current="page"{% endif %}>داده آماده ایران</a>{% endif %}
-      {% if db.can_edit %}<a href="{% url 'analysis:page' db.pk %}" {% if section == 'analysis' %}aria-current="page"{% endif %}>تحلیل</a>{% endif %}
-      <a href="{% url 'databases:explore_health' db.pk %}" {% if section == 'health' %}aria-current="page"{% endif %}>سلامت داده</a>
-      {% if db.can_edit %}<a href="{% url 'publish:manage' db.pk %}">انتشار</a>{% endif %}
-    </nav>
-  </div>
-  <div class="ex-layout">
+{% block ws %}
+  <div class="ex-layout{% if section != 'tables' and section != 'sql' %} solo{% endif %}">
+    {% if section == 'tables' or section == 'sql' %}
     <aside class="ex-side" aria-label="فهرست جدول‌ها">
       <div class="ex-side-head">جدول‌ها <span class="muted">({{ tables|length|fanum }})</span></div>
       {% regroup tables by schema as groups %}
@@ -33,9 +20,9 @@
         <p class="small muted" style="padding:0 12px">هنوز جدولی ندارید.</p>
       {% endfor %}
     </aside>
+    {% endif %}
     <section class="ex-main">
       {% block ex %}{% endblock %}
     </section>
   </div>
-</div>
 {% endblock %}

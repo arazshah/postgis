@@ -657,7 +657,7 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 .tiles a:hover{border-color:var(--teal);transform:translateY(-2px)}
 .tiles b{color:var(--teal-dark);font-size:.98rem}
 .tiles span{font-size:.8rem;color:var(--ink-2);line-height:1.6}
-.duo{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:var(--s4);margin-bottom:var(--s4);align-items:stretch}
+.duo{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:var(--s4);margin-bottom:var(--s4);align-items:stretch}
 .trio{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:var(--s4);margin-bottom:var(--s4);align-items:stretch}
 .duo>.panel,.trio>.panel,.duo>.once{margin:0;height:100%}
 .duo>:only-child{grid-column:1/-1}
@@ -704,3 +704,47 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 .tool-form .bf-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--s3)}
 .tool-opts{display:flex;gap:var(--s5);flex-wrap:wrap}
 .tool-run{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+
+/* ---------- فضای کار پایگاه داده: منوی کنار صفحه + مسیر ---------- */
+.ws{display:grid;grid-template-columns:232px minmax(0,1fr);gap:var(--s6);align-items:start;padding-top:var(--s6);padding-bottom:var(--s8)}
+.ws-side{position:sticky;top:78px;display:flex;flex-direction:column;gap:var(--s3)}
+.ws-back{font-size:.85rem;text-decoration:none;color:var(--ink-2)}
+.ws-back:hover{color:var(--teal)}
+.ws-db{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3) var(--s4);display:flex;flex-direction:column;gap:6px}
+.ws-name{font-family:var(--f-mono);font-weight:500;color:var(--ink);text-decoration:none;font-size:.98rem;overflow-wrap:anywhere}
+.ws-meta{display:flex;justify-content:space-between;align-items:center;gap:var(--s2);flex-wrap:wrap}
+.ws-db .meter{width:100%;margin:0;height:6px}
+.ws-menu{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s2)}
+.ws-menu summary{display:none;cursor:pointer;list-style:none;font-weight:700;padding:var(--s2) var(--s3);justify-content:space-between;align-items:center}
+.ws-menu summary::-webkit-details-marker{display:none}
+.ws-group{padding:var(--s1) 0}
+.ws-group+.ws-group{border-top:1px solid var(--line);margin-top:var(--s1);padding-top:var(--s2)}
+.ws-gt{font-size:.74rem;font-weight:700;color:var(--ink-2);padding:2px var(--s3) var(--s1);letter-spacing:.02em}
+.ws-item{display:flex;align-items:center;gap:var(--s3);padding:7px var(--s3);border-radius:var(--r-sm);text-decoration:none;color:var(--ink);font-size:.93rem;font-weight:500;border-inline-start:3px solid transparent}
+.ws-item svg{width:19px;height:19px;flex:none;fill:none;stroke:var(--ink-2);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ws-item:hover{background:var(--paper-2)}
+.ws-item.on{background:var(--teal-soft);color:var(--teal-dark);font-weight:700;border-inline-start-color:var(--teal)}
+.ws-item.on svg{stroke:var(--teal)}
+.ws-main{min-width:0}
+.ws-main .wrap{max-width:none;padding:0}
+.ws-main .page{padding:0}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);font-size:.88rem;color:var(--ink-2);margin-bottom:var(--s4)}
+.crumbs a{color:var(--ink-2);text-decoration:none}
+.crumbs a:hover{color:var(--teal);text-decoration:underline}
+.crumbs span{opacity:.5}
+.crumbs b{color:var(--ink)}
+.ws-main .page>p.small:first-child a,.ws-main .page>.small:first-child{display:inline-flex}
+.ws-main .page>p.small:first-child{margin-bottom:var(--s3)}
+.ws-main .page>p.small:first-child a{background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:2px 14px;text-decoration:none}
+.ws-main .page>p.small:first-child a:hover{border-color:var(--teal)}
+.ex-layout.solo{grid-template-columns:minmax(0,1fr)}
+@media (max-width:900px){
+  .ws{grid-template-columns:1fr;gap:var(--s4);padding-top:var(--s4)}
+  .ws-side{position:static}
+  .ws-menu summary{display:flex}
+  .ws-menu:not([open]) nav{display:none}
+  .ws-menu[open] summary{border-bottom:1px solid var(--line);margin-bottom:var(--s2)}
+}
+.ws .ex-layout{grid-template-columns:200px minmax(0,1fr);gap:var(--s4)}
+.ws .ex-layout.solo{grid-template-columns:minmax(0,1fr)}
+@media (max-width:900px){.ws .ex-layout{grid-template-columns:1fr}}

@@ -1,10 +1,10 @@
-{% extends "base.html" %}{% load static fa %}
+{% extends "databases/_ws.html" %}{% load static fa %}
 {% block title %}{{ p.title }} — WMS/WFS — {{ SITE_NAME }}{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
 <link rel="stylesheet" href="{% static 'css/map.css' %}">
 {% endblock %}
-{% block content %}
+{% block ws %}
 <div class="wrap page">
   <p class="small"><a href="{% url 'publish:ows' db.pk %}">← WMS و WFS</a></p>
   <div class="page-head">
