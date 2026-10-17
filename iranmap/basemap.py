@@ -179,9 +179,20 @@ def build() -> dict:
     tmp = dest.with_suffix(".part.pmtiles")
     tmp.unlink(missing_ok=True)
     cmd = [exe, "extract", src, str(tmp), f"--bbox={settings.BASEMAP_BBOX}",
-           f"--maxzoom={int(settings.BASEMAP_MAXZOOM)}", "--download-threads=4"]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=6 * 3600, env=os.environ.copy())
+           f"--maxzoom={int(settings.BASEMAP_MAXZOOM)}", "--download-threads=2"]
+    # فایل موقت pmtiles به‌جای /tmp کانتینر (کوچک) کنار خروجی روی volume نوشته شود
+    env = {**os.environ, "TMPDIR": str(dest.parent)}
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=6 * 3600, env=env)
+    except subprocess.TimeoutExpired as exc:
+        tmp.unlink(missing_ok=True)
+        raise BasemapError("ساخت نقشه پایه بیش از ۶ ساعت طول کشید و متوقف شد.") from exc
     if proc.returncode != 0 or not tmp.exists():
-        raise BasemapError(f"pmtiles extract ناموفق بود: {proc.stderr.strip()[-800:]}")
+        out = (proc.stderr.strip() + "\n" + proc.stdout.strip()).strip()[-800:]
+        hint = ""
+        if proc.returncode in (-9, 137):
+            hint = " (فرایند را سیستم‌عامل به‌دلیل کمبود حافظه کشته است؛ BASEMAP_MAXZOOM را کمتر کنید یا حافظه worker را زیاد کنید)"
+        tmp.unlink(missing_ok=True)
+        raise BasemapError(f"pmtiles extract ناموفق بود (کد خروج {proc.returncode}){hint}: {out or 'بدون خروجی'}")
     tmp.replace(dest)
     return {"source": src, "size": dest.stat().st_size}

@@ -121,14 +121,15 @@ def download_source(url: str | None = None) -> Path:
     """فایل ایران را (با فایل موقت و جایگزینی اتمی) می‌گیرد و نواحی را دوباره می‌سازد."""
     url = url or settings.OSM_SOURCE_URL
     dest = source_file()
-    tmp = dest.with_suffix(".part")
+    # osmium نوع فایل را از پسوند می‌شناسد؛ پسوند موقت باید باز هم .osm.pbf باشد
+    tmp = dest.with_name("iran-latest.part.osm.pbf")
     req = urllib.request.Request(url, headers={"User-Agent": "postgis.ir osm refresh"})
     with urllib.request.urlopen(req, timeout=120) as r, open(tmp, "wb") as f:  # noqa: S310 آدرس از تنظیمات
         shutil.copyfileobj(r, f, length=1024 * 1024)
     if tmp.stat().st_size < 1024:
         tmp.unlink()
         raise OsmError("فایل دانلودشده خالی است.")
-    _run([_bin("osmium"), "fileinfo", str(tmp)], timeout=600)  # فایل سالم است؟
+    _run([_bin("osmium"), "fileinfo", "-F", "pbf", str(tmp)], timeout=600)  # فایل سالم است؟
     tmp.replace(dest)
     refresh_areas()
     return dest

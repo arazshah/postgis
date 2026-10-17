@@ -26,10 +26,10 @@ RUN pip install --index-url "$PIP_INDEX_URL" -r requirements.txt
 COPY . .
 RUN DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput \
  && chmod +x docker/entrypoint.sh \
- && mkdir -p /app/media /app/ows /app/osm \
+ && mkdir -p /app/media /app/ows /app/osm /app/backups /app/rasters \
  && chown -R app:app /app
 
-USER app
+# کانتینر با root شروع می‌شود تا entrypoint مالکیت volumeها را درست کند، سپس به کاربر app می‌رود
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS "http://127.0.0.1:${PORT}/healthz" || exit 1
