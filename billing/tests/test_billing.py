@@ -3,7 +3,7 @@ from datetime import timedelta
 from unittest import mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
@@ -36,7 +36,8 @@ class FakeProv:
         return lambda *a, **k: self.calls.append((item, *a))
 
 
-@override_settings(MEDIA_ROOT="/tmp/claude-0/-home-claude/2234ec6a-5c11-59b3-8baf-aeb4326ca9f5/scratchpad/media-test")
+@override_settings(CANONICAL_URL="https://testserver",
+                   MEDIA_ROOT="/tmp/claude-0/-home-claude/2234ec6a-5c11-59b3-8baf-aeb4326ca9f5/scratchpad/media-test")
 class BillingTests(TestCase):
     def setUp(self):
         self.prov = FakeProv()
@@ -180,6 +181,23 @@ class ZarinpalTests(_GatewayBase, BillingTests):
             self.verified = True
             return {"data": {"code": code, "ref_id": 201, "card_pan": "502229******5995"}, "errors": []}
         raise AssertionError(url)
+
+    def test_callback_uses_canonical_domain(self):
+        with self.settings(CANONICAL_URL="https://postgis.ir",
+                           ALLOWED_HOSTS=["testserver", "secondary.postgis.ir"]):
+            request = RequestFactory().get("/", HTTP_HOST="secondary.postgis.ir")
+            callback = services._callback_url(self.inv, request)
+        self.assertEqual(callback, f"https://postgis.ir/billing/callback/{self.inv.number}/")
+
+    @override_settings(DEBUG=True, CANONICAL_URL="https://postgis.ir",
+                       ALLOWED_HOSTS=["testserver", "secondary.postgis.ir"])
+    def test_secondary_domain_must_not_start_gateway_payment(self):
+        response = self.client.post(reverse("billing:pay_gateway", args=[self.inv.number]),
+                                    HTTP_HOST="secondary.postgis.ir")
+        expected = f"https://postgis.ir/billing/invoice/{self.inv.number}/"
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], expected)
+        self.assertEqual(self.calls, [])
 
     def test_full_flow(self):
         r = self.start()

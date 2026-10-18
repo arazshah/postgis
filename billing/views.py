@@ -1,9 +1,12 @@
 import logging
+from urllib.parse import urlsplit
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from accounts.decorators import site_user_required
@@ -67,6 +70,11 @@ def invoice(request, number):
 @require_POST
 def pay_gateway(request, number):
     inv = _user_invoice(request, number)
+    request_host = urlsplit(f"//{request.get_host()}").hostname
+    canonical_host = urlsplit(settings.CANONICAL_URL).hostname
+    if request_host and canonical_host and request_host.lower() != canonical_host.lower():
+        canonical_invoice = f"{settings.CANONICAL_URL.rstrip('/')}{reverse('billing:invoice', args=[inv.number])}"
+        return redirect(canonical_invoice)
     try:
         url = services.start_gateway(inv, request)
     except services.BillingError as exc:
