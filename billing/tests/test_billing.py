@@ -189,7 +189,7 @@ class ZarinpalTests(_GatewayBase, BillingTests):
             callback = services._callback_url(self.inv, request)
         self.assertEqual(callback, f"https://postgis.ir/billing/callback/{self.inv.number}/")
 
-    @override_settings(CANONICAL_URL="https://postgis.ir",
+    @override_settings(DEBUG=True, CANONICAL_URL="https://postgis.ir",
                        ALLOWED_HOSTS=["testserver", "secondary.postgis.ir"])
     def test_secondary_domain_must_not_start_gateway_payment(self):
         response = self.client.post(reverse("billing:pay_gateway", args=[self.inv.number]),
