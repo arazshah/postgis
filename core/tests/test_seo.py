@@ -23,6 +23,10 @@ class SEOTests(TestCase):
         for q in faq["mainEntity"]:
             self.assertIn(q["name"], html)  # پرسش‌های schema روی صفحه هم دیده می‌شوند
 
+    def test_referrer_policy_sends_only_origin_to_external_payment_gateway(self):
+        response = self.client.get("/")
+        self.assertEqual(response["Referrer-Policy"], "strict-origin-when-cross-origin")
+
     def test_pillar_page(self):
         r = self.client.get("/docs/what-is-postgis/")
         self.assertEqual(r.status_code, 200)
