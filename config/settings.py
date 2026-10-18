@@ -221,11 +221,13 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@postgis.ir")
 # پشت پراکسی Coolify (Traefik/Caddy)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
+# در انتقال امن به درگاه خارجی فقط مبدأ سایت فرستاده شود تا دامنهٔ پذیرنده
+# قابل بررسی باشد، بدون اینکه مسیر فاکتور یا اطلاعات صفحه افشا شود.
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 if not DEBUG and not os.environ.get("DJANGO_TESTING"):
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
-    SECURE_REFERRER_POLICY = "same-origin"
     X_FRAME_OPTIONS = "DENY"
 
 LOGGING = {
