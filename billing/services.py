@@ -71,10 +71,7 @@ def create_invoice(user, kind: str, plan: Plan, database: UserDatabase | None = 
 
 # ---------------------------------------------------------------------- درگاه پرداخت
 def _callback_url(inv: Invoice, request) -> str:
-    url = request.build_absolute_uri(reverse("billing:callback", args=[inv.number]))
-    if url.startswith("http://") and not settings.DEBUG:
-        url = "https://" + url[len("http://"):]
-    return url
+    return f"{settings.CANONICAL_URL.rstrip('/')}{reverse('billing:callback', args=[inv.number])}"
 
 
 def start_gateway(inv: Invoice, request) -> str:
