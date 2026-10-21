@@ -124,6 +124,16 @@ class SiteSettings(models.Model):
         help_text="کد نماد ساماندهی، زرین‌پال، سازمان نظام صنفی رایانه‌ای و مانند آن. "
                   "هر کد HTML که بگذارید بدون تغییر در فوتر اجرا می‌شود؛ فقط کد معتبر و مطمئن بگذارید.")
 
+    # --- آمار Umami ---
+    umami_script_url = models.URLField(
+        "نشانی اسکریپت Umami", max_length=300, blank=True,
+        help_text="مثلاً https://stats.araz.me/script.js (در Umami: Settings ← Websites ← Edit ← Tracking code). "
+                  "چسباندن کل تگ script هم کار می‌کند.")
+    umami_website_id = models.CharField(
+        "Website ID در Umami", max_length=64, blank=True,
+        help_text="شناسه وب‌سایت، شبیه 3f9c1c52-…؛ اگر کل تگ script را چسباندید خودکار پر می‌شود. "
+                  "خالی بگذارید تا Umami خاموش شود.")
+
     # --- فوتر ---
     footer_about = models.TextField(
         "متن معرفی زیر نام سایت", blank=True,
@@ -294,6 +304,10 @@ class SiteSettings(models.Model):
     @property
     def has_trust_badges(self) -> bool:
         return bool(self.enamad_badge_html.strip() or self.footer_badges_html.strip())
+
+    @property
+    def umami_ready(self) -> bool:
+        return bool(self.umami_script_url and self.umami_website_id)
 
     @property
     def card_number_display(self) -> str:

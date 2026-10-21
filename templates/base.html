@@ -19,6 +19,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#0F5C59">
   {% if SITE.enamad_meta_content %}<meta name="enamad" content="{{ SITE.enamad_meta_content }}">{% endif %}
+  {% if SITE.umami_ready and not user.is_staff %}<script defer src="{{ SITE.umami_script_url }}" data-website-id="{{ SITE.umami_website_id }}" data-do-not-track="true"></script>{% endif %}
   <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
   <link rel="preload" href="{% static 'fonts/vazirmatn-arabic-400-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">

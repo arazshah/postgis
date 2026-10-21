@@ -15,6 +15,11 @@ class SiteSettingsForm(forms.ModelForm):
         label="کلید API پنل sms.ir", required=False,
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
         help_text="فقط هنگام تغییر وارد کنید. رمزنگاری‌شده ذخیره می‌شود و دوباره نمایش داده نمی‌شود.")
+    umami_script_url = forms.CharField(
+        label="نشانی اسکریپت Umami", required=False, max_length=600,
+        widget=forms.TextInput(attrs={"dir": "ltr", "size": 70, "autocomplete": "off", "spellcheck": "false"}),
+        help_text="مثلاً https://stats.araz.me/script.js (در Umami: Settings ← Websites ← Edit ← Tracking code). "
+                  "چسباندن کل تگ script هم کار می‌کند و Website ID خودکار پر می‌شود.")
     clear_smsir_api_key = forms.BooleanField(label="حذف کلید API فعلی", required=False)
     bale_client_secret = forms.CharField(
         label="رمز سرویس سفیر (Client Secret)", required=False,
@@ -32,6 +37,7 @@ class SiteSettingsForm(forms.ModelForm):
             "enamad_meta_content": forms.TextInput(attrs={"dir": "ltr", "autocomplete": "off", "size": 60}),
             "enamad_badge_html": forms.Textarea(attrs={"dir": "ltr", "rows": 4, "cols": 80, "spellcheck": "false"}),
             "footer_badges_html": forms.Textarea(attrs={"dir": "ltr", "rows": 4, "cols": 80, "spellcheck": "false"}),
+            "umami_website_id": forms.TextInput(attrs={"dir": "ltr", "size": 50, "autocomplete": "off"}),
             "footer_about": forms.Textarea(attrs={"rows": 3, "cols": 80}),
             "footer_address": forms.Textarea(attrs={"rows": 2, "cols": 80}),
             "footer_links": forms.Textarea(attrs={"rows": 4, "cols": 80}),
@@ -53,6 +59,29 @@ class SiteSettingsForm(forms.ModelForm):
         value = (m.group(1) if m else raw).strip()
         if not re.fullmatch(r"[A-Za-z0-9_-]{4,100}", value):
             raise ValidationError("مقدار content اینماد فقط شامل حروف انگلیسی و عدد است؛ مثلاً 35683048.")
+        return value
+
+    def clean_umami_script_url(self):
+        """هم نشانی ساده و هم کل تگ script پذیرفته می‌شود؛ فقط https و بدون نقل‌قول."""
+        import re
+
+        raw = (self.cleaned_data.get("umami_script_url") or "").strip()
+        m = re.search(r"""src\s*=\s*["']([^"']+)["']""", raw)
+        value = (m.group(1) if m else raw).strip()
+        if value and not re.fullmatch(r"https://[A-Za-z0-9.\-]+(:\d+)?(/[A-Za-z0-9._~/\-]*)?", value):
+            raise ValidationError("نشانی باید با https:// شروع شود و فقط خود آدرس باشد؛ مثلاً https://stats.araz.me/script.js")
+        return value
+
+    def clean_umami_website_id(self):
+        import re
+
+        raw = (self.cleaned_data.get("umami_website_id") or "").strip()
+        script = self.data.get("umami_script_url", "")
+        m = re.search(r"""data-website-id\s*=\s*["']([^"']+)["']""", script) or \
+            re.search(r"""data-website-id\s*=\s*["']([^"']+)["']""", raw)
+        value = (m.group(1) if m else raw).strip()
+        if value and not re.fullmatch(r"[A-Za-z0-9\-]{8,64}", value):
+            raise ValidationError("Website ID فقط حروف انگلیسی، عدد و خط تیره دارد؛ مثلاً 3f9c1c52-1a2b-4c5d-8e9f-0a1b2c3d4e5f")
         return value
 
     def clean_footer_links(self):
@@ -110,6 +139,12 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             "description": "در پنل enamad.ir دو کد می‌دهند: «متاتگ تأیید مالکیت» که باید در head صفحه اصلی باشد "
                            "(کادر اول)، و «کد نماد» که در فوتر نشان داده می‌شود (کادر دوم). "
                            "نمادهای دیگر مثل ساماندهی را در کادر سوم بگذارید. بعد از ذخیره، سایت را باز کنید و فوتر را ببینید.",
+        }),
+        ("آمار بازدید (Umami)", {
+            "fields": ("umami_script_url", "umami_website_id"),
+            "description": "در Umami وب‌سایت postgis.ir را اضافه کنید، از Tracking code نشانی script و Website ID را اینجا بگذارید "
+                           "(یا کل تگ script را در کادر اول بچسبانید). اسکریپت فقط برای بازدیدکننده‌ها بارگذاری می‌شود، نه مدیران، "
+                           "و تنظیم «Do Not Track» مرورگر را رعایت می‌کند.",
         }),
         ("فوتر سایت", {
             "fields": ("footer_about", "footer_address", "footer_copyright", "footer_links",
