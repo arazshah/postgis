@@ -191,3 +191,61 @@ class ReportAndCleanupTests(TestCase):
         self.assertEqual(res["visitors"], 1)
         self.assertTrue(Visitor.objects.filter(pk=keep.pk).exists())
         self.assertFalse(Visitor.objects.filter(pk=drop.pk).exists())
+
+
+class TrackedLinkTests(TestCase):
+    def setUp(self):
+        from analytics.models import TrackedLink
+
+        self.link = TrackedLink.objects.create(
+            slug="linkedin-oct", name="لینکدین مهر", destination="/?utm_source=old&x=1", utm_source="linkedin",
+            utm_medium="paid", utm_campaign="oct-gis", utm_content="img1")
+
+    def test_target_path_replaces_old_utm_and_keeps_other_params(self):
+        t = self.link.target_path()
+        self.assertTrue(t.startswith("/?x=1&utm_source=linkedin&utm_medium=paid&utm_campaign=oct-gis"))
+        self.assertNotIn("old", t)
+
+    def test_redirect_counts_click_and_attribution_flows_end_to_end(self):
+        r = self.client.get("/go/linkedin-oct/", HTTP_USER_AGENT=UA_DESK)
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(r["Cache-Control"], "no-store")
+        self.link.refresh_from_db()
+        self.assertEqual(self.link.clicks, 1)
+        self.client.get(r["Location"], HTTP_USER_AGENT=UA_DESK)
+        v = Visitor.objects.get()
+        self.assertEqual((v.first_source, v.first_medium, v.first_campaign), ("linkedin", "paid", "oct-gis"))
+        self.assertEqual(Visit.objects.get().content, "img1")
+
+    def test_bot_preview_not_counted_but_still_redirects(self):
+        r = self.client.get("/go/linkedin-oct/", HTTP_USER_AGENT="TelegramBot (like TwitterBot)")
+        self.assertEqual(r.status_code, 302)
+        self.link.refresh_from_db()
+        self.assertEqual(self.link.clicks, 0)
+
+    def test_inactive_or_unknown_is_404(self):
+        self.link.is_active = False
+        self.link.save()
+        self.assertEqual(self.client.get("/go/linkedin-oct/").status_code, 404)
+        self.assertEqual(self.client.get("/go/nope/").status_code, 404)
+
+    def test_admin_validation_and_normalization(self):
+        from analytics.admin import TrackedLinkForm
+
+        base = {"slug": "Bale-Ad", "name": "بله", "destination": "/", "utm_source": " Bale ", "utm_medium": "Social",
+                "utm_campaign": "Mehr Ad", "is_active": True}
+        form = TrackedLinkForm(base)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual((form.cleaned_data["slug"], form.cleaned_data["utm_source"], form.cleaned_data["utm_campaign"]),
+                         ("bale-ad", "bale", "mehr-ad"))
+        for bad in ("https://evil.com", "//evil.com", "evil.com/x", "/\\evil.com"):
+            self.assertFalse(TrackedLinkForm({**base, "slug": "x", "destination": bad}).is_valid(), bad)
+
+    def test_admin_pages_render(self):
+        admin = User.objects.create_admin("root", "Str0ng-Admin-Pass")
+        self.client.force_login(admin)
+        r = self.client.get(reverse("admin:analytics_trackedlink_changelist"))
+        self.assertContains(r, "linkedin-oct")
+        r = self.client.get(reverse("admin:analytics_trackedlink_change", args=[self.link.pk]))
+        self.assertContains(r, "/go/linkedin-oct/")
+        self.assertEqual(self.client.get(reverse("admin:analytics_trackedlink_add")).status_code, 200)

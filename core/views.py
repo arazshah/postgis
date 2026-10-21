@@ -93,6 +93,7 @@ def robots_txt(request):
         "User-agent: *",
         "Allow: /",
         "Disallow: /manage/",
+        "Disallow: /go/",
         "Disallow: /dashboard/",
         "Disallow: /accounts/",
         "Disallow: /billing/",
