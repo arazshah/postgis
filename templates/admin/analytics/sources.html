@@ -1,0 +1,32 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">خانه</a> › گزارش منابع ورود</div>{% endblock %}
+{% block content %}
+<style>
+  .an-range{display:flex;gap:8px;margin:0 0 18px}
+  .an-range a{padding:6px 14px;border:1px solid var(--border-color,#ccc);border-radius:99px;text-decoration:none}
+  .an-range a.on{background:var(--primary,#417690);color:#fff;border-color:transparent}
+  .an-note{color:var(--body-quiet-color,#666);margin:0 0 18px;line-height:1.9}
+  .an-fun{display:grid;gap:8px;max-width:760px;margin:0 0 28px}
+  .an-fun div{display:grid;grid-template-columns:150px 1fr 150px;gap:12px;align-items:center}
+  .an-bar{height:22px;background:var(--darkened-bg,#eee);border-radius:6px;overflow:hidden}
+  .an-bar i{display:block;height:100%;background:var(--primary,#417690)}
+  table.an{width:100%;margin-bottom:28px} table.an td,table.an th{text-align:center} table.an td:first-child,table.an th:first-child{text-align:start}
+  .an-bad{color:#b3261e;font-weight:600}
+</style>
+<p class="an-note">آمار بر پایه <b>منبع اولین ورود</b> هر بازدیدکننده است (بازدیدکننده‌های جدید همین بازه). ربات‌ها و درخواست‌های «Do Not Track» شمرده نمی‌شوند.
+  برای اینکه تبلیغ‌ها از «direct» جدا شوند، هر لینک تبلیغ را با <code>utm_source</code> و <code>utm_medium</code> و <code>utm_campaign</code> بسازید؛ مثلاً
+  <code dir="ltr">?utm_source=linkedin&amp;utm_medium=paid&amp;utm_campaign=oct-gis</code></p>
+<div class="an-range">{% for r in ranges %}<a href="?days={{ r }}" class="{% if r == days %}on{% endif %}">{{ r }} روز اخیر</a>{% endfor %}</div>
+
+<h2>قیف ثبت‌نام</h2>
+<div class="an-fun">
+{% for s in funnel %}<div><span>{{ s.label }}</span><span class="an-bar"><i style="width:{{ s.width }}%"></i></span><span>{{ s.n }} · {{ s.of_total }}{% if forloop.counter > 1 %} · از مرحله قبل {{ s.of_prev }}{% endif %}</span></div>{% endfor %}
+</div>
+
+{% include "admin/analytics/_table.html" with title="منبع / نوع / کمپین" rows=sources %}
+{% include "admin/analytics/_table.html" with title="صفحه فرود" rows=landing %}
+{% include "admin/analytics/_table.html" with title="دامنه ارجاع‌دهنده" rows=referrers %}
+{% include "admin/analytics/_table.html" with title="دستگاه" rows=devices %}
+{% include "admin/analytics/_table.html" with title="مرورگر داخلی برنامه‌ها (اینستاگرام، تلگرام، لینکدین ...)" rows=in_app %}
+<p class="an-note">«کد گرفتند و وارد نکردند» یعنی کد درخواست شد ولی هرگز وارد نشد: معمولاً پیامک نرسیده، شماره ایرانی نبوده یا کاربر منصرف شده است.</p>
+{% endblock %}

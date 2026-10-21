@@ -1,0 +1,9 @@
+<h2>{{ title }}</h2>
+{% if rows %}
+<table class="an">
+  <thead><tr><th>{{ title }}</th><th>بازدیدکننده</th><th>کد خواستند</th><th>ثبت‌نام</th><th>نرخ ثبت‌نام</th><th>ساخت پایگاه داده</th><th>کد گرفتند و وارد نکردند</th><th>خطای ارسال پیامک</th></tr></thead>
+  <tbody>
+  {% for r in rows %}<tr><td dir="auto">{{ r.label }}</td><td>{{ r.visitors }}</td><td>{{ r.requested }}</td><td>{{ r.signup }}</td><td>{{ r.signup_rate }}</td><td>{{ r.dbs }}</td><td{% if r.stuck %} class="an-bad"{% endif %}>{{ r.stuck }}</td><td{% if r.send_failed %} class="an-bad"{% endif %}>{{ r.send_failed }}</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="an-note">هنوز داده‌ای برای این بازه ثبت نشده است.</p>{% endif %}

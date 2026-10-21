@@ -88,6 +88,9 @@ def create(request):
             messages.error(request, str(exc))
         else:
             request.session[SESSION_PW_KEY.format(db.pk)] = form.cleaned_data["password"]
+            from analytics import services as analytics
+
+            analytics.record(request, "db_created", plan=plan.slug if plan else "")
             messages.success(request, "پایگاه داده مکانی شما آماده است 🎉")
             return redirect("databases:detail", pk=db.pk)
     if form.is_bound:

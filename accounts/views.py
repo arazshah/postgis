@@ -5,6 +5,8 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods, require_POST
 
+from analytics import services as analytics
+from analytics.models import Event
 from core.models import SiteSettings
 
 from . import otp
@@ -40,6 +42,10 @@ def login_start(request):
             messages.error(request, "این شماره به حساب مدیریتی متصل است و از اینجا وارد نمی‌شود.")
             return render(request, "accounts/login.html", {"form": form, "next": nxt or ""})
         result = otp.request_code(phone, otp.client_ip(request))
+        if result.ok:
+            analytics.record(request, Event.OTP_REQUESTED, new=existing is None)
+        elif not result.wait_seconds:
+            analytics.record(request, Event.OTP_SEND_FAILED, new=existing is None)
         if result.ok or result.wait_seconds:
             request.session[SESSION_PHONE] = phone
             if nxt:
@@ -69,6 +75,7 @@ def verify(request):
     if request.method == "POST" and form.is_valid():
         ok, error = otp.verify_code(phone, form.cleaned_data["code"])
         if not ok:
+            analytics.record(request, Event.OTP_WRONG, new=new_user)
             form.add_error("code", error)
         else:
             if new_user and not SiteSettings.get().signup_open:
@@ -88,6 +95,8 @@ def verify(request):
             request.session.pop(SESSION_PHONE, None)
             nxt = request.session.pop(SESSION_NEXT, None)
             login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+            analytics.record(request, Event.OTP_VERIFIED, new=new_user)
+            analytics.attach_user(request, user, new_user=new_user)
             if new_user:
                 messages.success(request, "حساب شما ساخته شد. حالا اولین پایگاه داده مکانی خود را بسازید.")
                 return redirect("databases:create")
