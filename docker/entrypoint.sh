@@ -16,6 +16,11 @@ if [ "${RUN_MIGRATIONS:-1}" = "1" ]; then
   python manage.py migrate --noinput
 fi
 
+# مقاله‌های پایگاه دانش از kb/content (مقاله‌های ویرایش‌شده در پنل دست‌نخورده می‌مانند)
+if [ "${RUN_MIGRATIONS:-1}" = "1" ] && [ "${KB_SYNC:-1}" = "1" ]; then
+  python manage.py kb_sync || echo "kb_sync ناموفق بود؛ ادامه راه‌اندازی"
+fi
+
 # ساخت ادمین اولیه در اولین اجرا (اختیاری)
 if [ -n "$DJANGO_SUPERUSER_USERNAME" ] && [ -n "$DJANGO_SUPERUSER_PASSWORD" ]; then
   python manage.py ensure_superuser || true

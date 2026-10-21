@@ -1,0 +1,52 @@
+{% extends "kb/_base.html" %}{% load fa %}
+{% block title %}{{ a.title }} — پایگاه دانش {{ SITE_NAME }}{% endblock %}
+{% block description %}{{ summary|truncatechars:158 }}{% endblock %}
+{% block robots %}{% if noindex %}noindex, nofollow{% else %}{{ ROBOTS }}{% endif %}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_title %}{{ a.title }}{% endblock %}
+{% block og_description %}{{ summary|truncatechars:200 }}{% endblock %}
+{% block jsonld %}<script type="application/ld+json">{{ jsonld }}</script>{% endblock %}
+{% block kbtop %}
+<nav class="kb-crumb" aria-label="مسیر"><a href="{% url 'kb:index' %}">پایگاه دانش</a> <span aria-hidden="true">›</span> <a href="{{ a.category.get_absolute_url }}">{{ a.category.title }}</a></nav>
+{% endblock %}
+{% block kbbody %}
+<div class="kb-layout article">
+  <article class="kb-article">
+    {% if a.status != 'published' %}<p class="callout">این مقاله پیش‌نویس است و فقط مدیران آن را می‌بینند.</p>{% endif %}
+    <h1>{{ a.title }}</h1>
+    <p class="kb-meta"><span class="chip">{{ a.get_kind_display }}</span>
+      {% if a.audience == 'member' %}<span class="chip geo">ویژه کاربران واردشده</span>{% elif a.audience == 'staff' %}<span class="chip geo">داخلی</span>{% endif %}
+      <span class="muted small">آخرین بازبینی: {{ a.reviewed_at|jdate }}</span></p>
+    <div class="kb-answer" role="note" aria-label="پاسخ کوتاه"><b>پاسخ کوتاه</b><p>{{ summary }}</p></div>
+    {% if toc %}<nav class="kb-toc" aria-label="در این مقاله"><b>در این مقاله</b><ol>{% for lvl, name, anchor in toc %}<li><a href="#{{ anchor }}">{{ name }}</a></li>{% endfor %}</ol></nav>{% endif %}
+    <div class="kb-body prose">{{ body_html }}</div>
+
+    <section class="kb-vote" aria-labelledby="kb-vote-h">
+      <h2 id="kb-vote-h">آیا این مقاله به شما کمک کرد؟</h2>
+      {% if voted %}<p class="muted">بازخورد شما ثبت شد؛ ممنون.</p>
+      {% else %}
+      <form method="post" action="{% url 'kb:feedback' a.slug %}">{% csrf_token %}
+        <div class="kb-vote-row">
+          <button class="btn sm" name="helpful" value="1" type="submit">بله، مفید بود</button>
+          <button class="btn ghost sm" name="helpful" value="0" type="submit">نه، کامل نبود</button>
+        </div>
+        <details><summary class="small muted">چه چیزی کم بود؟ (اختیاری)</summary>
+          <label class="sr-only" for="kb-comment">توضیح</label>
+          <textarea id="kb-comment" name="comment" rows="2" maxlength="500" placeholder="مثلاً «مرحله ۳ مبهم بود». رمز و اطلاعات شخصی ننویسید."></textarea>
+        </details>
+      </form>
+      {% endif %}
+      <p class="small muted">هنوز جواب نگرفتید؟ <a href="{% url 'support:new' %}">به پشتیبانی بگویید</a>.</p>
+    </section>
+
+    <nav class="pager" aria-label="مقاله قبلی و بعدی">
+      <span>{% if prev %}<a href="{{ prev.get_absolute_url }}">قبلی: {{ prev.title }}</a>{% endif %}</span>
+      <span>{% if next %}<a href="{{ next.get_absolute_url }}">بعدی: {{ next.title }}</a>{% endif %}</span>
+    </nav>
+  </article>
+  <aside class="kb-side" aria-label="مقاله‌های مرتبط">
+    {% if related %}<b>مقاله‌های مرتبط</b><ul>{% for r in related %}<li><a href="{{ r.get_absolute_url }}">{{ r.title }}</a></li>{% endfor %}</ul>{% endif %}
+    <p class="small"><a href="{{ a.category.get_absolute_url }}">همه مقاله‌های «{{ a.category.title }}»</a></p>
+  </aside>
+</div>
+{% endblock %}

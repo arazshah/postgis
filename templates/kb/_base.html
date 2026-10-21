@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% load static %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/kb.css' %}">{% endblock %}
+{% block content %}
+<div class="wrap page kb">
+  {% block kbtop %}{% endblock %}
+  <form class="kb-search" role="search" action="{% url 'kb:search' %}" method="get">
+    <label class="sr-only" for="kb-q">جست‌وجو در پایگاه دانش</label>
+    <input id="kb-q" type="search" name="q" value="{{ q|default:'' }}" maxlength="200" autocomplete="off"
+           placeholder="سؤال خود را بنویسید؛ مثلاً «چرا خطای Connection refused می‌گیرم؟»">
+    <button class="btn" type="submit">جست‌وجو</button>
+  </form>
+  {% block kbbody %}{% endblock %}
+</div>
+{% endblock %}

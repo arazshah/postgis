@@ -35,6 +35,7 @@
       {% with u=request.resolver_match.url_name ns=request.resolver_match.namespace %}
       <a href="{% url 'core:help' %}" {% if ns == 'core' and u == 'help' or u == 'help_page' %}aria-current="page"{% endif %}>راهنما</a>
       <a href="{% url 'core:docs' %}" {% if ns == 'core' and u == 'docs' or u == 'doc' %}aria-current="page"{% endif %}>آموزش</a>
+      <a href="{% url 'kb:index' %}" {% if ns == 'kb' %}aria-current="page"{% endif %}>پایگاه دانش</a>
       {% if user.is_authenticated and user.is_staff %}
         <a href="{% url 'admin:index' %}">پنل مدیریت</a>
         <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="linkbtn" type="submit">خروج</button></form>
@@ -90,6 +91,7 @@
         <ul>
           <li><a href="{% url 'core:help' %}">راهنمای تصویری</a></li>
           <li><a href="{% url 'core:docs' %}">آموزش‌های نوشتاری</a></li>
+          <li><a href="{% url 'kb:index' %}">پایگاه دانش</a></li>
           <li><a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی چیست؟</a></li>
           <li><a href="{% url 'core:home' %}#faq">پرسش‌های متداول</a></li>
         </ul>
