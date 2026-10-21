@@ -27,9 +27,13 @@ DOC_SLUGS = {d[0] for d in DOCS}
 
 def home(request):
     plans = Plan.objects.filter(is_public=True)
+    from kb.faq import faq_jsonld, home_faqs
+
     from .help import GUIDES
 
-    return render(request, "core/home.html", {"plans": plans, "guides_count": len(GUIDES)})
+    faqs = home_faqs()
+    return render(request, "core/home.html", {"plans": plans, "guides_count": len(GUIDES), "faqs": faqs,
+                                              "faq_json": faq_jsonld(faqs)})
 
 
 def docs_index(request):
@@ -98,6 +102,7 @@ def robots_txt(request):
         "Disallow: /accounts/",
         "Disallow: /billing/",
         "Disallow: /support/",
+        "Disallow: /kb/search/",
         "",
         f"Sitemap: {settings.CANONICAL_URL}/sitemap.xml",
         "",
@@ -115,6 +120,22 @@ def _template_date(name: str) -> str:
         return datetime.date.today().isoformat()
 
 
+def _kb_sitemap_entries():
+    """پایگاه دانش: صفحه اصلی، دسته‌ها و مقاله‌های عمومی (با تاریخ آخرین تغییر واقعی)."""
+    from kb.models import Category
+    from kb.search import public_only
+
+    arts = list(public_only())
+    if not arts:
+        return []
+    out = [(reverse("kb:index"), "0.9", max(a.updated_at for a in arts).date().isoformat())]
+    live = {a.category_id for a in arts}
+    out += [(c.get_absolute_url(), "0.6", datetime.date.today().isoformat())
+            for c in Category.objects.filter(is_active=True, pk__in=live)]
+    out += [(a.get_absolute_url(), "0.7", a.updated_at.date().isoformat()) for a in arts]
+    return out
+
+
 def sitemap_xml(request):
     base = settings.CANONICAL_URL
     from .help import GUIDES
@@ -126,10 +147,11 @@ def sitemap_xml(request):
     pages += [(reverse("core:doc", args=[d[0]]), "0.9" if d[0] == "what-is-postgis" else "0.7", f"docs/{d[0]}.html")
               for d in DOCS]
     pages.append((reverse("core:terms"), "0.3", "core/terms.html"))
+    entries = [(path, prio, _template_date(tpl)) for path, prio, tpl in pages]
+    entries += _kb_sitemap_entries()
     items = "".join(
-        f"<url><loc>{escape(base + path)}</loc><lastmod>{_template_date(tpl)}</lastmod>"
-        f"<priority>{prio}</priority></url>"
-        for path, prio, tpl in pages)
+        f"<url><loc>{escape(base + path)}</loc><lastmod>{lastmod}</lastmod><priority>{prio}</priority></url>"
+        for path, prio, lastmod in entries)
     xml = ('<?xml version="1.0" encoding="UTF-8"?>'
            f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</urlset>')
     return HttpResponse(xml, content_type="application/xml; charset=utf-8")

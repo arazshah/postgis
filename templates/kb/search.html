@@ -1,0 +1,20 @@
+{% extends "kb/_base.html" %}{% load fa %}
+{% block title %}{% if q %}جست‌وجوی «{{ q }}» — {% endif %}پایگاه دانش {{ SITE_NAME }}{% endblock %}
+{% block robots %}noindex, follow{% endblock %}
+{% block kbbody %}
+{% if q %}
+<h1 class="kb-h1">{{ results|length|fanum }} نتیجه برای «{{ q }}»</h1>
+{% if cat %}<p class="muted small"><a href="{% url 'kb:search' %}?q={{ q|urlencode }}">حذف فیلتر دسته</a></p>{% endif %}
+{% if results %}
+<ul class="kb-list">{% for a, score in results %}{% include "kb/_card.html" %}{% endfor %}</ul>
+{% else %}
+<div class="callout">
+  <p>مقاله‌ای برای این عبارت پیدا نشد. عبارت را کوتاه‌تر یا با واژه‌های دیگر بنویسید، یا مستقیم از پشتیبانی بپرسید؛ پرسش شما برای نوشتن مقاله‌های بعدی ثبت شد.</p>
+  <p><a class="btn sm" href="{% url 'support:new' %}">ثبت تیکت پشتیبانی</a></p>
+</div>
+{% if suggest %}<h2>شاید این‌ها به کارتان بیاید</h2><ul class="kb-list">{% for a in suggest %}{% include "kb/_card.html" %}{% endfor %}</ul>{% endif %}
+{% endif %}
+{% else %}
+<p class="muted">عبارتی بنویسید و جست‌وجو را بزنید.</p>
+{% endif %}
+{% endblock %}

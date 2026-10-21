@@ -1,0 +1,6 @@
+{% load fa %}
+<li class="kb-item">
+  <a class="kb-item-title" href="{{ a.get_absolute_url }}">{{ a.title }}</a>
+  <p class="kb-item-sum">{{ a.summary|truncatechars:210 }}</p>
+  <p class="kb-item-meta"><span class="chip">{{ a.category.title }}</span> <span class="muted small">{{ a.get_kind_display }}</span>{% if a.audience == 'member' %} <span class="chip geo">ویژه کاربران</span>{% elif a.audience == 'staff' %} <span class="chip geo">داخلی</span>{% endif %}</p>
+</li>

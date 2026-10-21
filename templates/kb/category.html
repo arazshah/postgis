@@ -1,0 +1,13 @@
+{% extends "kb/_base.html" %}{% load fa %}
+{% block title %}{{ cat.title }} — پایگاه دانش {{ SITE_NAME }}{% endblock %}
+{% block description %}{{ cat.description }} — {{ articles|length|fanum }} مقاله در پایگاه دانش {{ SITE_NAME }}.{% endblock %}
+{% block kbtop %}
+<nav class="kb-crumb" aria-label="مسیر"><a href="{% url 'kb:index' %}">پایگاه دانش</a> <span aria-hidden="true">›</span> <span>{{ cat.title }}</span></nav>
+<header class="kb-hero"><h1>{{ cat.icon }} {{ cat.title }}</h1><p class="muted">{{ cat.description }}</p></header>
+{% endblock %}
+{% block kbbody %}
+<div class="kb-layout">
+  <aside class="kb-side" aria-label="دسته‌ها"><ul>{% for c in categories %}<li><a href="{{ c.get_absolute_url }}" {% if c.pk == cat.pk %}aria-current="page"{% endif %}>{{ c.title }}</a></li>{% endfor %}</ul></aside>
+  <ul class="kb-list">{% for a in articles %}{% include "kb/_card.html" %}{% endfor %}</ul>
+</div>
+{% endblock %}

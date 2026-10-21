@@ -1,0 +1,34 @@
+{% extends "kb/_base.html" %}{% load fa %}
+{% block title %}پایگاه دانش — پاسخ پرسش‌های PostGIS، اتصال، داده و نقشه — {{ SITE_NAME }}{% endblock %}
+{% block description %}پایگاه دانش {{ SITE_NAME }}: راهنمای ساخت پایگاه داده مکانی PostGIS، اتصال از QGIS و GeoServer، ورود داده، تحلیل مکانی، انتشار نقشه، پلن‌ها و عیب‌یابی؛ همه با پاسخ مستقیم.{% endblock %}
+{% block jsonld %}<script type="application/ld+json">{{ jsonld }}</script>{% endblock %}
+{% block kbtop %}
+<header class="kb-hero">
+  <h1>پایگاه دانش {{ SITE_NAME }}</h1>
+  <p class="muted">{{ total|fanum }} مقاله با پاسخ مستقیم و راهنمای گام‌به‌گام؛ از اولین پایگاه داده تا انتشار نقشه روی وب.</p>
+</header>
+{% endblock %}
+{% block kbbody %}
+<section aria-labelledby="kb-cats">
+  <h2 id="kb-cats" class="sr-only">دسته‌ها</h2>
+  <ul class="kb-cats">
+    {% for c in categories %}
+    <li><a href="{{ c.get_absolute_url }}"><span class="kb-ico" aria-hidden="true">{{ c.icon }}</span><b>{{ c.title }}</b>
+      <span class="muted small">{{ c.description }}</span><span class="chip">{{ c.n|fanum }} مقاله</span></a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% if featured %}
+<section aria-labelledby="kb-pop">
+  <h2 id="kb-pop">پرسش‌های پرتکرار</h2>
+  <ul class="kb-list">{% for a in featured %}{% include "kb/_card.html" %}{% endfor %}</ul>
+</section>
+{% endif %}
+{% if recent %}
+<section aria-labelledby="kb-new">
+  <h2 id="kb-new">تازه‌ترین مقاله‌ها</h2>
+  <ul class="kb-list">{% for a in recent %}{% include "kb/_card.html" %}{% endfor %}</ul>
+</section>
+{% endif %}
+<p class="muted small kb-foot">پاسخ سؤالتان را پیدا نکردید؟ <a href="{% url 'support:list' %}">با پشتیبانی تماس بگیرید</a> یا <a href="{% url 'core:help' %}">راهنمای تصویری</a> را ببینید.</p>
+{% endblock %}

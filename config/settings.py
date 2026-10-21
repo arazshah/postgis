@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     "restapi",
     "enterprise",
     "analytics",
+    "kb",
 ]
 
 MIDDLEWARE = [
