@@ -1,8 +1,13 @@
+from django import forms
+from django.conf import settings
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from django.template.response import TemplateResponse
+from django.utils.html import format_html
 
+from . import classify as cl
 from . import reports
-from .models import Event, SourceReport, Visit, Visitor
+from .models import Event, SourceReport, TrackedLink, Visit, Visitor
 
 
 class ReadOnly(admin.ModelAdmin):
@@ -63,3 +68,83 @@ class EventAdmin(ReadOnly):
     list_display = ("created_at", "name", "path", "visitor")
     list_filter = ("name",)
     date_hierarchy = "created_at"
+
+
+class TrackedLinkForm(forms.ModelForm):
+    class Meta:
+        model = TrackedLink
+        exclude = ("clicks", "last_click_at")
+
+    def clean_destination(self):
+        value = (self.cleaned_data.get("destination") or "/").strip()
+        if not value.startswith("/") or value.startswith("//") or "\\" in value or "://" in value:
+            raise ValidationError("مقصد باید مسیر داخل همین سایت باشد و با / شروع شود؛ مثلاً / یا /accounts/login/")
+        return value
+
+    def clean_slug(self):
+        return self.cleaned_data["slug"].lower()
+
+    def _norm(self, name, limit):
+        value = cl.clean(self.cleaned_data.get(name), limit)
+        return value.replace(" ", "-")
+
+    def clean_utm_source(self):
+        value = self._norm("utm_source", 80)
+        if not value:
+            raise ValidationError("منبع الزامی است؛ مثلاً linkedin یا telegram")
+        return value
+
+    def clean_utm_medium(self):
+        return self._norm("utm_medium", 40) or "none"
+
+    def clean_utm_campaign(self):
+        return self._norm("utm_campaign", 120)
+
+    def clean_utm_content(self):
+        return self._norm("utm_content", 120)
+
+    def clean_utm_term(self):
+        return self._norm("utm_term", 120)
+
+
+@admin.register(TrackedLink)
+class TrackedLinkAdmin(admin.ModelAdmin):
+    """سازنده UTM + لینک کوتاه: لینک را بساز، در تبلیغ یا کانال بگذار و در «گزارش منابع ورود» نتیجه را ببین."""
+
+    form = TrackedLinkForm
+    list_display = ("name", "short_link", "utm_source", "utm_medium", "utm_campaign", "clicks", "visitors", "signups",
+                    "is_active")
+    list_filter = ("is_active", "utm_source", "utm_medium")
+    search_fields = ("name", "slug", "utm_campaign")
+    readonly_fields = ("short_link", "full_link", "clicks", "last_click_at", "created_at")
+    fields = ("name", "slug", "destination", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+              "is_active", "short_link", "full_link", "clicks", "last_click_at", "created_at")
+
+    def _abs(self, path):
+        return settings.CANONICAL_URL + path
+
+    @admin.display(description="لینک کوتاه (این را در تبلیغ بگذارید)")
+    def short_link(self, obj):
+        if not obj.pk:
+            return "پس از ذخیره ساخته می‌شود"
+        url = self._abs(f"/go/{obj.slug}/")
+        return format_html('<input type="text" readonly dir="ltr" size="52" value="{}" onfocus="this.select()">', url)
+
+    @admin.display(description="لینک کامل با UTM (بدون کوتاه‌کننده)")
+    def full_link(self, obj):
+        if not obj.pk:
+            return "پس از ذخیره ساخته می‌شود"
+        return format_html('<input type="text" readonly dir="ltr" size="80" value="{}" onfocus="this.select()">',
+                           self._abs(obj.target_path()))
+
+    def _visitors(self, obj):
+        qs = Visitor.objects.filter(first_source=obj.utm_source, first_medium=obj.utm_medium)
+        return qs.filter(first_campaign=obj.utm_campaign) if obj.utm_campaign else qs
+
+    @admin.display(description="بازدیدکننده جدید")
+    def visitors(self, obj):
+        return self._visitors(obj).count()
+
+    @admin.display(description="ثبت‌نام")
+    def signups(self, obj):
+        return Event.objects.filter(name=Event.SIGNUP, visitor__in=self._visitors(obj)).values("visitor").distinct().count()

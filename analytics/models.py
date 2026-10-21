@@ -92,6 +92,46 @@ class Event(models.Model):
         return self.name
 
 
+class TrackedLink(models.Model):
+    """لینک کوتاه ردیابی‌شده برای تبلیغ در پیام‌رسان‌ها (که Referer نمی‌فرستند): /go/<slug>/."""
+
+    slug = models.SlugField("نام کوتاه", max_length=60, unique=True, help_text="فقط حروف انگلیسی کوچک، عدد و خط تیره. مثلاً linkedin-oct")
+    name = models.CharField("عنوان داخلی", max_length=120, help_text="فقط برای شما: مثلاً «آگهی لینکدین مهر، تصویر ۱»")
+    destination = models.CharField("صفحه مقصد", max_length=300, default="/",
+                                   help_text="مسیر داخل سایت، مثلاً / یا /accounts/login/ یا /classes/")
+    utm_source = models.CharField("منبع (utm_source)", max_length=80, help_text="مثلاً linkedin، telegram، bale، aparat")
+    utm_medium = models.CharField("نوع (utm_medium)", max_length=40, default="social",
+                                  help_text="مثلاً paid، social، email، channel، video")
+    utm_campaign = models.CharField("کمپین (utm_campaign)", max_length=120, blank=True)
+    utm_content = models.CharField("نسخه آگهی (utm_content)", max_length=120, blank=True)
+    utm_term = models.CharField("کلمه (utm_term)", max_length=120, blank=True)
+    is_active = models.BooleanField("فعال", default=True)
+    clicks = models.PositiveIntegerField("کلیک", default=0)
+    last_click_at = models.DateTimeField("آخرین کلیک", null=True, blank=True)
+    created_at = models.DateTimeField("ساخته‌شده", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "لینک ردیابی‌شده"
+        verbose_name_plural = "لینک‌های ردیابی‌شده"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.name
+
+    def target_path(self) -> str:
+        """مقصد همراه با UTM؛ UTMهای قدیمیِ خود مقصد جایگزین می‌شوند."""
+        from urllib.parse import parse_qsl, urlencode, urlsplit
+
+        parts = urlsplit(self.destination or "/")
+        query = [(k, v) for k, v in parse_qsl(parts.query) if not k.startswith("utm_")]
+        for key in ("source", "medium", "campaign", "content", "term"):
+            value = getattr(self, f"utm_{key}")
+            if value:
+                query.append((f"utm_{key}", value))
+        out = parts.path or "/"
+        return out + "?" + urlencode(query) + (f"#{parts.fragment}" if parts.fragment else "")
+
+
 class SourceReport(Visit):
     """فقط برای نمایش گزارش «منابع ورود» در پنل مدیریت."""
 
