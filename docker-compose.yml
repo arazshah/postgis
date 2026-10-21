@@ -110,7 +110,8 @@ services:
     cpus: ${QGIS_CPUS:-1.5}
 
   panel-db:
-    image: postgres:16-alpine
+    # pgvector: جست‌وجوی معنایی دستیار هوشمند (ایمیج Debian است؛ بعد از تعویض از alpine، entrypoint یک بار REINDEX می‌کند)
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       - POSTGRES_USER=panel

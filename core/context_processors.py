@@ -2,7 +2,7 @@ from django.conf import settings
 
 from .models import SiteSettings
 
-PRIVATE_PREFIXES = ("/dashboard/", "/accounts/", "/billing/", "/support/", "/manage/", "/go/")
+PRIVATE_PREFIXES = ("/dashboard/", "/accounts/", "/billing/", "/support/", "/manage/", "/go/", "/assistant/")
 
 
 def site(request):
