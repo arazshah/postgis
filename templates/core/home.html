@@ -34,9 +34,6 @@
         <li>شروع رایگان برای دانشجوها و تازه‌کارها</li>
         <li>اتصال رمزنگاری‌شده SSL</li>
       </ul>
-      <ul class="tech" aria-label="سازگار با" dir="ltr">
-        <li>PostgreSQL 17</li><li>PostGIS 3.5</li><li>pgRouting 3.8</li><li>QGIS</li><li>GeoServer</li><li>Python</li>
-      </ul>
     </div>
 
     <figure class="demo" aria-labelledby="demo-cap">
@@ -128,20 +125,8 @@ WHERE ST_DWithin(
       <a class="tile" href="{% url 'core:help_page' 'publish' %}">
         <span class="tile-ico">{% include "help/_icon.html" with name="layers" %}</span>
         <h3>انتشار لایه</h3>
-        <p>کاشی برداری، OGC API Features و کلید API برای برنامه‌ها.</p>
+        <p>کاشی برداری، OGC API Features، WMS/WFS و کلید API.</p>
         <span class="tile-go">ببینید ←</span>
-      </a>
-      <a class="tile" href="{% url 'core:help_page' 'ready' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="globe" %}</span>
-        <h3>داده آماده ایران</h3>
-        <p>نقشه پایه فارسی، داده OSM هر استان و شبکه مسیریابی pgRouting.</p>
-        <span class="tile-go">ببینید ←</span>
-      </a>
-      <a class="tile" href="{% url 'core:help_page' 'wms' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="map" %}</span>
-        <h3>WMS و WFS</h3>
-        <p>پروژه QGIS خود را با QGIS Server منتشر کنید، بدون نصب GeoServer.</p>
-        <span class="fmt" dir="ltr"><span>WMS</span><span>WFS</span></span>
       </a>
       <a class="tile w2" href="{% url 'core:help_page' 'mapbuilder' %}">
         <span class="tile-ico">{% include "help/_icon.html" with name="brush" %}</span>
@@ -154,18 +139,6 @@ WHERE ST_DWithin(
         <h3>تحلیل بدون SQL و پرسش فارسی</h3>
         <p>بافر، نزدیک‌ترین، شمارش، شش‌ضلعی و حوزه دسترسی با چند کلیک؛ یا پرسش خود را فارسی بنویسید.</p>
         <span class="tile-go">راهنمای تحلیل ←</span>
-      </a>
-      <a class="tile" href="{% url 'core:help_page' 'rest' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="phone" %}</span>
-        <h3>REST API و فرم میدانی</h3>
-        <p>فرم موبایلی با GPS که بدون اینترنت هم کار می‌کند.</p>
-        <span class="tile-go">ببینید ←</span>
-      </a>
-      <a class="tile" href="{% url 'core:help_page' 'backups' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="backup" %}</span>
-        <h3>بکاپ و تیم</h3>
-        <p>بکاپ دستی و شبانه، و اعضای تیم با نقش مشاهده‌گر یا ویرایشگر.</p>
-        <span class="tile-go">ببینید ←</span>
       </a>
     </div>
   </div>
@@ -185,37 +158,6 @@ WHERE ST_DWithin(
       </video>
     </figure>
     <p class="intro-more"><a class="btn ghost" href="{% url 'core:help' %}">همه ویدیوهای راهنما</a></p>
-  </div>
-</section>
-
-{# ───────────── از ثبت‌نام تا اتصال ───────────── #}
-<section class="section cv" id="start" aria-labelledby="start-h">
-  <div class="wrap start-grid">
-    <div>
-      <div class="section-head">
-        <h2 id="start-h">از ثبت‌نام تا اولین لایه روی نقشه</h2>
-        <p class="muted">همه کارهای سخت سمت سرور انجام می‌شود؛ شما فقط داده مکانی خود را وارد می‌کنید.</p>
-      </div>
-      <ol class="help-steps">
-        <li><h3>حساب بسازید</h3><p>شماره موبایل را وارد کنید و کد پیامک‌شده را بزنید. رمز عبور لازم نیست.</p></li>
-        <li><h3>پایگاه داده را بسازید</h3><p>یک نام و رمز انتخاب کنید و افزونه‌های مکانی مورد نیازتان را تیک بزنید.</p></li>
-        <li><h3>وصل شوید</h3><p>اطلاعات اتصال آماده را در QGIS، GeoServer یا Python کپی کنید و Shapefile خود را وارد کنید.</p></li>
-      </ol>
-      <a class="btn" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">{% if user.is_authenticated %}ساخت پایگاه داده{% else %}شروع کنید؛ رایگان{% endif %}</a>
-    </div>
-
-    <figure class="conn" aria-label="نمونه اطلاعات اتصالی که تحویل می‌گیرید" style="margin:0">
-      <div class="conn-head"><span class="dot" aria-hidden="true"></span>پایگاه داده شما آماده است</div>
-      <dl>
-        <dt>میزبان</dt><dd>db.postgis.ir</dd>
-        <dt>پورت</dt><dd>5434</dd>
-        <dt>پایگاه داده</dt><dd>gp_tehran_parcels</dd>
-        <dt>نام کاربری</dt><dd>gp_tehran_parcels</dd>
-        <dt>SSL</dt><dd>require</dd>
-        <dt>افزونه‌ها</dt><dd>postgis · pgrouting</dd>
-      </dl>
-      <div class="uri">postgresql://gp_tehran_parcels:<b>••••••••</b>@db.postgis.ir:5434/gp_tehran_parcels?sslmode=require</div>
-    </figure>
   </div>
 </section>
 
@@ -247,24 +189,6 @@ WHERE ST_DWithin(
         <p>کلاس با کد ورود؛ هر دانشجو پایگاه داده جدا و داده تمرینی دارد و در پایان ترم بایگانی می‌شود.</p>
         <a href="{% url 'classroom:landing' %}">پلن کلاس و دانشگاه ←</a>
       </article>
-    </div>
-  </div>
-</section>
-
-{# ───────────── افزونه‌ها ───────────── #}
-<section class="section cv" aria-labelledby="ext-h">
-  <div class="wrap">
-    <div class="section-head">
-      <h2 id="ext-h">افزونه‌هایی که می‌توانید انتخاب کنید</h2>
-      <p class="muted">هر افزونه با یک تیک نصب می‌شود. بعداً هم از داشبورد می‌توانید افزونه اضافه کنید.</p>
-    </div>
-    <div class="ext-grid">
-      {% for e in extensions %}
-      <div class="ext-row">
-        <span class="tick{% if not e.is_default %} off{% endif %}" aria-hidden="true">{% if e.is_default %}✓{% endif %}</span>
-        <div><b>{{ e.title }}</b><span>{{ e.description }}</span></div>
-      </div>
-      {% endfor %}
     </div>
   </div>
 </section>
@@ -305,11 +229,11 @@ WHERE ST_DWithin(
 
 {# ───────────── آموزش و پرسش‌های متداول ───────────── #}
 <section class="section cv" id="faq" aria-labelledby="faq-h">
-  <div class="wrap learn">
+  <div class="wrap learn one">
     <div>
       <div class="section-head">
         <h2 id="faq-h">پرسش‌های متداول</h2>
-        <p class="muted">تازه با پایگاه داده مکانی آشنا شده‌اید؟ از <a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی و PostGIS چیست؟</a> شروع کنید.</p>
+        <p class="muted">تازه با پایگاه داده مکانی آشنا شده‌اید؟ از <a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی و PostGIS چیست؟</a> شروع کنید؛ بقیه آموزش‌ها در <a href="{% url 'core:docs' %}">بخش آموزش</a> است.</p>
       </div>
       <div class="faq">
         <details><summary>پایگاه داده مکانی چیست؟</summary><p>پایگاه داده‌ای که علاوه بر متن و عدد، نقطه، خط و چندضلعی را ذخیره می‌کند و با توابع مکانی مثل فاصله، تقاطع و بافر روی آن‌ها تحلیل انجام می‌دهد. PostGIS محبوب‌ترین پایگاه داده مکانی متن‌باز است.</p></details>
@@ -320,16 +244,6 @@ WHERE ST_DWithin(
         <details><summary>داده‌هایم را چطور وارد کنم؟</summary><p>با DB Manager در QGIS، با ogr2ogr یا shp2pgsql، یا با یک خط پایتون (to_postgis در GeoPandas). آموزش هر روش در بخش آموزش هست.</p></details>
       </div>
     </div>
-    <aside aria-labelledby="docs-h">
-      <h2 id="docs-h" class="docs-h">آموزش‌های قدم‌به‌قدم</h2>
-      <ul class="doc-links one">
-        <li><a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی و PostGIS چیست؟<span>راهنمای کامل برای شروع</span></a></li>
-        <li><a href="{% url 'core:doc' 'qgis' %}">اتصال از QGIS<span>افزودن اتصال PostGIS و نمایش لایه‌ها</span></a></li>
-        <li><a href="{% url 'core:doc' 'import' %}">وارد کردن Shapefile و GeoPackage<span>با DB Manager، ogr2ogr یا shp2pgsql</span></a></li>
-        <li><a href="{% url 'core:doc' 'geoserver' %}">اتصال به GeoServer<span>ساخت Store و انتشار لایه WMS/WFS</span></a></li>
-        <li><a href="{% url 'core:doc' 'srid' %}">سیستم مختصات در ایران<span>کی 4326، کی 3857 و کی UTM</span></a></li>
-      </ul>
-    </aside>
   </div>
 </section>
 
