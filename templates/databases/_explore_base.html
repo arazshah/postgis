@@ -1,24 +1,39 @@
 {% extends "databases/_ws.html" %}{% load fa static %}
 {% block title %}مرورگر {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
-  <div class="ex-layout{% if section != 'tables' and section != 'sql' %} solo{% endif %}">
-    {% if section == 'tables' or section == 'sql' %}
-    <aside class="ex-side" aria-label="فهرست جدول‌ها">
-      <div class="ex-side-head">جدول‌ها <span class="muted">({{ tables|length|fanum }})</span></div>
+  {# فهرست جدول‌ها فقط داخل یک جدول یا در کنسول SQL لازم است؛ در «خلاصه جدول‌ها» خود صفحه فهرست است. #}
+  <div class="ex-layout solo" data-ex-layout>
+    {% if tables and t or tables and section == 'sql' %}
+    <div class="ex-bar">
+      <button type="button" class="btn ghost sm ex-toggle" aria-expanded="false" aria-controls="ex-list" data-ex-toggle>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        جدول‌ها <span class="muted">({{ tables|length|fanum }})</span>
+      </button>
+      {% if t %}<span class="ex-current ltr" title="جدول فعلی">{% if t.schema != 'public' %}{{ t.schema }}.{% endif %}{{ t.name }}</span>{% endif %}
+    </div>
+    <aside class="ex-side" id="ex-list" aria-label="فهرست جدول‌ها" hidden data-ex-list>
+      <div class="ex-side-head">
+        <input type="search" class="ex-filter ltr" placeholder="جست‌وجوی جدول…" aria-label="جست‌وجوی جدول" data-ex-filter autocomplete="off">
+        <button type="button" class="ex-pin" aria-pressed="false" title="نمایش فهرست کنار صفحه" data-ex-pin>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3z"/></svg>
+          <span class="sr-label">سنجاق</span>
+        </button>
+      </div>
+      <div class="ex-scroll">
       {% regroup tables by schema as groups %}
       {% for g in groups %}
         {% if groups|length > 1 or g.grouper != 'public' %}<div class="ex-schema ltr">{{ g.grouper }}</div>{% endif %}
         <ul>
         {% for x in g.list %}
-          <li><a href="{% url 'databases:explore_table' db.pk x.schema x.name %}" {% if t and t.oid == x.oid %}aria-current="page"{% endif %}>
+          <li data-name="{{ x.name|lower }}"><a href="{% url 'databases:explore_table' db.pk x.schema x.name %}" {% if t and t.oid == x.oid %}aria-current="page"{% endif %}>
             <span class="ltr ex-tname">{{ x.name }}</span>
             {% if x.geometry %}<span class="geo-dot" title="{{ x.geometry.0.type }} · SRID {{ x.geometry.0.srid }}" aria-label="مکانی"></span>{% endif %}
           </a></li>
         {% endfor %}
         </ul>
-      {% empty %}
-        <p class="small muted" style="padding:0 12px">هنوز جدولی ندارید.</p>
       {% endfor %}
+      <p class="small muted ex-none" hidden>جدولی با این نام نیست.</p>
+      </div>
     </aside>
     {% endif %}
     <section class="ex-main">
@@ -26,3 +41,4 @@
     </section>
   </div>
 {% endblock %}
+{% block scripts %}<script src="{% static 'js/explore-nav.js' %}" defer></script>{% endblock %}

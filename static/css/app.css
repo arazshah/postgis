@@ -256,7 +256,7 @@ code,.mono,kbd{font-family:var(--f-mono);font-size:.88em}
   border-radius:var(--r-sm) var(--r-sm) 0 0;white-space:nowrap}
 .tabs button[aria-selected=true]{background:var(--ink);color:#fff}
 .tabpanel[hidden]{display:none}
-pre.code{background:var(--ink);color:#DCEAE4;padding:var(--s4);border-radius:var(--r-sm);direction:ltr;text-align:left;
+pre.code{display:block;width:100%;max-width:100%;box-sizing:border-box;background:var(--ink);color:#DCEAE4;padding:var(--s4);border-radius:var(--r-sm);direction:ltr;text-align:left;
   overflow-x:auto;font-family:var(--f-mono);font-size:.85rem;line-height:1.7;margin:0 0 var(--s3);position:relative;white-space:pre}
 pre.code .copy{position:absolute;top:8px;right:8px}
 .copy{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:5px;font:inherit;font-size:.78rem;
@@ -358,6 +358,7 @@ details.danger-zone summary{cursor:pointer;color:var(--red);font-weight:700}
 .data-table{border-collapse:collapse;width:100%;font-size:.86rem}
 .data-table th,.data-table td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;
   max-width:420px;overflow:hidden;text-overflow:ellipsis}
+.data-table td.small{white-space:normal}
 .data-table thead th{position:sticky;top:0;background:var(--paper-2);z-index:1;font-weight:700}
 .data-table td.ltr,.data-table th.ltr{direction:ltr;text-align:left;font-family:var(--f-mono);font-size:.82rem}
 .data-table tbody tr:hover{background:var(--paper)}
@@ -774,3 +775,31 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 .llm-steps li{counter-increment:s;display:grid;grid-template-columns:28px 1fr;column-gap:10px;align-items:start}
 .llm-steps li::before{content:counter(s);grid-row:span 2;width:28px;height:28px;border-radius:50%;background:var(--brand,#1d6fb8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.85rem}
 .llm-steps li b{font-size:.92rem}
+
+/* ── فهرست جدول‌ها: بازشو با جست‌وجو یا سنجاق‌شده کنار صفحه (explore-nav.js) ── */
+.ex-layout{position:relative}
+.ex-bar{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-bottom:var(--s4)}
+.ex-toggle{display:inline-flex;align-items:center;gap:8px}
+.ex-current{font-family:var(--f-mono);font-size:.9rem;color:var(--ink-2);padding:2px 10px;border-radius:99px;background:var(--paper-2)}
+.ex-side[hidden],.ex-pin[hidden],.ex-side li[hidden],.ex-side ul[hidden],.ex-schema[hidden],.ex-none[hidden]{display:none!important}
+.ex-side{padding:0;display:flex;flex-direction:column}
+.ex-side-head{display:flex;align-items:center;gap:var(--s2);padding:var(--s3);border-bottom:1px solid var(--line)}
+.ex-filter{flex:1;min-width:0;font:inherit;font-size:.88rem;padding:6px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff}
+.ex-filter:focus{outline:2px solid var(--teal);outline-offset:1px}
+.ex-pin{flex:none;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid var(--line);
+  border-radius:var(--r-sm);background:#fff;color:var(--ink-2);cursor:pointer}
+.ex-pin:hover{border-color:var(--teal);color:var(--teal)}
+.ex-pin[aria-pressed=true]{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-dark)}
+.ex-scroll{overflow:auto;padding:var(--s2) 0;flex:1;min-height:0}
+.ex-none{padding:var(--s3) var(--s4);margin:0}
+/* حالت بازشو: روی محتوا باز می‌شود و جایی از آن نمی‌گیرد */
+.ws .ex-layout.popover .ex-side{position:absolute;top:44px;inset-inline-start:0;z-index:30;width:min(340px,100%);
+  max-height:min(70vh,520px);box-shadow:0 14px 34px rgba(10,30,28,.2)}
+/* حالت سنجاق‌شده: ستون کنار صفحه */
+.ws .ex-layout.solo.docked{grid-template-columns:220px minmax(0,1fr);gap:var(--s4)}
+.ex-layout.docked .ex-bar{grid-column:1/-1}
+.ex-layout.docked .ex-side{position:sticky;top:84px;max-height:calc(100vh - 110px)}
+@media (max-width:900px){
+  .ws .ex-layout.solo.docked{grid-template-columns:minmax(0,1fr)}
+  .ws .ex-layout.popover .ex-side{inset-inline:0;width:auto}
+}
