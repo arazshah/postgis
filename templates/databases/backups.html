@@ -18,7 +18,7 @@
   <section class="panel">
     <h2 style="font-size:1.2rem">تاریخچه</h2>
     {% if jobs %}
-    <table class="data-table">
+    <div class="table-wrap"><table class="data-table">
       <thead><tr><th>زمان</th><th>نوع</th><th>وضعیت</th><th>حجم</th><th>توضیح</th><th></th></tr></thead>
       <tbody>
       {% for j in jobs %}
@@ -32,7 +32,7 @@
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% else %}
     <p class="muted">هنوز بکاپی گرفته نشده. اولین بکاپ خودکار امشب گرفته می‌شود؛ یا همین حالا یک بکاپ دستی بگیرید.</p>
     {% endif %}

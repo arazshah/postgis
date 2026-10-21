@@ -358,6 +358,7 @@ details.danger-zone summary{cursor:pointer;color:var(--red);font-weight:700}
 .data-table{border-collapse:collapse;width:100%;font-size:.86rem}
 .data-table th,.data-table td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;
   max-width:420px;overflow:hidden;text-overflow:ellipsis}
+.data-table td.small{white-space:normal}
 .data-table thead th{position:sticky;top:0;background:var(--paper-2);z-index:1;font-weight:700}
 .data-table td.ltr,.data-table th.ltr{direction:ltr;text-align:left;font-family:var(--f-mono);font-size:.82rem}
 .data-table tbody tr:hover{background:var(--paper)}
