@@ -127,6 +127,10 @@
   </div>
 </footer>
 <script src="{% static 'js/app.js' %}" defer></script>
+{% if SITE.assistant_ready %}
+<link rel="stylesheet" href="{% static 'css/assistant.css' %}">
+<script src="{% static 'js/assistant.js' %}" defer data-config="{% url 'assistant:config' %}" data-ask="{% url 'assistant:ask' %}" data-feedback="{% url 'assistant:feedback' %}" data-kb="{% url 'kb:index' %}"></script>
+{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

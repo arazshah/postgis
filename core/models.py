@@ -51,6 +51,28 @@ class SiteSettings(models.Model):
         "پیوند ثبت‌نام (همکاری در فروش)", max_length=300, blank=True,
         help_text="پیوند ثبت‌نام شما در سرویس؛ دکمه راهنما کاربر را به این آدرس می‌برد.")
 
+    # --- دستیار هوشمند (پرسش و پاسخ روی پایگاه دانش، با سرویس سازگار با OpenAI مثل AvalAI) ---
+    assistant_enabled = models.BooleanField(
+        "دستیار هوشمند فعال است", default=False,
+        help_text="دکمه دستیار پایین‌چپ همه صفحه‌ها. بدون کلید API نمایش داده نمی‌شود.")
+    assistant_base_url = models.URLField("آدرس سرویس (سازگار با OpenAI)", max_length=300,
+                                         default="https://api.avalai.ir/v1")
+    assistant_api_key_encrypted = models.TextField(blank=True, editable=False)
+    assistant_chat_model = models.CharField("مدل گفتگو", max_length=100, default="gpt-4o-mini")
+    assistant_embedding_model = models.CharField(
+        "مدل embedding (جست‌وجوی معنایی)", max_length=100, default="text-embedding-3-small",
+        help_text="با عوض کردن مدل، «ساخت embedding» را دوباره بزنید.")
+    assistant_welcome = models.CharField(
+        "پیام خوش‌آمد", max_length=300, blank=True,
+        default="سلام! هر سؤالی درباره ساخت پایگاه داده، اتصال، ورود داده یا پلن‌ها دارید بپرسید.")
+    assistant_member_daily = models.PositiveSmallIntegerField("سقف پرسش روزانه هر کاربر واردشده", default=30)
+    assistant_guest_daily = models.PositiveSmallIntegerField(
+        "سقف پرسش روزانه هر مهمان (هر IP)", default=10, help_text="۰ = مهمان‌ها دستیار را نمی‌بینند.")
+    assistant_global_daily = models.PositiveIntegerField(
+        "سقف کل پرسش‌های روزانه سایت", default=1000, help_text="برای کنترل هزینه؛ بعد از رسیدن به آن دستیار تا فردا متوقف می‌شود.")
+    assistant_max_tokens = models.PositiveSmallIntegerField(
+        "حداکثر طول پاسخ (توکن)", default=700, validators=[MinValueValidator(100), MaxValueValidator(2000)])
+
     # --- پرداخت ---
     pay_enabled = models.BooleanField("فروش پلن‌های پولی فعال است", default=False)
     invoice_ttl_minutes = models.PositiveSmallIntegerField("مهلت پرداخت هر فاکتور (دقیقه)", default=60,
@@ -231,6 +253,29 @@ class SiteSettings(models.Model):
     @property
     def bale_ready(self) -> bool:
         return bool(self.bale_enabled and self.bale_client_id and self.bale_client_secret_encrypted)
+
+    def set_assistant_api_key(self, raw: str):
+        from databases.crypto import encrypt
+
+        self.assistant_api_key_encrypted = encrypt(raw.strip()) if raw else ""
+
+    def get_assistant_api_key(self) -> str:
+        from databases.crypto import decrypt
+
+        if not self.assistant_api_key_encrypted:
+            return ""
+        try:
+            return decrypt(self.assistant_api_key_encrypted)
+        except ValueError:
+            return ""
+
+    @property
+    def assistant_key_ready(self) -> bool:
+        return bool(self.assistant_api_key_encrypted and self.assistant_base_url)
+
+    @property
+    def assistant_ready(self) -> bool:
+        return bool(self.assistant_enabled and self.assistant_key_ready)
 
     @property
     def has_smsir_api_key(self) -> bool:

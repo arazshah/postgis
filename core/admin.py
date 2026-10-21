@@ -30,6 +30,12 @@ class SiteSettingsForm(forms.ModelForm):
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
         help_text="از پنل زرین‌پال (۳۶ کاراکتر) یا زیبال. فقط هنگام تغییر وارد کنید؛ رمزنگاری‌شده ذخیره می‌شود.")
 
+    assistant_api_key = forms.CharField(
+        label="کلید API دستیار (AvalAI)", required=False,
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
+        help_text="فقط هنگام تغییر وارد کنید؛ رمزنگاری‌شده ذخیره می‌شود و دوباره نمایش داده نمی‌شود.")
+    clear_assistant_api_key = forms.BooleanField(label="حذف کلید API دستیار", required=False)
+
     class Meta:
         model = SiteSettings
         fields = "__all__"
@@ -98,6 +104,15 @@ class SiteSettingsForm(forms.ModelForm):
                 raise ValidationError(f"خط {i}: آدرس باید با / یا https:// شروع شود.")
         return "\n".join(lines)
 
+    def clean_assistant_base_url(self):
+        url = (self.cleaned_data.get("assistant_base_url") or "").strip().rstrip("/")
+        if not url.startswith("https://"):
+            raise ValidationError("آدرس سرویس باید با https:// شروع شود؛ مثلاً https://api.avalai.ir/v1")
+        return url
+
+    def clean_assistant_api_key(self):
+        return "".join((self.cleaned_data.get("assistant_api_key") or "").split())
+
     def clean_gateway_merchant(self):
         return "".join((self.cleaned_data.get("gateway_merchant") or "").split())
 
@@ -121,6 +136,10 @@ class SiteSettingsForm(forms.ModelForm):
             obj.set_bale_client_secret(self.cleaned_data["bale_client_secret"].strip())
         if self.cleaned_data.get("gateway_merchant"):
             obj.set_gateway_merchant(self.cleaned_data["gateway_merchant"])
+        if self.cleaned_data.get("clear_assistant_api_key"):
+            obj.assistant_api_key_encrypted = ""
+        elif self.cleaned_data.get("assistant_api_key"):
+            obj.set_assistant_api_key(self.cleaned_data["assistant_api_key"])
         if commit:
             obj.save()
         return obj
@@ -130,7 +149,7 @@ class SiteSettingsForm(forms.ModelForm):
 class SiteSettingsAdmin(admin.ModelAdmin):
     form = SiteSettingsForm
     readonly_fields = ["api_key_status", "bale_status", "gateway_status", "gateway_tools", "sms_tools",
-                       "enamad_status", "updated_at"]
+                       "enamad_status", "assistant_status", "assistant_tools", "updated_at"]
     fieldsets = (
         ("سایت", {"fields": ("site_name", "tagline", "announcement", "announcement_level")}),
         ("پشتیبانی", {"fields": ("support_phone", "support_telegram", "support_email")}),
@@ -166,6 +185,16 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         ("راهنمای ساخت حساب مدل زبانی", {
             "fields": ("llm_partner_enabled", "llm_partner_name", "llm_partner_url"),
             "description": "اگر کاربر در صفحه تحلیل حساب مدل زبانی ندارد، دکمه ساخت حساب با پیوند همکاری شما نشان داده می‌شود.",
+        }),
+        ("دستیار هوشمند (پرسش و پاسخ روی پایگاه دانش)", {
+            "fields": ("assistant_enabled", "assistant_status", "assistant_base_url", "assistant_api_key",
+                       "clear_assistant_api_key", "assistant_chat_model", "assistant_embedding_model",
+                       "assistant_welcome", "assistant_member_daily", "assistant_guest_daily",
+                       "assistant_global_daily", "assistant_max_tokens", "assistant_tools"),
+            "description": "از سرویس‌های سازگار با OpenAI مثل AvalAI استفاده می‌شود: آدرس، کلید API و نام مدل را وارد کنید، "
+                           "ذخیره کنید، سپس «آزمایش اتصال» و «ساخت embedding» را بزنید. دستیار فقط از مقاله‌های پایگاه دانش "
+                           "جواب می‌دهد و به داده کاربران دسترسی ندارد. بعد از افزودن یا ویرایش مقاله‌ها، embedding هر ۱۰ دقیقه "
+                           "(با run_maintenance) خودکار به‌روز می‌شود.",
         }),
         ("پلن کلاس و دانشگاه", {"fields": ("class_price_per_student",)}),
         ("پنل پیامک (sms.ir)", {
@@ -231,6 +260,31 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             return format_html('<b style="color:#b54708">وارد نشده — فقط حالت آزمایشی کار می‌کند</b>')
         return format_html('<b style="color:#b42318">وارد نشده</b>')
 
+    @admin.display(description="وضعیت دستیار")
+    def assistant_status(self, obj):
+        from kb import vectors
+
+        if not obj.assistant_key_ready:
+            return format_html('<b style="color:#b42318">کلید API وارد نشده</b>')
+        try:
+            total, done = vectors.stats(obj.assistant_embedding_model)
+            sem = vectors.available()
+        except Exception:
+            total, done, sem = 0, 0, False
+        state = "فعال" if obj.assistant_enabled else "کلید ذخیره شده، ولی دستیار خاموش است"
+        color = "#1a7f4b" if obj.assistant_enabled else "#b54708"
+        if sem:
+            detail = f"جست‌وجوی معنایی: {done} از {total} تکه آماده"
+        else:
+            detail = "pgvector روی پایگاه داده پنل نیست؛ فقط جست‌وجوی کلیدواژه‌ای کار می‌کند"
+        return format_html('<b style="color:{}">{}</b> — {}', color, state, detail)
+
+    @admin.display(description="ابزار دستیار")
+    def assistant_tools(self, obj):
+        return format_html(
+            '<a class="button" href="{}">آزمایش اتصال</a>&nbsp; <a class="button" href="{}">ساخت / به‌روزرسانی embedding</a>',
+            reverse("admin:core_sitesettings_assistanttest"), reverse("admin:core_sitesettings_assistantembed"))
+
     @admin.display(description="ابزار درگاه")
     def gateway_tools(self, obj):
         return format_html('<a class="button" href="{}">آزمایش اتصال به درگاه</a>',
@@ -249,6 +303,10 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             path("gateway-test/", self.admin_site.admin_view(self.gateway_test_view),
                  name="core_sitesettings_gatewaytest"),
             path("test-sms/", self.admin_site.admin_view(self.test_sms_view), name="core_sitesettings_testsms"),
+            path("assistant-test/", self.admin_site.admin_view(self.assistant_test_view),
+                 name="core_sitesettings_assistanttest"),
+            path("assistant-embed/", self.admin_site.admin_view(self.assistant_embed_view),
+                 name="core_sitesettings_assistantembed"),
         ] + super().get_urls()
 
     def _back(self):
@@ -270,6 +328,38 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             messages.success(request, format_html(
                 "اتصال به {}{} درست است. <a href=\"{}\" target=\"_blank\">صفحه پرداخت آزمایشی</a> "
                 "(پرداخت نکنید).", gw.title, mode, res.pay_url))
+        return self._back()
+
+    def assistant_test_view(self, request):
+        from assistant import llm
+
+        conf = SiteSettings.get()
+        if not conf.assistant_key_ready:
+            messages.error(request, "اول کلید API را وارد و ذخیره کنید.")
+            return self._back()
+        try:
+            res = llm.ping(conf)
+        except llm.LLMError as exc:
+            messages.error(request, f"آزمایش ناموفق بود: {exc}")
+        else:
+            messages.success(request, f"اتصال درست است: مدل embedding بُردار {res['dims']}بُعدی داد و مدل گفتگو پاسخ داد "
+                                      f"(«{res['reply']}»).")
+        return self._back()
+
+    def assistant_embed_view(self, request):
+        from kb import embedding, vectors
+
+        conf = SiteSettings.get()
+        if not vectors.available() and not vectors.setup():
+            messages.error(request, "افزونه pgvector روی پایگاه داده پنل نصب نیست؛ ایمیج panel-db باید "
+                                    "pgvector/pgvector:pg16 باشد. تا آن زمان دستیار با جست‌وجوی کلیدواژه‌ای کار می‌کند.")
+            return self._back()
+        res = embedding.embed_pending(conf)
+        total, done = vectors.stats(conf.assistant_embedding_model)
+        if res["error"]:
+            messages.error(request, f"ساخت embedding کامل نشد ({res['embedded']} تکه انجام شد): {res['error']}")
+        else:
+            messages.success(request, f"{res['embedded']} تکه جدید ساخته شد؛ پوشش فعلی {done} از {total}.")
         return self._back()
 
     def credit_view(self, request):

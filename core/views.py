@@ -102,6 +102,7 @@ def robots_txt(request):
         "Disallow: /accounts/",
         "Disallow: /billing/",
         "Disallow: /support/",
+        "Disallow: /assistant/",
         "Disallow: /kb/search/",
         "",
         f"Sitemap: {settings.CANONICAL_URL}/sitemap.xml",
