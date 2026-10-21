@@ -113,6 +113,7 @@
 /* ---------- آموزش و پرسش‌ها ---------- */
 .learn{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:var(--s7);align-items:start}
 .learn .faq{max-width:none}
+.learn.one{grid-template-columns:minmax(0,820px);justify-content:center}
 .docs-h{font-size:1.25rem}
 .doc-links.one{grid-template-columns:1fr}
 

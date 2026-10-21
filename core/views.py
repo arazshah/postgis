@@ -8,7 +8,7 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
 
-from databases.models import Extension, Plan
+from databases.models import Plan
 
 DOCS = [
     ("what-is-postgis", "پایگاه داده مکانی و PostGIS چیست؟",
@@ -27,10 +27,9 @@ DOC_SLUGS = {d[0] for d in DOCS}
 
 def home(request):
     plans = Plan.objects.filter(is_public=True)
-    exts = Extension.objects.filter(is_active=True)
     from .help import GUIDES
 
-    return render(request, "core/home.html", {"plans": plans, "extensions": exts, "guides_count": len(GUIDES)})
+    return render(request, "core/home.html", {"plans": plans, "guides_count": len(GUIDES)})
 
 
 def docs_index(request):
