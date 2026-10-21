@@ -24,16 +24,17 @@
     return ok;
   }
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-copy]");
+    // data-copy-target نام ویژگی جداست و با [data-copy] تطبیق نمی‌کند
+    const btn = e.target.closest("[data-copy], [data-copy-target]");
     if (!btn) return;
     e.preventDefault();
     let text = btn.getAttribute("data-copy");
     if (!text) {
       const target = btn.getAttribute("data-copy-target");
       const el = target ? document.querySelector(target) : btn.closest("pre")?.querySelector("code");
-      text = el ? el.innerText.trim() : "";
+      text = el ? (el.textContent || "").trim() : "";
     }
-    copyText(text, btn);
+    if (text) copyText(text, btn);
   });
 
   // ساخت رمز تصادفی
