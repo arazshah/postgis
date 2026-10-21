@@ -256,7 +256,7 @@ code,.mono,kbd{font-family:var(--f-mono);font-size:.88em}
   border-radius:var(--r-sm) var(--r-sm) 0 0;white-space:nowrap}
 .tabs button[aria-selected=true]{background:var(--ink);color:#fff}
 .tabpanel[hidden]{display:none}
-pre.code{background:var(--ink);color:#DCEAE4;padding:var(--s4);border-radius:var(--r-sm);direction:ltr;text-align:left;
+pre.code{display:block;width:100%;max-width:100%;box-sizing:border-box;background:var(--ink);color:#DCEAE4;padding:var(--s4);border-radius:var(--r-sm);direction:ltr;text-align:left;
   overflow-x:auto;font-family:var(--f-mono);font-size:.85rem;line-height:1.7;margin:0 0 var(--s3);position:relative;white-space:pre}
 pre.code .copy{position:absolute;top:8px;right:8px}
 .copy{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:5px;font:inherit;font-size:.78rem;
