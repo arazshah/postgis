@@ -49,7 +49,7 @@ class SiteSettings(models.Model):
     llm_partner_name = models.CharField("نام سرویس", max_length=50, default="AvalAI")
     llm_partner_url = models.URLField(
         "پیوند ثبت‌نام (همکاری در فروش)", max_length=300, blank=True,
-        help_text="پیوند همکاری شما. کنار دکمه، یک جمله شفاف درباره همکاری در فروش نمایش داده می‌شود.")
+        help_text="پیوند ثبت‌نام شما در سرویس؛ دکمه راهنما کاربر را به این آدرس می‌برد.")
 
     # --- پرداخت ---
     pay_enabled = models.BooleanField("فروش پلن‌های پولی فعال است", default=False)
