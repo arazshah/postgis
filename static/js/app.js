@@ -155,3 +155,11 @@ document.querySelectorAll("[data-sql]").forEach((b) => {
     if (ta) { ta.value = b.getAttribute("data-sql"); ta.focus(); }
   });
 });
+
+// راهنمای ساخت حساب مدل زبانی: بعد از کلیک، کادر تنظیم کلید باز می‌شود تا کاربر کلید را بچسباند
+document.addEventListener("click", function (e) {
+  var a = e.target.closest("[data-llm-guide]");
+  if (!a) return;
+  var cfg = document.getElementById("llm-cfg");
+  if (cfg) { cfg.open = true; setTimeout(function () { var k = document.getElementById("l-key"); if (k) k.focus({preventScroll: true}); }, 400); }
+});
