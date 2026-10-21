@@ -18,6 +18,7 @@
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#0F5C59">
+  {% if SITE.enamad_meta_content %}<meta name="enamad" content="{{ SITE.enamad_meta_content }}">{% endif %}
   <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
   <link rel="preload" href="{% static 'fonts/vazirmatn-arabic-400-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
@@ -63,19 +64,66 @@
 
 <footer class="footer">
   <div class="wrap">
-    <div>{{ SITE_NAME }} · پایگاه داده مکانی برای جامعه GIS ایران</div>
-    <div style="display:flex;gap:16px;flex-wrap:wrap">
-      <a href="{% url 'core:help' %}">راهنمای تصویری</a>
-      <a href="{% url 'core:docs' %}">آموزش</a>
-      <a href="{% url 'classroom:landing' %}">پلن کلاس و دانشگاه</a>
-      <a href="{% url 'core:terms' %}">قوانین استفاده</a>
-      <a href="{% url 'support:new' %}">ثبت تیکت پشتیبانی</a>
-      {% if SITE.support_phone %}<span>پشتیبانی: <span class="ltr">{{ SITE.support_phone }}</span></span>{% endif %}
-      {% if SUPPORT_TELEGRAM %}<a href="https://t.me/{{ SUPPORT_TELEGRAM }}" rel="noopener">پشتیبانی در تلگرام</a>{% endif %}
-      {% if SUPPORT_EMAIL %}<a href="mailto:{{ SUPPORT_EMAIL }}">{{ SUPPORT_EMAIL }}</a>{% endif %}
+    <div class="foot-grid">
+      <section class="foot-brand" aria-label="درباره {{ SITE_NAME }}">
+        <a class="brand" href="{% url 'core:home' %}"><img src="{% static 'img/favicon.svg' %}" alt="" width="30" height="30" loading="lazy">{{ SITE_NAME }}</a>
+        {% if SITE.footer_about %}<p>{{ SITE.footer_about|linebreaksbr }}</p>{% endif %}
+        {% if SITE.social_list %}
+        <ul class="foot-social" aria-label="شبکه‌های اجتماعی">
+          {% for label, url, key in SITE.social_list %}<li><a href="{{ url }}" rel="noopener me" target="_blank" data-net="{{ key }}">{{ label }}</a></li>{% endfor %}
+        </ul>
+        {% endif %}
+      </section>
+
+      <nav class="foot-col" aria-labelledby="foot-h-svc">
+        <h2 class="foot-h" id="foot-h-svc">سرویس</h2>
+        <ul>
+          <li><a href="{% if user.is_authenticated and not user.is_staff %}{% url 'databases:create' %}{% else %}{% url 'accounts:login' %}{% endif %}">ساخت پایگاه داده</a></li>
+          <li><a href="{% url 'core:home' %}#plans">پلن‌ها و قیمت</a></li>
+          <li><a href="{% url 'classroom:landing' %}">پلن کلاس و دانشگاه</a></li>
+          <li><a href="{% url 'core:home' %}#features">امکانات</a></li>
+        </ul>
+      </nav>
+
+      <nav class="foot-col" aria-labelledby="foot-h-learn">
+        <h2 class="foot-h" id="foot-h-learn">یادگیری</h2>
+        <ul>
+          <li><a href="{% url 'core:help' %}">راهنمای تصویری</a></li>
+          <li><a href="{% url 'core:docs' %}">آموزش‌های نوشتاری</a></li>
+          <li><a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی چیست؟</a></li>
+          <li><a href="{% url 'core:home' %}#faq">پرسش‌های متداول</a></li>
+        </ul>
+      </nav>
+
+      <section class="foot-col" aria-labelledby="foot-h-contact">
+        <h2 class="foot-h" id="foot-h-contact">پشتیبانی</h2>
+        <ul>
+          <li><a href="{% url 'support:new' %}">ثبت تیکت پشتیبانی</a></li>
+          {% if SITE.support_phone %}<li>تلفن: <a class="ltr" href="tel:{{ SITE.support_phone }}">{{ SITE.support_phone }}</a></li>{% endif %}
+          {% if SUPPORT_TELEGRAM %}<li><a href="https://t.me/{{ SUPPORT_TELEGRAM }}" rel="noopener" target="_blank">پشتیبانی در تلگرام</a></li>{% endif %}
+          {% if SUPPORT_EMAIL %}<li><a class="ltr" href="mailto:{{ SUPPORT_EMAIL }}">{{ SUPPORT_EMAIL }}</a></li>{% endif %}
+          {% if SITE.footer_address %}<li class="foot-addr">{{ SITE.footer_address|linebreaksbr }}</li>{% endif %}
+        </ul>
+      </nav>
+
+      {% if SITE.has_trust_badges %}
+      <section class="foot-trust" aria-label="نمادهای اعتماد">
+        {% if SITE.enamad_badge_html.strip %}<div class="trust-box">{{ SITE.enamad_badge_html|safe }}</div>{% endif %}
+        {% if SITE.footer_badges_html.strip %}<div class="trust-box">{{ SITE.footer_badges_html|safe }}</div>{% endif %}
+      </section>
+      {% endif %}
+    </div>
+
+    <div class="foot-bottom">
+      <span>{{ SITE.copyright_text }}</span>
+      <ul>
+        <li><a href="{% url 'core:terms' %}">قوانین استفاده</a></li>
+        {% for title, url in SITE.footer_link_list %}<li><a href="{{ url }}"{% if url|slice:":4" == "http" %} rel="noopener" target="_blank"{% endif %}>{{ title }}</a></li>{% endfor %}
+      </ul>
     </div>
   </div>
 </footer>
 <script src="{% static 'js/app.js' %}" defer></script>
+{% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,26 +1,207 @@
 {% extends "base.html" %}{% load fa humanize static %}
 {% block title %}پایگاه داده مکانی PostGIS آنلاین | ساخت رایگان در ۳ دقیقه — {{ SITE_NAME }}{% endblock %}
+{% block head %}
+<link rel="preload" href="{% static 'fonts/noto-kufi-arabic-arabic-800-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{% static 'css/home.css' %}">
+{% endblock %}
 {% block jsonld %}
 <script type="application/ld+json">
 {"@context": "https://schema.org", "@graph": [{"@type": "Organization", "@id": "{{ BASE_URL }}/#org", "name": "{{ SITE_NAME|escapejs }}", "url": "{{ BASE_URL }}/", "logo": "{{ BASE_URL }}/static/img/favicon.svg"}, {"@type": "WebSite", "@id": "{{ BASE_URL }}/#site", "name": "{{ SITE_NAME|escapejs }}", "alternateName": "postgis.ir", "url": "{{ BASE_URL }}/", "inLanguage": "fa-IR", "publisher": {"@id": "{{ BASE_URL }}/#org"}}, {"@type": "SoftwareApplication", "name": "{{ SITE_NAME|escapejs }} — پایگاه داده مکانی PostGIS", "applicationCategory": "DeveloperApplication", "operatingSystem": "Web", "url": "{{ BASE_URL }}/", "inLanguage": "fa-IR", "description": "پایگاه داده مکانی PostGIS آماده برای WebGIS، QGIS و GeoServer؛ ساخت در سه دقیقه بدون نصب سرور.", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "IRR"}, "publisher": {"@id": "{{ BASE_URL }}/#org"}}, {"@type": "VideoObject", "name": "معرفی {{ SITE_NAME|escapejs }} در یک و نیم دقیقه", "description": "پایگاه داده مکانی PostGIS آنلاین: ساخت، اتصال QGIS، ورود فایل، SQL مکانی، نقشه قابل اشتراک و WMS/WFS با QGIS Server.", "duration": "PT1M37S", "thumbnailUrl": "{{ BASE_URL }}{% static 'help/video/intro.jpg' %}", "contentUrl": "{{ BASE_URL }}{% static 'help/video/intro.mp4' %}", "uploadDate": "2026-10-16", "inLanguage": "fa-IR"}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "پایگاه داده مکانی چیست؟", "acceptedAnswer": {"@type": "Answer", "text": "پایگاه داده‌ای که علاوه بر متن و عدد، نقطه، خط و چندضلعی را ذخیره می‌کند و با توابع مکانی مثل فاصله، تقاطع و بافر روی آن‌ها تحلیل انجام می‌دهد. PostGIS محبوب‌ترین پایگاه داده مکانی متن‌باز است."}}, {"@type": "Question", "name": "آیا برای استفاده باید PostgreSQL یا PostGIS نصب کنم؟", "acceptedAnswer": {"@type": "Answer", "text": "نه. پایگاه داده روی سرور ما ساخته می‌شود و شما فقط اطلاعات اتصال را در QGIS، GeoServer یا کد خود وارد می‌کنید."}}, {"@type": "Question", "name": "پلن رایگان چه محدودیتی دارد؟", "acceptedAnswer": {"@type": "Answer", "text": "پلن رایگان برای یادگیری، پایان‌نامه و نمونه اولیه WebGIS طراحی شده است؛ حجم، تعداد اتصال همزمان و مدت اعتبار آن در بخش پلن‌ها آمده و تمدیدش رایگان است."}}, {"@type": "Question", "name": "آیا اتصال امن است؟", "acceptedAnswer": {"@type": "Answer", "text": "بله. اتصال با SSL رمزنگاری می‌شود، هر پایگاه داده کاربر جداگانه دارد و کاربران به پایگاه داده یکدیگر دسترسی ندارند."}}, {"@type": "Question", "name": "با چه نرم‌افزارهایی می‌توانم وصل شوم؟", "acceptedAnswer": {"@type": "Answer", "text": "هر ابزاری که با PostgreSQL کار می‌کند: QGIS، ArcGIS Pro، GeoServer، پایتون (GeoPandas، psycopg)، GeoDjango، Node.js، ogr2ogr و psql."}}, {"@type": "Question", "name": "داده‌هایم را چطور وارد کنم؟", "acceptedAnswer": {"@type": "Answer", "text": "با DB Manager در QGIS، با ogr2ogr یا shp2pgsql، یا با یک خط پایتون (to_postgis در GeoPandas). آموزش هر روش در بخش آموزش هست."}}]}]}
 </script>
 {% endblock %}
+
 {% block content %}
-<section class="hero">
+{% url 'databases:create' as create_url %}{% url 'accounts:login' as login_url %}
+
+{# ───────────── قهرمان: پیشنهاد ارزش + نمونه زنده ───────────── #}
+<section class="home-hero" aria-labelledby="hero-h">
   <div class="wrap">
-    <div>
-      <h1>پایگاه داده مکانی PostGIS شما، سه دقیقه دیگر آماده است</h1>
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="dot" aria-hidden="true"></span>PostGIS به‌صورت سرویس</p>
+      <h1 id="hero-h">پایگاه داده مکانی PostGIS شما، <span class="hl">سه دقیقه</span> دیگر آماده است</h1>
       <p class="lead">بدون نصب، بدون سرور و بدون درگیری با تنظیمات. یک نام انتخاب کنید، افزونه‌ها را تیک بزنید و اطلاعات اتصال را در QGIS، GeoServer یا کد خودتان بگذارید.</p>
-      <div class="actions">
+      <div class="actions" data-hero-cta>
         {% if user.is_authenticated %}
-          <a class="btn" href="{% url 'databases:create' %}">ساخت پایگاه داده</a>
-          <a class="btn ghost" href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a>
+          <a class="btn lg" href="{{ create_url }}">ساخت پایگاه داده</a>
+          <a class="btn ghost lg" href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a>
         {% else %}
-          <a class="btn" href="{% url 'accounts:login' %}">ساخت حساب رایگان</a>
-          <a class="btn ghost" href="#intro">▶ ببینید چطور کار می‌کند</a>
+          <a class="btn lg" href="{{ login_url }}">ساخت حساب رایگان</a>
+          <a class="btn ghost lg" href="#intro"><svg class="hicon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>ببینید چطور کار می‌کند</a>
         {% endif %}
       </div>
-      <p class="note">رایگان برای دانشجوها و تازه‌کارها؛ ورود فقط با شماره موبایل.</p>
+      <ul class="assure" aria-label="چرا شروع آسان است">
+        <li>ورود فقط با شماره موبایل</li>
+        <li>شروع رایگان برای دانشجوها و تازه‌کارها</li>
+        <li>اتصال رمزنگاری‌شده SSL</li>
+      </ul>
+      <ul class="tech" aria-label="سازگار با" dir="ltr">
+        <li>PostgreSQL 17</li><li>PostGIS 3.5</li><li>pgRouting 3.8</li><li>QGIS</li><li>GeoServer</li><li>Python</li>
+      </ul>
+    </div>
+
+    <figure class="demo" aria-labelledby="demo-cap">
+      <div class="demo-bar">
+        <span class="dot" aria-hidden="true"></span>
+        <b id="demo-cap">یک کوئری مکانی را امتحان کنید</b>
+        <span class="demo-tag">نمونه نمایشی</span>
+      </div>
+      <div class="demo-tabs" role="group" aria-label="نمونه‌های تحلیل مکانی">
+        <button type="button" aria-pressed="true" data-demo="buffer">بافر ۵۰۰ متری</button>
+        <button type="button" aria-pressed="false" data-demo="near">۳ نزدیک‌ترین</button>
+        <button type="button" aria-pressed="false" data-demo="zone">داخل محدوده</button>
+      </div>
+      <svg id="demo-map" class="demo-map" viewBox="0 0 480 330" data-mode="buffer" role="img" aria-label="نقشه نمایشی با ۲۶ نقطه؛ نتیجه کوئری انتخاب‌شده با رنگ زرد مشخص می‌شود">
+        <g class="c-grp" aria-hidden="true">
+          <path class="c" d="M-10 262 C60 214 118 270 196 240 S338 170 402 210 S470 268 494 248"/>
+          <path class="c" d="M-10 300 C70 262 140 312 220 286 S356 224 420 262 S474 310 494 296"/>
+          <path class="c" d="M-10 214 C50 170 116 226 190 196 S318 128 392 168 S462 214 494 196"/>
+          <path class="c" d="M-10 80 C60 40 130 96 214 70 S340 14 414 50 S470 96 494 74"/>
+          <path class="c" d="M-10 130 C54 96 124 150 200 124 S330 74 408 108 S462 150 494 130"/>
+          <path class="river" d="M-6 150 C86 184 150 118 236 146 S384 196 486 128"/>
+          <path class="road" d="M30 318 C110 250 150 226 215 165 S330 90 452 22"/>
+        </g>
+        <polygon class="zone" points="330,70 430,60 455,150 410,215 325,195 305,125"/>
+        <circle class="buf" cx="215" cy="165" r="88"/>
+        <text class="buf-l" x="215" y="70" text-anchor="middle">۵۰۰ متر</text>
+        <g class="lines" aria-hidden="true"></g>
+        <g class="pts">
+          <circle class="pt" cx="48" cy="52" r="5"/><circle class="pt" cx="95" cy="110" r="5"/>
+          <circle class="pt" cx="140" cy="60" r="5"/><circle class="pt" cx="190" cy="38" r="5"/>
+          <circle class="pt" cx="262" cy="52" r="5"/><circle class="pt" cx="318" cy="40" r="5"/>
+          <circle class="pt" cx="372" cy="98" r="5"/><circle class="pt" cx="418" cy="115" r="5"/>
+          <circle class="pt" cx="446" cy="52" r="5"/><circle class="pt" cx="350" cy="150" r="5"/>
+          <circle class="pt" cx="392" cy="178" r="5"/><circle class="pt" cx="345" cy="185" r="5"/>
+          <circle class="pt" cx="180" cy="130" r="5"/><circle class="pt" cx="268" cy="150" r="5"/>
+          <circle class="pt" cx="250" cy="205" r="5"/><circle class="pt" cx="160" cy="205" r="5"/>
+          <circle class="pt" cx="215" cy="95" r="5"/><circle class="pt" cx="140" cy="168" r="5"/>
+          <circle class="pt" cx="60" cy="180" r="5"/><circle class="pt" cx="95" cy="265" r="5"/>
+          <circle class="pt" cx="150" cy="300" r="5"/><circle class="pt" cx="215" cy="290" r="5"/>
+          <circle class="pt" cx="300" cy="290" r="5"/><circle class="pt" cx="390" cy="270" r="5"/>
+          <circle class="pt" cx="445" cy="230" r="5"/><circle class="pt" cx="455" cy="300" r="5"/>
+        </g>
+        <g class="ctr" transform="translate(215 165)" aria-hidden="true">
+          <circle class="ctr-ring" r="15"/><circle class="ctr-dot" r="6"/><text y="-22" text-anchor="middle">مرکز</text>
+        </g>
+      </svg>
+      <pre class="demo-sql" dir="ltr"><code id="demo-sql">SELECT * FROM poi
+WHERE ST_DWithin(
+  geom::geography,
+  ST_SetSRID(ST_MakePoint(51.389, 35.689), 4326)::geography,
+  500);</code></pre>
+      <p class="demo-out" id="demo-out" aria-live="polite"><span>نتیجه</span><b>—</b></p>
+    </figure>
+  </div>
+</section>
+
+{# ───────────── نوار اطمینان ───────────── #}
+<section class="facts" aria-label="چرا {{ SITE_NAME }}">
+  <ul class="wrap">
+    <li><svg class="hicon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="11" cy="6" rx="7" ry="3"/><path d="M4 6v6c0 1.7 3.1 3 7 3M4 12v6c0 1.7 3.1 3 7 3"/><path d="M18 14v6M15 17h6"/></svg><div><b>پایگاه داده جدا برای هر کاربر</b><span>کاربران به داده یکدیگر دسترسی ندارند</span></div></li>
+    <li><svg class="hicon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><div><b>اتصال رمزنگاری‌شده SSL</b><span>رمز و داده‌ها بی‌دغدغه جابه‌جا می‌شوند</span></div></li>
+    <li><svg class="hicon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg><div><b>بکاپ شبانه و بازگردانی امن</b><span>پیش از بازگردانی، بکاپ ایمنی ساخته می‌شود</span></div></li>
+    <li><svg class="hicon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H4zM20 4h-5a2 2 0 0 0-2 2"/><path d="M20 4v13.5h-6.5"/></svg><div><b>{{ guides_count|fanum }} راهنمای تصویری</b><span>ویدیوی بی‌کلام و مراحل نوشتاری فارسی</span></div></li>
+  </ul>
+</section>
+
+{# ───────────── امکانات (بنتو) ───────────── #}
+<section class="section cv" id="features" aria-labelledby="features-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">همه‌چیز در یک جا</p>
+      <h2 id="features-h">از اولین فایل تا نقشه منتشرشده، بدون نصب هیچ‌چیز</h2>
+      <p class="muted">پایگاه داده فقط شروع کار است. ورود داده، تحلیل، انتشار و اشتراک هم کنارش آماده‌اند.</p>
+    </div>
+    <div class="bento">
+      <a class="tile hot w2" href="{% url 'core:help_page' 'import' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="upload" %}</span>
+        <h3>ورود فایل و سلامت داده</h3>
+        <p>فایل خود را آپلود کنید، پیش‌نمایش ببینید و وارد پایگاه داده کنید. هندسه نامعتبر، کلید اصلی و نمایه مکانی هم با یک کلیک اصلاح می‌شود.</p>
+        <span class="fmt" dir="ltr"><span>Shapefile</span><span>GeoPackage</span><span>GeoJSON</span><span>KML</span><span>CSV</span><span>DXF</span></span>
+        <span class="tile-go">راهنمای ورود فایل ←</span>
+      </a>
+      <a class="tile" href="{% url 'core:help_page' 'explore' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="stack" %}</span>
+        <h3>مرورگر داده و SQL</h3>
+        <p>جدول‌ها، نقشه و کنسول SQL مکانی، همه در مرورگر.</p>
+        <span class="tile-go">ببینید ←</span>
+      </a>
+      <a class="tile" href="{% url 'core:help_page' 'publish' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="layers" %}</span>
+        <h3>انتشار لایه</h3>
+        <p>کاشی برداری، OGC API Features و کلید API برای برنامه‌ها.</p>
+        <span class="tile-go">ببینید ←</span>
+      </a>
+      <a class="tile" href="{% url 'core:help_page' 'ready' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="globe" %}</span>
+        <h3>داده آماده ایران</h3>
+        <p>نقشه پایه فارسی، داده OSM هر استان و شبکه مسیریابی pgRouting.</p>
+        <span class="tile-go">ببینید ←</span>
+      </a>
+      <a class="tile" href="{% url 'core:help_page' 'wms' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="map" %}</span>
+        <h3>WMS و WFS</h3>
+        <p>پروژه QGIS خود را با QGIS Server منتشر کنید، بدون نصب GeoServer.</p>
+        <span class="fmt" dir="ltr"><span>WMS</span><span>WFS</span></span>
+      </a>
+      <a class="tile w2" href="{% url 'core:help_page' 'mapbuilder' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="brush" %}</span>
+        <h3>طراحی نقشه و اشتراک</h3>
+        <p>طبقه‌بندی، برچسب و پاپ‌آپ را تنظیم کنید و نقشه را با لینک عمومی یا iframe در سایت خودتان بگذارید.</p>
+        <span class="tile-go">راهنمای نقشه‌ساز ←</span>
+      </a>
+      <a class="tile w2" href="{% url 'core:help_page' 'analysis' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="spark" %}</span>
+        <h3>تحلیل بدون SQL و پرسش فارسی</h3>
+        <p>بافر، نزدیک‌ترین، شمارش، شش‌ضلعی و حوزه دسترسی با چند کلیک؛ یا پرسش خود را فارسی بنویسید.</p>
+        <span class="tile-go">راهنمای تحلیل ←</span>
+      </a>
+      <a class="tile" href="{% url 'core:help_page' 'rest' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="phone" %}</span>
+        <h3>REST API و فرم میدانی</h3>
+        <p>فرم موبایلی با GPS که بدون اینترنت هم کار می‌کند.</p>
+        <span class="tile-go">ببینید ←</span>
+      </a>
+      <a class="tile" href="{% url 'core:help_page' 'backups' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="backup" %}</span>
+        <h3>بکاپ و تیم</h3>
+        <p>بکاپ دستی و شبانه، و اعضای تیم با نقش مشاهده‌گر یا ویرایشگر.</p>
+        <span class="tile-go">ببینید ←</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+{# ───────────── ویدیوی معرفی ───────────── #}
+<section class="section intro" id="intro" aria-labelledby="intro-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">در یک و نیم دقیقه</p>
+      <h2 id="intro-h">{{ SITE_NAME }} را ببینید</h2>
+      <p class="muted">از ثبت‌نام و ورود فایل تا نقشه قابل اشتراک و WMS؛ همه چیز همان‌طور که در سایت می‌بینید.</p>
+    </div>
+    <figure class="vplayer intro-video">
+      <video controls playsinline preload="none" poster="{% static 'help/video/intro.jpg' %}" aria-label="ویدیوی معرفی {{ SITE_NAME }}">
+        <source src="{% static 'help/video/intro.mp4' %}" type="video/mp4">
+      </video>
+    </figure>
+    <p class="intro-more"><a class="btn ghost" href="{% url 'core:help' %}">همه ویدیوهای راهنما</a></p>
+  </div>
+</section>
+
+{# ───────────── از ثبت‌نام تا اتصال ───────────── #}
+<section class="section cv" id="start" aria-labelledby="start-h">
+  <div class="wrap start-grid">
+    <div>
+      <div class="section-head">
+        <h2 id="start-h">از ثبت‌نام تا اولین لایه روی نقشه</h2>
+        <p class="muted">همه کارهای سخت سمت سرور انجام می‌شود؛ شما فقط داده مکانی خود را وارد می‌کنید.</p>
+      </div>
+      <ol class="help-steps">
+        <li><h3>حساب بسازید</h3><p>شماره موبایل را وارد کنید و کد پیامک‌شده را بزنید. رمز عبور لازم نیست.</p></li>
+        <li><h3>پایگاه داده را بسازید</h3><p>یک نام و رمز انتخاب کنید و افزونه‌های مکانی مورد نیازتان را تیک بزنید.</p></li>
+        <li><h3>وصل شوید</h3><p>اطلاعات اتصال آماده را در QGIS، GeoServer یا Python کپی کنید و Shapefile خود را وارد کنید.</p></li>
+      </ol>
+      <a class="btn" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">{% if user.is_authenticated %}ساخت پایگاه داده{% else %}شروع کنید؛ رایگان{% endif %}</a>
     </div>
 
     <figure class="conn" aria-label="نمونه اطلاعات اتصالی که تحویل می‌گیرید" style="margin:0">
@@ -38,40 +219,43 @@
   </div>
 </section>
 
-<section class="section intro" id="intro" aria-labelledby="intro-h">
+{# ───────────── مخاطب‌ها ───────────── #}
+<section class="section alt cv" aria-labelledby="who-h">
   <div class="wrap">
     <div class="section-head">
-      <p class="kicker">در یک و نیم دقیقه</p>
-      <h2 id="intro-h">{{ SITE_NAME }} را ببینید</h2>
-      <p class="muted">از ثبت‌نام و ورود فایل تا نقشه قابل اشتراک و WMS؛ همه چیز همان‌طور که در سایت می‌بینید.</p>
+      <h2 id="who-h">برای چه کسی ساخته شده؟</h2>
+      <p class="muted">هر کسی که با داده مکانی کار می‌کند و نمی‌خواهد وقتش را صرف نگهداری سرور کند.</p>
     </div>
-    <figure class="vplayer intro-video">
-      <video controls playsinline preload="none" poster="{% static 'help/video/intro.jpg' %}" aria-label="ویدیوی معرفی {{ SITE_NAME }}">
-        <source src="{% static 'help/video/intro.mp4' %}" type="video/mp4">
-      </video>
-    </figure>
-    <p class="intro-more"><a class="btn ghost" href="{% url 'core:help' %}">همه ویدیوهای راهنما</a></p>
+    <div class="who">
+      <article>
+        <h3>دانشجو و پایان‌نامه</h3>
+        <p>پایگاه داده‌ای که همان روز اول کار می‌کند؛ با داده تمرینی، آموزش فارسی و تمدید رایگان.</p>
+        <a href="{% url 'core:doc' 'start' %}">شروع سریع در ۳ دقیقه ←</a>
+      </article>
+      <article>
+        <h3>توسعه‌دهنده WebGIS</h3>
+        <p>PostGIS آماده با PgBouncer، REST API، کاشی برداری و کلید API برای برنامه‌ی شما.</p>
+        <a href="{% url 'core:doc' 'code' %}">اتصال از Python و Node.js ←</a>
+      </article>
+      <article>
+        <h3>مشاور و شرکت GIS</h3>
+        <p>یک پایگاه داده برای هر پروژه، بکاپ خودکار، تیم با نقش‌ها و امکان GeoServer اختصاصی.</p>
+        <a href="{% url 'core:help_page' 'enterprise' %}">امکانات سازمانی ←</a>
+      </article>
+      <article>
+        <h3>استاد و دانشگاه</h3>
+        <p>کلاس با کد ورود؛ هر دانشجو پایگاه داده جدا و داده تمرینی دارد و در پایان ترم بایگانی می‌شود.</p>
+        <a href="{% url 'classroom:landing' %}">پلن کلاس و دانشگاه ←</a>
+      </article>
+    </div>
   </div>
 </section>
 
-<section class="section">
+{# ───────────── افزونه‌ها ───────────── #}
+<section class="section cv" aria-labelledby="ext-h">
   <div class="wrap">
     <div class="section-head">
-      <h2>از ثبت‌نام تا اولین لایه روی نقشه</h2>
-      <p class="muted">همه کارهای سخت سمت سرور انجام می‌شود؛ شما فقط داده مکانی خود را وارد می‌کنید.</p>
-    </div>
-    <ol class="steps">
-      <li><h3>حساب بسازید</h3><p>شماره موبایل را وارد کنید و کد پیامک‌شده را بزنید. رمز عبور لازم نیست.</p></li>
-      <li><h3>پایگاه داده را بسازید</h3><p>یک نام و رمز انتخاب کنید و افزونه‌های مکانی مورد نیازتان را تیک بزنید.</p></li>
-      <li><h3>وصل شوید</h3><p>اطلاعات اتصال آماده را در QGIS، GeoServer یا Python کپی کنید و Shapefile خود را وارد کنید.</p></li>
-    </ol>
-  </div>
-</section>
-
-<section class="section alt">
-  <div class="wrap">
-    <div class="section-head">
-      <h2>افزونه‌هایی که می‌توانید انتخاب کنید</h2>
+      <h2 id="ext-h">افزونه‌هایی که می‌توانید انتخاب کنید</h2>
       <p class="muted">هر افزونه با یک تیک نصب می‌شود. بعداً هم از داشبورد می‌توانید افزونه اضافه کنید.</p>
     </div>
     <div class="ext-grid">
@@ -85,10 +269,11 @@
   </div>
 </section>
 
-<section class="section" id="plans">
+{# ───────────── پلن‌ها ───────────── #}
+<section class="section alt cv" id="plans" aria-labelledby="plans-h">
   <div class="wrap">
     <div class="section-head">
-      <h2>پلن‌ها</h2>
+      <h2 id="plans-h">پلن‌ها</h2>
       <p class="muted">محدودیت‌ها از اول مشخص‌اند تا سرور برای همه سریع بماند. بکاپ روزانه گرفته می‌شود، اما برای داده‌های مهم همیشه نسخه‌ای هم نزد خودتان نگه دارید.</p>
     </div>
     <div class="plans">
@@ -106,10 +291,10 @@
       </ul>
       <div style="margin-top:16px">
       {% if p.is_free %}
-        <a class="btn" href="{% if user.is_authenticated %}{% url 'databases:create' %}{% else %}{% url 'accounts:login' %}{% endif %}">شروع رایگان</a>
+        <a class="btn" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">شروع رایگان</a>
       {% else %}
         {% if SITE.pay_enabled %}<a class="btn" href="{% url 'billing:plans' %}?plan={{ p.slug }}">خرید</a>
-        {% else %}<a class="btn ghost" href="{% if user.is_authenticated %}{% url 'support:new' %}?plan={{ p.slug }}{% else %}{% url 'accounts:login' %}?next={% url 'support:new' %}%3Fplan%3D{{ p.slug }}{% endif %}">درخواست از پشتیبانی</a>{% endif %}
+        {% else %}<a class="btn ghost" href="{% if user.is_authenticated %}{% url 'support:new' %}?plan={{ p.slug }}{% else %}{{ login_url }}?next={% url 'support:new' %}%3Fplan%3D{{ p.slug }}{% endif %}">درخواست از پشتیبانی</a>{% endif %}
       {% endif %}
       </div>
     </div>
@@ -118,30 +303,48 @@
   </div>
 </section>
 
-<section class="section alt">
-  <div class="wrap">
-    <div class="section-head"><h2>آموزش‌های قدم‌به‌قدم</h2></div>
-    <ul class="doc-links">
-      <li><a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی و PostGIS چیست؟<span>راهنمای کامل برای شروع</span></a></li>
-      <li><a href="{% url 'core:doc' 'qgis' %}">اتصال از QGIS<span>افزودن اتصال PostGIS و نمایش لایه‌ها</span></a></li>
-      <li><a href="{% url 'core:doc' 'import' %}">وارد کردن Shapefile و GeoPackage<span>با DB Manager، ogr2ogr یا shp2pgsql</span></a></li>
-      <li><a href="{% url 'core:doc' 'geoserver' %}">اتصال به GeoServer<span>ساخت Store و انتشار لایه WMS/WFS</span></a></li>
-      <li><a href="{% url 'core:doc' 'srid' %}">سیستم مختصات در ایران<span>کی 4326، کی 3857 و کی UTM</span></a></li>
-    </ul>
-  </div>
-</section>
-<section class="section alt" id="faq">
-  <div class="wrap">
-    <div class="section-head"><h2>پرسش‌های متداول</h2>
-      <p class="muted">تازه با پایگاه داده مکانی آشنا شده‌اید؟ از <a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی و PostGIS چیست؟</a> شروع کنید.</p></div>
-    <div class="faq">
-      <details><summary>پایگاه داده مکانی چیست؟</summary><p>پایگاه داده‌ای که علاوه بر متن و عدد، نقطه، خط و چندضلعی را ذخیره می‌کند و با توابع مکانی مثل فاصله، تقاطع و بافر روی آن‌ها تحلیل انجام می‌دهد. PostGIS محبوب‌ترین پایگاه داده مکانی متن‌باز است.</p></details>
-      <details><summary>آیا برای استفاده باید PostgreSQL یا PostGIS نصب کنم؟</summary><p>نه. پایگاه داده روی سرور ما ساخته می‌شود و شما فقط اطلاعات اتصال را در QGIS، GeoServer یا کد خود وارد می‌کنید.</p></details>
-      <details><summary>پلن رایگان چه محدودیتی دارد؟</summary><p>پلن رایگان برای یادگیری، پایان‌نامه و نمونه اولیه WebGIS طراحی شده است؛ حجم، تعداد اتصال همزمان و مدت اعتبار آن در بخش پلن‌ها آمده و تمدیدش رایگان است.</p></details>
-      <details><summary>آیا اتصال امن است؟</summary><p>بله. اتصال با SSL رمزنگاری می‌شود، هر پایگاه داده کاربر جداگانه دارد و کاربران به پایگاه داده یکدیگر دسترسی ندارند.</p></details>
-      <details><summary>با چه نرم‌افزارهایی می‌توانم وصل شوم؟</summary><p>هر ابزاری که با PostgreSQL کار می‌کند: QGIS، ArcGIS Pro، GeoServer، پایتون (GeoPandas، psycopg)، GeoDjango، Node.js، ogr2ogr و psql.</p></details>
-      <details><summary>داده‌هایم را چطور وارد کنم؟</summary><p>با DB Manager در QGIS، با ogr2ogr یا shp2pgsql، یا با یک خط پایتون (to_postgis در GeoPandas). آموزش هر روش در بخش آموزش هست.</p></details>
+{# ───────────── آموزش و پرسش‌های متداول ───────────── #}
+<section class="section cv" id="faq" aria-labelledby="faq-h">
+  <div class="wrap learn">
+    <div>
+      <div class="section-head">
+        <h2 id="faq-h">پرسش‌های متداول</h2>
+        <p class="muted">تازه با پایگاه داده مکانی آشنا شده‌اید؟ از <a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی و PostGIS چیست؟</a> شروع کنید.</p>
+      </div>
+      <div class="faq">
+        <details><summary>پایگاه داده مکانی چیست؟</summary><p>پایگاه داده‌ای که علاوه بر متن و عدد، نقطه، خط و چندضلعی را ذخیره می‌کند و با توابع مکانی مثل فاصله، تقاطع و بافر روی آن‌ها تحلیل انجام می‌دهد. PostGIS محبوب‌ترین پایگاه داده مکانی متن‌باز است.</p></details>
+        <details><summary>آیا برای استفاده باید PostgreSQL یا PostGIS نصب کنم؟</summary><p>نه. پایگاه داده روی سرور ما ساخته می‌شود و شما فقط اطلاعات اتصال را در QGIS، GeoServer یا کد خود وارد می‌کنید.</p></details>
+        <details><summary>پلن رایگان چه محدودیتی دارد؟</summary><p>پلن رایگان برای یادگیری، پایان‌نامه و نمونه اولیه WebGIS طراحی شده است؛ حجم، تعداد اتصال همزمان و مدت اعتبار آن در بخش پلن‌ها آمده و تمدیدش رایگان است.</p></details>
+        <details><summary>آیا اتصال امن است؟</summary><p>بله. اتصال با SSL رمزنگاری می‌شود، هر پایگاه داده کاربر جداگانه دارد و کاربران به پایگاه داده یکدیگر دسترسی ندارند.</p></details>
+        <details><summary>با چه نرم‌افزارهایی می‌توانم وصل شوم؟</summary><p>هر ابزاری که با PostgreSQL کار می‌کند: QGIS، ArcGIS Pro، GeoServer، پایتون (GeoPandas، psycopg)، GeoDjango، Node.js، ogr2ogr و psql.</p></details>
+        <details><summary>داده‌هایم را چطور وارد کنم؟</summary><p>با DB Manager در QGIS، با ogr2ogr یا shp2pgsql، یا با یک خط پایتون (to_postgis در GeoPandas). آموزش هر روش در بخش آموزش هست.</p></details>
+      </div>
     </div>
+    <aside aria-labelledby="docs-h">
+      <h2 id="docs-h" class="docs-h">آموزش‌های قدم‌به‌قدم</h2>
+      <ul class="doc-links one">
+        <li><a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی و PostGIS چیست؟<span>راهنمای کامل برای شروع</span></a></li>
+        <li><a href="{% url 'core:doc' 'qgis' %}">اتصال از QGIS<span>افزودن اتصال PostGIS و نمایش لایه‌ها</span></a></li>
+        <li><a href="{% url 'core:doc' 'import' %}">وارد کردن Shapefile و GeoPackage<span>با DB Manager، ogr2ogr یا shp2pgsql</span></a></li>
+        <li><a href="{% url 'core:doc' 'geoserver' %}">اتصال به GeoServer<span>ساخت Store و انتشار لایه WMS/WFS</span></a></li>
+        <li><a href="{% url 'core:doc' 'srid' %}">سیستم مختصات در ایران<span>کی 4326، کی 3857 و کی UTM</span></a></li>
+      </ul>
+    </aside>
   </div>
 </section>
+
+{# ───────────── دعوت نهایی ───────────── #}
+<section class="cta-band" id="go" aria-labelledby="go-h">
+  <div class="wrap">
+    <h2 id="go-h">اولین لایه مکانی‌تان را امروز روی نقشه بیاورید</h2>
+    <p>ثبت‌نام با شماره موبایل، ساخت پایگاه داده در چند دقیقه.</p>
+    <a class="btn lg" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">{% if user.is_authenticated %}ساخت پایگاه داده{% else %}ساخت حساب رایگان{% endif %}</a>
+  </div>
+</section>
+
+<div class="sticky-cta" data-sticky-cta>
+  <a class="btn lg" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">{% if user.is_authenticated %}ساخت پایگاه داده{% else %}ساخت حساب رایگان{% endif %}</a>
+</div>
 {% endblock %}
+
+{% block scripts %}<script src="{% static 'js/home.js' %}" defer></script>{% endblock %}

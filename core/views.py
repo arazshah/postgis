@@ -28,7 +28,9 @@ DOC_SLUGS = {d[0] for d in DOCS}
 def home(request):
     plans = Plan.objects.filter(is_public=True)
     exts = Extension.objects.filter(is_active=True)
-    return render(request, "core/home.html", {"plans": plans, "extensions": exts})
+    from .help import GUIDES
+
+    return render(request, "core/home.html", {"plans": plans, "extensions": exts, "guides_count": len(GUIDES)})
 
 
 def docs_index(request):
