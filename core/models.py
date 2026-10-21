@@ -42,6 +42,15 @@ class SiteSettings(models.Model):
     map_tile_attribution = models.CharField("منبع نقشه پایه", max_length=200, blank=True,
                                             default="© OpenStreetMap")
 
+    # --- راهنمای ساخت حساب مدل زبانی (پیوند همکاری در فروش) ---
+    llm_partner_enabled = models.BooleanField(
+        "نمایش راهنمای «ساخت حساب مدل زبانی» در صفحه تحلیل", default=False,
+        help_text="برای کاربرانی که هنوز حساب سرویس مدل زبانی ندارند.")
+    llm_partner_name = models.CharField("نام سرویس", max_length=50, default="AvalAI")
+    llm_partner_url = models.URLField(
+        "پیوند ثبت‌نام (همکاری در فروش)", max_length=300, blank=True,
+        help_text="پیوند همکاری شما. کنار دکمه، یک جمله شفاف درباره همکاری در فروش نمایش داده می‌شود.")
+
     # --- پرداخت ---
     pay_enabled = models.BooleanField("فروش پلن‌های پولی فعال است", default=False)
     invoice_ttl_minutes = models.PositiveSmallIntegerField("مهلت پرداخت هر فاکتور (دقیقه)", default=60,

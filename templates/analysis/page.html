@@ -7,8 +7,20 @@
   <p class="small muted">سؤالتان را به فارسی بنویسید؛ s3geo برنامه تحلیل را می‌سازد، روی همین سرور اجرا می‌کند و نتیجه را جدول جدید ذخیره می‌کند. به مدل زبانی فقط نام لایه‌ها، ستون‌ها، تعداد و محدوده آن‌ها فرستاده می‌شود، نه خود داده‌ها.</p>
   {% if not cfg %}
   <div class="msg info">برای پرسش فارسی، کلید API یک سرویس مدل زبانی سازگار با OpenAI (مثل AvalAI یا OpenAI) لازم است. هزینه استفاده از مدل با حساب خود شماست.</div>
+  {% if SITE.llm_partner_enabled and SITE.llm_partner_url %}
+  <details class="llm-guide" {% if not cfg %}open{% endif %}>
+    <summary>حساب مدل زبانی ندارید؟ در سه قدم بسازید</summary>
+    <ol class="llm-steps">
+      <li><b>ساخت حساب</b><span class="small muted">در {{ SITE.llm_partner_name }} ثبت‌نام کنید (چند دقیقه).</span></li>
+      <li><b>شارژ اعتبار</b><span class="small muted">مبلغ کم هم کافی است؛ هر پرسش معمولاً چند تومان هزینه دارد.</span></li>
+      <li><b>ساخت کلید API</b><span class="small muted">کلید را کپی کنید و در کادر «تنظیم کلید» پایین بچسبانید.</span></li>
+    </ol>
+    <a class="btn sm" href="{{ SITE.llm_partner_url }}" target="_blank" rel="sponsored noopener noreferrer" data-llm-guide>ساخت حساب در {{ SITE.llm_partner_name }}</a>
+    <p class="small muted" style="margin-top:8px">این پیوند همکاری در فروش است: بدون هزینه اضافه برای شما، بخشی از فروش به ما می‌رسد. هر سرویس سازگار با OpenAI را هم می‌توانید استفاده کنید.</p>
+  </details>
   {% endif %}
-  <details class="llm-cfg" {% if not cfg %}open{% endif %}>
+  {% endif %}
+  <details class="llm-cfg" id="llm-cfg" {% if not cfg %}open{% endif %}>
     <summary>{% if cfg %}مدل زبانی: <span class="ltr">{{ cfg.model }}</span> · کلید <span class="ltr">{{ cfg.key_hint }}</span>{% else %}تنظیم کلید مدل زبانی{% endif %}</summary>
     <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="llm_save">
       <div class="bf-row">
