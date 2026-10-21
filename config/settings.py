@@ -91,6 +91,7 @@ INSTALLED_APPS = [
     "analysis",
     "restapi",
     "enterprise",
+    "analytics",
 ]
 
 MIDDLEWARE = [
@@ -102,6 +103,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "analytics.middleware.AnalyticsMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -258,6 +260,9 @@ OTP_MAX_ATTEMPTS = int(os.environ.get("OTP_MAX_ATTEMPTS", "5"))
 OTP_MAX_PER_PHONE_HOUR = int(os.environ.get("OTP_MAX_PER_PHONE_HOUR", "5"))
 OTP_MAX_PER_IP_HOUR = int(os.environ.get("OTP_MAX_PER_IP_HOUR", "20"))
 # تعداد پراکسی‌های قابل اعتماد جلوی برنامه (Traefik در Coolify = ۱)
+# آمار بازدید داخلی (منبع ورود، قیف ثبت‌نام). خام‌ها پس از این مدت پاک می‌شوند.
+ANALYTICS_ENABLED = env_bool("ANALYTICS_ENABLED", True)
+ANALYTICS_RETENTION_DAYS = int(os.environ.get("ANALYTICS_RETENTION_DAYS", "90"))
 TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "1"))
 # در حالت console و DEBUG کد روی صفحه هم نمایش داده شود (فقط برای توسعه)
 OTP_SHOW_IN_DEBUG = DEBUG and SMS_BACKEND == "console"

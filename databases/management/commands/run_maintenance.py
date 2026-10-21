@@ -8,7 +8,7 @@ class Command(BaseCommand):
     help = "پایش حجم، انقضا و سلامت سرورها. در Coolify به‌صورت Scheduled Task هر ۱۰ دقیقه اجرا شود."
 
     def add_arguments(self, parser):
-        parser.add_argument("--only", choices=["quota", "expiry", "servers", "billing"], help="فقط یک بخش اجرا شود")
+        parser.add_argument("--only", choices=["quota", "expiry", "servers", "billing", "analytics"], help="فقط یک بخش اجرا شود")
 
     def handle(self, *args, only=None, **options):
         if only in (None, "servers"):
@@ -23,3 +23,7 @@ class Command(BaseCommand):
             from billing.services import maintenance
 
             self.stdout.write(f"billing: {maintenance()}")
+        if only in (None, "analytics"):
+            from analytics import services as analytics_services
+
+            self.stdout.write(f"analytics: {analytics_services.cleanup()}")
