@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("core", "0008_class_price"),
+        ("core", "0009_enamad_footer"),
     ]
 
     operations = [
