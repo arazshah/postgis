@@ -153,9 +153,29 @@ code,.mono,kbd{font-family:var(--f-mono);font-size:.88em}
 .doc-links li a:hover{color:var(--teal)}
 .doc-links li a span{display:block;color:var(--ink-2);font-size:.9rem}
 
-.footer{border-top:1px solid var(--line);padding:var(--s6) 0;color:var(--ink-2);font-size:.9rem}
-.footer .wrap{display:flex;gap:var(--s5);flex-wrap:wrap;justify-content:space-between}
-.footer a{color:var(--ink-2)}
+/* ---------- فوتر ---------- */
+.footer{background:var(--ink);color:#B9CCC6;padding:var(--s7) 0 var(--s5);font-size:.92rem;position:relative}
+.footer::before{content:"";position:absolute;inset:0 0 auto;height:4px;background:linear-gradient(90deg,var(--teal),var(--ochre) 60%,var(--teal))}
+.footer a{color:#DCEAE4;text-decoration:none}
+.footer a:hover{color:#fff;text-decoration:underline;text-underline-offset:4px}
+.foot-grid{display:grid;grid-template-columns:1.5fr repeat(3,1fr);gap:var(--s6) var(--s7);align-items:start}
+.foot-brand .brand{color:#fff;margin-bottom:var(--s3)}
+.foot-brand p{margin:0 0 var(--s4);line-height:1.9;max-width:36ch}
+.foot-h{font-family:var(--f-display);font-size:.95rem;color:#fff;margin:0 0 var(--s3);font-weight:700}
+.foot-col ul,.foot-social,.foot-bottom ul{list-style:none;margin:0;padding:0}
+.foot-col li{padding:3px 0;line-height:1.8}
+.foot-addr{color:#9FB6B0;font-size:.86rem}
+.foot-social{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.foot-social a{display:inline-block;padding:2px 12px;border:1px solid rgba(255,255,255,.22);border-radius:99px;font-size:.84rem}
+.foot-social a:hover{background:var(--ochre);border-color:var(--ochre);color:var(--ink);text-decoration:none}
+.foot-trust{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:var(--s3);padding-top:var(--s5);border-top:1px solid rgba(255,255,255,.12)}
+.trust-box{background:#fff;border-radius:var(--r-md);padding:var(--s2) var(--s3);min-height:72px;min-width:72px;display:flex;align-items:center;justify-content:center}
+.trust-box img{max-height:84px;width:auto;display:block}
+.foot-bottom{display:flex;flex-wrap:wrap;gap:var(--s3) var(--s5);justify-content:space-between;align-items:center;
+  margin-top:var(--s6);padding-top:var(--s4);border-top:1px solid rgba(255,255,255,.12);font-size:.85rem;color:#9FB6B0}
+.foot-bottom ul{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5)}
+@media (max-width:900px){.foot-grid{grid-template-columns:1fr 1fr}.foot-brand{grid-column:1/-1}}
+@media (max-width:480px){.foot-grid{grid-template-columns:1fr}}
 
 /* ---------- فرم‌ها ---------- */
 .page{padding:var(--s7) 0 var(--s8)}

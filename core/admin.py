@@ -28,6 +28,46 @@ class SiteSettingsForm(forms.ModelForm):
     class Meta:
         model = SiteSettings
         fields = "__all__"
+        widgets = {
+            "enamad_meta_content": forms.TextInput(attrs={"dir": "ltr", "autocomplete": "off", "size": 60}),
+            "enamad_badge_html": forms.Textarea(attrs={"dir": "ltr", "rows": 4, "cols": 80, "spellcheck": "false"}),
+            "footer_badges_html": forms.Textarea(attrs={"dir": "ltr", "rows": 4, "cols": 80, "spellcheck": "false"}),
+            "footer_about": forms.Textarea(attrs={"rows": 3, "cols": 80}),
+            "footer_address": forms.Textarea(attrs={"rows": 2, "cols": 80}),
+            "footer_links": forms.Textarea(attrs={"rows": 4, "cols": 80}),
+            "social_telegram": forms.URLInput(attrs={"dir": "ltr", "size": 60}),
+            "social_instagram": forms.URLInput(attrs={"dir": "ltr", "size": 60}),
+            "social_linkedin": forms.URLInput(attrs={"dir": "ltr", "size": 60}),
+            "social_github": forms.URLInput(attrs={"dir": "ltr", "size": 60}),
+            "social_eitaa": forms.URLInput(attrs={"dir": "ltr", "size": 60}),
+        }
+
+    def clean_enamad_meta_content(self):
+        """هم مقدار خام (35683048) و هم کل تگ meta پذیرفته می‌شود؛ فقط مقدار امن ذخیره می‌شود."""
+        import re
+
+        raw = (self.cleaned_data.get("enamad_meta_content") or "").strip()
+        if not raw:
+            return ""
+        m = re.search(r"""content\s*=\s*["']([^"']+)["']""", raw)
+        value = (m.group(1) if m else raw).strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{4,100}", value):
+            raise ValidationError("مقدار content اینماد فقط شامل حروف انگلیسی و عدد است؛ مثلاً 35683048.")
+        return value
+
+    def clean_footer_links(self):
+        lines = [ln.strip() for ln in (self.cleaned_data.get("footer_links") or "").splitlines() if ln.strip()]
+        if len(lines) > 12:
+            raise ValidationError("حداکثر ۱۲ پیوند.")
+        for i, line in enumerate(lines, 1):
+            title, sep, url = line.partition("|")
+            if not sep or not title.strip() or not url.strip():
+                raise ValidationError(f"خط {i}: به شکل «عنوان | آدرس» بنویسید.")
+            if len(title.strip()) > 60:
+                raise ValidationError(f"خط {i}: عنوان بیش از ۶۰ نویسه است.")
+            if not SiteSettings.is_safe_link(url):
+                raise ValidationError(f"خط {i}: آدرس باید با / یا https:// شروع شود.")
+        return "\n".join(lines)
 
     def clean_gateway_merchant(self):
         return "".join((self.cleaned_data.get("gateway_merchant") or "").split())
@@ -60,10 +100,23 @@ class SiteSettingsForm(forms.ModelForm):
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
     form = SiteSettingsForm
-    readonly_fields = ["api_key_status", "bale_status", "gateway_status", "gateway_tools", "sms_tools", "updated_at"]
+    readonly_fields = ["api_key_status", "bale_status", "gateway_status", "gateway_tools", "sms_tools",
+                       "enamad_status", "updated_at"]
     fieldsets = (
         ("سایت", {"fields": ("site_name", "tagline", "announcement", "announcement_level")}),
         ("پشتیبانی", {"fields": ("support_phone", "support_telegram", "support_email")}),
+        ("اینماد و نمادهای اعتماد", {
+            "fields": ("enamad_status", "enamad_meta_content", "enamad_badge_html", "footer_badges_html"),
+            "description": "در پنل enamad.ir دو کد می‌دهند: «متاتگ تأیید مالکیت» که باید در head صفحه اصلی باشد "
+                           "(کادر اول)، و «کد نماد» که در فوتر نشان داده می‌شود (کادر دوم). "
+                           "نمادهای دیگر مثل ساماندهی را در کادر سوم بگذارید. بعد از ذخیره، سایت را باز کنید و فوتر را ببینید.",
+        }),
+        ("فوتر سایت", {
+            "fields": ("footer_about", "footer_address", "footer_copyright", "footer_links",
+                       "social_telegram", "social_instagram", "social_linkedin", "social_github", "social_eitaa"),
+            "description": "تلفن، تلگرام و ایمیل پشتیبانی از بخش «پشتیبانی» بالا در فوتر نشان داده می‌شود. "
+                           "شبکه‌ای که آدرس نداشته باشد نمایش داده نمی‌شود.",
+        }),
         ("کاربران و سرویس", {"fields": ("signup_open", "allow_new_databases", "max_databases_per_user",
                                          "renew_window_days", "expiry_warning_days", "expired_grace_days")}),
         ("پرداخت و فروش پلن‌ها", {
@@ -110,6 +163,18 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         if obj.has_smsir_api_key:
             return format_html('<b style="color:#1a7f4b">ذخیره شده</b>')
         return format_html('<b style="color:#b42318">وارد نشده</b>')
+
+    @admin.display(description="وضعیت اینماد")
+    def enamad_status(self, obj):
+        meta = bool(obj.enamad_meta_content)
+        badge = bool(obj.enamad_badge_html.strip())
+        if meta and badge:
+            return format_html('<b style="color:#1a7f4b">متاتگ و نماد هر دو ثبت شده‌اند</b>')
+        if meta:
+            return format_html('<b style="color:#b54708">متاتگ ثبت شده؛ کد نماد فوتر هنوز وارد نشده</b>')
+        if badge:
+            return format_html('<b style="color:#b54708">نماد فوتر ثبت شده؛ متاتگ تأیید مالکیت وارد نشده</b>')
+        return format_html('<b style="color:#b42318">هیچ‌کدام وارد نشده</b>')
 
     @admin.display(description="وضعیت بله")
     def bale_status(self, obj):

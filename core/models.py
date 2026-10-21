@@ -101,6 +101,38 @@ class SiteSettings(models.Model):
     class_price_per_student = models.PositiveIntegerField(
         "قیمت پایه پلن کلاس (تومان، هر دانشجو در ترم)", default=0,
         help_text="در صفحه «پلن کلاس» به‌عنوان «از … تومان» نمایش داده می‌شود؛ ۰ یعنی «تماس بگیرید».")
+
+    # --- اینماد و نمادهای اعتماد ---
+    enamad_meta_content = models.CharField(
+        "کد تأیید مالکیت اینماد (متاتگ)", max_length=100, blank=True,
+        help_text="فقط مقدار content (مثلاً 35683048) را بنویسید؛ چسباندن کل تگ متای اینماد هم کار می‌کند. "
+                  "در بخش head همه صفحه‌ها گذاشته می‌شود.")
+    enamad_badge_html = models.TextField(
+        "کد نماد اینماد (برای فوتر)", blank=True,
+        help_text="کد HTML نماد را از پنل enamad.ir کپی و همان‌طور که هست اینجا بچسبانید. در فوتر نمایش داده می‌شود.")
+    footer_badges_html = models.TextField(
+        "سایر نمادها و کدها (فوتر)", blank=True,
+        help_text="کد نماد ساماندهی، زرین‌پال، سازمان نظام صنفی رایانه‌ای و مانند آن. "
+                  "هر کد HTML که بگذارید بدون تغییر در فوتر اجرا می‌شود؛ فقط کد معتبر و مطمئن بگذارید.")
+
+    # --- فوتر ---
+    footer_about = models.TextField(
+        "متن معرفی زیر نام سایت", blank=True,
+        default="پایگاه داده مکانی PostGIS آماده برای WebGIS، QGIS و GeoServer؛ ساخته‌شده برای جامعه GIS ایران.")
+    footer_address = models.TextField("نشانی (اختیاری)", blank=True)
+    footer_copyright = models.CharField(
+        "متن حق نشر", max_length=200, blank=True,
+        help_text="خالی = «© {سال} {نام سایت}». می‌توانید نام شرکت یا شماره ثبت را هم بنویسید.")
+    footer_links = models.TextField(
+        "پیوندهای دلخواه فوتر", blank=True,
+        help_text="هر خط یک پیوند، به شکل «عنوان | آدرس»؛ مثلاً: حریم خصوصی | /terms/ . "
+                  "آدرس باید با / یا https:// شروع شود.")
+    social_instagram = models.URLField("اینستاگرام", blank=True)
+    social_telegram = models.URLField("کانال تلگرام", blank=True)
+    social_linkedin = models.URLField("لینکدین", blank=True)
+    social_github = models.URLField("گیت‌هاب", blank=True)
+    social_eitaa = models.URLField("ایتا", blank=True)
+
     updated_at = models.DateTimeField("آخرین تغییر", auto_now=True)
 
     class Meta:
@@ -207,6 +239,52 @@ class SiteSettings(models.Model):
     @property
     def manual_ready(self) -> bool:
         return bool(self.pay_manual_enabled and (self.pay_card_number or self.pay_link_url))
+
+    SOCIAL_FIELDS = (
+        ("social_telegram", "تلگرام", "telegram"),
+        ("social_instagram", "اینستاگرام", "instagram"),
+        ("social_linkedin", "لینکدین", "linkedin"),
+        ("social_github", "گیت‌هاب", "github"),
+        ("social_eitaa", "ایتا", "eitaa"),
+    )
+
+    @staticmethod
+    def is_safe_link(url: str) -> bool:
+        """فقط آدرس نسبی سایت یا http(s)/mailto/tel؛ هرگز javascript: و مانند آن."""
+        url = (url or "").strip()
+        if url.startswith("/") and not url.startswith("//"):
+            return True
+        return url.lower().startswith(("https://", "http://", "mailto:", "tel:"))
+
+    @property
+    def footer_link_list(self) -> list[tuple[str, str]]:
+        """[(عنوان، آدرس)] از خط‌های «عنوان | آدرس»؛ خط‌های نامعتبر نادیده گرفته می‌شوند."""
+        out = []
+        for line in (self.footer_links or "").splitlines():
+            title, sep, url = line.partition("|")
+            title, url = title.strip(), url.strip()
+            if sep and title and self.is_safe_link(url):
+                out.append((title[:60], url))
+        return out
+
+    @property
+    def social_list(self) -> list[tuple[str, str, str]]:
+        """[(نام فارسی، آدرس، کلید آیکن)] فقط شبکه‌هایی که آدرس دارند."""
+        return [(label, getattr(self, field), key) for field, label, key in self.SOCIAL_FIELDS
+                if getattr(self, field)]
+
+    @property
+    def copyright_text(self) -> str:
+        if self.footer_copyright.strip():
+            return self.footer_copyright.strip()
+        import jdatetime
+
+        year = str(jdatetime.date.today().year).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+        return f"© {year} {self.site_name}"
+
+    @property
+    def has_trust_badges(self) -> bool:
+        return bool(self.enamad_badge_html.strip() or self.footer_badges_html.strip())
 
     @property
     def card_number_display(self) -> str:
