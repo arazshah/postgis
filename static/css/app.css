@@ -580,6 +580,17 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 .ready-form input[type=search]{width:100%}
 .log li{flex-wrap:wrap}
 .log .log-msg{flex-basis:100%;color:var(--ink-2)}
+.rd-live{border-inline-start:4px solid var(--ochre);margin:var(--s4) 0}
+.rd-live-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3)}
+.rd-hist{margin-top:var(--s5)}
+.rd-hist h3{font-size:1rem;margin:0 0 var(--s2)}
+.rd-table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface)}
+.rd-table{margin:0}
+.rd-table th{background:var(--paper-2);white-space:nowrap}
+.rd-table th,.rd-table td{padding:10px 14px}
+.rd-table tbody tr:last-child td{border-bottom:0}
+.rd-table td:last-child{max-width:380px;overflow-wrap:anywhere;color:var(--ink-2)}
+.rd-table td.rd-err{color:var(--red)}
 
 /* تیم و کاربران پایگاه داده */
 .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:var(--s5);align-items:start}
