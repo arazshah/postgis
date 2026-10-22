@@ -25,6 +25,19 @@ DOCS = [
 DOC_SLUGS = {d[0] for d in DOCS}
 
 
+def site_logo(request):
+    from .models import SiteSettings
+
+    conf = SiteSettings.get()
+    if not conf.logo_data:
+        raise Http404
+    resp = HttpResponse(bytes(conf.logo_data), content_type=conf.logo_mime)
+    resp["Cache-Control"] = "public, max-age=86400"
+    resp["X-Content-Type-Options"] = "nosniff"
+    resp["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    return resp
+
+
 def home(request):
     plans = Plan.objects.filter(is_public=True)
     from kb.faq import faq_jsonld, home_faqs

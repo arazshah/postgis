@@ -129,8 +129,7 @@ class OTPCode(models.Model):
     attempts = models.PositiveSmallIntegerField(default=0)
     used_at = models.DateTimeField(null=True, blank=True)
     sent_ok = models.BooleanField(default=True)
-    channel = models.CharField("مسیر ارسال", max_length=8, default="sms",
-                               choices=[("sms", "پیامک"), ("bale", "بله")])
+    channel = models.CharField("مسیر ارسال", max_length=8, default="sms", choices=[("sms", "پیامک")])
 
     class Meta:
         verbose_name = "رمز یک‌بار مصرف"
@@ -143,7 +142,7 @@ class OTPCode(models.Model):
     @classmethod
     def issue(cls, phone: str, ip: str | None, conf) -> tuple["OTPCode", str]:
         length = conf.otp_length
-        # رقم اول هیچ‌وقت صفر نیست تا کد در مسیرهای عددی (مثل بله) دست‌نخورده بماند
+        # رقم اول هیچ‌وقت صفر نیست تا کد دست‌نخورده بماند
         code = secrets.choice("123456789") + "".join(secrets.choice("0123456789") for _ in range(length - 1))
         # کدهای قبلی این شماره باطل می‌شوند
         cls.objects.filter(phone=phone, used_at__isnull=True).update(used_at=timezone.now())

@@ -20,7 +20,7 @@
   <meta name="theme-color" content="#0F5C59">
   {% if SITE.enamad_meta_content %}<meta name="enamad" content="{{ SITE.enamad_meta_content }}">{% endif %}
   {% if SITE.umami_ready and not user.is_staff %}<script defer src="{{ SITE.umami_script_url }}" data-website-id="{{ SITE.umami_website_id }}" data-do-not-track="true"></script>{% endif %}
-  <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
+  <link rel="icon" href="{{ SITE_LOGO_URL }}">
   <link rel="preload" href="{% static 'fonts/vazirmatn-arabic-400-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   {% block head %}{% endblock %}
@@ -30,7 +30,7 @@
 <a class="skip" href="#main">رفتن به محتوای اصلی</a>
 <header class="topbar">
   <div class="wrap">
-    <a class="brand" href="{% url 'core:home' %}"><img src="{% static 'img/favicon.svg' %}" alt="" width="30" height="30">{{ SITE_NAME }}</a>
+    <a class="brand" href="{% url 'core:home' %}"><img src="{{ SITE_LOGO_URL }}" alt="" width="30" height="30">{{ SITE_NAME }}</a>
     <button class="btn ghost sm menu-toggle" aria-controls="mainnav" aria-expanded="false">منو</button>
     <nav class="nav" id="mainnav" aria-label="منوی اصلی">
       {% with u=request.resolver_match.url_name ns=request.resolver_match.namespace %}
@@ -68,7 +68,7 @@
   <div class="wrap">
     <div class="foot-grid">
       <section class="foot-brand" aria-label="درباره {{ SITE_NAME }}">
-        <a class="brand" href="{% url 'core:home' %}"><img src="{% static 'img/favicon.svg' %}" alt="" width="30" height="30" loading="lazy">{{ SITE_NAME }}</a>
+        <a class="brand" href="{% url 'core:home' %}"><img src="{{ SITE_LOGO_URL }}" alt="" width="30" height="30" loading="lazy">{{ SITE_NAME }}</a>
         {% if SITE.footer_about %}<p>{{ SITE.footer_about|linebreaksbr }}</p>{% endif %}
         {% if SITE.social_list %}
         <ul class="foot-social" aria-label="شبکه‌های اجتماعی">

@@ -4,7 +4,7 @@
 <div class="wrap page">
   <div class="auth">
     <h1>{% if new_user %}ساخت حساب{% else %}ورود{% endif %}</h1>
-    <p class="muted">{% if via_bale %}کد تأیید در پیام‌رسان <b>بله</b> (بازوی «کد تأیید») برای <b class="ltr mono">{{ phone }}</b> ارسال شد.{% else %}کد تأیید به <b class="ltr mono">{{ phone }}</b> پیامک شد.{% endif %} <a href="{% url 'accounts:login' %}">شماره را تغییر دهید</a></p>
+    <p class="muted">کد تأیید به <b class="ltr mono">{{ phone }}</b> پیامک شد. <a href="{% url 'accounts:login' %}">شماره را تغییر دهید</a></p>
     <form method="post" class="panel" novalidate>
       {% csrf_token %}
       {% include "partials/form_errors.html" %}
@@ -26,14 +26,6 @@
       <button class="linkbtn resend-btn" type="submit" style="color:var(--teal)">ارسال دوباره کد</button>
       <span class="muted small resend-timer" aria-live="polite"></span>
     </form>
-    {% if bale_button %}
-    <form method="post" action="{% url 'accounts:resend' %}" style="margin-top:10px" class="resend" data-wait="{{ bale_wait }}">
-      {% csrf_token %}<input type="hidden" name="channel" value="bale">
-      <span class="muted small">پیامک نمی‌رسد؟</span>
-      <button class="linkbtn resend-btn" type="submit" style="color:var(--teal)">کد را در پیام‌رسان بله بفرست</button>
-      <span class="muted small resend-timer" aria-live="polite"></span>
-    </form>
-    {% endif %}
   </div>
 </div>
 {% endblock %}
