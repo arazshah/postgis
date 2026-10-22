@@ -4,13 +4,14 @@ import csv
 from django.contrib import messages
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
+from databases.explorer import ExplorerError
 
 from . import services
-from .models import Classroom, Contract, ContractRequest, Enrollment
+from .models import ClassMap, Classroom, Contract, ContractRequest, Enrollment
 
 SESSION_PW = "class_join_pw_{}"
 
@@ -104,6 +105,19 @@ def detail(request, pk):
             c.is_open = not c.is_open
             c.save(update_fields=["is_open"])
             messages.success(request, "ثبت‌نام باز شد." if c.is_open else "ثبت‌نام بسته شد.")
+        elif action == "share_map" and c.status == Classroom.Status.ACTIVE:
+            webmap = _teacher_maps(request.user).filter(pk=request.POST.get("map") or 0).first()
+            if webmap is None:
+                messages.error(request, "نقشه را انتخاب کنید.")
+            else:
+                cm, created = ClassMap.objects.get_or_create(classroom=c, webmap=webmap)
+                cm.note = (request.POST.get("note") or "").strip()[:2000]
+                cm.save(update_fields=["note"])
+                messages.success(request, f"نقشه «{webmap.title}» با کلاس به اشتراک گذاشته شد." if created
+                                 else "توضیح نقشه به‌روز شد.")
+        elif action == "unshare_map":
+            ClassMap.objects.filter(classroom=c, pk=request.POST.get("share") or 0).delete()
+            messages.success(request, "نقشه از کلاس برداشته شد.")
         elif action == "archive" and c.status == Classroom.Status.ACTIVE:
             n = services.archive(c)
             messages.success(request, f"کلاس بایگانی شد؛ از {n} پایگاه داده بکاپ گرفته می‌شود. پایگاه‌ها تا پایان "
@@ -121,8 +135,19 @@ def detail(request, pk):
             w.writerow([e.full_name, e.student_no, e.student.phone, db.db_name if db else "", db.role_name if db else "",
                         db.size_bytes if db else 0, e.joined_at.date().isoformat()])
         return resp
+    shared = c.maps.select_related("webmap")
     return render(request, "classroom/detail.html", {
-        "c": c, "rows": rows, "join_url": request.build_absolute_uri(f"/class/join/{c.code}/")})
+        "c": c, "rows": rows, "join_url": request.build_absolute_uri(f"/class/join/{c.code}/"),
+        "shared": shared, "my_maps": _teacher_maps(request.user).exclude(pk__in=[x.webmap_id for x in shared])})
+
+
+def _teacher_maps(user):
+    """نقشه‌های پایگاه داده‌های خود استاد (نه پایگاه داده دانشجوها)."""
+    from databases.models import UserDatabase
+    from maps.models import WebMap
+
+    return (WebMap.objects.filter(database__owner=user, database__enrollment__isnull=True)
+            .exclude(database__status=UserDatabase.Status.DELETED).select_related("database"))
 
 
 @site_user_required
@@ -154,4 +179,29 @@ def join(request, code):
             request.session[SESSION_PW.format(mine.pk)] = pw
             return redirect("classroom:join", code=c.code)
     pw = request.session.pop(SESSION_PW.format(mine.pk), None) if mine else None
-    return render(request, "classroom/join.html", {"c": c, "mine": mine, "password": pw, "error": error})
+    shared = c.maps.select_related("webmap") if mine or c.teacher_id == request.user.pk else []
+    return render(request, "classroom/join.html", {"c": c, "mine": mine, "password": pw, "error": error,
+                                                   "shared": shared})
+
+
+@site_user_required
+@require_POST
+def copy_map(request, code, share_id):
+    """کپی نقشه کلاس در پایگاه داده کلاسی دانشجو؛ لایه‌ها به جدول‌های هم‌نام خود دانشجو وصل می‌شوند."""
+    from maps import services as map_services
+
+    c = get_object_or_404(Classroom, code=code.upper())
+    cm = get_object_or_404(ClassMap.objects.select_related("webmap"), pk=share_id, classroom=c)
+    mine = Enrollment.objects.filter(classroom=c, student=request.user).select_related("database__plan").first()
+    if mine is None or mine.database is None or not mine.database.is_live:
+        raise Http404
+    try:
+        copy, skipped = map_services.copy_to(cm.webmap, mine.database, request.user)
+    except (map_services.MapError, ExplorerError) as exc:
+        messages.error(request, str(exc))
+        return redirect("classroom:join", code=c.code)
+    msg = f"نقشه «{copy.title}» در پایگاه داده شما ساخته شد."
+    if skipped:
+        msg += " این لایه‌ها جدول هم‌نام در پایگاه داده شما نداشتند و کپی نشدند: " + "، ".join(skipped)
+    messages.success(request, msg)
+    return redirect("maps:composer", pk=mine.database.pk, map_id=copy.pk)

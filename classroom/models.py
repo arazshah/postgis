@@ -147,3 +147,22 @@ class Enrollment(models.Model):
 
     def __str__(self):
         return f"{self.full_name} در {self.classroom}"
+
+
+class ClassMap(models.Model):
+    """نقشه چندلایه‌ای که استاد با کلاس به اشتراک گذاشته؛ دانشجوها آن را می‌بینند و در پایگاه داده خودشان کپی می‌کنند."""
+
+    classroom = models.ForeignKey(Classroom, on_delete=models.CASCADE, related_name="maps", verbose_name="کلاس")
+    webmap = models.ForeignKey("maps.WebMap", on_delete=models.CASCADE, related_name="class_shares",
+                               verbose_name="نقشه")
+    note = models.TextField("توضیح یا تمرین", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "نقشه کلاس"
+        verbose_name_plural = "نقشه‌های کلاس"
+        ordering = ["-created_at"]
+        unique_together = [("classroom", "webmap")]
+
+    def __str__(self):
+        return f"{self.classroom}: {self.webmap.title}"

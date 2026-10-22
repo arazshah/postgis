@@ -1,0 +1,62 @@
+{% extends "databases/_ws.html" %}{% load fa %}
+{% block title %}نقشه‌های چندلایه {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block ws %}
+<div class="wrap page">
+  <div class="page-head">
+    <h1>نقشه‌های چندلایه</h1>
+    <a class="btn ghost sm" href="{% url 'databases:explore' db.pk %}" style="margin-inline-start:auto">مرورگر داده</a>
+  </div>
+  <p class="lead muted" style="max-width:72ch">چند جدول مکانی را کنار هم روی یک نقشه ببینید، هر لایه با رنگ و برچسب خودش. نقشه را خصوصی نگه دارید یا با یک لینک و کد جاسازی به اشتراک بگذارید. برای این کار لازم نیست جدول‌ها را جداگانه منتشر کنید.</p>
+
+  <div class="pub-stats">
+    <div><b>{{ maps|length|fanum }}</b> از {{ cap|fanum }} نقشه</div>
+    <div>حداکثر <b>{{ layer_cap|fanum }}</b> لایه در هر نقشه</div>
+  </div>
+
+  {% if maps %}
+  <div class="wm-cards">
+    {% for m in maps %}
+    <article class="panel wm-card">
+      <div class="pub-head">
+        <h2 style="font-size:1.1rem;margin:0">{{ m.title }}</h2>
+        <span class="badge {% if m.is_public %}active{% else %}pending{% endif %}">{% if m.is_public %}عمومی{% else %}خصوصی{% endif %}</span>
+      </div>
+      {% if m.description %}<p class="small muted" style="margin:0">{{ m.description|truncatechars:140 }}</p>{% endif %}
+      <ul class="wm-layers">{% for l in m.layers.all %}<li><i style="background:{{ l.style.color|default:'#0F5C59' }}"></i><span>{{ l.display_title }}</span></li>{% empty %}<li class="muted small">هنوز لایه‌ای ندارد</li>{% endfor %}</ul>
+      <div class="wm-actions">
+        {% if db.can_edit %}<a class="btn sm" href="{% url 'maps:composer' db.pk m.pk %}">طراحی</a>{% endif %}
+        <a class="btn ghost sm" href="{% url 'maps:map' m.slug %}" target="_blank" rel="noopener">مشاهده</a>
+        {% if db.can_edit %}
+        <form method="post" action="{% url 'maps:duplicate' db.pk m.pk %}" class="inline-form">{% csrf_token %}<button class="btn ghost sm" type="submit">کپی</button></form>
+        <form method="post" action="{% url 'maps:delete' db.pk m.pk %}" class="inline-form" onsubmit="return confirm('نقشه «{{ m.title|escapejs }}» حذف شود؟ لینک و کد جاسازی آن دیگر کار نمی‌کند.')">{% csrf_token %}<button class="btn ghost sm wm-del" type="submit">حذف</button></form>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if tables %}
+  <section class="panel" style="margin-top:var(--s5)">
+    <h2 style="font-size:1.2rem">{% if db.can_edit %}نقشه تازه{% else %}نمایش جدول‌ها با هم{% endif %}</h2>
+    <form method="post" action="{% url 'maps:create' db.pk %}" class="wm-new" id="wm-new">{% csrf_token %}
+      {% if db.can_edit %}<div class="field"><label for="wm-title">عنوان</label><input id="wm-title" type="text" name="title" maxlength="120" placeholder="مثلاً: مدرسه‌ها و پارک‌های منطقه ۶"></div>{% endif %}
+      <fieldset class="cols"><legend class="small">جدول‌ها (اولی بالای بقیه روی نقشه)</legend>
+        {% for t in tables %}<label class="check small"><input type="checkbox" name="t" value="{{ t.key }}"><span class="ltr">{% if t.schema != 'public' %}{{ t.schema }}.{% endif %}{{ t.table }}</span> <span class="muted">{{ t.geom_type|lower }}</span></label>{% endfor %}
+      </fieldset>
+      <div class="wm-actions">
+        {% if db.can_edit %}<button class="btn" type="submit" {% if maps|length >= cap %}disabled title="سقف نقشه‌های پلن پر است"{% endif %}>ساخت نقشه</button>{% endif %}
+        <button class="btn ghost" type="submit" formmethod="get" formaction="{% url 'maps:quick' db.pk %}">فقط نمایش با هم (بدون ذخیره)</button>
+      </div>
+      {% if db.can_edit and maps|length >= cap %}<p class="small muted">سقف {{ cap|fanum }} نقشه پلن شما پر است؛ یک نقشه را حذف کنید یا <a href="{% url 'billing:plans' %}">پلن را ارتقا دهید</a>. «نمایش با هم» همچنان کار می‌کند.</p>{% endif %}
+    </form>
+  </section>
+  {% else %}
+  <div class="empty" style="margin-top:var(--s5)">
+    <h2>جدول مکانی ندارید</h2>
+    <p class="muted">برای ساخت نقشه دست‌کم یک جدول با ستون geometry و SRID معلوم لازم است.</p>
+    <a class="btn" href="{% url 'databases:import' db.pk %}">ورود فایل</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مقایسه: {{ webmap.title }} — {{ SITE_NAME }}</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/favicon.svg' %}">
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
+<link rel="stylesheet" href="{% static 'css/map.css' %}">
+</head>
+<body class="gpx-body">
+<div class="cmp-wrap" id="cmp">
+  <div id="map-b" class="gpm cmp-map"></div>
+  <div id="map-a" class="gpm cmp-map cmp-top"></div>
+  <div class="cmp-handle" id="cmp-handle" role="slider" tabindex="0" aria-label="مرز دو نقشه" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span aria-hidden="true">⇆</span></div>
+</div>
+<form class="cmp-bar" onsubmit="return false">
+  <a class="small" href="{% url 'maps:map' webmap.slug %}">← {{ webmap.title }}</a>
+  {% if n_layers < 2 %}<span class="small muted">برای مقایسه دست‌کم دو لایه لازم است.</span>{% else %}
+  <label class="small">چپ <select id="cmp-a" aria-label="لایه سمت چپ"></select></label>
+  <label class="small">راست <select id="cmp-b" aria-label="لایه سمت راست"></select></label>
+  {% endif %}
+</form>
+{{ config|json_script:"map-config" }}
+<script src="{% static 'vendor/maplibre/maplibre-gl.js' %}"></script>
+<script src="{% static 'js/map-page.js' %}"></script>
+<script src="{% static 'js/map-compare.js' %}"></script>
+</body>
+</html>

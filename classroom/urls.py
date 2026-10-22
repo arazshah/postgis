@@ -9,4 +9,5 @@ urlpatterns = [
     path("teach/<int:pk>/", views.detail, name="detail"),
     path("teach/<int:pk>/archive/<int:enrollment_id>/", views.archive_download, name="archive"),
     path("join/<str:code>/", views.join, name="join"),
+    path("join/<str:code>/maps/<int:share_id>/copy/", views.copy_map, name="copy_map"),
 ]

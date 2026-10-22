@@ -1,0 +1,32 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ارائه: {{ webmap.title }} — {{ SITE_NAME }}</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/favicon.svg' %}">
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
+<link rel="stylesheet" href="{% static 'css/map.css' %}">
+</head>
+<body class="gpx-body">
+<div id="map" class="gpm gpx-map" aria-label="نقشه {{ webmap.title }}"></div>
+<section class="gpx-card" aria-live="polite">
+  <div class="gpx-meta"><span id="gpx-count"></span><a href="{% url 'maps:map' webmap.slug %}" class="gpx-exit">خروج از ارائه</a></div>
+  <h1 id="gpx-title">{{ webmap.title }}</h1>
+  <div id="gpx-body" class="gpx-text">{{ webmap.description|linebreaksbr }}</div>
+  {% if not n_slides %}<p class="gpx-text muted">این نقشه هنوز اسلایدی ندارد؛ در صفحه طراحی، بخش «ارائه» اسلاید بسازید.</p>{% endif %}
+  <div class="gpx-nav">
+    <button type="button" class="btn ghost sm" id="gpx-prev" aria-label="اسلاید قبلی">→ قبلی</button>
+    <div class="gpx-dots" id="gpx-dots" role="tablist" aria-label="اسلایدها"></div>
+    <button type="button" class="btn sm" id="gpx-next" aria-label="اسلاید بعدی">بعدی ←</button>
+  </div>
+</section>
+{% if webmap.database.plan.map_badge %}<a class="map-badge gpx-badge" href="{{ SITE_URL|default:'https://postgis.ir' }}/?utm_source=map&amp;utm_medium=present" target="_blank" rel="noopener"><img src="{% static 'img/favicon.svg' %}" alt="">ساخته‌شده با postgis.ir</a>{% endif %}
+{{ config|json_script:"map-config" }}
+<script src="{% static 'vendor/maplibre/maplibre-gl.js' %}"></script>
+<script src="{% static 'js/map-page.js' %}"></script>
+<script src="{% static 'js/map-present.js' %}"></script>
+</body>
+</html>

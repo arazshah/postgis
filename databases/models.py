@@ -178,6 +178,8 @@ class Plan(models.Model):
         "سقف درخواست روزانه لایه‌های منتشرشده", default=5000,
         help_text="مجموع درخواست‌های کاشی و OGC API همه لایه‌های این پایگاه داده در یک روز.")
     map_badge = models.BooleanField("نشان postgis.ir روی نقشه‌های عمومی", default=True)
+    maps = models.PositiveIntegerField("حداکثر نقشه چندلایه", default=2)
+    map_layers = models.PositiveIntegerField("حداکثر لایه در هر نقشه", default=5)
     ows_projects = models.PositiveIntegerField("حداکثر پروژه WMS/WFS (QGIS Server)", default=1)
     db_roles = models.PositiveIntegerField(
         "حداکثر کاربر اضافه پایگاه داده", default=1,

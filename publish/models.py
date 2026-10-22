@@ -72,6 +72,11 @@ class Layer(models.Model):
     def display_title(self) -> str:
         return self.title or self.table
 
+    @property
+    def database(self):
+        """برای publish.engine: هر چیزی که schema/table/geom_column/srid/columns و database دارد کاشی می‌شود."""
+        return self.service.database
+
 
 class ApiKey(models.Model):
     PREFIX = "gpk_"

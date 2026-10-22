@@ -1,0 +1,51 @@
+{% load static fa %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>چاپ: {{ webmap.title }} — {{ SITE_NAME }}</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="{% static 'img/favicon.svg' %}">
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
+<link rel="stylesheet" href="{% static 'css/map.css' %}">
+<style id="pr-page">@page{size:A4 landscape;margin:8mm}</style>
+</head>
+<body class="pr-body">
+<form class="pr-tools" id="pr-tools" onsubmit="return false">
+  <a class="small" href="{% url 'maps:map' webmap.slug %}">← نقشه</a>
+  <div class="seg-choice" role="radiogroup" aria-label="جهت کاغذ">
+    <label><input type="radio" name="orient" value="landscape" checked><span>افقی</span></label>
+    <label><input type="radio" name="orient" value="portrait"><span>عمودی</span></label>
+  </div>
+  <label class="check small"><input type="checkbox" id="pr-legend" checked><span>راهنما</span></label>
+  <label class="check small"><input type="checkbox" id="pr-north" checked><span>جهت شمال</span></label>
+  <span class="pr-spacer"></span>
+  <button class="btn ghost sm" type="button" id="pr-png">دانلود تصویر PNG</button>
+  <button class="btn sm" type="button" id="pr-print">چاپ / ذخیره PDF</button>
+</form>
+<p class="pr-hint small muted" id="pr-msg">نقشه را جابه‌جا و بزرگ‌نمایی کنید و عنوان را همین‌جا ویرایش کنید؛ همان چیزی که می‌بینید چاپ می‌شود. برای PDF در پنجره چاپ «Save as PDF» را انتخاب کنید.</p>
+
+<main class="pr-sheet landscape" id="pr-sheet">
+  <header class="pr-head">
+    <h1 contenteditable="true" spellcheck="false" id="pr-title" data-png="text">{{ webmap.title }}</h1>
+    <p contenteditable="true" spellcheck="false" id="pr-sub" data-png="text">{{ webmap.description|default:"" }}</p>
+  </header>
+  <div class="pr-map"><div id="map" class="gpm"></div>
+    <svg class="pr-north" id="pr-north-svg" viewBox="0 0 40 56" aria-label="شمال" role="img"><path d="M20 4 L32 40 L20 33 L8 40 Z" fill="#12313A"/><path d="M20 4 L20 33 L8 40 Z" fill="#fff" stroke="#12313A" stroke-width="1.5"/><text x="20" y="54" text-anchor="middle" font-size="12" font-family="Vazirmatn, sans-serif" font-weight="700" fill="#12313A">N</text></svg>
+  </div>
+  <footer class="pr-foot">
+    <div class="pr-legend" id="pr-legend-box"></div>
+    <div class="pr-meta">
+      <span data-png="text">تاریخ: {{ today|fanum }}</span>
+      <span data-png="text">نقشه پایه: <span id="pr-base"></span></span>
+      <span data-png="text">ساخته‌شده با postgis.ir</span>
+    </div>
+  </footer>
+</main>
+{{ config|json_script:"map-config" }}
+<script src="{% static 'vendor/maplibre/maplibre-gl.js' %}"></script>
+<script src="{% static 'js/map-page.js' %}"></script>
+<script src="{% static 'js/map-print.js' %}"></script>
+</body>
+</html>
