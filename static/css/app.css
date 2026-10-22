@@ -522,6 +522,16 @@ details.pay-option summary{cursor:pointer}
 .health form{display:flex;gap:var(--s2);align-items:center;flex:none}
 @media (max-width:900px){.imp-grid{grid-template-columns:1fr}.h-row{flex-direction:column;align-items:flex-start}}
 
+/* ورودهای اخیر */
+.recent-imports{margin-top:var(--s6)}
+.recent-imports h3{margin:0 0 var(--s3)}
+.recent-imports .table-scroll{border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface)}
+.imp-recent{width:100%}
+.imp-recent td{vertical-align:middle}
+.imp-name{display:inline-block;max-width:260px;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+.imp-msg{white-space:normal;min-width:180px;max-width:360px}
+.imp-err{color:var(--red)}
+
 /* ---------- انتشار ---------- */
 .pub-stats{display:flex;gap:var(--s6);flex-wrap:wrap;margin:0 0 var(--s5);padding:var(--s4) var(--s5);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md)}
 .pub-stats b{font-family:var(--f-display);font-size:1.3rem;color:var(--teal)}

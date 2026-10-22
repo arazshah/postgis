@@ -526,7 +526,7 @@ def import_start(request, pk):
                 job.params = {**job.params, **info}
                 job.save(update_fields=["params"])
                 return redirect("databases:import_review", pk=db.pk, job_id=job.pk)
-    recent = db.jobs.filter(kind="import").exclude(status="draft")[:5]
+    recent = db.jobs.filter(kind="import").exclude(status="draft")[:10]
     return render(request, "databases/import.html", {
         "db": db, "tables": ex.tables(), "section": "import", "error": error, "max_mb": max_mb,
         "accept": ",".join(sorted(gdal.ALLOWED_EXT)), "recent": recent})
