@@ -3,7 +3,7 @@
 ARG BASE_IMAGE=ubuntu:24.04
 FROM ${BASE_IMAGE}
 
-# آینه apt: اگر دانلود از archive.ubuntu.com کند است، در Coolify مثلاً APT_MIRROR=http://mirror.arvancloud.ir/ubuntu بگذارید.
+# آینه apt (برای apt به http تبدیل می‌شود چون ایمیج پایه هنوز ca-certificates ندارد؛ بسته‌ها امضای GPG دارند): اگر دانلود از archive.ubuntu.com کند است، در Coolify مثلاً APT_MIRROR=http://mirror.arvancloud.ir/ubuntu بگذارید.
 ARG APT_MIRROR=
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean \
  && echo 'Acquire::Retries "5"; Acquire::http::Timeout "30"; Acquire::https::Timeout "30";' > /etc/apt/apt.conf.d/80-retries \
- && if [ -n "$APT_MIRROR" ]; then sed -i -E "s#https?://(archive|security)\.ubuntu\.com/ubuntu/?#${APT_MIRROR%/}/#g" /etc/apt/sources.list.d/ubuntu.sources; fi \
+ && if [ -n "$APT_MIRROR" ]; then M="http://${APT_MIRROR#*://}"; sed -i -E "s#https?://(archive|security)\.ubuntu\.com/ubuntu/?#${M%/}/#g" /etc/apt/sources.list.d/ubuntu.sources; fi \
  && apt-get update \
  && apt-get install -y --no-install-recommends qgis-server-bin qgis-server-wms qgis-server-wfs \
       spawn-fcgi multiwatch nginx-light fonts-vazirmatn fonts-dejavu-core ca-certificates curl \
