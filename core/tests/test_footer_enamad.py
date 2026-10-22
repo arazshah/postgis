@@ -10,7 +10,7 @@ def form_data(conf, **extra):
     data = {}
     for name in SiteSettingsForm.base_fields:
         value = getattr(conf, name, None)
-        if value is None or name in ("smsir_api_key", "bale_client_secret", "gateway_merchant"):
+        if value is None or name in ("smsir_api_key", "gateway_merchant"):
             continue
         if isinstance(value, bool):
             if value:

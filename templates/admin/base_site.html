@@ -1,7 +1,7 @@
 {% extends "admin/base.html" %}{% load static %}
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
 {% block extrastyle %}{{ block.super }}
-<link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
+<link rel="icon" href="{{ SITE_LOGO_URL }}">
 <style>
 @font-face{font-family:"Vazirmatn";font-weight:400;src:url({% static 'fonts/vazirmatn-arabic-400-normal.woff2' %}) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
 @font-face{font-family:"Vazirmatn";font-weight:700;src:url({% static 'fonts/vazirmatn-arabic-700-normal.woff2' %}) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}

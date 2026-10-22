@@ -13,6 +13,7 @@ def site(request):
         "ROBOTS": "noindex, nofollow" if request.path.startswith(PRIVATE_PREFIXES) else "index, follow",
         "SITE": conf,
         "SITE_NAME": conf.site_name,
+        "SITE_LOGO_URL": conf.logo_url,
         "SITE_URL": settings.SITE_URL,
         "SUPPORT_TELEGRAM": conf.support_telegram,
         "SUPPORT_EMAIL": conf.support_email,

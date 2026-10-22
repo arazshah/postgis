@@ -16,6 +16,9 @@ class SiteSettings(models.Model):
     site_name = models.CharField("نام سایت", max_length=100, default="ژئوپایگاه")
     tagline = models.CharField("شعار کوتاه", max_length=200, blank=True,
                                default="پایگاه داده مکانی PostGIS آماده برای WebGIS")
+    logo_data = models.BinaryField(editable=False, null=True, blank=True)
+    logo_mime = models.CharField(max_length=40, blank=True, editable=False)
+    logo_version = models.PositiveIntegerField(default=0, editable=False)
     support_phone = models.CharField("تلفن پشتیبانی", max_length=30, blank=True)
     support_telegram = models.CharField("آیدی تلگرام پشتیبانی (بدون @)", max_length=100, blank=True)
     support_email = models.EmailField("ایمیل پشتیبانی", blank=True)
@@ -107,16 +110,6 @@ class SiteSettings(models.Model):
                                          help_text="برای پیامک‌های هشدار حجم و انقضا. خالی = ارسال نشود.")
 
     # --- رمز یک‌بار مصرف ---
-    # --- پیام‌رسان بله (سفیر) ---
-    bale_enabled = models.BooleanField(
-        "ارسال کد ورود از طریق بله", default=False,
-        help_text="سرویس سفیر بله؛ کد از بازوی رسمی «کد تأیید» (@verification_code_bot) برای کاربر می‌رود.")
-    bale_client_id = models.CharField("شناسه سرویس سفیر (Client ID)", max_length=200, blank=True)
-    bale_client_secret_encrypted = models.TextField(blank=True, editable=False)
-    bale_fallback = models.BooleanField("اگر پیامک ارسال نشد، خودکار با بله بفرست", default=True)
-    bale_button = models.BooleanField("دکمه «ارسال کد در بله» در صفحه ورود", default=True,
-                                      help_text="برای وقتی که پیامک ارسال شده ولی به دست کاربر نرسیده است.")
-
     otp_length = models.PositiveSmallIntegerField("تعداد رقم کد", default=5,
                                                   validators=[MinValueValidator(4), MaxValueValidator(8)])
     otp_ttl_seconds = models.PositiveSmallIntegerField("اعتبار کد (ثانیه)", default=120,
@@ -190,6 +183,14 @@ class SiteSettings(models.Model):
     def delete(self, *args, **kwargs):
         pass  # حذف‌شدنی نیست
 
+    @property
+    def logo_url(self) -> str:
+        """آدرس لوگوی بارگذاری‌شده (با شماره نسخه برای کش)؛ بدون لوگو، آیکن پیش‌فرض."""
+        if self.logo_data:
+            return f"/site-logo/?v={self.logo_version}"
+        from django.templatetags.static import static
+        return static("img/favicon.svg")
+
     @classmethod
     def get(cls) -> "SiteSettings":
         obj = cls.objects.filter(pk=1).first()
@@ -234,25 +235,6 @@ class SiteSettings(models.Model):
             return decrypt(self.smsir_api_key_encrypted)
         except ValueError:
             return ""
-
-    def set_bale_client_secret(self, raw: str):
-        from databases.crypto import encrypt
-
-        self.bale_client_secret_encrypted = encrypt(raw) if raw else ""
-
-    def get_bale_client_secret(self) -> str:
-        from databases.crypto import decrypt
-
-        if not self.bale_client_secret_encrypted:
-            return ""
-        try:
-            return decrypt(self.bale_client_secret_encrypted)
-        except ValueError:
-            return ""
-
-    @property
-    def bale_ready(self) -> bool:
-        return bool(self.bale_enabled and self.bale_client_id and self.bale_client_secret_encrypted)
 
     def set_assistant_api_key(self, raw: str):
         from databases.crypto import encrypt

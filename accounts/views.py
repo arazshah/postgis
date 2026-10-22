@@ -12,7 +12,7 @@ from core.models import SiteSettings
 from . import otp
 from .decorators import site_user_required
 from .forms import PhoneForm, ProfileForm, VerifyForm
-from .models import OTPCode, User
+from .models import User
 
 SESSION_PHONE = "otp_phone"
 SESSION_NEXT = "otp_next"
@@ -103,13 +103,9 @@ def verify(request):
             return redirect(nxt or "databases:dashboard")
 
     conf = SiteSettings.get()
-    last = OTPCode.objects.filter(phone=phone).order_by("-created_at").first()
     return render(request, "accounts/verify.html", {
         "form": form, "phone": phone, "new_user": new_user,
         "wait": otp.seconds_until_resend(phone, conf),
-        "via_bale": bool(last and last.channel == "bale"),
-        "bale_button": conf.bale_ready and conf.bale_button,
-        "bale_wait": otp.seconds_until_resend(phone, conf, "bale"),
     })
 
 
@@ -118,8 +114,7 @@ def resend(request):
     phone = request.session.get(SESSION_PHONE)
     if not phone:
         return redirect("accounts:login")
-    channel = "bale" if request.POST.get("channel") == "bale" else "sms"
-    result = otp.request_code(phone, otp.client_ip(request), channel=channel)
+    result = otp.request_code(phone, otp.client_ip(request))
     (messages.success if result.ok else messages.error)(request, result.message)
     if result.debug_code:
         messages.info(request, f"حالت توسعه: کد {result.debug_code}")

@@ -9,8 +9,44 @@ from accounts.models import normalize_mobile
 
 from .models import SiteSettings
 
+LOGO_MAX_BYTES = 512 * 1024
+LOGO_TYPES = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp", "GIF": "image/gif"}
+
+
+def sniff_logo(raw: bytes) -> str:
+    """نوع تصویر را از محتوا می‌شناسد؛ فقط PNG/JPEG/WebP/GIF/SVG مجاز است."""
+    head = raw[:2048].lstrip().lower()
+    if b"<svg" in head or (head.startswith(b"<?xml") and b"<svg" in raw[:4096].lower()):
+        import defusedxml.ElementTree as ET
+
+        try:
+            root = ET.fromstring(raw)
+        except Exception:
+            raise ValidationError("فایل SVG معتبر نیست.")
+        if not root.tag.endswith("svg"):
+            raise ValidationError("فایل SVG معتبر نیست.")
+        return "image/svg+xml"
+    from io import BytesIO
+
+    from PIL import Image
+
+    try:
+        with Image.open(BytesIO(raw)) as im:
+            im.verify()
+            fmt = im.format
+    except Exception:
+        raise ValidationError("این فایل تصویر معتبری نیست.")
+    if fmt not in LOGO_TYPES:
+        raise ValidationError("فرمت لوگو باید PNG، JPG، WebP، GIF یا SVG باشد.")
+    return LOGO_TYPES[fmt]
+
 
 class SiteSettingsForm(forms.ModelForm):
+    logo_file = forms.FileField(
+        label="لوگوی سایت", required=False,
+        help_text="PNG، JPG، WebP، GIF یا SVG تا ۵۰۰ کیلوبایت؛ ترجیحاً مربع (در هدر ۳۰ پیکسل و به‌عنوان آیکن تب نمایش داده می‌شود). "
+                  "خالی بگذارید تا لوگوی فعلی بماند.")
+    clear_logo = forms.BooleanField(label="حذف لوگو و بازگشت به آیکن پیش‌فرض", required=False)
     smsir_api_key = forms.CharField(
         label="کلید API پنل sms.ir", required=False,
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
@@ -21,10 +57,6 @@ class SiteSettingsForm(forms.ModelForm):
         help_text="مثلاً https://stats.araz.me/script.js (در Umami: Settings ← Websites ← Edit ← Tracking code). "
                   "چسباندن کل تگ script هم کار می‌کند و Website ID خودکار پر می‌شود.")
     clear_smsir_api_key = forms.BooleanField(label="حذف کلید API فعلی", required=False)
-    bale_client_secret = forms.CharField(
-        label="رمز سرویس سفیر (Client Secret)", required=False,
-        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
-        help_text="فقط هنگام تغییر وارد کنید؛ رمزنگاری‌شده ذخیره می‌شود.")
     gateway_merchant = forms.CharField(
         label="مرچنت کد درگاه", required=False,
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
@@ -110,6 +142,17 @@ class SiteSettingsForm(forms.ModelForm):
             raise ValidationError("آدرس سرویس باید با https:// شروع شود؛ مثلاً https://api.avalai.ir/v1")
         return url
 
+    def clean_logo_file(self):
+        f = self.cleaned_data.get("logo_file")
+        if not f:
+            return f
+        if f.size > LOGO_MAX_BYTES:
+            raise ValidationError("حجم لوگو باید کمتر از ۵۰۰ کیلوبایت باشد.")
+        raw = f.read()
+        self.logo_mime = sniff_logo(raw)
+        self.logo_raw = raw
+        return f
+
     def clean_assistant_api_key(self):
         return "".join((self.cleaned_data.get("assistant_api_key") or "").split())
 
@@ -132,8 +175,12 @@ class SiteSettingsForm(forms.ModelForm):
             obj.smsir_api_key_encrypted = ""
         elif self.cleaned_data.get("smsir_api_key"):
             obj.set_smsir_api_key(self.cleaned_data["smsir_api_key"].strip())
-        if self.cleaned_data.get("bale_client_secret"):
-            obj.set_bale_client_secret(self.cleaned_data["bale_client_secret"].strip())
+        if self.cleaned_data.get("clear_logo"):
+            obj.logo_data, obj.logo_mime = None, ""
+            obj.logo_version += 1
+        elif self.cleaned_data.get("logo_file"):
+            obj.logo_data, obj.logo_mime = self.logo_raw, self.logo_mime
+            obj.logo_version += 1
         if self.cleaned_data.get("gateway_merchant"):
             obj.set_gateway_merchant(self.cleaned_data["gateway_merchant"])
         if self.cleaned_data.get("clear_assistant_api_key"):
@@ -148,10 +195,10 @@ class SiteSettingsForm(forms.ModelForm):
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
     form = SiteSettingsForm
-    readonly_fields = ["api_key_status", "bale_status", "gateway_status", "gateway_tools", "sms_tools",
-                       "enamad_status", "assistant_status", "assistant_tools", "updated_at"]
+    readonly_fields = ["api_key_status", "gateway_status", "gateway_tools", "sms_tools",
+                       "enamad_status", "logo_preview", "assistant_status", "assistant_tools", "updated_at"]
     fieldsets = (
-        ("سایت", {"fields": ("site_name", "tagline", "announcement", "announcement_level")}),
+        ("سایت", {"fields": ("site_name", "logo_preview", "logo_file", "clear_logo", "tagline", "announcement", "announcement_level")}),
         ("پشتیبانی", {"fields": ("support_phone", "support_telegram", "support_email")}),
         ("اینماد و نمادهای اعتماد", {
             "fields": ("enamad_status", "enamad_meta_content", "enamad_badge_html", "footer_badges_html"),
@@ -203,13 +250,6 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             "description": "قالب کد تأیید را در پنل sms.ir بسازید، مثلاً «کد ورود شما: #CODE#»، "
                            "و شناسه آن را اینجا وارد کنید.",
         }),
-        ("ارسال کد ورود در پیام‌رسان بله (سفیر)", {
-            "fields": ("bale_enabled", "bale_status", "bale_client_id", "bale_client_secret", "bale_fallback",
-                       "bale_button"),
-            "description": "در سامانه سفیر بله (bale.ai/safir) حساب سازمانی بسازید، سرویس ارسال کد تأیید (OTP) را فعال کنید و "
-                           "Client ID و Client Secret را این‌جا وارد کنید. با «ارسال کد آزمایشی» در بخش پیامک، "
-                           "مسیر بله را هم می‌توانید آزمایش کنید.",
-        }),
         ("رمز یک‌بار مصرف و امنیت ورود", {"fields": ("otp_length", "otp_ttl_seconds", "otp_resend_seconds",
                                                     "otp_max_attempts", "otp_max_per_phone_hour",
                                                     "otp_max_per_ip_hour")}),
@@ -244,13 +284,11 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             return format_html('<b style="color:#b54708">نماد فوتر ثبت شده؛ متاتگ تأیید مالکیت وارد نشده</b>')
         return format_html('<b style="color:#b42318">هیچ‌کدام وارد نشده</b>')
 
-    @admin.display(description="وضعیت بله")
-    def bale_status(self, obj):
-        if obj.bale_ready:
-            return format_html('<b style="color:#1a7f4b">فعال و آماده</b>')
-        if obj.bale_client_secret_encrypted and obj.bale_client_id:
-            return format_html('<b style="color:#b54708">اطلاعات ذخیره شده، ولی غیرفعال</b>')
-        return format_html('<b style="color:#b42318">تنظیم نشده</b>')
+    @admin.display(description="لوگوی فعلی")
+    def logo_preview(self, obj):
+        if obj and obj.logo_data:
+            return format_html('<img src="{}" alt="" style="max-height:64px;max-width:200px;background:#eee;padding:4px">', obj.logo_url)
+        return "لوگویی بارگذاری نشده؛ آیکن پیش‌فرض نمایش داده می‌شود."
 
     @admin.display(description="وضعیت مرچنت کد")
     def gateway_status(self, obj):
@@ -379,7 +417,6 @@ class SiteSettingsAdmin(admin.ModelAdmin):
 
         class TestForm(forms.Form):
             phone = forms.CharField(label="شماره موبایل گیرنده", widget=forms.TextInput(attrs={"dir": "ltr"}))
-            channel = forms.ChoiceField(label="مسیر", choices=[("sms", "پیامک (sms.ir)"), ("bale", "پیام‌رسان بله")])
 
             def clean_phone(self):
                 return normalize_mobile(self.cleaned_data["phone"])
@@ -388,18 +425,8 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         if request.method == "POST" and form.is_valid():
             phone = form.cleaned_data["phone"]
             try:
-                if form.cleaned_data["channel"] == "bale":
-                    from accounts.bale import BaleError
-                    from accounts.bale import send_otp as bale_send
-
-                    try:
-                        bale_send(phone, "12345")
-                    except BaleError as exc:
-                        raise SMSError(str(exc)) from exc
-                    messages.success(request, "کد آزمایشی 12345 در بله ارسال شد (بازوی «کد تأیید»).")
-                else:
-                    send_otp(phone, "12345")
-                    messages.success(request, "پیامک آزمایشی با کد 12345 ارسال شد.")
+                send_otp(phone, "12345")
+                messages.success(request, "پیامک آزمایشی با کد 12345 ارسال شد.")
             except (SMSError, ValidationError) as exc:
                 messages.error(request, f"ارسال ناموفق: {exc}")
             return self._back()
