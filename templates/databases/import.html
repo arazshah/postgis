@@ -14,6 +14,29 @@
   </label>
   <button class="btn" type="submit" {% if db.status != 'active' %}disabled{% endif %}>بررسی فایل</button>
 </form>
+{% if recent %}
+<section class="recent-imports" aria-labelledby="recent-h">
+  <h3 id="recent-h">ورودهای اخیر</h3>
+  <div class="table-scroll">
+    <table class="data-table imp-recent">
+      <thead><tr><th>فایل</th><th>وضعیت</th><th>لایه‌ها</th><th>توضیح</th><th>زمان</th><th></th></tr></thead>
+      <tbody>
+      {% for j in recent %}
+        <tr>
+          <td class="small"><a href="{% url 'databases:import_review' db.pk j.pk %}" class="imp-name ltr">{{ j.params.original|default:"—" }}</a></td>
+          <td><span class="badge {% if j.status == 'done' %}active{% elif j.status == 'failed' %}error{% elif j.status == 'expired' %}expired{% else %}warn{% endif %}">{{ j.get_status_display }}</span>
+            {% if j.status == 'running' %}<span class="small muted">{{ j.progress|fanum }}٪</span>{% endif %}</td>
+          <td>{% if j.params.imported %}{{ j.params.imported|length|fanum }}{% else %}—{% endif %}</td>
+          <td class="small imp-msg">{% if j.status == 'failed' or j.params.errors %}<span class="imp-err">{{ j.message|default:j.stage|truncatechars:140 }}</span>{% elif j.message %}{{ j.message|truncatechars:140 }}{% else %}{{ j.stage|default:"—" }}{% endif %}</td>
+          <td class="small muted">{{ j.created_at|jdatetime_full }}</td>
+          <td><a class="btn ghost small" href="{% url 'databases:import_review' db.pk j.pk %}">جزئیات</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
 <div class="help-tips" style="margin-top:var(--s5)">
   <h3 style="font-size:1rem">نکته‌ها</h3>
   <ul class="small">
@@ -22,10 +45,6 @@
     <li>CSV باید ستون‌هایی مثل <span class="ltr">lon/lat</span>، <span class="ltr">x/y</span> یا <span class="ltr">wkt</span> داشته باشد.</li>
   </ul>
 </div>
-{% if recent %}
-<h3 style="margin-top:var(--s6)">ورودهای اخیر</h3>
-<ul class="log">{% for j in recent %}<li class="{% if j.status == 'failed' %}fail{% endif %}"><a href="{% url 'databases:import_review' db.pk j.pk %}">{{ j.params.original }}</a> · {{ j.get_status_display }}<span class="muted">{{ j.created_at|jdatetime_full }}</span></li>{% endfor %}</ul>
-{% endif %}
 <script>
 document.querySelectorAll('#imp-file').forEach(i => i.addEventListener('change', () => {
   document.querySelector('[data-file-name]').textContent = i.files[0] ? i.files[0].name : '';
