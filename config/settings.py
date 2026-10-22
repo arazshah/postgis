@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     "support",
     "jobs",
     "publish",
+    "maps",
     "iranmap",
     "classroom",
     "analysis",

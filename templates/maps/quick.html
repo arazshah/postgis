@@ -1,0 +1,35 @@
+{% extends "databases/_ws.html" %}{% load static fa %}
+{% block title %}نمایش با هم — {{ SITE_NAME }}{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
+<link rel="stylesheet" href="{% static 'css/map.css' %}">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+{% endblock %}
+{% block ws %}
+<div class="wrap page">
+  <p class="small"><a href="{% url 'databases:explore' db.pk %}">← جدول‌ها</a></p>
+  <div class="page-head">
+    <h1>نمایش با هم <span class="muted small">({{ layers|length|fanum }} لایه)</span></h1>
+    <a class="btn ghost sm" href="{% url 'maps:index' db.pk %}" style="margin-inline-start:auto">تغییر جدول‌ها</a>
+  </div>
+  <p class="muted small">این نمایش ذخیره نمی‌شود. هر لایه رنگ جدا دارد؛ از راهنمای روی نقشه لایه‌ها را روشن و خاموش کنید و روی عارضه‌ها کلیک کنید.{% if too_many %} فقط {{ layers|length|fanum }} جدول اول نمایش داده شد.{% endif %}</p>
+  <div class="wm-quick-map"><div id="map" class="gpm"></div></div>
+
+  {% if db.can_edit %}
+  <section class="panel" style="margin-top:var(--s5)">
+    <h2 style="font-size:1.1rem">ذخیره به‌عنوان نقشه</h2>
+    <p class="small muted">نقشه ذخیره‌شده را می‌توانید سبک‌دهی کنید، با لینک به اشتراک بگذارید یا در سایت دیگری جاسازی کنید.</p>
+    <form method="post" action="{% url 'maps:create' db.pk %}" class="inline-form">{% csrf_token %}
+      <input type="hidden" name="back" value="quick">
+      {% for k in keys %}<input type="hidden" name="t" value="{{ k }}">{% endfor %}
+      <input type="text" name="title" maxlength="120" placeholder="عنوان نقشه" aria-label="عنوان نقشه" required>
+      <button class="btn" type="submit">ذخیره نقشه</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{{ config|json_script:"map-config" }}
+<script src="{% static 'vendor/maplibre/maplibre-gl.js' %}"></script>
+<script src="{% static 'js/map-page.js' %}"></script>
+<script>GPMap.createMulti(document.getElementById("map"), JSON.parse(document.getElementById("map-config").textContent));</script>
+{% endblock %}

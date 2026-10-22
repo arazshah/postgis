@@ -266,7 +266,10 @@ def explore(request, pk):
     except ExplorerError as exc:
         messages.error(request, str(exc))
         return redirect("databases:detail", pk=db.pk)
-    return render(request, "databases/explore.html", {"db": db, "tables": tables, "section": "tables"})
+    for t in tables:
+        t.mappable = any(not g["geography"] and g["srid"] for g in t.geometry)
+    return render(request, "databases/explore.html", {"db": db, "tables": tables, "section": "tables",
+                                                      "spatial_count": sum(t.mappable for t in tables)})
 
 
 @site_user_required
@@ -283,7 +286,14 @@ def explore_table(request, pk, schema, table):
         ctx = {"db": db, "tables": tables, "t": t, "tab": tab, "section": "tables"}
         if tab == "columns":
             ctx["columns"] = ex.columns(t)
-        elif tab != "map":
+        elif tab == "map":
+            from maps.models import WebMap
+
+            mappable = [x for x in tables if any(not g["geography"] and g["srid"] for g in x.geometry)]
+            ctx["mappable"] = t in mappable
+            ctx["compare"] = len(mappable) > 1
+            ctx["maps"] = list(WebMap.objects.filter(database=db).only("pk", "title")) if db.can_edit else []
+        else:
             try:
                 page = int(request.GET.get("page", "1"))
             except ValueError:
@@ -314,9 +324,11 @@ def explore_drop(request, pk, schema, table):
         messages.error(request, str(exc))
         return redirect("databases:explore", pk=db.pk)
     # لایه‌ها و APIهای منتشرشده از این جدول دیگر معنا ندارند
+    from maps.models import MapLayer
     from publish.models import Layer
     from restapi.models import ApiTable
 
+    MapLayer.objects.filter(webmap__database=db, schema=schema, table=table).delete()
     gone = Layer.objects.filter(service__database=db, schema=schema, table=table).delete()[0]
     gone += ApiTable.objects.filter(service__database=db, schema=schema, table=table).delete()[0]
     messages.success(request, f"جدول {table} حذف شد." + (" انتشار آن هم برداشته شد." if gone else ""))

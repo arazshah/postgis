@@ -39,7 +39,7 @@ def _slot(db_id: int) -> threading.BoundedSemaphore:
 
 @contextmanager
 def _connect(layer):
-    db = layer.service.database
+    db = layer.database
     slot = _slot(db.pk)
     if not slot.acquire(timeout=20):
         raise ExplorerError("سرور مشغول است؛ چند لحظه بعد دوباره تلاش کنید.")

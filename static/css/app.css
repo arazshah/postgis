@@ -568,6 +568,42 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 @media (max-width:900px){.builder{grid-template-columns:1fr}.builder-map{position:static;height:420px}}
 .builder-form [hidden]{display:none!important}
 
+/* ---------- نقشه‌های چندلایه ---------- */
+.wm-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--s4)}
+.wm-card{display:flex;flex-direction:column;gap:var(--s3);margin:0}
+.wm-layers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:.88rem}
+.wm-layers li{display:flex;gap:8px;align-items:center}
+.wm-layers i{width:12px;height:12px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.15)}
+.wm-actions{display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center;margin-top:auto}
+.wm-del{color:var(--red)}
+.wm-new{display:flex;flex-direction:column;gap:var(--s3)}
+.wm-new .cols{display:flex;flex-wrap:wrap;gap:6px var(--s4);border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--s3)}
+.wm-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.wm-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+.wm-item.on{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-soft)}
+.wm-item.drag{opacity:.5}
+.wm-item.over{border-color:var(--ochre);border-style:dashed}
+.wm-item.missing .wm-sw{opacity:.3}
+.wm-grip{cursor:grab;color:var(--ink-3,#7A8B8F);letter-spacing:-2px;user-select:none}
+.wm-eye{width:16px;height:16px;accent-color:var(--teal);flex:none;margin:0}
+.wm-sw{width:18px;height:18px;border-radius:4px;flex:none;border:1px solid rgba(0,0,0,.15)}
+.wm-name{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;background:none;border:0;padding:0;font:inherit;text-align:start;cursor:pointer;color:inherit}
+.wm-name span{font-weight:700;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.wm-name small{font-size:.75rem;color:var(--ink-2)}
+.wm-bad{color:var(--red)!important}
+.wm-tools{display:flex;gap:2px}
+.wm-tools button{background:none;border:1px solid transparent;border-radius:6px;width:26px;height:26px;cursor:pointer;color:var(--ink-2);font:inherit;line-height:1}
+.wm-tools button:hover:not(:disabled){border-color:var(--line);color:var(--teal)}
+.wm-tools button:disabled{opacity:.3;cursor:default}
+.wm-tools [data-act=remove]:hover{color:var(--red)!important}
+.wm-add{display:flex;gap:var(--s2)}
+.wm-add select{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);font:inherit}
+#wm-msg.err{color:var(--red)}
+.wm-quick-map{height:min(72vh,640px);border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--line)}
+.ex-compare{display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap;margin:0 0 var(--s3)}
+.ex-addmap{display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap;margin-top:var(--s3)}
+.ex-addmap select{padding:5px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);font:inherit}
+
 /* WMS/WFS با QGIS Server */
 .ows-new,.ows-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5);margin-bottom:var(--s5)}
 .ows-grid{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}

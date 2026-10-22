@@ -1,14 +1,22 @@
 {% extends "databases/_explore_base.html" %}{% load fa %}
 {% block ex %}
 {% if tables %}
-<div class="panel">
+<form class="panel" method="get" action="{% url 'maps:quick' db.pk %}" id="compare">
   <h2>خلاصه جدول‌ها</h2>
+  {% if spatial_count > 1 %}
+  <div class="ex-compare">
+    <span class="small muted">چند جدول مکانی را تیک بزنید تا کنار هم روی یک نقشه ببینید.</span>
+    <button class="btn sm" type="submit" data-compare-btn disabled>نمایش با هم روی نقشه</button>
+    <a class="small" href="{% url 'maps:index' db.pk %}">نقشه‌های ذخیره‌شده</a>
+  </div>
+  {% endif %}
   <div class="table-scroll">
   <table class="data-table">
-    <thead><tr><th>نام</th><th>نوع</th><th>تعداد تقریبی سطر</th><th>حجم</th><th>ستون مکانی</th></tr></thead>
+    <thead><tr>{% if spatial_count > 1 %}<th><span class="sr-label">انتخاب</span></th>{% endif %}<th>نام</th><th>نوع</th><th>تعداد تقریبی سطر</th><th>حجم</th><th>ستون مکانی</th></tr></thead>
     <tbody>
     {% for x in tables %}
       <tr>
+        {% if spatial_count > 1 %}<td>{% if x.mappable %}<input type="checkbox" name="t" value="{{ x.schema }}.{{ x.name }}" aria-label="انتخاب {{ x.name }} برای نمایش روی نقشه" data-compare>{% endif %}</td>{% endif %}
         <td><a class="ltr" href="{% url 'databases:explore_table' db.pk x.schema x.name %}">{% if x.schema != 'public' %}{{ x.schema }}.{% endif %}{{ x.name }}</a></td>
         <td>{{ x.kind_label }}</td>
         <td>{{ x.rows_estimate|fanum }}</td>
@@ -20,7 +28,17 @@
   </table>
   </div>
   <p class="small muted" style="margin-top:12px">جدول‌های سیستمی PostGIS (مثل spatial_ref_sys) نمایش داده نمی‌شوند. تعداد سطرها تقریبی است و بعد از VACUUM/ANALYZE دقیق‌تر می‌شود.</p>
-</div>
+</form>
+{% if spatial_count > 1 %}
+<script>
+(() => {
+  const f = document.getElementById("compare"), btn = f.querySelector("[data-compare-btn]");
+  const sync = () => { const n = f.querySelectorAll("[data-compare]:checked").length; btn.disabled = n < 1;
+    btn.textContent = n > 1 ? `نمایش ${n.toLocaleString("fa-IR")} جدول با هم روی نقشه` : "نمایش با هم روی نقشه"; };
+  f.addEventListener("change", sync); sync();
+})();
+</script>
+{% endif %}
 {% else %}
 <div class="empty">
   <h2>این پایگاه داده هنوز جدولی ندارد</h2>

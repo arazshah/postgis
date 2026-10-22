@@ -1,0 +1,48 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ webmap.title }} — نقشه در {{ SITE_NAME }}</title>
+<meta name="description" content="{{ webmap.description|default:webmap.title|truncatechars:160 }}">
+<meta property="og:title" content="{{ webmap.title }}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ public_url }}">
+<meta name="robots" content="{% if embed or not webmap.is_public %}noindex{% else %}index, follow{% endif %}">
+<link rel="icon" href="{% static 'img/favicon.svg' %}">
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
+<link rel="stylesheet" href="{% static 'css/map.css' %}">
+<style>
+html,body{height:100%;margin:0}
+body{background:#EEF2EC}
+#map{position:fixed;inset:0}
+.map-card{position:fixed;top:12px;inset-inline-start:12px;z-index:3;max-width:min(360px,calc(100vw - 80px));background:rgba(249,251,248,.97);border:1px solid var(--line);border-radius:12px;padding:12px 16px;box-shadow:0 8px 24px -12px rgba(18,49,58,.4)}
+.map-card h1{font-size:1.15rem;margin:0}
+.map-card p{margin:6px 0 0;font-size:.9rem;color:var(--ink-2);line-height:1.8}
+.map-badge{position:fixed;inset-inline-start:12px;bottom:28px;z-index:3;display:inline-flex;gap:8px;align-items:center;background:var(--teal-dark);color:#EEF2EC;text-decoration:none;font-size:.82rem;padding:6px 12px;border-radius:999px;box-shadow:0 6px 16px -8px rgba(0,0,0,.4)}
+.map-badge:hover{color:#fff}
+.map-badge img{width:18px;height:18px}
+@media (max-width:640px){.map-badge{bottom:auto;top:auto;bottom:56px}}
+</style>
+</head>
+<body>
+<div id="map" class="gpm" aria-label="نقشه {{ webmap.title }}"></div>
+{% if not embed %}
+<div class="map-card">
+  <h1>{{ webmap.title }}</h1>
+  {% if webmap.description %}<p>{{ webmap.description|linebreaksbr }}</p>{% endif %}
+</div>
+{% endif %}
+{% if webmap.database.plan.map_badge %}
+<a class="map-badge" href="{{ SITE_URL|default:'https://postgis.ir' }}/?utm_source=map&amp;utm_medium=badge" target="_blank" rel="noopener"><img src="{% static 'img/favicon.svg' %}" alt="">ساخته‌شده با postgis.ir</a>
+{% endif %}
+{{ config|json_script:"map-config" }}
+<script src="{% static 'vendor/maplibre/maplibre-gl.js' %}"></script>
+<script src="{% static 'js/map-page.js' %}"></script>
+<script>
+  const cfg = JSON.parse(document.getElementById("map-config").textContent);
+  window.gpMap = GPMap.createMulti(document.getElementById("map"), cfg);
+</script>
+</body>
+</html>

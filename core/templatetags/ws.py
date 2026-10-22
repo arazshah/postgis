@@ -13,6 +13,7 @@ ICONS = {
     "chart": "M4 20V10M10 20V4M16 20v-7M22 20H2",
     "globe": "M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18",
     "layers": "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5",
+    "map": "M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14",
     "code": "M9 4C6 4 7 9 5 12c2 3 1 8 4 8M15 4c3 0 2 5 4 8-2 3-1 8-4 8",
     "team": "M16 19v-1a4 4 0 00-4-4H8a4 4 0 00-4 4v1M10 11a3 3 0 100-6 3 3 0 000 6M20 19v-1a3 3 0 00-2-3M16 5a3 3 0 010 6",
     "backup": "M4 7c0-2 16-2 16 0v10c0 2-16 2-16 0zM4 12c0 2 16 2 16 0",
@@ -32,6 +33,7 @@ GROUPS = [
     ]),
     ("تحلیل و انتشار", [
         ("تحلیل", "analysis:page", ("analysis:page",), "chart", "editor"),
+        ("نقشه‌های چندلایه", "maps:index", ("maps:index", "maps:composer", "maps:quick"), "map", "viewer"),
         ("نقشه و API", "publish:manage", ("publish:manage", "publish:map_builder"), "globe", "editor"),
         ("WMS و WFS", "publish:ows", ("publish:ows", "publish:ows_detail"), "layers", "editor"),
         ("REST API و فرم میدانی", "restapi:manage", ("restapi:manage",), "code", "editor"),

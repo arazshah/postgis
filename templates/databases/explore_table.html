@@ -43,6 +43,22 @@
   <div id="map" class="ex-map" data-src="{% url 'databases:explore_geojson' db.pk t.schema t.name %}"
        data-tiles="{{ SITE.map_tile_url }}" data-attr="{{ SITE.map_tile_attribution }}"></div>
   <p class="small muted" id="map-note" style="margin-top:8px">حداکثر ۲٬۰۰۰ عارضه اول نمایش داده می‌شود. روی هر عارضه کلیک کنید تا ویژگی‌هایش را ببینید.</p>
+  {% if mappable %}
+  <div class="ex-addmap">
+    {% if db.can_edit %}
+    <form method="post" action="{% url 'maps:add_table' db.pk %}" class="ex-addmap">{% csrf_token %}
+      <input type="hidden" name="schema" value="{{ t.schema }}"><input type="hidden" name="table" value="{{ t.name }}">
+      <label class="small" for="addmap">افزودن این جدول به</label>
+      <select id="addmap" name="map">
+        <option value="new">نقشه چندلایه تازه</option>
+        {% for m in maps %}<option value="{{ m.pk }}">{{ m.title }}</option>{% endfor %}
+      </select>
+      <button class="btn sm" type="submit">افزودن به نقشه</button>
+    </form>
+    {% endif %}
+    {% if compare %}<a class="btn ghost sm" href="{% url 'databases:explore' db.pk %}#compare">نمایش کنار جدول‌های دیگر</a>{% endif %}
+  </div>
+  {% endif %}
   <script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>
   <script src="{% static 'js/explore-map.js' %}" defer></script>
 {% else %}

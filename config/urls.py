@@ -31,6 +31,7 @@ urlpatterns = [
     path("assistant/", include("assistant.urls")),
     path("", include("kb.urls")),
     path("", include("publish.urls")),
+    path("", include("maps.urls")),
     path("", include("iranmap.urls")),
     path("", include("analysis.urls")),
     path("", include("restapi.urls")),
