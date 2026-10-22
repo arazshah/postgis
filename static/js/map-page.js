@@ -34,21 +34,25 @@
     return st.color;
   }
 
-  // ردیف‌های راهنمای یک لایه؛ برای تک‌رنگ خالی
-  function legendRows(cfg, st) {
-    let rows = "";
+  // ردیف‌های راهنمای یک لایه به‌صورت داده (برای HTML و تصویر PNG)؛ برای تک‌رنگ خالی
+  function legendItems(cfg, st) {
+    const out = [];
     if (st.mode === "graduated" && st.field && st.breaks && st.breaks.length) {
       const pal = pick(cfg.palettes[st.palette] || cfg.palettes.YlOrRd, st.breaks.length + 1);
       pal.forEach((c, i) => {
-        const lo = i === 0 ? "کمتر از " + fmt(st.breaks[0]) : i === pal.length - 1 ? fmt(st.breaks[i - 1]) + " و بیشتر"
+        const label = i === 0 ? "کمتر از " + fmt(st.breaks[0]) : i === pal.length - 1 ? fmt(st.breaks[i - 1]) + " و بیشتر"
           : fmt(st.breaks[i - 1]) + " تا " + fmt(st.breaks[i]);
-        rows += `<li><i style="background:${c}"></i>${lo}</li>`;
+        out.push({color: c, label});
       });
     } else if (st.mode === "categorized" && st.field && st.categories && st.categories.length) {
-      st.categories.forEach((c) => { rows += `<li><i style="background:${c.color}"></i>${esc(c.value)}</li>`; });
-      rows += `<li><i style="background:${NOVAL}"></i>سایر</li>`;
+      st.categories.forEach((c) => out.push({color: c.color, label: String(c.value)}));
+      out.push({color: NOVAL, label: "سایر"});
     }
-    return rows;
+    return out;
+  }
+
+  function legendRows(cfg, st) {
+    return legendItems(cfg, st).map((x) => `<li><i style="background:${x.color}"></i>${esc(x.label)}</li>`).join("");
   }
 
   function legendHTML(cfg, st) {
@@ -260,9 +264,27 @@
         map.fitBounds([[Math.min(...bs.map((b) => b[0])), Math.min(...bs.map((b) => b[1]))],
           [Math.max(...bs.map((b) => b[2])), Math.max(...bs.map((b) => b[3]))]], {padding: 48, maxZoom: 15});
       },
+      // نمای ذخیره‌شده با جابه‌جایی نرم (ارائه)؛ بدون نما: محدوده همه لایه‌ها
+      goTo(view, instant) {
+        if (view && view.center) {
+          const opts = {center: view.center, zoom: view.zoom, bearing: view.bearing || 0};
+          if (instant) map.jumpTo(opts); else map.flyTo(Object.assign(opts, {duration: 2200, essential: true}));
+        } else {
+          api.fit();
+        }
+      },
+      // فقط این لایه‌ها روشن؛ فهرست خالی یعنی روشن/خاموش پیش‌فرض نقشه
+      showOnly(keys, defaults) {
+        layers.forEach((l) => {
+          l.visible = keys && keys.length ? keys.includes(l.key) : (defaults ? defaults[l.key] !== false : true);
+          paintLayer(l);
+        });
+        renderLegend();
+      },
       getView() {
         const c = map.getCenter();
-        return {center: [Math.round(c.lng * 1e6) / 1e6, Math.round(c.lat * 1e6) / 1e6], zoom: Math.round(map.getZoom() * 100) / 100};
+        return {center: [Math.round(c.lng * 1e6) / 1e6, Math.round(c.lat * 1e6) / 1e6], zoom: Math.round(map.getZoom() * 100) / 100,
+          bearing: Math.round(map.getBearing() * 10) / 10};
       },
     });
   }
@@ -274,5 +296,5 @@
         style: cfg.style, title: cfg.title, bbox: cfg.bbox}]}));
     return {map: m.map, setStyle(next) { m.setLayerStyle("gp", next); }, setBasemap: m.setBasemap};
   }
-  window.GPMap = {create, createMulti, pick, FA, legendRows};
+  window.GPMap = {create, createMulti, pick, FA, legendRows, legendItems, esc};
 })();

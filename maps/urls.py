@@ -14,6 +14,8 @@ urlpatterns = [
     path("dashboard/<int:pk>/maps/<int:map_id>/", views.composer, name="composer"),
     path("dashboard/<int:pk>/maps/<int:map_id>/delete/", views.delete, name="delete"),
     path("dashboard/<int:pk>/maps/<int:map_id>/duplicate/", views.duplicate, name="duplicate"),
+    path("dashboard/<int:pk>/maps/<int:map_id>/qgis/", views.qgis_project, name="qgis"),
+    path("dashboard/<int:pk>/maps/<int:map_id>/ows/", views.publish_ows, name="publish_ows"),
     path("dashboard/<int:pk>/maps/<int:map_id>/layers/", views.layer_add, name="layer_add"),
     path("dashboard/<int:pk>/maps/<int:map_id>/layers/<int:layer_id>/remove/", views.layer_remove,
          name="layer_remove"),
@@ -22,5 +24,8 @@ urlpatterns = [
     # آدرس‌های عمومی
     path("maps/<slug:slug>/", views.public_map, name="map"),
     path("maps/<slug:slug>/embed/", views.embed_map, name="embed"),
+    path("maps/<slug:slug>/present/", views.present, name="present"),
+    path("maps/<slug:slug>/print/", views.print_map, name="print"),
+    path("maps/<slug:slug>/compare/", views.compare, name="compare"),
     path("maps/<slug:slug>/t/<int:layer_id>/<int:z>/<int:x>/<int:y>.mvt", views.tile, name="tile"),
 ]

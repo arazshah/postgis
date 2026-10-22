@@ -32,6 +32,11 @@ body{background:#EEF2EC}
 <div class="map-card">
   <h1>{{ webmap.title }}</h1>
   {% if webmap.description %}<p>{{ webmap.description|linebreaksbr }}</p>{% endif %}
+  <nav class="map-tools" aria-label="ابزارهای نقشه">
+    {% if n_slides %}<a href="{% url 'maps:present' webmap.slug %}">▶ ارائه</a>{% endif %}
+    {% if n_layers > 1 %}<a href="{% url 'maps:compare' webmap.slug %}">مقایسه لایه‌ها</a>{% endif %}
+    <a href="{% url 'maps:print' webmap.slug %}">چاپ و تصویر</a>
+  </nav>
 </div>
 {% endif %}
 {% if webmap.database.plan.map_badge %}

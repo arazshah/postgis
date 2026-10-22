@@ -83,3 +83,22 @@ class MapLayer(models.Model):
             return []
         extra = [st.get(k) for k in ("field", "label") if st.get(k)]
         return list(dict.fromkeys(popup + extra))
+
+
+class MapSlide(models.Model):
+    """یک گام از «ارائه» نقشه: نما، لایه‌های روشن و متن کوتاه."""
+
+    webmap = models.ForeignKey(WebMap, on_delete=models.CASCADE, related_name="slides", verbose_name="نقشه")
+    position = models.PositiveIntegerField("ترتیب", default=0)
+    title = models.CharField("عنوان", max_length=120, blank=True)
+    body = models.TextField("متن", blank=True)
+    view = models.JSONField("نما", default=dict, blank=True, help_text="{center: [طول, عرض], zoom, bearing}")
+    layers = models.JSONField("لایه‌های روشن", default=list, blank=True, help_text="شناسه لایه‌های نقشه.")
+
+    class Meta:
+        verbose_name = "اسلاید ارائه"
+        verbose_name_plural = "اسلایدهای ارائه"
+        ordering = ["position", "id"]
+
+    def __str__(self):
+        return self.title or f"اسلاید {self.position + 1}"

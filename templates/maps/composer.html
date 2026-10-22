@@ -12,8 +12,19 @@
     <h1 id="wm-h">{{ webmap.title }}</h1>
     <span class="small muted" id="wm-dirty" hidden>تغییرات ذخیره نشده</span>
     <a class="btn ghost sm" href="{{ public_url }}" target="_blank" rel="noopener" style="margin-inline-start:auto">باز کردن نقشه</a>
+    <details class="dl-more wm-more">
+      <summary class="btn ghost sm">ابزارها</summary>
+      <div class="dl-menu">
+        <a href="{% url 'maps:present' webmap.slug %}" target="_blank" rel="noopener">اجرای ارائه</a>
+        <a href="{% url 'maps:print' webmap.slug %}" target="_blank" rel="noopener">چاپ، PDF و تصویر PNG</a>
+        <a href="{% url 'maps:compare' webmap.slug %}" target="_blank" rel="noopener">مقایسه دو لایه (پرده کشویی)</a>
+        <a href="{% url 'maps:qgis' db.pk webmap.pk %}">دانلود پروژه QGIS (.qgs)</a>
+        <form method="post" action="{% url 'maps:publish_ows' db.pk webmap.pk %}" onsubmit="return confirm('نسخه فعلی ذخیره‌شده نقشه به‌صورت WMS/WFS منتشر شود؟ یک پروژه از سهمیه WMS/WFS پلن استفاده می‌شود.')">{% csrf_token %}<button type="submit">انتشار به‌صورت WMS/WFS</button></form>
+      </div>
+    </details>
     <button class="btn sm" type="button" id="wm-save">ذخیره</button>
   </div>
+  <p class="small muted" style="margin-top:-8px">ابزارها روی آخرین نسخه ذخیره‌شده کار می‌کنند؛ اول تغییرات را ذخیره کنید.</p>
   <p class="small" id="wm-msg" role="status" aria-live="polite"></p>
 
   <div class="builder">
@@ -41,6 +52,15 @@
           <button class="btn sm" type="button" id="wm-add-btn">افزودن</button>
         </div>
         <p class="small muted">حداکثر {{ layer_cap|fanum }} لایه. برای جابه‌جایی، لایه را بکشید یا با دکمه‌های ↑ و ↓ جابه‌جا کنید.</p>
+      </fieldset>
+
+      <fieldset class="bf-group"><legend>ارائه <span class="muted small" id="sl-count"></span></legend>
+        <p class="small muted" style="margin:0">هر اسلاید یک نما از نقشه است با لایه‌های روشن همان لحظه و یک متن کوتاه. در حالت ارائه، نقشه با کلیدهای جهت از یک اسلاید به بعدی می‌رود.</p>
+        <ol class="sl-list" id="sl-list"></ol>
+        <div class="wm-actions">
+          <button class="btn ghost sm" type="button" id="sl-add">+ اسلاید از نمای فعلی</button>
+          <a class="btn ghost sm" href="{% url 'maps:present' webmap.slug %}" target="_blank" rel="noopener" id="sl-run">اجرای ارائه</a>
+        </div>
       </fieldset>
 
       <div id="wm-editor" hidden>

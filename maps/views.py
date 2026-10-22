@@ -21,12 +21,13 @@ from publish import access, engine, styles
 from publish.styles import CATEGORY_COLORS
 from publish.views import base_config
 
-from . import services
-from .models import MapLayer, WebMap
+from . import qgis_export, services
+from .models import MapLayer, MapSlide, WebMap
 from .services import MapError
 
 log = logging.getLogger(__name__)
 TILE_TTL = 60
+MAX_SLIDES = 30
 
 
 def _json(data, status=200):
@@ -78,10 +79,12 @@ def map_config(request, webmap: WebMap, embed=False, fields=False) -> dict:
     layers = list(webmap.layers.all())
     return {
         **base_config(request),
-        "title": webmap.title, "description": webmap.description, "embed": embed,
+        "title": webmap.title, "description": webmap.description, "embed": embed, "slug": webmap.slug,
         "basemapKind": _basemap(webmap.basemap), "view": webmap.view or {},
         "badge": webmap.database.plan.map_badge,
         "layers": [_layer_conf(request, x, _tiles_path(webmap, x), f"ml{x.pk}", fields) for x in layers],
+        "slides": [{"title": x.title, "body": x.body, "view": x.view, "layers": [f"ml{i}" for i in x.layers]}
+                   for x in webmap.slides.all()],
     }
 
 
@@ -218,7 +221,36 @@ def _save(webmap: WebMap, data: dict):
     for i, layer in enumerate(order + rest):
         layer.position = i
         layer.save()
+    if isinstance(data.get("slides"), list):
+        _save_slides(webmap, data["slides"], set(layers))
     webmap.save()
+
+
+def _save_slides(webmap: WebMap, items: list, layer_ids: set[int]):
+    """اسلایدهای ارائه همه با هم جایگزین می‌شوند؛ نمای نامعتبر یعنی همان نمای شروع نقشه."""
+    slides = []
+    for item in items[:MAX_SLIDES]:
+        if not isinstance(item, dict):
+            continue
+        view = _clean_view(item.get("view"))
+        try:
+            bearing = float((item.get("view") or {}).get("bearing", 0))
+        except (TypeError, ValueError, AttributeError):
+            bearing = 0
+        if view and -180 <= bearing <= 360 and bearing:
+            view["bearing"] = round(bearing, 1)
+        ids = []
+        for v in item.get("layers") or []:
+            try:
+                v = int(str(v).removeprefix("ml"))
+            except ValueError:
+                continue
+            if v in layer_ids and v not in ids:
+                ids.append(v)
+        slides.append(MapSlide(webmap=webmap, position=len(slides), title=str(item.get("title") or "")[:120],
+                               body=str(item.get("body") or "")[:2000], view=view, layers=ids))
+    webmap.slides.all().delete()
+    MapSlide.objects.bulk_create(slides)
 
 
 @site_user_required
@@ -286,6 +318,39 @@ def layer_stats(request, pk, map_id, layer_id):
     if mode == "categorized":
         stats["colors"] = CATEGORY_COLORS[:len(stats["values"])]
     return _json(stats)
+
+
+@site_user_required
+def qgis_project(request, pk, map_id):
+    """دانلود پروژه QGIS: اتصال بدون رمز؛ QGIS بار اول رمز پایگاه داده را می‌پرسد."""
+    db = _db(request, pk)
+    webmap = _map(db, map_id)
+    data = qgis_export.build(webmap, qgis_export.desktop_connection(db))
+    resp = HttpResponse(data, content_type="application/x-qgis-project")
+    resp["Content-Disposition"] = f'attachment; filename="{webmap.slug}.qgs"'
+    return resp
+
+
+@site_user_required
+@require_POST
+def publish_ows(request, pk, map_id):
+    """همین نقشه به‌صورت WMS/WFS با QGIS Server (یک پروژه از سهمیه WMS/WFS پلن)."""
+    from publish import ows, qgis
+
+    db = _db(request, pk)
+    webmap = _map(db, map_id)
+    if not webmap.layers.exists():
+        messages.error(request, "نقشه هنوز لایه‌ای ندارد.")
+        return redirect("maps:composer", pk=db.pk, map_id=webmap.pk)
+    try:
+        project = ows.create_project(db, qgis_export.for_publishing(webmap), f"{webmap.slug}.qgs",
+                                     title=webmap.title, is_public=webmap.is_public)
+    except (qgis.ProjectError, ows.OwsError) as exc:
+        messages.error(request, str(exc))
+        return redirect("maps:composer", pk=db.pk, map_id=webmap.pk)
+    messages.success(request, f"نقشه «{webmap.title}» به‌صورت WMS/WFS منتشر شد. اگر بعداً نقشه را تغییر دادید، "
+                              "دوباره منتشر کنید؛ این پروژه خودبه‌خود عوض نمی‌شود.")
+    return redirect("publish:ows_detail", pk=db.pk, project_id=project.pk)
 
 
 # ---------------------------------------------------------------------- «نمایش با هم» بدون ذخیره
@@ -392,15 +457,39 @@ def _public_map(request, slug) -> WebMap:
     return webmap
 
 
-def public_map(request, slug, embed=False):
+def _page(request, slug, template, embed=False, **extra):
     webmap = _public_map(request, slug)
-    resp = render(request, "maps/map.html", {
-        "webmap": webmap, "embed": embed, "config": map_config(request, webmap, embed),
+    config = map_config(request, webmap, embed)
+    resp = render(request, template, {
+        "webmap": webmap, "embed": embed, "config": config,
         "public_url": request.build_absolute_uri(reverse("maps:map", args=[webmap.slug])),
+        "n_layers": len(config["layers"]), "n_slides": len(config["slides"]), **extra,
     })
     # نقشه پایه OSM بدون Referer کاشی نمی‌دهد؛ فقط دامنه فرستاده می‌شود
     resp["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return resp
+
+
+def public_map(request, slug, embed=False):
+    return _page(request, slug, "maps/map.html", embed)
+
+
+def present(request, slug):
+    """حالت ارائه: اسلایدها یکی‌یکی با جابه‌جایی نرم نقشه."""
+    return _page(request, slug, "maps/present.html")
+
+
+def print_map(request, slug):
+    """قالب چاپ A4 (چاپ/PDF مرورگر و خروجی PNG)."""
+    import jdatetime
+
+    today = jdatetime.date.today().strftime("%Y/%m/%d")
+    return _page(request, slug, "maps/print.html", today=today)
+
+
+def compare(request, slug):
+    """مقایسه دو لایه با پرده کشویی."""
+    return _page(request, slug, "maps/compare.html")
 
 
 @xframe_options_exempt

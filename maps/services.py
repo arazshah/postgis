@@ -116,10 +116,18 @@ def duplicate(webmap: WebMap, user) -> WebMap:
     with transaction.atomic():
         copy = WebMap.objects.create(database=db, created_by=user, title=f"{webmap.title} (کپی)"[:120],
                                      description=webmap.description, basemap=webmap.basemap, view=webmap.view)
+        ids = {}
         for layer in webmap.layers.all():
+            old = layer.pk
             layer.pk = None
             layer.webmap = copy
             layer.save()
+            ids[old] = layer.pk
+        for slide in webmap.slides.all():
+            slide.pk = None
+            slide.webmap = copy
+            slide.layers = [ids[i] for i in slide.layers if i in ids]
+            slide.save()
     return copy
 
 

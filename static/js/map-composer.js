@@ -267,6 +267,8 @@
       basemap: $("wm-base").value, view: meta.view,
       layers: layers.map((l) => ({id: l.id, title: l.title === l.table.split(".").pop() ? "" : l.title,
         visible: l.visible, style: l.style})),
+      slides: slides.map((x) => ({title: x.title, body: x.body, view: x.view,
+        layers: x.layers.filter((k) => byKey(k)).map((k) => Number(k.slice(2)))})),
     };
     $("wm-save").disabled = true;
     try {
@@ -285,6 +287,68 @@
     if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); save(); }
   });
 
+  // ------------------------------------------------------------------ اسلایدهای ارائه
+  const slides = (cfg.slides || []).map((x) => Object.assign({}, x));
+  const slList = $("sl-list");
+  const visibleKeys = () => layers.filter((l) => l.visible).map((l) => l.key);
+
+  function renderSlides() {
+    slList.innerHTML = "";
+    slides.forEach((x, i) => {
+      const li = document.createElement("li");
+      li.className = "sl-item";
+      li.dataset.i = i;
+      const names = x.layers.map((k) => byKey(k)).filter(Boolean).map((l) => l.title).join("، ") || "لایه‌های پیش‌فرض";
+      li.innerHTML = `<div class="sl-head"><b>${GPMap.FA(i + 1)}</b>
+          <input type="text" class="sl-title" maxlength="120" placeholder="عنوان اسلاید" value="${esc(x.title)}" aria-label="عنوان اسلاید ${GPMap.FA(i + 1)}">
+          <span class="wm-tools">
+            <button type="button" data-sl="show" title="نمایش روی نقشه" aria-label="نمایش">◉</button>
+            <button type="button" data-sl="update" title="جایگزینی با نمای فعلی" aria-label="به‌روزرسانی با نمای فعلی">⟳</button>
+            <button type="button" data-sl="up" ${i === 0 ? "disabled" : ""} aria-label="بالاتر">↑</button>
+            <button type="button" data-sl="down" ${i === slides.length - 1 ? "disabled" : ""} aria-label="پایین‌تر">↓</button>
+            <button type="button" data-sl="remove" data-act="remove" aria-label="حذف اسلاید">✕</button>
+          </span></div>
+        <textarea class="sl-body" rows="2" maxlength="2000" placeholder="متن کوتاه (اختیاری)" aria-label="متن اسلاید">${esc(x.body)}</textarea>
+        <small class="muted">${esc(names)}</small>`;
+      slList.appendChild(li);
+    });
+    $("sl-count").textContent = slides.length ? `(${GPMap.FA(slides.length)})` : "";
+  }
+
+  $("sl-add").addEventListener("click", () => {
+    slides.push({title: "", body: "", view: gm.getView(), layers: visibleKeys()});
+    renderSlides();
+    setDirty(true);
+    slList.lastElementChild.querySelector(".sl-title").focus();
+  });
+  slList.addEventListener("input", (e) => {
+    const li = e.target.closest(".sl-item");
+    if (!li) return;
+    const x = slides[Number(li.dataset.i)];
+    if (e.target.classList.contains("sl-title")) x.title = e.target.value;
+    if (e.target.classList.contains("sl-body")) x.body = e.target.value;
+    setDirty(true);
+  });
+  slList.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sl]"), li = e.target.closest(".sl-item");
+    if (!b || !li) return;
+    const i = Number(li.dataset.i), x = slides[i], act = b.dataset.sl;
+    if (act === "show") {
+      const defaults = {};
+      layers.forEach((l) => { defaults[l.key] = l.visible; });
+      gm.showOnly(x.layers, defaults);
+      gm.goTo(x.view);
+      return;
+    }
+    if (act === "update") { x.view = gm.getView(); x.layers = visibleKeys(); }
+    if (act === "up" && i > 0) [slides[i - 1], slides[i]] = [slides[i], slides[i - 1]];
+    if (act === "down" && i < slides.length - 1) [slides[i + 1], slides[i]] = [slides[i], slides[i + 1]];
+    if (act === "remove") slides.splice(i, 1);
+    renderSlides();
+    setDirty(true);
+  });
+
+  renderSlides();
   renderList();
   if (layers.length === 1) select(layers[0].key);
 })();
