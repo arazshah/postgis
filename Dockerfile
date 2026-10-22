@@ -10,7 +10,9 @@ ARG PMTILES_URL=https://github.com/protomaps/go-pmtiles/releases/download/v1.28.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PORT=8000
+    PORT=8000 \
+    PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PYTHONUSERBASE=/app/pylibs
 
 WORKDIR /app
 
@@ -26,7 +28,7 @@ RUN pip install --index-url "$PIP_INDEX_URL" -r requirements.txt
 COPY . .
 RUN DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput \
  && chmod +x docker/entrypoint.sh \
- && mkdir -p /app/media /app/ows /app/osm /app/backups /app/rasters \
+ && mkdir -p /app/media /app/ows /app/osm /app/backups /app/rasters /app/pylibs \
  && chown -R app:app /app
 
 # کانتینر با root شروع می‌شود تا entrypoint مالکیت volumeها را درست کند، سپس به کاربر app می‌رود

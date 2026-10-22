@@ -37,6 +37,7 @@ services:
       - ows-projects:/app/ows
       - osm-data:/app/osm
       - rasters:/app/rasters
+      - pylibs:/app/pylibs
     networks:
       - default
       - coolify
@@ -82,6 +83,7 @@ services:
       - ows-projects:/app/ows
       - osm-data:/app/osm
       - rasters:/app/rasters
+      - pylibs:/app/pylibs
     networks:
       - default
       - coolify
@@ -157,6 +159,8 @@ volumes:
   osm-data:
   # رسترهای پلن سازمانی (Cloud Optimized GeoTIFF)
   rasters:
+  # نسخه‌های به‌روزشده smart-spatial-system (بدون بیلد دوباره)
+  pylibs:
 
 networks:
   coolify:
