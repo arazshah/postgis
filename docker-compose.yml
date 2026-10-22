@@ -98,6 +98,8 @@ services:
   qgis:
     build:
       context: docker/qgis
+      args:
+        - APT_MIRROR=${APT_MIRROR:-}
     restart: unless-stopped
     environment:
       - QGIS_PROCESSES=${QGIS_PROCESSES:-2}
