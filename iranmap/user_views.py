@@ -2,6 +2,7 @@
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from accounts.decorators import site_user_required
@@ -31,8 +32,7 @@ def ready_data(request, pk):
             except ready.ReadyError as exc:
                 error = str(exc)
             else:
-                messages.success(request, f"درخواست داده {area.label} در صف قرار گرفت؛ چند دقیقه بعد جدول‌ها "
-                                          "در فهرست سمت راست دیده می‌شوند.")
+                messages.success(request, f"درخواست داده {area.label} در صف قرار گرفت؛ پیشرفت آن را در همین صفحه ببینید.")
                 return redirect("iranmap:ready", pk=db.pk)
     try:
         tables = ex.tables()
@@ -46,6 +46,24 @@ def ready_data(request, pk):
         "active": any(j.active for j in recent), "attribution": osm.ATTRIBUTION,
         "routing_max": ready.ROUTING_MAX_DEG2, "pgrouting": ready.pgrouting_available(db),
     })
+
+
+@site_user_required
+@require_GET
+def status(request, pk):
+    """وضعیت درخواست‌های داده آماده برای نوار پیشرفت."""
+    db, ex = _explorer_db(request, pk, "editor")
+    if ex is None:
+        return JsonResponse({"error": "unavailable"}, status=404)
+    now = timezone.now()
+    items = []
+    for j in Job.objects.filter(database=db, kind=Job.Kind.OSM_IMPORT)[:8]:
+        started = j.started_at or j.created_at
+        items.append({"id": j.pk, "status": j.status, "progress": j.progress, "stage": j.stage,
+                      "elapsed": int(((j.finished_at or now) - started).total_seconds()),
+                      "message": j.message})
+    return JsonResponse({"items": items, "active": any(i["status"] in ("queued", "running") for i in items)},
+                        json_dumps_params={"ensure_ascii": False})
 
 
 @site_user_required

@@ -65,17 +65,25 @@ def run_import(job: Job) -> str:
     if area is None:
         raise osm.OsmError("ناحیه انتخاب‌شده دیگر در فهرست نیست؛ دوباره درخواست دهید.")
     done = []
+    keys = job.params.get("datasets", [])
+    routing = bool(job.params.get("routing"))
+    steps = len(keys) + (1 if routing else 0)
+    # ۵٪ برای برش محدوده، ۹۰٪ بین مراحل ورود، بقیه برای نهایی‌سازی
+    job.set_progress(3, "برش محدوده از داده ایران")
     root = Path(settings.OSM_ROOT) / "work"
     root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=root) as d:
         pbf = osm.extract(area, Path(d) / "area.osm.pbf")
-        for key in job.params.get("datasets", []):
+        for i, key in enumerate(keys):
             ds = osm.DATASET_MAP[key]
+            job.set_progress(8 + 85 * i // steps, f"ورود {ds.title}")
             n = osm.import_dataset(db, pbf, ds)
             done.append(f"osm_{key} ({n:,} عارضه)")
-        if job.params.get("routing"):
+        if routing:
+            job.set_progress(8 + 85 * len(keys) // steps, "ساخت شبکه مسیریابی")
             n = osm.import_routing(db, pbf)
             done.append(f"routing.ways ({n:,} یال)")
     # اطمینان: همه اشیای ساخته‌شده مال نقش خود کاربر باشند
+    job.set_progress(96, "تنظیم دسترسی جدول‌ها")
     Provisioner.for_server(db.server).reassign_browser_objects(db.db_name, db.role_name)
     return f"{area.label}: " + "، ".join(done)

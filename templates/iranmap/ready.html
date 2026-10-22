@@ -1,8 +1,16 @@
-{% extends "databases/_explore_base.html" %}{% load fa %}
+{% extends "databases/_explore_base.html" %}{% load fa static %}
 {% block ex %}
 <h2 style="margin-top:0">داده آماده ایران</h2>
 <p class="muted">معابر، مکان‌های مهم، ساختمان‌ها، کاربری زمین و مرزهای اداری هر استان، شهرستان یا شهر را با یک کلیک در پایگاه داده خودتان داشته باشید؛ همراه با شبکه آماده مسیریابی.</p>
 {% if error %}<div class="msg error" role="alert">{{ error }}</div>{% endif %}
+{% for j in recent %}{% if j.active %}
+<section class="panel rd-live" id="rd-live" data-status="{% url 'iranmap:status' db.pk %}" data-job="{{ j.pk }}" aria-live="polite">
+  <div class="rd-live-head"><b>{{ j.params.area_label }}</b><span class="badge warn">{{ j.get_status_display }}</span></div>
+  <div class="prog run" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ j.progress }}"><i style="width:{{ j.progress }}%"></i></div>
+  <div class="prog-label"><span class="stage">{% if j.status == 'queued' %}در صف؛ به‌زودی شروع می‌شود{% else %}{{ j.stage|default:"در حال شروع" }}{% endif %}</span><span><span class="pct">{{ j.progress|fanum }}</span>٪ · <span class="el"></span></span></div>
+  <p class="small muted" style="margin:6px 0 0">می‌توانید صفحه را ببندید؛ ورود داده روی سرور ادامه پیدا می‌کند.</p>
+</section>
+{% endif %}{% endfor %}
 {% if not source or not has_areas %}
 <div class="msg warning">داده OSM ایران هنوز روی سرور آماده نشده است. معمولاً در چند ساعت آینده در دسترس قرار می‌گیرد.</div>
 {% else %}
@@ -29,6 +37,20 @@
 </form>
 {% endif %}
 
+{% if recent %}
+<section class="rd-hist" id="rd-hist">
+  <h3>درخواست‌های اخیر</h3>
+  <div class="rd-table-wrap"><table class="tbl rd-table">
+    <thead><tr><th>محدوده</th><th>وضعیت</th><th>زمان</th><th>نتیجه</th></tr></thead>
+    <tbody>{% for j in recent %}
+      <tr class="{{ j.status }}"><td><b>{{ j.params.area_label }}</b></td>
+        <td><span class="badge {% if j.status == 'done' %}active{% elif j.status == 'failed' %}error{% else %}warn{% endif %}">{{ j.get_status_display }}</span></td>
+        <td class="small muted">{{ j.created_at|jdatetime_full }}</td>
+        <td class="small {% if j.status == 'failed' %}rd-err{% endif %}">{{ j.message|default:"—" }}</td></tr>{% endfor %}
+    </tbody></table></div>
+</section>
+{% endif %}
+
 <div class="help-tips" style="margin-top:var(--s5)">
   <h3 style="font-size:1rem">منبع و مجوز</h3>
   <p class="small">داده‌ها از <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> هستند و با مجوز <span class="ltr">ODbL 1.0</span> منتشر می‌شوند. در هر نقشه یا گزارشی که از آن‌ها می‌سازید، منبع را ذکر کنید: <span class="ltr">«© OpenStreetMap contributors»</span>. اگر پایگاه داده‌ای مشتق از آن را عمومی کنید، باید با همان مجوز باشد. کامل بودن داده در شهرهای مختلف یکسان نیست.</p>
@@ -44,11 +66,7 @@ FROM pgr_dijkstra('SELECT gid AS id, source, target, cost, reverse_cost FROM rou
 JOIN routing.ways w ON w.gid = r.edge;</code></pre>
 </div>
 
-{% if recent %}
-<h3 style="margin-top:var(--s6)">درخواست‌های اخیر</h3>
-<ul class="log">{% for j in recent %}<li class="{% if j.status == 'failed' %}fail{% endif %}">{{ j.params.area_label }} · <b>{{ j.get_status_display }}</b><span class="muted">{{ j.created_at|jdatetime_full }}</span>{% if j.message %}<div class="small log-msg">{{ j.message }}</div>{% endif %}</li>{% endfor %}</ul>
-{% if active %}<script>setTimeout(() => location.reload(), 8000);</script>{% endif %}
-{% endif %}
+{% if active %}<script src="{% static 'js/ready.js' %}" defer></script>{% endif %}
 <script>
 (() => {
   const q = document.getElementById("area-q"); if (!q) return;
