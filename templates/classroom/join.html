@@ -29,6 +29,25 @@
       <p class="small muted">استاد کلاس جدول‌ها و نقشه‌های شما را می‌بیند (بدون امکان تغییر). پایان ترم از پایگاه داده شما بکاپ گرفته می‌شود و سپس غیرفعال می‌شود؛ پیش از آن، اگر خواستید از صفحه «بکاپ‌ها» نسخه خودتان را دانلود کنید.</p>
       {% else %}<div class="msg error">ساخت پایگاه داده شما کامل نشد؛ به پشتیبانی تیکت بزنید.</div>{% endif %}
     </section>
+    {% if shared %}
+    <section class="panel" style="margin-top:var(--s4)">
+      <h2 class="u-h">نقشه‌های کلاس</h2>
+      <ul class="cls-maps">{% for s in shared %}
+        <li>
+          <div><b>{{ s.webmap.title }}</b>
+            {% if s.note %}<p class="small muted" style="margin:2px 0 0">{{ s.note|linebreaksbr }}</p>{% endif %}</div>
+          <span class="wm-actions">
+            <a class="btn ghost sm" href="{% url 'maps:map' s.webmap.slug %}" target="_blank" rel="noopener">مشاهده</a>
+            {% if s.webmap.slides.exists %}<a class="btn ghost sm" href="{% url 'maps:present' s.webmap.slug %}" target="_blank" rel="noopener">ارائه</a>{% endif %}
+            {% if mine.database and mine.database.is_live %}
+            <form method="post" action="{% url 'classroom:copy_map' c.code s.pk %}" class="inline-form">{% csrf_token %}<button class="btn sm" type="submit">کپی در پایگاه داده من</button></form>
+            {% endif %}
+          </span>
+        </li>{% endfor %}
+      </ul>
+      <p class="small muted">کپی، نقشه را روی جدول‌های هم‌نام پایگاه داده خودتان می‌سازد تا سبک و لایه‌هایش را خودتان تغییر دهید.</p>
+    </section>
+    {% endif %}
   {% elif c.status != 'active' or not c.is_open %}
     <div class="msg warning">ثبت‌نام این کلاس بسته است.</div>
   {% else %}

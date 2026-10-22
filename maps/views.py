@@ -433,7 +433,8 @@ def tile(request, slug, layer_id, z, x, y):
     webmap, db = layer.webmap, layer.webmap.database
     try:
         access.check_database(db)
-        owner = access.is_owner(request, db)
+        # تیم و اعضای کلاسی که نقشه با آن به اشتراک گذاشته شده: نقشه خصوصی را می‌بینند و شمرده نمی‌شوند
+        owner = access.is_owner(request, db) or class_member(request, webmap)
         if not (webmap.is_public or owner):
             if access.raw_key(request) == "":
                 raise access.Denied(401, "Unauthorized", "این نقشه خصوصی است.")
@@ -447,12 +448,25 @@ def tile(request, slug, layer_id, z, x, y):
     return _tile_response(layer, z, x, y, public=webmap.is_public, cache_key=ck)
 
 
+def class_member(request, webmap: WebMap) -> bool:
+    """دانشجو یا استاد کلاسی که این نقشه با آن به اشتراک گذاشته شده (کلاس فعال)."""
+    from django.db.models import Q
+
+    from classroom.models import ClassMap, Classroom
+
+    user = getattr(request, "user", None)
+    if not (user and user.is_authenticated):
+        return False
+    return ClassMap.objects.filter(webmap=webmap, classroom__status=Classroom.Status.ACTIVE).filter(
+        Q(classroom__enrollments__student=user) | Q(classroom__teacher=user)).exists()
+
+
 def _public_map(request, slug) -> WebMap:
     webmap = get_object_or_404(WebMap.objects.select_related("database__plan"), slug=slug)
     db = webmap.database
     if db.status not in UserDatabase.LIVE_STATUSES:
         raise Http404
-    if not webmap.is_public and not access.is_owner(request, db):
+    if not webmap.is_public and not access.is_owner(request, db) and not class_member(request, webmap):
         raise Http404
     return webmap
 

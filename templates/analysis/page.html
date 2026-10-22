@@ -105,6 +105,7 @@
       {% if j.status == 'done' and e.rows %}
         <span class="small muted">{{ e.rows|fanum }} عارضه</span>
         <a class="btn ghost sm" href="{% url 'databases:explore_table' db.pk 'public' e.table %}?tab=map"><span class="ltr">{{ e.table }}</span> ← نقشه</a>
+        {% if e.together %}<a class="btn ghost sm" href="{{ e.together }}" title="نتیجه و لایه‌های ورودی روی یک نقشه">کنار ورودی‌ها</a>{% endif %}
       {% elif j.status == 'done' %}<span class="small muted">{{ j.message|truncatechars:60 }}</span>{% endif %}
     </div>
     {% if j.status == 'queued' or j.status == 'running' %}

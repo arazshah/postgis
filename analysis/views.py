@@ -1,9 +1,10 @@
 """صفحه «تحلیل»: پرسش فارسی (s3geo با کلید خود کاربر) و ابزارهای آماده بدون SQL."""
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
@@ -24,6 +25,15 @@ def _busy(db) -> bool:
                               status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).exists()
 
 
+def _together(db, output: str, inputs) -> str:
+    """«نمایش با هم»: نتیجه بالای لایه‌های ورودی (بدون ذخیره نقشه)."""
+    keys = [f"public.{output}"] + [k for k in (inputs or []) if isinstance(k, str) and k]
+    keys = list(dict.fromkeys(keys))
+    if len(keys) < 2:
+        return ""
+    return reverse("maps:quick", args=[db.pk]) + "?" + urlencode([("t", k) for k in keys])
+
+
 def _entries(db):
     """تاریخچه یکپارچه ابزارها و پرسش‌ها، تازه‌ترین اول."""
     out = []
@@ -31,11 +41,12 @@ def _entries(db):
         t = tools.TOOL_MAP.get(r.tool)
         out.append({"kind": "tool", "id": f"t{r.pk}", "title": t.title if t else r.tool, "glyph": GLYPHS.get(r.tool, "◇"),
                     "detail": r.summary, "table": r.output_table, "rows": r.rows, "job": r.job,
-                    "created": r.created_at})
+                    "created": r.created_at, "together": _together(db, r.output_table,
+                                                                    [r.params.get("layer"), r.params.get("other")])})
     for q in Question.objects.filter(database=db).select_related("job")[:HISTORY_LIMIT]:
         out.append({"kind": "ask", "id": f"q{q.pk}", "title": q.text, "glyph": "؟", "detail": q.goal,
                     "ops": q.operations, "table": q.output_table, "rows": q.rows, "job": q.job,
-                    "created": q.created_at})
+                    "created": q.created_at, "together": _together(db, q.output_table, q.layers)})
     out.sort(key=lambda e: e["created"], reverse=True)
     return out[:HISTORY_LIMIT]
 

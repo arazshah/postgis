@@ -149,3 +149,42 @@ def quick_layers(db, keys: list[str]) -> list[MapLayer]:
             layer.bbox = []
         out.append(layer)
     return out
+
+
+def copy_to(webmap: WebMap, target_db, user) -> tuple[WebMap, list[str]]:
+    """کپی نقشه در پایگاه داده دیگر (مثلاً نقشه استاد برای دانشجو): هر لایه به جدول هم‌نام همان‌جا وصل می‌شود.
+
+    لایه‌هایی که جدولشان آنجا نیست کنار گذاشته می‌شوند؛ ستون‌های سبک با ستون‌های جدول مقصد دوباره بررسی می‌شوند.
+    """
+    from publish import styles
+
+    _check_map_quota(target_db)
+    tables = {(t["schema"], t["table"]): t for t in spatial_tables(target_db)}
+    skipped, ids = [], {}
+    with transaction.atomic():
+        copy = WebMap.objects.create(database=target_db, created_by=user, title=webmap.title,
+                                     description=webmap.description, basemap=webmap.basemap, view=webmap.view)
+        for layer in webmap.layers.all():
+            t = tables.get((layer.schema, layer.table))
+            if t is None or len(ids) >= target_db.plan.map_layers:
+                skipped.append(layer.display_title)
+                continue
+            new = MapLayer(webmap=copy, schema=t["schema"], table=t["table"], geom_column=t["geom_column"],
+                           srid=t["srid"], geom_type=t["geom_type"], title=layer.title, position=layer.position,
+                           visible=layer.visible)
+            try:
+                names = {n for n, _ in all_fields(new)}
+                new.bbox = engine.extent(new)
+            except (engine.EngineError, ExplorerError):
+                names, new.bbox = set(), []
+            style = styles.clean(layer.style, names)
+            style.pop("basemap", None)
+            new.style = style
+            new.save()
+            ids[layer.pk] = new.pk
+        for slide in webmap.slides.all():
+            slide.pk = None
+            slide.webmap = copy
+            slide.layers = [ids[i] for i in slide.layers if i in ids]
+            slide.save()
+    return copy, skipped

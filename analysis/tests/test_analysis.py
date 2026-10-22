@@ -178,6 +178,11 @@ class AnalysisTests(TestCase):
         page = self.client.get(url)
         self.assertContains(page, "park_100")
         self.assertNotContains(page, 'role="progressbar"')
+        # نتیجه کنار لایه ورودی روی یک نقشه (نمایش با هم)
+        together = reverse("maps:quick", args=[self.db.pk]) + "?t=public.park_100&amp;t=public.parks"
+        self.assertContains(page, together)
+        quick = self.client.get(together.replace("&amp;", "&"))
+        self.assertEqual([x["table"] for x in quick.context["config"]["layers"]], ["park_100", "parks"])
         # خطا در کارگر: ردیف ناموفق با پیام فارسی در تاریخچه
         self.client.post(url, {**post, "output": "park_300"})
         run2 = ToolRun.objects.get(output_table="park_300")

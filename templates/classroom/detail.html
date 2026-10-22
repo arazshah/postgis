@@ -30,6 +30,35 @@
   </div>
 
   <section class="panel" style="margin-top:var(--s5)">
+    <h2 class="u-h">نقشه‌های کلاس</h2>
+    <p class="small">یکی از نقشه‌های چندلایه خودتان را با کلاس به اشتراک بگذارید. دانشجوها آن را در صفحه کلاس می‌بینند (حتی اگر نقشه خصوصی باشد)، ارائه‌اش را اجرا می‌کنند و با یک کلیک در پایگاه داده خودشان کپی می‌کنند. لایه‌ها در کپی به جدول‌های هم‌نام دانشجو وصل می‌شوند؛ برای کلاس با «داده تمرینی»، نقشه را روی همان جدول‌ها بسازید.</p>
+    {% if shared %}
+    <ul class="cls-maps">{% for s in shared %}
+      <li>
+        <div><b>{{ s.webmap.title }}</b> <span class="small muted">({{ s.webmap.layers.count|fanum }} لایه)</span>
+          {% if s.note %}<p class="small muted" style="margin:2px 0 0">{{ s.note|linebreaksbr }}</p>{% endif %}</div>
+        <span class="wm-actions">
+          <a class="btn ghost sm" href="{% url 'maps:map' s.webmap.slug %}" target="_blank" rel="noopener">مشاهده</a>
+          <a class="btn ghost sm" href="{% url 'maps:composer' s.webmap.database_id s.webmap.pk %}">طراحی</a>
+          <form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="action" value="unshare_map"><input type="hidden" name="share" value="{{ s.pk }}"><button class="btn ghost sm wm-del" type="submit">برداشتن</button></form>
+        </span>
+      </li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if c.status == 'active' %}
+      {% if my_maps %}
+      <form method="post" class="cls-share">{% csrf_token %}<input type="hidden" name="action" value="share_map">
+        <div class="field"><label for="cm-map">نقشه</label><select id="cm-map" name="map" required>{% for m in my_maps %}<option value="{{ m.pk }}">{{ m.title }} — {{ m.database.db_name }}</option>{% endfor %}</select></div>
+        <div class="field"><label for="cm-note">توضیح یا تمرین (اختیاری)</label><textarea id="cm-note" name="note" rows="2" maxlength="2000" placeholder="مثلاً: رنگ مدرسه‌ها را بر اساس تعداد دانش‌آموز طبقه‌بندی کنید."></textarea></div>
+        <button class="btn sm" type="submit">اشتراک با کلاس</button>
+      </form>
+      {% elif not shared %}
+      <p class="small muted">هنوز نقشه چندلایه‌ای در پایگاه داده‌های خودتان ندارید. از صفحه یکی از پایگاه داده‌هایتان، «نقشه‌های چندلایه» را باز کنید و یک نقشه بسازید.</p>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  <section class="panel" style="margin-top:var(--s5)">
     <h2 class="u-h">دانشجوها ({{ rows|length|fanum }} از {{ c.capacity|fanum }})</h2>
     <div class="table-wrap"><table class="tbl">
       <thead><tr><th>نام</th><th>شماره دانشجویی</th><th>پایگاه داده</th><th>حجم</th><th>وضعیت</th><th></th></tr></thead>
