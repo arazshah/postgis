@@ -131,7 +131,8 @@ ruff check .
    - `DJANGO_SUPERUSER_USERNAME` و `DJANGO_SUPERUSER_PASSWORD` — مدیر اولیه، فقط بار اول ساخته می‌شود
 
    `DATABASE_URL` لازم نیست؛ خودکار ساخته می‌شود.
-4. **دیپلوی خودکار:** Auto Deploy را روشن کنید تا هر merge روی `main` دیپلوی شود.
+4. **ایمیج‌ها از GHCR:** GitHub Actions بعد از سبز شدن `main` ایمیج‌های `ghcr.io/arazshah/postgis`، `postgis-qgis` و `postgis-pgbouncer` را می‌سازد (کار `publish` در `ci.yml`) و Coolify فقط آن‌ها را pull می‌کند؛ پس apt/pip/git روی سرور اجرا نمی‌شود. بسته‌ها را در GitHub ← Packages عمومی (Public) کنید، یا روی سرور یک بار `docker login ghcr.io` با توکن `read:packages` بزنید. برای بیلد محلی: `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`.
+5. **دیپلوی خودکار:** Auto Deploy ریپو را خاموش کنید (وگرنه دیپلوی پیش از آماده شدن ایمیج شروع می‌شود). به‌جایش در Coolify ← Webhooks آدرس Deploy Webhook را بردارید و در GitHub Secrets با نام‌های `COOLIFY_DEPLOY_WEBHOOK` و `COOLIFY_TOKEN` (توکن API) بگذارید تا `publish` بعد از آماده شدن ایمیج‌ها دیپلوی را راه بیندازد.
 5. **کار زمان‌بندی‌شده:** در تب Scheduled Tasks:
    - دستور: `python manage.py run_maintenance`
    - کانتینر: `web`

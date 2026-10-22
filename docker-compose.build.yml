@@ -1,0 +1,14 @@
+# بیلد محلی/CI به‌جای pull از GHCR:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+services:
+  web:
+    build: .
+  worker:
+    build: .
+  qgis:
+    build:
+      context: docker/qgis
+      args:
+        - APT_MIRROR=${APT_MIRROR:-}
+  pgbouncer:
+    build: ./docker/pgbouncer

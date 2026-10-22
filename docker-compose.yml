@@ -1,4 +1,7 @@
 # استقرار در Coolify (Build Pack: Docker Compose)
+# - ایمیج‌ها را GitHub Actions می‌سازد و در GHCR می‌گذارد (workflow: .github/workflows/ci.yml)؛
+#   سرور فقط pull می‌کند و دیگر apt/pip/git روی سرور اجرا نمی‌شود.
+#   برای بیلد محلی: docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 # - دامنه با SERVICE_FQDN_WEB_8000 در تب General تنظیم می‌شود
 # - رمز دیتابیس پنل را Coolify خودکار می‌سازد (SERVICE_PASSWORD_POSTGRES)
 # - هیچ پورتی روی میزبان باز نمی‌شود؛ ترافیک از پراکسی Coolify می‌آید
@@ -6,7 +9,7 @@
 #   (مثل سرور PostGIS مشتریان) با نام داخلی‌شان دسترسی داشته باشد
 services:
   web:
-    build: .
+    image: ${APP_IMAGE:-ghcr.io/arazshah/postgis:latest}
     restart: unless-stopped
     depends_on:
       panel-db:
@@ -51,7 +54,7 @@ services:
   # کارهای پس‌زمینه: بکاپ شبانه، بکاپ و بازگردانی درخواستی، آزمون بازگردانی، هشدارها
   # برای انتقال به سرور دیگر کافی است همین سرویس با همان متغیرها و volume بکاپ آنجا اجرا شود.
   worker:
-    build: .
+    image: ${APP_IMAGE:-ghcr.io/arazshah/postgis:latest}
     restart: unless-stopped
     command: ["python", "manage.py", "run_worker"]
     depends_on:
@@ -98,10 +101,7 @@ services:
   # به شبکه coolify وصل است تا به سرور PostGIS مشتریان برسد (با نقش فقط‌خواندنی هر پایگاه داده).
   # برای انتقال به سرور جدا: همین سرویس آنجا اجرا شود، volume پروژه‌ها همگام شود و QGIS_SERVER_URL عوض شود.
   qgis:
-    build:
-      context: docker/qgis
-      args:
-        - APT_MIRROR=${APT_MIRROR:-}
+    image: ${QGIS_IMAGE:-ghcr.io/arazshah/postgis-qgis:latest}
     restart: unless-stopped
     environment:
       - QGIS_PROCESSES=${QGIS_PROCESSES:-2}
@@ -133,7 +133,7 @@ services:
   # PGBOUNCER_AUTH_PASSWORD تنظیم نشوند بیکار می‌ماند. سپس در پنل مدیریت: سرور ← «راه‌اندازی PgBouncer» و
   # وارد کردن پورت عمومی. حالت transaction: برای وب و API؛ QGIS و pg_dump مستقیم وصل شوند.
   pgbouncer:
-    build: ./docker/pgbouncer
+    image: ${PGBOUNCER_IMAGE:-ghcr.io/arazshah/postgis-pgbouncer:latest}
     restart: unless-stopped
     environment:
       - DB_HOST=${PGBOUNCER_DB_HOST:-}
