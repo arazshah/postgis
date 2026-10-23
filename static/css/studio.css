@@ -1,0 +1,120 @@
+/* استودیوی نقشه چندلایه: تمام‌صفحه زیر هدر سایت؛ ریل تب + پنل قابل بستن + نقشه بزرگ */
+.is-studio{overflow:hidden}
+.is-studio .msgs{position:fixed;z-index:60;top:calc(var(--st-top,64px) + 56px);inset-inline:0;padding:0!important;pointer-events:none;transition:opacity .4s}
+.is-studio .msgs.gone{opacity:0}
+.is-studio .msgs .messages{max-width:520px;margin:0 auto;padding:0 12px;box-shadow:none}
+.is-studio .msgs .msg{pointer-events:auto;box-shadow:0 8px 24px -12px rgba(18,49,58,.45)}
+
+.studio{position:fixed;inset-inline:0;bottom:0;top:var(--st-top,64px);display:flex;flex-direction:column;background:var(--paper);z-index:1}
+.studio [hidden]{display:none!important}
+.studio.sizing{user-select:none;cursor:col-resize}
+.studio.sizing .gpm{pointer-events:none}
+
+/* ---------- نوار بالا ---------- */
+.st-bar{display:flex;align-items:center;gap:10px;padding:6px 12px;background:var(--surface);border-bottom:1px solid var(--line);min-height:50px;position:relative;z-index:30;flex:none}
+.st-back{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);text-decoration:none;color:var(--teal);font-size:1.1rem;flex:none}
+.st-back:hover{background:var(--teal-soft)}
+.st-crumbs{display:flex;gap:6px;align-items:center;font-size:.82rem;color:var(--ink-2);white-space:nowrap}
+.st-crumbs a{color:inherit;text-decoration:none}
+.st-crumbs a:hover{color:var(--teal);text-decoration:underline}
+.st-title{flex:1 1 220px;min-width:110px;max-width:440px;border:1px solid transparent;border-radius:8px;padding:5px 10px;font:inherit;font-weight:800;font-size:1.02rem;background:transparent;color:var(--ink)}
+.st-title:hover{border-color:var(--line)}
+.st-title:focus{border-color:var(--teal);background:#fff;outline:none;box-shadow:0 0 0 3px var(--teal-soft)}
+.st-dirty{font-size:.78rem;color:#8a5a00;white-space:nowrap}
+.st-spacer{flex:1}
+#wm-save.is-dirty{background:var(--ochre,#E0A526);border-color:var(--ochre,#E0A526);color:#1B2B2F}
+.dl-note{margin:4px 12px 6px;font-size:.78rem;color:var(--ink-2)}
+
+/* ---------- بدنه ---------- */
+.st-body{flex:1;display:flex;min-height:0}
+.st-rail{width:72px;flex:none;background:var(--surface);border-inline-end:1px solid var(--line);display:flex;flex-direction:column;padding:6px 4px;gap:2px}
+.st-tab{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px 7px;border:0;border-inline-end:3px solid transparent;background:none;border-radius:8px;cursor:pointer;font:inherit;font-size:.72rem;color:var(--ink-2)}
+.st-tab svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.st-tab:hover{background:var(--paper-2);color:var(--teal)}
+.st-tab[aria-selected=true]{background:var(--teal-soft);color:var(--teal-dark,#0F5C59);border-inline-end-color:var(--teal);font-weight:700}
+.st-tab:focus-visible,.st-collapse:focus-visible,.st-link:focus-visible{outline:3px solid var(--ochre);outline-offset:-3px}
+.st-badge{position:absolute;top:3px;inset-inline-start:10px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--teal);color:#fff;font-style:normal;font-size:.66rem;line-height:17px;text-align:center}
+.st-badge:empty{display:none}
+.st-collapse{margin-top:auto;display:grid;place-items:center;height:36px;border:0;background:none;border-radius:8px;cursor:pointer;color:var(--ink-2)}
+.st-collapse:hover{background:var(--paper-2);color:var(--teal)}
+.st-collapse svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+.studio[data-panel=closed] .st-collapse svg{transform:rotate(180deg)}
+
+.st-panel{width:var(--panel-w,380px);flex:none;background:var(--surface);border-inline-end:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+.studio[data-panel=closed] .st-panel,.studio[data-panel=closed] .st-resize{display:none}
+.st-sec,.st-view{display:flex;flex-direction:column;min-height:0;flex:1}
+.st-head{display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);flex:none;min-height:50px}
+.st-head h2{font-size:1.02rem;margin:0}
+.st-end{margin-inline-start:auto}
+.st-scroll{flex:1;min-height:0;overflow:auto;padding:12px 14px 20px;display:flex;flex-direction:column;gap:12px;overscroll-behavior:contain}
+.st-resize{width:7px;margin-inline-start:-4px;flex:none;cursor:col-resize;z-index:5;position:relative}
+.st-resize:hover,.st-resize:focus-visible,.studio.sizing .st-resize{background:var(--teal-soft);outline:none}
+.st-resize::after{content:"";position:absolute;top:50%;inset-inline-start:2px;width:3px;height:36px;margin-top:-18px;border-radius:2px;background:var(--line)}
+.st-map{flex:1;min-width:0;position:relative;background:#EEF2EC}
+.st-map .gpm{position:absolute;inset:0}
+
+/* ---------- لایه‌ها ---------- */
+.st-link{border:0;background:none;color:var(--teal);font:inherit;font-weight:700;cursor:pointer;padding:4px 6px;border-radius:6px}
+.st-link:hover{background:var(--teal-soft)}
+.st-dname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9rem}
+.st-eye{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.st-eye input{width:16px;height:16px;accent-color:var(--teal);margin:0}
+.st-eye span{font-size:.9rem}
+.st-dhead .wm-tools{flex:none}
+.st-scroll .wm-add{margin:0}
+.st-scroll .wm-list{margin:0}
+
+.st-acc{border:1px solid var(--line);border-radius:var(--r-md);padding:0;background:var(--paper)}
+.st-acc>summary{cursor:pointer;font-weight:700;font-size:.92rem;padding:9px 12px;list-style:none;display:flex;align-items:center;justify-content:space-between}
+.st-acc>summary::-webkit-details-marker{display:none}
+.st-acc>summary::after{content:"▾";color:var(--ink-2);transition:transform .15s}
+.st-acc[open]>summary::after{transform:rotate(180deg)}
+.st-acc[open]>summary{border-bottom:1px solid var(--line)}
+.st-acc>:not(summary){margin-inline:12px}
+.st-acc>summary+*{margin-top:12px}
+.st-acc>:last-child{margin-bottom:12px}
+.st-acc>*+:not(summary){margin-top:10px}
+.st-acc .cols{display:flex;flex-wrap:wrap;gap:4px 14px}
+.st-acc [hidden]{display:none!important}
+
+/* ---------- اسلایدها ---------- */
+.studio .sl-list{margin:0}
+.sl-item{padding:0;overflow:hidden}
+.sl-item.on{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-soft)}
+.sl-main{display:grid;grid-template-columns:auto 1fr;gap:0 10px;align-items:center;width:100%;text-align:start;background:none;border:0;padding:9px 12px;cursor:pointer;font:inherit;color:inherit}
+.sl-main b{grid-row:span 2;width:26px;height:26px;border-radius:50%;background:var(--teal-soft);color:var(--teal-dark,#0F5C59);display:grid;place-items:center;font-size:.82rem}
+.sl-item.on .sl-main b{background:var(--teal);color:#fff}
+.sl-t{font-weight:700;font-size:.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sl-main small{grid-column:2;color:var(--ink-2);font-size:.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sl-edit{display:flex;flex-direction:column;gap:8px;padding:0 12px 12px}
+.sl-edit .sl-title{flex:none;width:100%}
+.sl-tools{align-self:flex-end}
+
+/* ---------- روی نقشه ---------- */
+.st-chip{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:2px;background:rgba(249,251,248,.97);border:1px solid var(--line);border-radius:999px;padding:3px 6px;box-shadow:0 8px 20px -12px rgba(18,49,58,.5);font-size:.85rem}
+.st-chip button{border:0;background:none;width:30px;height:28px;border-radius:50%;cursor:pointer;font-size:1.2rem;line-height:1;color:var(--teal)}
+.st-chip button:hover{background:var(--teal-soft)}
+.st-chip span{padding:0 8px;font-weight:700;white-space:nowrap}
+.st-legendbtn{position:absolute;top:10px;inset-inline-start:10px;z-index:6;border:1px solid var(--line);background:rgba(249,251,248,.97);color:var(--teal);border-radius:999px;padding:4px 12px;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;box-shadow:0 6px 16px -10px rgba(18,49,58,.5)}
+.st-legendbtn[aria-pressed=true]{background:var(--teal);color:#fff;border-color:var(--teal)}
+.st-toast{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);z-index:7;max-width:min(520px,calc(100% - 24px));background:#12313A;color:#fff;padding:8px 16px;border-radius:999px;font-size:.88rem;box-shadow:0 10px 28px -10px rgba(0,0,0,.5);text-align:center}
+.st-toast.err{background:var(--red)}
+.studio .gpm-legend{bottom:34px}
+
+/* ---------- گوشی و نمایشگر کوچک: ریل پایین، پنل زیر نقشه ---------- */
+@media (max-width:1100px){.st-crumbs{display:none}}
+@media (max-width:900px){
+  .st-body{flex-direction:column}
+  .st-map{order:1}
+  .st-panel{order:2;width:auto!important;height:46%;border-inline-end:0;border-top:1px solid var(--line);flex:none}
+  .st-resize,.st-collapse{display:none}
+  .st-rail{order:3;width:auto;flex-direction:row;border-inline-end:0;border-top:1px solid var(--line);justify-content:space-around;padding:2px 4px}
+  .st-tab{flex:1;padding:6px 2px 4px;border-inline-end:0;border-top:3px solid transparent}
+  .st-tab[aria-selected=true]{border-inline-end-color:transparent;border-top-color:var(--teal)}
+  .st-badge{inset-inline-start:auto;inset-inline-end:calc(50% - 22px)}
+  .st-bar{gap:6px;padding:6px 8px}
+  .st-bar .btn.ghost[target]{display:none}
+  .st-title{flex-basis:90px}
+  .studio .gpm-legend{max-width:150px;bottom:14px}
+  .st-toast{bottom:14px}
+}
