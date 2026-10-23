@@ -92,6 +92,13 @@ class MapsIntegrationTests(TestCase):
         self.assertContains(page, f"/maps/{m.slug}/t/{layers[0].pk}/")
         self.assertContains(page, "nosrid", count=0)  # بدون SRID قابل افزودن نیست
         self.assertNotContains(page, ">notes")
+        # استودیوی تمام‌صفحه: ریل چهار تب، بدون فوتر سایت؛ صفحه‌های دیگر فوتر دارند
+        self.assertContains(page, 'id="studio"')
+        self.assertContains(page, 'class="is-studio"')
+        for tab in ("layers", "slides", "map", "share"):
+            self.assertContains(page, f'data-tab="{tab}"')
+        self.assertNotContains(page, 'class="footer"')
+        self.assertContains(self.client.get(reverse("maps:index", args=[self.db.pk])), 'class="footer"')
 
     def test_add_and_remove_layer(self):
         self._create("public.schools")

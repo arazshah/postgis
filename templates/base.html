@@ -26,7 +26,7 @@
   {% block head %}{% endblock %}
   {% block jsonld %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
 <a class="skip" href="#main">رفتن به محتوای اصلی</a>
 <header class="topbar">
   <div class="wrap">
@@ -57,14 +57,14 @@
 {% if SITE.announcement %}<div class="announce {{ SITE.announcement_level }}" role="note"><div class="wrap">{{ SITE.announcement|linebreaksbr }}</div></div>{% endif %}
 <main id="main">
   {% if messages %}
-  <div class="wrap" style="padding-top:24px">
+  <div class="wrap msgs" style="padding-top:24px">
     <ul class="messages">{% for m in messages %}<li class="msg {{ m.tags }}" role="status">{{ m }}</li>{% endfor %}</ul>
   </div>
   {% endif %}
   {% block content %}{% endblock %}
 </main>
 
-<footer class="footer">
+{% block footer %}<footer class="footer">
   <div class="wrap">
     <div class="foot-grid">
       <section class="foot-brand" aria-label="درباره {{ SITE_NAME }}">
@@ -125,7 +125,7 @@
       </ul>
     </div>
   </div>
-</footer>
+</footer>{% endblock %}
 <script src="{% static 'js/app.js' %}" defer></script>
 {% if SITE.assistant_ready %}
 <link rel="stylesheet" href="{% static 'css/assistant.css' %}">

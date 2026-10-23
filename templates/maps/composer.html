@@ -1,17 +1,27 @@
-{% extends "databases/_ws.html" %}{% load static fa %}
+{% extends "base.html" %}{% load static fa %}
 {% block title %}طراحی {{ webmap.title }} — {{ SITE_NAME }}{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+{% block body_class %}is-studio{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
 <link rel="stylesheet" href="{% static 'css/map.css' %}">
+<link rel="stylesheet" href="{% static 'css/studio.css' %}">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 {% endblock %}
-{% block ws %}
-<div class="wrap page">
-  <p class="small"><a href="{% url 'maps:index' db.pk %}">← نقشه‌های چندلایه</a></p>
-  <div class="page-head">
-    <h1 id="wm-h">{{ webmap.title }}</h1>
-    <span class="small muted" id="wm-dirty" hidden>تغییرات ذخیره نشده</span>
-    <a class="btn ghost sm" href="{{ public_url }}" target="_blank" rel="noopener" style="margin-inline-start:auto">باز کردن نقشه</a>
+{% block footer %}{% endblock %}
+{% block content %}
+<div class="studio" id="studio" data-panel="open">
+  {% csrf_token %}
+  <header class="st-bar">
+    <a class="st-back" href="{% url 'maps:index' db.pk %}" title="نقشه‌های چندلایه" aria-label="بازگشت به نقشه‌های چندلایه">→</a>
+    <nav class="st-crumbs" aria-label="مسیر">
+      <a class="ltr" href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a><span aria-hidden="true">/</span>
+      <a href="{% url 'maps:index' db.pk %}">نقشه‌ها</a>
+    </nav>
+    <input id="wm-title" class="st-title" type="text" maxlength="120" value="{{ webmap.title }}" aria-label="عنوان نقشه">
+    <span class="st-dirty" id="wm-dirty" hidden>● ذخیره نشده</span>
+    <span class="st-spacer"></span>
+    <a class="btn ghost sm" href="{{ public_url }}" target="_blank" rel="noopener">باز کردن نقشه</a>
     <details class="dl-more wm-more">
       <summary class="btn ghost sm">ابزارها</summary>
       <div class="dl-menu">
@@ -20,94 +30,161 @@
         <a href="{% url 'maps:compare' webmap.slug %}" target="_blank" rel="noopener">مقایسه دو لایه (پرده کشویی)</a>
         <a href="{% url 'maps:qgis' db.pk webmap.pk %}">دانلود پروژه QGIS (.qgs)</a>
         <form method="post" action="{% url 'maps:publish_ows' db.pk webmap.pk %}" onsubmit="return confirm('نسخه فعلی ذخیره‌شده نقشه به‌صورت WMS/WFS منتشر شود؟ یک پروژه از سهمیه WMS/WFS پلن استفاده می‌شود.')">{% csrf_token %}<button type="submit">انتشار به‌صورت WMS/WFS</button></form>
+        <p class="dl-note">ابزارها روی آخرین نسخه ذخیره‌شده کار می‌کنند.</p>
       </div>
     </details>
-    <button class="btn sm" type="button" id="wm-save">ذخیره</button>
-  </div>
-  <p class="small muted" style="margin-top:-8px">ابزارها روی آخرین نسخه ذخیره‌شده کار می‌کنند؛ اول تغییرات را ذخیره کنید.</p>
-  <p class="small" id="wm-msg" role="status" aria-live="polite"></p>
+    <button class="btn sm" type="button" id="wm-save" title="ذخیره (Ctrl+S)">ذخیره</button>
+  </header>
 
-  <div class="builder">
-    <div class="panel builder-form" id="wm-panel">{% csrf_token %}
-      <fieldset class="bf-group"><legend>نقشه</legend>
-        <div class="field"><label for="wm-title">عنوان</label><input id="wm-title" type="text" maxlength="120" value="{{ webmap.title }}"></div>
-        <div class="field"><label for="wm-desc">توضیح کوتاه</label><textarea id="wm-desc" rows="2" maxlength="1000">{{ webmap.description }}</textarea></div>
-        <div class="field"><label for="wm-base">نقشه پایه</label><select id="wm-base">{% if iran_basemap %}<option value="iran">نقشه پایه ایران (فارسی)</option>{% endif %}<option value="osm">OpenStreetMap (تصویری)</option><option value="none">بدون نقشه پایه</option></select></div>
-        <label class="check small"><input type="checkbox" id="wm-public" {% if webmap.is_public %}checked{% endif %}><span>عمومی: هر کسی با لینک نقشه را می‌بیند</span></label>
-        <div class="wm-actions">
-          <button class="btn ghost sm" type="button" id="wm-view">نمای فعلی، نمای شروع باشد</button>
-          <button class="btn ghost sm" type="button" id="wm-autoview">محدوده همه لایه‌ها</button>
+  <div class="st-body">
+    <nav class="st-rail" role="tablist" aria-label="بخش‌های نقشه" aria-orientation="vertical">
+      <button type="button" class="st-tab" role="tab" data-tab="layers" aria-controls="tab-layers">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5"/></svg><span>لایه‌ها</span><em class="st-badge" id="b-layers"></em></button>
+      <button type="button" class="st-tab" role="tab" data-tab="slides" aria-controls="tab-slides">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><span>اسلایدها</span><em class="st-badge" id="b-slides"></em></button>
+      <button type="button" class="st-tab" role="tab" data-tab="map" aria-controls="tab-map">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9M15 4v6M9 14v6"/></svg><span>نقشه</span></button>
+      <button type="button" class="st-tab" role="tab" data-tab="share" aria-controls="tab-share">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 11l8-4M8 13l8 4"/></svg><span>اشتراک</span></button>
+      <button type="button" class="st-collapse" id="st-collapse" aria-controls="st-panel" aria-expanded="true" title="بستن پنل">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+    </nav>
+
+    <aside class="st-panel" id="st-panel" aria-label="تنظیمات نقشه">
+      <!-- ============ لایه‌ها ============ -->
+      <section class="st-sec" id="tab-layers" data-tab="layers" role="tabpanel">
+        <div class="st-view" id="v-list">
+          <div class="st-head"><h2>لایه‌ها <span class="muted small" id="wm-count"></span></h2></div>
+          <div class="st-scroll">
+            <div class="wm-add">
+              <select id="wm-add" aria-label="جدول برای افزودن">
+                <option value="">— افزودن جدول —</option>
+                {% for t in tables %}<option value="{{ t.key }}">{% if t.schema != 'public' %}{{ t.schema }}.{% endif %}{{ t.table }} ({{ t.geom_type|lower }})</option>{% endfor %}
+              </select>
+              <button class="btn sm" type="button" id="wm-add-btn">افزودن</button>
+            </div>
+            <ol class="wm-list" id="wm-list" aria-label="لایه‌های نقشه؛ بالایی روی بقیه"></ol>
+            <p class="small muted" id="wm-empty" hidden>هنوز لایه‌ای ندارد؛ از فهرست بالا یک جدول اضافه کنید.</p>
+            <p class="small muted">حداکثر {{ layer_cap|fanum }} لایه. روی نام لایه بزنید تا سبکش باز شود؛ برای تغییر ترتیب لایه را بکشید.</p>
+          </div>
         </div>
-        <p class="small muted" id="wm-viewnote"></p>
-      </fieldset>
 
-      <fieldset class="bf-group"><legend>لایه‌ها <span class="muted small" id="wm-count"></span></legend>
-        <ol class="wm-list" id="wm-list" aria-label="لایه‌های نقشه؛ بالایی روی بقیه"></ol>
-        <p class="small muted" id="wm-empty" hidden>هنوز لایه‌ای ندارد؛ از فهرست زیر یک جدول اضافه کنید.</p>
-        <div class="wm-add">
-          <select id="wm-add" aria-label="جدول برای افزودن">
-            <option value="">— افزودن جدول —</option>
-            {% for t in tables %}<option value="{{ t.key }}">{% if t.schema != 'public' %}{{ t.schema }}.{% endif %}{{ t.table }} ({{ t.geom_type|lower }})</option>{% endfor %}
-          </select>
-          <button class="btn sm" type="button" id="wm-add-btn">افزودن</button>
+        <div class="st-view" id="v-detail" hidden>
+          <div class="st-head st-dhead">
+            <button type="button" class="st-link" id="d-back">← لایه‌ها</button>
+            <b class="ltr st-dname" id="e-name"></b>
+            <label class="st-eye" title="نمایش لایه"><input type="checkbox" id="d-eye" aria-label="نمایش لایه"><span aria-hidden="true">👁</span></label>
+            <span class="wm-tools">
+              <button type="button" id="d-zoom" title="رفتن به این لایه" aria-label="رفتن به این لایه">⌖</button>
+              <button type="button" id="d-prev" title="لایه بالایی" aria-label="لایه بالایی">↑</button>
+              <button type="button" id="d-next" title="لایه پایینی" aria-label="لایه پایینی">↓</button>
+            </span>
+          </div>
+          <div class="st-scroll" id="wm-editor">
+            <div class="field"><label for="e-title">نام لایه در راهنما</label><input id="e-title" type="text" maxlength="120"></div>
+
+            <details class="st-acc" open><summary>رنگ‌آمیزی</summary>
+              <div class="seg-choice" role="radiogroup" aria-label="نوع رنگ‌آمیزی">
+                <label><input type="radio" name="mode" value="single"><span>یک رنگ</span></label>
+                <label><input type="radio" name="mode" value="graduated"><span>طبقه‌بندی عددی</span></label>
+                <label><input type="radio" name="mode" value="categorized"><span>بر اساس دسته</span></label>
+              </div>
+              <div class="field" data-when="single"><label for="e-color">رنگ</label><input id="e-color" type="color" data-k="color"></div>
+              <div class="field" data-when="graduated categorized"><label for="e-field">ستون</label><select id="e-field" data-k="field" data-fields="all"></select></div>
+              <div class="bf-row" data-when="graduated">
+                <div class="field"><label for="e-classes">تعداد طبقه</label><select id="e-classes" data-k="classes">{% for n in "2345678" %}<option value="{{ n }}">{{ n|fanum }}</option>{% endfor %}</select></div>
+                <div class="field"><label for="e-pal">طیف رنگ</label><select id="e-pal" data-k="palette">{% for name in palettes %}<option value="{{ name }}">{{ name }}</option>{% endfor %}</select></div>
+              </div>
+              <p class="small muted" data-msg></p>
+            </details>
+
+            <details class="st-acc" open><summary>ظاهر</summary>
+              <div class="bf-row">
+                <div class="field"><label for="e-size">اندازه نقطه / پهنای خط</label><input id="e-size" type="range" min="1" max="20" step="1" data-k="size"></div>
+                <div class="field"><label for="e-op">شفافیت</label><input id="e-op" type="range" min="0.1" max="1" step="0.05" data-k="opacity"></div>
+              </div>
+              <div class="field"><label for="e-outline">رنگ حاشیه</label><input id="e-outline" type="color" data-k="outline"></div>
+            </details>
+
+            <details class="st-acc"><summary>برچسب</summary>
+              <div class="field"><label for="e-label">ستون برچسب</label><select id="e-label" data-k="label" data-fields="label"></select></div>
+              <div class="bf-row" data-when-label>
+                <div class="field"><label for="e-lsize">اندازه متن</label><input id="e-lsize" type="range" min="8" max="24" step="1" data-k="label_size"></div>
+                <div class="field"><label for="e-lcolor">رنگ متن</label><input id="e-lcolor" type="color" data-k="label_color"></div>
+              </div>
+            </details>
+
+            <details class="st-acc"><summary>پنجره اطلاعات</summary>
+              <p class="small muted" style="margin:0">ستون‌هایی که با کلیک روی عارضه دیده می‌شوند. هیچ‌کدام را انتخاب نکنید تا همه نشان داده شوند؛ اگر انتخاب کنید فقط همان‌ها (به‌علاوه ستون رنگ و برچسب) در نقشه فرستاده می‌شوند.</p>
+              <div class="cols" id="e-popup"></div>
+            </details>
+          </div>
         </div>
-        <p class="small muted">حداکثر {{ layer_cap|fanum }} لایه. برای جابه‌جایی، لایه را بکشید یا با دکمه‌های ↑ و ↓ جابه‌جا کنید.</p>
-      </fieldset>
+      </section>
 
-      <fieldset class="bf-group"><legend>ارائه <span class="muted small" id="sl-count"></span></legend>
-        <p class="small muted" style="margin:0">هر اسلاید یک نما از نقشه است با لایه‌های روشن همان لحظه و یک متن کوتاه. در حالت ارائه، نقشه با کلیدهای جهت از یک اسلاید به بعدی می‌رود.</p>
-        <ol class="sl-list" id="sl-list"></ol>
-        <div class="wm-actions">
-          <button class="btn ghost sm" type="button" id="sl-add">+ اسلاید از نمای فعلی</button>
-          <a class="btn ghost sm" href="{% url 'maps:present' webmap.slug %}" target="_blank" rel="noopener" id="sl-run">اجرای ارائه</a>
+      <!-- ============ اسلایدها ============ -->
+      <section class="st-sec" id="tab-slides" data-tab="slides" role="tabpanel" hidden>
+        <div class="st-view">
+          <div class="st-head">
+            <h2>اسلایدها <span class="muted small" id="sl-count"></span></h2>
+            <a class="btn ghost sm st-end" href="{% url 'maps:present' webmap.slug %}" target="_blank" rel="noopener">▶ اجرای ارائه</a>
+          </div>
+          <div class="st-scroll">
+            <p class="small muted" style="margin:0">نقشه را روی نمای دلخواه ببرید، لایه‌های لازم را از راهنمای روی نقشه روشن کنید و «افزودن اسلاید» را بزنید. اسلاید همان چیزی را نگه می‌دارد که الان می‌بینید.</p>
+            <button class="btn" type="button" id="sl-add">+ افزودن اسلاید از نمای فعلی</button>
+            <ol class="sl-list" id="sl-list"></ol>
+          </div>
         </div>
-      </fieldset>
+      </section>
 
-      <div id="wm-editor" hidden>
-        <fieldset class="bf-group"><legend>سبک لایه <b class="ltr" id="e-name"></b></legend>
-          <div class="field"><label for="e-title">نام لایه در راهنما</label><input id="e-title" type="text" maxlength="120"></div>
-          <div class="seg-choice" role="radiogroup" aria-label="نوع رنگ‌آمیزی">
-            <label><input type="radio" name="mode" value="single"><span>یک رنگ</span></label>
-            <label><input type="radio" name="mode" value="graduated"><span>طبقه‌بندی عددی</span></label>
-            <label><input type="radio" name="mode" value="categorized"><span>بر اساس دسته</span></label>
+      <!-- ============ تنظیمات نقشه ============ -->
+      <section class="st-sec" id="tab-map" data-tab="map" role="tabpanel" hidden>
+        <div class="st-view">
+          <div class="st-head"><h2>تنظیمات نقشه</h2></div>
+          <div class="st-scroll">
+            <div class="field"><label for="wm-desc">توضیح کوتاه</label><textarea id="wm-desc" rows="3" maxlength="1000">{{ webmap.description }}</textarea></div>
+            <div class="field"><label for="wm-base">نقشه پایه</label><select id="wm-base">{% if iran_basemap %}<option value="iran">نقشه پایه ایران (فارسی)</option>{% endif %}<option value="osm">OpenStreetMap (تصویری)</option><option value="none">بدون نقشه پایه</option></select></div>
+            <label class="check small"><input type="checkbox" id="wm-public" {% if webmap.is_public %}checked{% endif %}><span>عمومی: هر کسی با لینک نقشه را می‌بیند</span></label>
+            <div class="field"><span class="small"><b>نمای شروع</b></span>
+              <div class="wm-actions">
+                <button class="btn ghost sm" type="button" id="wm-view">نمای فعلی، نمای شروع باشد</button>
+                <button class="btn ghost sm" type="button" id="wm-autoview">محدوده همه لایه‌ها</button>
+              </div>
+              <p class="small muted" id="wm-viewnote" style="margin:6px 0 0"></p>
+            </div>
           </div>
-          <div class="field" data-when="single"><label for="e-color">رنگ</label><input id="e-color" type="color" data-k="color"></div>
-          <div class="field" data-when="graduated categorized"><label for="e-field">ستون</label><select id="e-field" data-k="field" data-fields="all"></select></div>
-          <div class="bf-row" data-when="graduated">
-            <div class="field"><label for="e-classes">تعداد طبقه</label><select id="e-classes" data-k="classes">{% for n in "2345678" %}<option value="{{ n }}">{{ n|fanum }}</option>{% endfor %}</select></div>
-            <div class="field"><label for="e-pal">طیف رنگ</label><select id="e-pal" data-k="palette">{% for name in palettes %}<option value="{{ name }}">{{ name }}</option>{% endfor %}</select></div>
-          </div>
-          <p class="small muted" data-msg></p>
-          <div class="bf-row">
-            <div class="field"><label for="e-size">اندازه نقطه / پهنای خط</label><input id="e-size" type="range" min="1" max="20" step="1" data-k="size"></div>
-            <div class="field"><label for="e-op">شفافیت</label><input id="e-op" type="range" min="0.1" max="1" step="0.05" data-k="opacity"></div>
-          </div>
-          <div class="field"><label for="e-outline">رنگ حاشیه</label><input id="e-outline" type="color" data-k="outline"></div>
-          <div class="field"><label for="e-label">ستون برچسب</label><select id="e-label" data-k="label" data-fields="label"></select></div>
-          <div class="bf-row" data-when-label>
-            <div class="field"><label for="e-lsize">اندازه متن</label><input id="e-lsize" type="range" min="8" max="24" step="1" data-k="label_size"></div>
-            <div class="field"><label for="e-lcolor">رنگ متن</label><input id="e-lcolor" type="color" data-k="label_color"></div>
-          </div>
-          <div class="field"><span class="small">پنجره اطلاعات (با کلیک روی عارضه)</span><div class="cols" id="e-popup"></div>
-            <p class="small muted">هیچ‌کدام را انتخاب نکنید تا همه ستون‌ها نمایش داده شوند. اگر ستون‌هایی را انتخاب کنید، فقط همان‌ها (به‌علاوه ستون رنگ و برچسب) در نقشه فرستاده می‌شوند.</p></div>
-        </fieldset>
-      </div>
-    </div>
+        </div>
+      </section>
 
-    <div class="builder-map">
+      <!-- ============ اشتراک ============ -->
+      <section class="st-sec" id="tab-share" data-tab="share" role="tabpanel" hidden>
+        <div class="st-view">
+          <div class="st-head"><h2>اشتراک‌گذاری</h2></div>
+          <div class="st-scroll">
+            <p class="small muted" id="wm-private-note"{% if webmap.is_public %} hidden{% endif %}>این نقشه خصوصی است و فقط شما و اعضای تیم آن را می‌بینید. برای اشتراک، در «نقشه» گزینه «عمومی» را بزنید و ذخیره کنید.</p>
+            <dl class="pub-urls st-urls">
+              <dt>لینک نقشه</dt><dd><code id="u-map">{{ public_url }}</code><button class="copy" data-copy-target="#u-map">کپی</button></dd>
+              <dt>کد جاسازی (iframe)</dt><dd><code id="u-embed">&lt;iframe src="{{ embed_url }}" width="100%" height="480" style="border:0" loading="lazy" title="{{ webmap.title }}"&gt;&lt;/iframe&gt;</code><button class="copy" data-copy-target="#u-embed">کپی</button></dd>
+            </dl>
+            <p class="small muted">هر بار نمایش نقشه عمومی از سهمیه درخواست روزانه پایگاه داده کم می‌کند؛ بازدید خود شما و تیم شمرده نمی‌شود.</p>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <div class="st-resize" id="st-resize" role="separator" aria-orientation="vertical" tabindex="0" aria-label="تغییر عرض پنل (کلیدهای جهت‌دار)" title="برای تغییر عرض بکشید؛ دوبار کلیک: اندازه پیش‌فرض"></div>
+
+    <div class="st-map">
       <div id="map" class="gpm"></div>
+      <button type="button" class="st-legendbtn" id="st-legend" aria-pressed="true" title="نمایش یا پنهان کردن راهنمای نقشه">راهنما</button>
+      <div class="st-chip" id="sl-chip" hidden>
+        <button type="button" id="chip-prev" aria-label="اسلاید قبلی">›</button>
+        <span id="chip-t"></span>
+        <button type="button" id="chip-next" aria-label="اسلاید بعدی">‹</button>
+      </div>
+      <div class="st-toast" id="wm-msg" role="status" aria-live="polite" hidden></div>
     </div>
   </div>
-
-  <section class="panel" style="margin-top:var(--s5)">
-    <h2 style="font-size:1.2rem">اشتراک‌گذاری</h2>
-    <p class="small muted" id="wm-private-note"{% if webmap.is_public %} hidden{% endif %}>این نقشه خصوصی است و فقط شما و اعضای تیم آن را می‌بینید. برای اشتراک، گزینه «عمومی» را بزنید و ذخیره کنید.</p>
-    <dl class="pub-urls">
-      <dt>لینک نقشه</dt><dd><code id="u-map">{{ public_url }}</code><button class="copy" data-copy-target="#u-map">کپی</button></dd>
-      <dt>کد جاسازی (iframe)</dt><dd><code id="u-embed">&lt;iframe src="{{ embed_url }}" width="100%" height="480" style="border:0" loading="lazy" title="{{ webmap.title }}"&gt;&lt;/iframe&gt;</code><button class="copy" data-copy-target="#u-embed">کپی</button></dd>
-    </dl>
-    <p class="small muted">هر بار نمایش نقشه عمومی از سهمیه درخواست روزانه پایگاه داده کم می‌کند؛ بازدید خود شما و تیم شمرده نمی‌شود.</p>
-  </section>
 </div>
 {{ config|json_script:"map-config" }}
 <script id="wm-urls" type="application/json">{"save": "{% url 'maps:composer' db.pk webmap.pk %}", "add": "{% url 'maps:layer_add' db.pk webmap.pk %}", "remove": "{% url 'maps:layer_remove' db.pk webmap.pk 0 %}", "stats": "{% url 'maps:layer_stats' db.pk webmap.pk 0 %}"}</script>
