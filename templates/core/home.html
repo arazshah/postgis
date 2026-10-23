@@ -134,6 +134,12 @@ WHERE ST_DWithin(
         <p>طبقه‌بندی، برچسب و پاپ‌آپ را تنظیم کنید و نقشه را با لینک عمومی یا iframe در سایت خودتان بگذارید.</p>
         <span class="tile-go">راهنمای نقشه‌ساز ←</span>
       </a>
+      <a class="tile w2" href="{% url 'core:help_page' 'maps' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="layers" %}</span>
+        <h3>نقشه چندلایه، ارائه و چاپ</h3>
+        <p>چند جدول را روی یک نقشه بیاورید، اسلاید و ارائه بسازید، PDF بگیرید و پروژه QGIS یا WMS/WFS منتشر کنید.</p>
+        <span class="tile-go">راهنمای نقشه چندلایه ←</span>
+      </a>
       <a class="tile w2" href="{% url 'core:help_page' 'analysis' %}">
         <span class="tile-ico">{% include "help/_icon.html" with name="spark" %}</span>
         <h3>تحلیل بدون SQL و پرسش فارسی</h3>
