@@ -1,0 +1,9 @@
+<details class="dl-more dash-menu">
+  <summary class="btn ghost sm" aria-label="همه بخش‌های این پایگاه داده" title="همه بخش‌ها"><span aria-hidden="true">⋯</span></summary>
+  <div class="dl-menu dash-menu-list">
+    {% for g in groups %}
+    {% if g.title %}<div class="dash-menu-t">{{ g.title }}</div>{% endif %}
+    {% for it in g.items %}<a href="{{ it.url }}">{{ it.label }}</a>{% endfor %}
+    {% endfor %}
+  </div>
+</details>

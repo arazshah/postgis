@@ -1,16 +1,48 @@
 {% load fa %}
-<details class="ws-menu" open>
-  <summary><span>{% if current %}{{ current.label }}{% else %}منوی پایگاه داده{% endif %}</span><i aria-hidden="true">▾</i></summary>
-  <nav aria-label="بخش‌های پایگاه داده">
-    {% for g in groups %}
-    <div class="ws-group">
-      {% if g.title %}<div class="ws-gt">{{ g.title }}</div>{% endif %}
-      {% for it in g.items %}
-      <a href="{% url it.url db.pk %}" class="ws-item{% if it.on %} on{% endif %}"{% if it.on %} aria-current="page"{% endif %}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ it.icon }}"/></svg><span>{{ it.label }}</span>
-      </a>
-      {% endfor %}
+<div class="ws-side-top">
+  <div class="ws-side-head">
+    <a class="ws-back" href="{% url 'databases:dashboard' %}" title="همه پایگاه‌های داده"><span aria-hidden="true">←</span><span class="ws-lbl"> همه پایگاه‌های داده</span></a>
+    <button class="ws-x" type="button" data-ws-close aria-label="بستن منو">✕</button>
+  </div>
+  <div class="ws-db">
+    <div class="ws-db-row">
+      <a href="{% url 'databases:detail' db.pk %}" class="ws-name ltr" title="{{ db.db_name }}">{{ db.db_name }}</a>
+      {% if switch %}<button class="ws-sw-btn" type="button" data-ws-sw aria-expanded="false" aria-controls="ws-sw" title="رفتن به پایگاه داده دیگر" aria-label="تعویض پایگاه داده"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg></button>{% endif %}
     </div>
+    <div class="ws-meta ws-lbl"><span class="badge {{ db.status }}">{{ db.get_status_display }}</span><span class="small muted">{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span></div>
+    <div class="meter {{ db.usage_level }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ db.usage_percent|pct_width }}" aria-label="مصرف حجم"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
+    {% if switch %}
+    <div class="ws-sw" id="ws-sw" hidden>
+      {% if switch|length > 6 %}<input class="ws-sw-q" type="search" placeholder="جست‌وجوی پایگاه داده…" aria-label="جست‌وجوی پایگاه داده" autocomplete="off" dir="ltr">{% endif %}
+      <ul>
+        {% for o in switch %}<li data-name="{{ o.name|lower }}"><a class="ltr" href="{{ o.url }}">{{ o.name }}{% if not o.mine %} <small>اشتراکی</small>{% endif %}{% if not o.live %} <small>غیرفعال</small>{% endif %}</a></li>{% endfor %}
+      </ul>
+      <p class="ws-sw-none small muted" hidden>موردی پیدا نشد.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+<div class="ws-scroll">
+  <nav class="ws-nav" aria-label="بخش‌های پایگاه داده">
+    {% for g in groups %}
+    {% if g.title %}
+    <details class="ws-group" data-key="{{ g.key }}" open>
+      <summary class="ws-gt"><span>{{ g.title }}</span><i aria-hidden="true"></i></summary>
+      <div class="ws-items">
+        {% for it in g.items %}<a href="{% url it.url db.pk %}" class="ws-item{% if it.on %} on{% endif %}" title="{{ it.label }}"{% if it.on %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ it.icon }}"/></svg><span class="ws-lbl">{{ it.label }}</span></a>{% endfor %}
+      </div>
+    </details>
+    {% else %}
+    <div class="ws-group ws-top">
+      {% for it in g.items %}<a href="{% url it.url db.pk %}" class="ws-item{% if it.on %} on{% endif %}" title="{{ it.label }}"{% if it.on %} aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ it.icon }}"/></svg><span class="ws-lbl">{{ it.label }}</span></a>{% endfor %}
+    </div>
+    {% endif %}
     {% endfor %}
   </nav>
-</details>
+</div>
+<div class="ws-side-foot">
+  <span class="ws-gpa" data-gpa-slot="menu"></span>
+  <button class="ws-tool" type="button" data-ws-jump title="جست‌وجوی سریع بخش‌ها و پایگاه‌ها (Ctrl+K)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-5-5"/></svg><span class="ws-lbl">جست‌وجوی سریع <kbd>Ctrl K</kbd></span></button>
+  <button class="ws-tool ws-collapse" type="button" data-ws-collapse aria-pressed="false" title="جمع کردن منو به نوار آیکون (کلید [ )"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14M20 12H9M13 8l-4 4 4 4"/></svg><span class="ws-lbl">جمع کردن منو</span></button>
+</div>
+{{ jump|json_script:"ws-jump" }}

@@ -1,5 +1,6 @@
 """منوی کنار صفحه برای همه بخش‌های یک پایگاه داده (فضای کار): دسته‌بندی ثابت، بخش فعلی مشخص."""
 from django import template
+from django.urls import reverse
 
 register = template.Library()
 
@@ -29,7 +30,7 @@ ICONS = {
     "arrow": "M19 12H5M11 6l-6 6 6 6",
 }
 
-# (کلید گروه، عنوان، [(نام view برای تشخیص بخش فعال…, عنوان، url name، آیکون، حداقل دسترسی)])
+# (کلید گروه، عنوان، [(عنوان، url name، نام view‌ها برای تشخیص بخش فعال، آیکون، حداقل دسترسی)])
 GROUPS = [
     ("", [("نمای کلی و اتصال", "databases:detail", ("databases:detail",), "home", "viewer")]),
     ("داده", [
@@ -55,6 +56,7 @@ GROUPS = [
     ]),
 ]
 LEVEL = {"viewer": 0, "editor": 1, "owner": 2}
+GROUP_KEYS = {"": "top", "داده": "data", "تحلیل و انتشار": "share", "مدیریت": "manage"}
 
 
 def _survey_on() -> bool:
@@ -69,7 +71,7 @@ def build(db, view_name: str) -> dict:
     level = 2 if mine else (1 if getattr(db, "can_edit", False) else 0)
     groups, current = [], None
     for title, items in GROUPS:
-        rows = []
+        rows, has_current = [], False
         for label, url, views, icon, need in items:
             if LEVEL[need] > level or (url == "survey:index" and not survey_on):
                 continue
@@ -77,10 +79,51 @@ def build(db, view_name: str) -> dict:
             row = {"label": label, "url": url, "on": on, "icon": ICONS[icon]}
             rows.append(row)
             if on:
-                current = row
+                current, has_current = row, True
         if rows:
-            groups.append({"title": title, "items": rows})
+            groups.append({"title": title, "key": GROUP_KEYS.get(title, "g"), "items": rows, "has_current": has_current})
     return {"groups": groups, "current": current}
+
+
+MAX_SWITCH = 60
+
+
+def _other_databases(user, db) -> list:
+    """پایگاه‌های داده‌ی دیگر کاربر (خودش + اشتراکی) برای تعویض سریع؛ خود پایگاه فعلی در فهرست نیست."""
+    from databases import team
+    from databases.models import UserDatabase
+
+    if not getattr(user, "is_authenticated", False):
+        return []
+    mine = list(user.databases.exclude(status=UserDatabase.Status.DELETED).order_by("db_name")[:MAX_SWITCH])
+    seen = {d.pk for d in mine}
+    shared = [d for d in team.shared_with(user).order_by("db_name")[:MAX_SWITCH] if d.pk not in seen]
+    out = []
+    for d in mine + shared:
+        if d.pk != db.pk:
+            out.append({"pk": d.pk, "name": d.db_name, "live": d.is_live, "mine": d.pk in seen})
+    return out[:MAX_SWITCH]
+
+
+def switch_targets(user, db, current) -> list:
+    """هر پایگاه را به همان بخشی که کاربر الان در آن است می‌برد؛ اگر پایگاه فعال نیست، به نمای کلی‌اش."""
+    section = current["url"] if current else "databases:detail"
+    rows = []
+    for o in _other_databases(user, db):
+        url = reverse(section if o["live"] else "databases:detail", args=[o["pk"]])
+        rows.append({"name": o["name"], "url": url, "mine": o["mine"], "live": o["live"]})
+    return rows
+
+
+def jump_entries(db, groups, switch) -> list:
+    """فهرست پرش سریع (Ctrl+K): بخش‌های همین پایگاه + سایر پایگاه‌ها."""
+    out = []
+    for g in groups:
+        for it in g["items"]:
+            out.append({"t": it["label"], "u": reverse(it["url"], args=[db.pk]), "g": g["title"] or "پایگاه داده", "k": "s"})
+    for o in switch:
+        out.append({"t": o["name"], "u": o["url"], "g": "رفتن به پایگاه داده", "k": "d"})
+    return out
 
 
 @register.inclusion_tag("databases/_ws_nav.html", takes_context=True)
@@ -88,7 +131,9 @@ def ws_nav(context, db):
     request = context.get("request")
     name = request.resolver_match.view_name if request and request.resolver_match else ""
     data = build(db, name)
-    return {"db": db, "groups": data["groups"], "current": data["current"]}
+    switch = switch_targets(request.user, db, data["current"]) if request else []
+    return {"db": db, "groups": data["groups"], "current": data["current"], "switch": switch,
+            "jump": jump_entries(db, data["groups"], switch)}
 
 
 @register.simple_tag(takes_context=True)
@@ -135,12 +180,23 @@ DASH_GROUPS = [
 
 @register.inclusion_tag("databases/_dash_actions.html")
 def dash_actions(db):
-    from django.urls import reverse
-
     groups = []
     survey_on = _survey_on()
     for key, title, items in DASH_GROUPS:
         groups.append({"key": key, "title": title, "items": [
             {"label": a, "hint": b, "url": reverse(u, args=[db.pk]), "icon": ICONS[i]} for a, b, u, i in items
             if survey_on or u != "survey:index"]})
+    return {"groups": groups}
+
+
+@register.inclusion_tag("databases/_dash_menu.html")
+def dash_menu(db):
+    """منوی «⋯» ردیف فشرده‌ی داشبورد: همه‌ی بخش‌ها با همان دسته‌بندی منوی کنار صفحه (فقط پایگاه‌های خود کاربر)."""
+    survey_on = _survey_on()
+    groups = []
+    for title, items in GROUPS:
+        rows = [{"label": label, "url": reverse(url, args=[db.pk])} for label, url, _views, _icon, _need in items
+                if survey_on or url != "survey:index"]
+        if rows:
+            groups.append({"title": title, "items": rows})
     return {"groups": groups}

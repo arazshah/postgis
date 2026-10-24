@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load fa ws %}
+{% extends "base.html" %}{% load fa ws static %}
 {% block title %}پایگاه‌های داده من — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page dash">
@@ -29,9 +29,43 @@
       <div class="stat {% if stats.running %}live{% endif %}"><span class="stat-n">{{ stats.running|fanum }}</span><span class="stat-l">کار در حال انجام</span></div>
     </div>
     {% endif %}
-    <div class="dash-list">
+    {% if dbs|length >= 2 or shared %}
+    <div class="dash-bar" role="toolbar" aria-label="ابزار فهرست پایگاه‌ها" data-dash-bar hidden>
+      {% if shared %}
+      <div class="dash-tabs" role="tablist" aria-label="نوع پایگاه‌ها">
+        <button type="button" role="tab" id="tab-mine" aria-selected="true" aria-controls="dash-mine" data-dash-tab="mine">پایگاه‌های من <span>{{ dbs|length|fanum }}</span></button>
+        <button type="button" role="tab" id="tab-shared" aria-selected="false" aria-controls="dash-shared" tabindex="-1" data-dash-tab="shared">اشتراکی با من <span>{{ shared|length|fanum }}</span></button>
+      </div>
+      {% endif %}
+      {% if dbs|length >= 4 %}
+      <input class="dash-q" type="search" placeholder="جست‌وجوی نام پایگاه داده…" aria-label="جست‌وجوی نام پایگاه داده" autocomplete="off" dir="ltr" data-dash-q data-mine-only>
+      <select class="dash-sel" aria-label="فیلتر" data-dash-filter data-mine-only>
+        <option value="all">همه</option>
+        <option value="attn">نیاز به توجه</option>
+        <option value="live">فعال</option>
+        <option value="off">غیرفعال</option>
+      </select>
+      <select class="dash-sel" aria-label="مرتب‌سازی" data-dash-sort data-mine-only>
+        <option value="new">جدیدترین</option>
+        <option value="attn">نیاز به توجه</option>
+        <option value="name">نام</option>
+        <option value="size">بیشترین حجم</option>
+        <option value="days">کمترین اعتبار</option>
+      </select>
+      {% endif %}
+      {% if dbs|length >= 2 %}
+      <div class="dash-view" role="group" aria-label="نحوه نمایش" data-mine-only>
+        <button type="button" data-dash-view="compact" aria-pressed="false" title="نمای فشرده"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>فشرده</span></button>
+        <button type="button" data-dash-view="cards" aria-pressed="true" title="نمای کارت"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v7H4zM4 14h16v6H4z"/></svg><span>کارت</span></button>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+    <div id="dash-mine" role="tabpanel" aria-labelledby="tab-mine">
+    <p class="dash-count small muted" aria-live="polite" data-dash-count hidden></p>
+    <div class="dash-list" data-dash-list data-total="{{ dbs|length }}">
     {% for db in dbs %}
-      <article class="dash-card">
+      <article class="dash-card" data-i="{{ forloop.counter0 }}" data-name="{{ db.db_name|lower }}" data-live="{% if db.is_live %}1{% else %}0{% endif %}" data-attn="{{ db.attn }}" data-size="{{ db.size_bytes|default:0|stringformat:"d" }}" data-days="{% if db.days_left is not None %}{{ db.days_left|stringformat:"d" }}{% else %}99999{% endif %}">
         <header class="dash-card-head">
           <div class="dash-id">
             <h2><a class="ltr" href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a></h2>
@@ -43,10 +77,22 @@
           </div>
           <div class="dash-cta">
             {% if db.is_live %}<a class="btn" href="{% url 'databases:explore' db.pk %}" title="جدول‌ها، داده‌ها و نقشه">باز کردن داده‌ها</a>{% endif %}
-            <a class="btn ghost" href="{% url 'databases:detail' db.pk %}" title="آدرس، نام کاربری و رمز برای QGIS، GeoServer و برنامه‌ها">{% icon "plug" 18 %} اطلاعات اتصال</a>
+            <a class="btn ghost" href="{% url 'databases:detail' db.pk %}" title="آدرس، نام کاربری و رمز برای QGIS، GeoServer و برنامه‌ها">{% icon "plug" 18 %} <span class="dash-cta-t">اطلاعات اتصال</span></a>
+            {% if db.is_live %}{% dash_menu db %}{% endif %}
           </div>
         </header>
 
+        <div class="dash-sum">
+          <div class="sum-usage" title="{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}">
+            <div class="meter {{ db.usage_level }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ db.usage_percent|pct_width }}" aria-label="مصرف حجم"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
+            <span>{{ db.usage_percent|fanum }}٪</span>
+          </div>
+          <span class="sum-fact">{% if db.days_left is not None %}{{ db.days_left|fanum }} روز اعتبار{% else %}بدون محدودیت زمانی{% endif %}</span>
+          {% if db.alerts %}<span class="sum-alert al-{{ db.worst }}">{% if db.worst == "info" %}{% icon "clock" 16 %}{% else %}{% icon "alert" 16 %}{% endif %} {{ db.alerts|length|fanum }} نکته</span>{% endif %}
+        </div>
+        <button type="button" class="dash-tog btn ghost sm" aria-expanded="false" aria-controls="dash-body-{{ db.pk }}">جزئیات</button>
+
+        <div class="dash-body" id="dash-body-{{ db.pk }}">
         {% if db.alerts %}
         <ul class="dash-alerts" aria-label="نیاز به توجه">
           {% for a in db.alerts %}
@@ -71,8 +117,14 @@
         {% else %}
           <p class="muted small dash-off">تا وقتی این پایگاه داده فعال نشود، بخش‌های کار با داده در دسترس نیستند. برای کمک <a href="{% url 'support:new' %}">تیکت پشتیبانی</a> بفرستید.</p>
         {% endif %}
+        </div>
       </article>
     {% endfor %}
+    </div>
+    <div class="empty dash-none" data-dash-none hidden>
+      <p>پایگاهی با این مشخصات پیدا نشد.</p>
+      <button type="button" class="btn ghost sm" data-dash-reset>پاک کردن فیلترها</button>
+    </div>
     </div>
   {% else %}
     <div class="empty dash-empty">
@@ -88,6 +140,7 @@
   {% endif %}
 
   {% if shared %}
+  <section id="dash-shared" class="dash-shared" role="tabpanel" aria-labelledby="tab-shared">
   <h2 class="sec-title">به اشتراک گذاشته شده با من</h2>
   <div class="db-list">
   {% for db in shared %}
@@ -102,6 +155,8 @@
     </article>
   {% endfor %}
   </div>
+  </section>
   {% endif %}
 </div>
 {% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'js/dashboard.js' %}" defer></script>{% endblock %}

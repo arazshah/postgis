@@ -44,6 +44,9 @@ def dashboard(request):
     for d in dbs:
         d.last_backup = last.get(d.pk)
         d.alerts = _db_alerts(d)
+        levels = {a["level"] for a in d.alerts}
+        d.worst = "bad" if "bad" in levels else "warn" if "warn" in levels else "info" if levels else ""
+        d.attn = 2 if d.worst == "bad" else 1 if d.worst == "warn" else 0  # برای فیلتر و مرتب‌سازی فهرست
     stats = {"count": len(dbs), "size": sum(d.size_bytes or 0 for d in dbs),
              "quota": sum(d.plan.quota_bytes for d in dbs if getattr(d.plan, "quota_bytes", None)),
              "running": Job.objects.filter(database__in=dbs, status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).count(),
