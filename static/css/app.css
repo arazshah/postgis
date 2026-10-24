@@ -984,3 +984,5 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 .dash-empty .dash-steps li{display:flex;gap:var(--s3);align-items:center}
 .dash-empty .dash-steps b{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--teal);color:#fff;font-size:.85rem;flex:none}
 @media (max-width:900px){.dash-groups{grid-template-columns:1fr}.dash-card{padding:var(--s4)}.dash-cta{width:100%}.dash-cta .btn{flex:1;justify-content:center}}
+.chk{display:block;font-size:13px;margin:8px 0}
+.chk small{display:block;margin-top:2px}

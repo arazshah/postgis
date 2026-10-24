@@ -137,9 +137,27 @@
     }
     return st.color;
   };
-  function zoomTo(l) {
-    const b = l && l.bbox;
-    if (b && b.length === 4) gm.map.fitBounds([[b[0], b[1]], [b[2], b[3]]], {padding: 60, maxZoom: 15});
+  const sameBox = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
+  const hasBox = (l) => l && l.bbox && l.bbox.length === 4;
+  const fitBox = (b) => gm.map.fitBounds([[b[0], b[1]], [b[2], b[3]]], {padding: 60, maxZoom: 15});
+  // محدوده از داده‌های فعلی جدول دوباره حساب می‌شود (بعد از افزودن لایه، داده عوض شده است)
+  async function refreshBox(l) {
+    try {
+      const d = await post(urls.extent.replace("/0/", `/${l.id}/`), new FormData());
+      const changed = !sameBox(l.bbox || [], d.bbox);
+      l.bbox = d.bbox;
+      gm.setBBox(l.key, d.bbox);
+      return changed;
+    } catch (err) { return false; }  // خطای شبکه: همان محدوده ذخیره‌شده
+  }
+  async function zoomTo(l, fresh) {
+    if (!l) return;
+    if (hasBox(l)) fitBox(l.bbox);
+    if (fresh === false) return;
+    const changed = await refreshBox(l);
+    if (hasBox(l) && changed) fitBox(l.bbox);
+    if (!hasBox(l)) say(`لایه «${l.title}» داده‌ای ندارد؛ جایی برای رفتن نیست.`, true);
+    if (changed) renderList();
   }
 
   function renderList() {
@@ -153,7 +171,7 @@
         <input type="checkbox" class="wm-eye" ${l.visible ? "checked" : ""} aria-label="نمایش ${esc(l.title)}">
         <i class="wm-sw" style="background:${swatch(l)}"></i>
         <button type="button" class="wm-name" title="ویرایش سبک"><span>${esc(l.title)}</span>
-          ${l.missing ? '<small class="wm-bad">جدول پیدا نشد</small>' : `<small class="ltr">${esc(l.table)}</small>`}</button>
+          ${l.missing ? '<small class="wm-bad">جدول پیدا نشد</small>' : `<small class="ltr">${esc(l.table)}</small>${hasBox(l) ? "" : ' <small class="wm-bad">بدون داده</small>'}`}</button>
         <span class="wm-tools">
           <button type="button" data-act="zoom" title="رفتن به این لایه" aria-label="رفتن به این لایه">⌖</button>
           <button type="button" data-act="up" ${i === 0 ? "disabled" : ""} aria-label="بالاتر">↑</button>
@@ -188,7 +206,7 @@
     const l = byKey(key);
     if (!l) return;
     l.visible = v;
-    if (!fromMap) gm.setVisible(key, v);
+    if (!fromMap) { gm.setVisible(key, v); if (v) gm.reveal(key); }  // لایه تازه روشن‌شده اگر دیده نمی‌شود: پرش هوشمند
     const box = list.querySelector(`[data-key="${key}"] .wm-eye`);
     if (box) box.checked = v;
     if (selected === key) $("d-eye").checked = v;
@@ -274,7 +292,7 @@
       $("wm-add").value = "";
       renderList();
       select(d.layer.key);
-      zoomTo(d.layer);
+      zoomTo(d.layer, false);
       say(`لایه «${d.layer.title}» اضافه شد.`);
     } catch (err) {
       say(err.message, true);
@@ -323,6 +341,8 @@
     ed.querySelectorAll("[data-k]").forEach((el) => { el.value = st[el.dataset.k] === undefined ? "" : st[el.dataset.k]; });
     ed.querySelector(`input[name=mode][value=${st.mode}]`).checked = true;
     ed.querySelectorAll("[data-popup]").forEach((el) => { el.checked = (st.popup || []).includes(el.value); });
+    $("e-far").checked = st.far_dots !== false;
+    $("e-far").closest("label").hidden = /POINT/.test(l.geomType || "");
     edMsg.textContent = l.missing ? "این جدول در پایگاه داده پیدا نشد (حذف یا تغییر نام داده شده)." : "";
     showWhen(st);
     syncDetailNav();
@@ -362,6 +382,7 @@
       return;
     }
     if (t.name === "mode") { st.mode = t.value; showWhen(st); refreshStats(l); return; }
+    if (t.dataset.far !== undefined) { st.far_dots = t.checked; setDirty(true); return; }
     if (t.dataset.popup !== undefined) { st.popup = [...ed.querySelectorAll("[data-popup]:checked")].map((x) => x.value); return; }
     if (!t.dataset.k) return;
     const k = t.dataset.k;
@@ -469,13 +490,25 @@
   ["wm-title", "wm-desc"].forEach((id) => $(id).addEventListener("input", () => setDirty(true)));
   $("wm-public").addEventListener("change", (e) => { $("wm-private-note").hidden = e.target.checked; setDirty(true); });
 
+  // روشن‌هایی که از نمای شروع بیرون می‌مانند (فقط وقتی نقشه روی همان نمای شروع است سنجیده می‌شود)
+  let outside = 0;
+  const countOutside = () => { outside = layers.filter((l) => l.visible && gm.relation(l.key) === "out").length; viewNote(); };
   const viewNote = () => {
-    $("wm-viewnote").textContent = meta.view && meta.view.center
+    const base = meta.view && meta.view.center
       ? `نقشه با همین نما (زوم ${FA(Math.round(meta.view.zoom * 10) / 10)}) باز می‌شود.`
       : "نقشه روی محدوده همه لایه‌ها باز می‌شود.";
+    $("wm-viewnote").textContent = outside && meta.view && meta.view.center
+      ? `${base} ⚠ ${FA(outside)} لایه روشن بیرون از این نما است؛ برای دیدنش «محدوده همه لایه‌ها» را بزنید.` : base;
   };
-  $("wm-view").addEventListener("click", () => { meta.view = gm.getView(); viewNote(); setDirty(true); say("نمای فعلی، نمای شروع شد."); });
-  $("wm-autoview").addEventListener("click", () => { meta.view = {}; gm.fit(); viewNote(); setDirty(true); });
+  $("wm-view").addEventListener("click", () => { meta.view = gm.getView(); countOutside(); say("نمای فعلی، نمای شروع شد."); setDirty(true); });
+  $("wm-autoview").addEventListener("click", async () => {
+    meta.view = {}; outside = 0; viewNote(); setDirty(true);
+    gm.fit();
+    // محدوده همه لایه‌ها دوباره از داده‌ها حساب می‌شود و نما به‌روز می‌ماند
+    const changed = await Promise.all(layers.map(refreshBox));
+    if (changed.some(Boolean)) { gm.fit(); renderList(); }
+  });
+  gm.map.once("idle", () => { if (meta.view && meta.view.center) countOutside(); });
   viewNote();
 
   async function save() {

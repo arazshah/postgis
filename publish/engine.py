@@ -92,6 +92,18 @@ def _props(layer, columns: list[tuple[str, str]], for_mvt: bool) -> list[tuple[s
     return out
 
 
+FAR_DOT_UNITS = 24   # کوچک‌تر از این (واحد کاشی ۴۰۹۶، حدود ۱٫۵ پیکسل) در زوم دور به نقطه تبدیل می‌شود
+FAR_DOT_MAX_ZOOM = 14
+
+
+def _far_dots(layer, z: int) -> bool:
+    """چندضلعی و خط ریز در زوم دور به‌صورت نقطه فرستاده می‌شود، مگر سبک لایه آن را خاموش کرده باشد."""
+    if z > FAR_DOT_MAX_ZOOM or "POINT" in (getattr(layer, "geom_type", "") or "").upper():
+        return False
+    style = getattr(layer, "style", None)
+    return not (isinstance(style, dict) and style.get("far_dots") is False)
+
+
 def tile(layer, z: int, x: int, y: int) -> bytes:
     if not (0 <= z <= 24 and 0 <= x < 2 ** z and 0 <= y < 2 ** z):
         raise EngineError("مختصات کاشی نامعتبر است.")
@@ -104,14 +116,23 @@ def tile(layer, z: int, x: int, y: int) -> bytes:
         filt = env if layer.srid == 3857 else sql.SQL("ST_Transform({}, {})").format(env, sql.Literal(layer.srid))
         geom3857 = g if layer.srid == 3857 else sql.SQL("ST_Transform({}, 3857)").format(g)
         cols = sql.SQL("").join(sql.SQL(", {} AS {}").format(e, sql.Identifier(n)) for n, e in props)
+        shape, src = geom3857, None
+        if _far_dots(layer, z):
+            # عارضه‌ای که در این زوم از چند پیکسل کوچک‌تر است در کاشی حذف می‌شد؛ به‌جایش یک نقطه می‌فرستیم
+            # تا لایه در زوم دور هم دیده شود (لایه نقطه‌ای کشیده می‌شود، همان رنگ و اندازه)
+            unit = 40075016.68 / (2 ** z) / 4096
+            thr = sql.Literal(unit * FAR_DOT_UNITS)
+            shape = sql.SQL("CASE WHEN ST_XMax(__g) - ST_XMin(__g) < {t} AND ST_YMax(__g) - ST_YMin(__g) < {t}"
+                            " THEN ST_PointOnSurface(__g) ELSE __g END").format(t=thr)
+            src = sql.SQL(", LATERAL (SELECT {} AS __g) __q").format(geom3857)
         query = sql.SQL("""
             WITH mvt AS (
               SELECT ST_AsMVTGeom({geom}, ST_TileEnvelope({z}, {x}, {y}), 4096, 64, true) AS __geom{cols}
-              FROM {rel} WHERE {g} && {filt} LIMIT {lim}
+              FROM {rel}{src} WHERE {g} && {filt} LIMIT {lim}
             )
             SELECT ST_AsMVT(mvt.*, {name}, 4096, '__geom') FROM mvt WHERE __geom IS NOT NULL
-        """).format(geom=geom3857, z=sql.Literal(z), x=sql.Literal(x), y=sql.Literal(y), cols=cols,
-                    rel=sql.Identifier(layer.schema, layer.table), g=g, filt=filt,
+        """).format(geom=shape, z=sql.Literal(z), x=sql.Literal(x), y=sql.Literal(y), cols=cols,
+                    rel=sql.Identifier(layer.schema, layer.table), src=src or sql.SQL(""), g=g, filt=filt,
                     lim=sql.Literal(TILE_FEATURE_LIMIT), name=sql.Literal(layer.collection_id))
         try:
             data = conn.execute(query).fetchone()[0]
@@ -120,13 +141,31 @@ def tile(layer, z: int, x: int, y: int) -> bytes:
         return bytes(data or b"")
 
 
+BIG_TABLE = 1_000_000  # بیشتر از این تعداد ردیف: اول محدوده تخمینی آمار (سریع)، بعد دقیق
+
+
 def extent(layer) -> list[float]:
+    """محدوده لایه به طول و عرض جغرافیایی؛ برای جدول خیلی بزرگ ST_EstimatedExtent و اگر آمار نبود ST_Extent."""
     with _connect(layer) as conn:
         g = sql.Identifier(layer.geom_column)
-        row = conn.execute(sql.SQL(
-            "SELECT ST_XMin(e), ST_YMin(e), ST_XMax(e), ST_YMax(e) FROM ("
-            "SELECT ST_Transform(ST_SetSRID(ST_Extent({}), {}), 4326) AS e FROM {}) s").format(
-            g, sql.Literal(layer.srid), sql.Identifier(layer.schema, layer.table))).fetchone()
+        row = None
+        reltuples = conn.execute(
+            "SELECT c.reltuples FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace"
+            " WHERE n.nspname = %s AND c.relname = %s", (layer.schema, layer.table)).fetchone()
+        if reltuples and reltuples[0] > BIG_TABLE:
+            try:
+                with conn.transaction():  # نقطه‌ذخیره: خطای آمار نباید پرسمان بعدی را خراب کند
+                    row = conn.execute(
+                        "SELECT ST_XMin(e), ST_YMin(e), ST_XMax(e), ST_YMax(e) FROM ("
+                        "SELECT ST_Transform(ST_SetSRID(ST_EstimatedExtent(%s, %s, %s)::geometry, %s), 4326) AS e) s",
+                        (layer.schema, layer.table, layer.geom_column, layer.srid)).fetchone()
+            except psycopg.Error:
+                row = None
+        if not row or row[0] is None:
+            row = conn.execute(sql.SQL(
+                "SELECT ST_XMin(e), ST_YMin(e), ST_XMax(e), ST_YMax(e) FROM ("
+                "SELECT ST_Transform(ST_SetSRID(ST_Extent({}), {}), 4326) AS e FROM {}) s").format(
+                g, sql.Literal(layer.srid), sql.Identifier(layer.schema, layer.table))).fetchone()
     return [round(v, 6) for v in row] if row and row[0] is not None else []
 
 

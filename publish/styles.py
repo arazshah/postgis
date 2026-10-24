@@ -8,7 +8,7 @@ import re
 
 STYLE_DEFAULT = {"mode": "single", "color": "#0F5C59", "opacity": 0.75, "size": 6, "outline": "#FFFFFF",
                  "field": "", "classes": 5, "palette": "YlOrRd", "breaks": [], "categories": [], "popup": [],
-                 "basemap": "iran", "label": "", "label_color": "#1B2B2F", "label_size": 12}
+                 "basemap": "iran", "label": "", "label_color": "#1B2B2F", "label_size": 12, "far_dots": True}
 BASEMAPS = ("iran", "osm", "none")
 PALETTES = {
     "YlOrRd": ["#ffffb2", "#fed976", "#feb24c", "#fd8d3c", "#fc4e2a", "#e31a1c", "#bd0026", "#800026", "#4d0019"],
@@ -42,6 +42,7 @@ def clean(data, names: set[str]) -> dict:
         style["label_size"] = int(max(8, min(24, float(style.get("label_size", 12)))))
     except (TypeError, ValueError):
         style["label_size"] = 12
+    style["far_dots"] = style.get("far_dots") is not False
     for k in ("color", "outline", "label_color"):
         if not HEX_RE.match(str(style.get(k, ""))):
             style[k] = STYLE_DEFAULT[k]

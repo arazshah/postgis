@@ -19,6 +19,8 @@ urlpatterns = [
     path("dashboard/<int:pk>/maps/<int:map_id>/layers/", views.layer_add, name="layer_add"),
     path("dashboard/<int:pk>/maps/<int:map_id>/layers/<int:layer_id>/remove/", views.layer_remove,
          name="layer_remove"),
+    path("dashboard/<int:pk>/maps/<int:map_id>/layers/<int:layer_id>/extent/", views.layer_extent,
+         name="layer_extent"),
     path("dashboard/<int:pk>/maps/<int:map_id>/layers/<int:layer_id>/stats/", views.layer_stats,
          name="layer_stats"),
     # آدرس‌های عمومی
