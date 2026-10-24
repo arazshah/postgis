@@ -39,6 +39,11 @@ if [ "${RUN_MIGRATIONS:-1}" = "1" ] && [ "${KB_SYNC:-1}" = "1" ]; then
   python manage.py kb_sync || echo "kb_sync ناموفق بود؛ ادامه راه‌اندازی"
 fi
 
+# درایورهای داخلی گیرنده GNSS (برداشت میدانی)
+if [ "${RUN_MIGRATIONS:-1}" = "1" ]; then
+  python manage.py gnss_sync || echo "gnss_sync ناموفق بود؛ ادامه راه‌اندازی"
+fi
+
 # embedding مقاله‌ها برای دستیار هوشمند (فقط اگر تنظیم شده باشد؛ تکه‌های تغییرنکرده دوباره ساخته نمی‌شوند)
 if [ "${RUN_MIGRATIONS:-1}" = "1" ] && [ "${KB_SYNC:-1}" = "1" ]; then
   timeout 120 python manage.py kb_embed || echo "kb_embed ناموفق بود؛ run_maintenance دوباره تلاش می‌کند"

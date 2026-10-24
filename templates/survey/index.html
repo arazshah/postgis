@@ -1,0 +1,45 @@
+{% extends "databases/_ws.html" %}{% load fa %}
+{% block title %}برداشت میدانی {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block ws %}
+<div class="wrap page">
+  <div class="page-head"><h1>برداشت میدانی</h1></div>
+  <p class="lead muted" style="max-width:72ch">برای نقشه‌برداران: نقطه، خط و چندضلعی را با GPS گوشی یا گیرنده دقیق برداشت کنید، حتی بدون اینترنت. داده مستقیم در جدول‌های PostGIS خودتان ذخیره می‌شود و همه‌ی امکانات سایت (تحلیل، نقشه، انتشار، QGIS و API) رویش کار می‌کند.</p>
+
+  <div class="pub-stats">
+    <div><b>{{ projects|length|fanum }}</b> از {{ cap|fanum }} پروژه</div>
+    <div>سقف <b>{{ points_cap|fanum }}</b> نقطه</div>
+    <div>{% if gnss_external %}گیرنده خارجی فعال است{% else %}فقط GPS گوشی (گیرنده خارجی در پلن‌های پولی){% endif %}</div>
+  </div>
+
+  {% if projects %}
+  <div class="wm-cards">
+    {% for p in projects %}
+    <article class="panel wm-card">
+      <div class="pub-head"><h2 style="font-size:1.1rem;margin:0">{{ p.name }}</h2><span class="badge active ltr">EPSG:{{ p.srid }}</span></div>
+      <p class="small muted ltr" style="margin:0">{{ p.slug }}</p>
+      <div class="wm-actions">
+        <a class="btn sm" href="{% url 'survey:studio' db.pk p.pk %}">باز کردن</a>
+        {% if db.is_mine %}<form method="post" action="{% url 'survey:archive' db.pk p.pk %}" class="inline-form" onsubmit="return confirm('پروژه «{{ p.name|escapejs }}» بایگانی شود؟ جدول‌های آن در پایگاه داده می‌مانند.')">{% csrf_token %}<button class="btn ghost sm wm-del" type="submit">بایگانی</button></form>{% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if db.can_edit %}
+  <section class="panel" style="margin-top:var(--s5)">
+    <h2 style="font-size:1.2rem">پروژه تازه</h2>
+    <form method="post" action="{% url 'survey:create' db.pk %}" class="wm-new">{% csrf_token %}
+      <div class="field"><label for="sv-name">نام پروژه</label><input id="sv-name" type="text" name="name" maxlength="120" required placeholder="مثلاً: برداشت قطعه ۱۲ کرج"></div>
+      <div class="field"><label for="sv-srid">سیستم مختصات</label>
+        <select id="sv-srid" name="srid">{% for srid, label in presets %}<option value="{{ srid }}">{{ label }}</option>{% endfor %}</select>
+        <p class="small muted">ایران در منطقه‌های UTM ۳۸ تا ۴۱ شمالی است؛ تهران ۳۹.</p></div>
+      <div class="field"><label for="sv-tpl">قالب (فهرست کدهای عارضه)</label>
+        <select id="sv-tpl" name="template">{% for k, label in templates %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></div>
+      <button class="btn" type="submit" {% if not left %}disabled title="سهمیه پروژه پلن پر است"{% endif %}>ساخت پروژه</button>
+      {% if not left %}<p class="small muted">سهمیه پروژه برداشت پلن شما پر است؛ <a href="{% url 'billing:plans' %}">پلن را ارتقا دهید</a>.</p>{% endif %}
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

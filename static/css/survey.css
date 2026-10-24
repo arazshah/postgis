@@ -1,0 +1,34 @@
+/* استودیوی برداشت میدانی: پنل‌های فشرده و دکمه‌های بزرگ برای کار با دستکش و زیر آفتاب */
+.sv-title{font-size:1.02rem;max-width:30vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sv-net{font-size:.8rem;padding:3px 10px;border-radius:12px;border:1px solid var(--line)}
+.sv-net.on{color:#14683a;background:#e6f5ec;border-color:#bfe3cc}
+.sv-net.off{color:#8a4b00;background:#fff1d9;border-color:#f0cf8c}
+.sv-count{display:inline-block;min-width:1.4em;padding:0 5px;border-radius:9px;background:var(--teal);color:#fff;font-size:.72rem;text-align:center}
+.sv-card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.sv-h{font-size:.95rem;margin:0}
+.sv-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sv-row input,.sv-row select{min-width:0;flex:1 1 90px}
+.sv-row label{white-space:nowrap}
+.sv-fix{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:10px;background:#eceff0;color:#44565c;font-size:.95rem}
+.sv-fix[data-q=fixed]{background:#dff3e6;color:#0f5c2e}
+.sv-fix[data-q=float]{background:#fff0cf;color:#7a4b00}
+.sv-fix[data-q=dgps]{background:#dde9f7;color:#1c4d86}
+.sv-fix[data-q=single]{background:#eceff0}
+.sv-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
+.sv-grid div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.sv-grid dt{font-size:.7rem;color:var(--ink-2)}
+.sv-grid dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;font-size:.95rem}
+.sv-modes{display:flex;gap:6px}
+.sv-mode.on{background:var(--teal);color:#fff}
+.sv-big{min-height:60px;font-size:1.15rem;font-weight:800}
+.sv-big:disabled{opacity:.5}
+.sv-bad{color:#a12626}
+.sv-links{display:flex;flex-wrap:wrap;gap:8px}
+.sv-table-wrap{overflow:auto;max-width:100%}
+.sv-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.sv-table th,.sv-table td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:start;white-space:nowrap}
+.sv-table tr.pend td{background:#fff8e6}
+.sv-stake{display:flex;align-items:center;gap:14px;padding:10px;border-radius:10px;background:#fff;border:1px solid var(--line)}
+.sv-stake.near{background:#dff3e6;border-color:#9fd3b2}
+.sv-arrow{font-size:3rem;line-height:1;width:64px;text-align:center;transition:transform .2s;color:var(--teal)}
+@media (max-width:900px){.sv-title{max-width:22vw}.studio .st-panel{width:min(92vw,380px)}.sv-big{min-height:64px}}

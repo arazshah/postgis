@@ -228,6 +228,10 @@ class SiteSettingsAdmin(admin.ModelAdmin):
                        "pay_link_url", "pay_manual_note"),
             "description": "قیمت پلن‌ها را از بخش «پلن‌ها» تعیین کنید. پرداخت‌های منتظر تأیید در بخش «فاکتورها» هستند.",
         }),
+        ("برداشت میدانی", {
+            "fields": ("survey_enabled",),
+            "description": "نقشه‌برداری و اتصال گیرنده GNSS. تا خاموش است هیچ‌چیز برای کاربران دیده نمی‌شود.",
+        }),
         ("نقشه مرورگر پایگاه داده", {"fields": ("map_tile_url", "map_tile_attribution")}),
         ("راهنمای ساخت حساب مدل زبانی", {
             "fields": ("llm_partner_enabled", "llm_partner_name", "llm_partner_url"),
