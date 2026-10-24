@@ -5,6 +5,7 @@ import unittest
 import uuid
 
 import psycopg
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -191,6 +192,7 @@ class MapsIntegrationTests(TestCase):
         self.assertGreater(len(self.client.get(url).content), 0)  # ۲۰ متر در زوم ۶: قبلاً حذف می‌شد، حالا نقطه است
         layer.style = {**layer.style, "far_dots": False}
         layer.save()
+        cache.clear()  # کلید کش کاشی تا ثانیه است؛ همین ثانیه کاشی قبلی را برمی‌گرداند
         self.assertEqual(self.client.get(url).content, b"")  # با خاموش کردن، رفتار قبلی
         z = 14  # نزدیک: خود چندضلعی کشیده می‌شود
         x, y = int((51.34 + 180) / 360 * 2 ** z), int((1 - math.asinh(math.tan(lat)) / math.pi) / 2 * 2 ** z)
