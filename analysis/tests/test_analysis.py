@@ -237,11 +237,12 @@ class AnalysisTests(TestCase):
         plan = {"goal": "ایستگاه‌های نام‌دار",
                 "entities": [{"ref": "metro_stations", "kind": "layer"}],
                 "operations": [
-                    {"op": "display_vector", "inputs": {"vector": "metro_stations"}, "params": {}, "output": "shown"},
+                    {"op": "filter_attribute", "inputs": {"vector": "metro_stations"}, "params": {"sort_by": "name", "limit": 2},
+                     "output": "shown"},
                     {"op": "summarize_vector", "inputs": {"vector": "shown"}, "params": {}, "output": "summary"}]}
         msg = ask.run(q.job, client=StaticLLMClient(json.dumps(plan, ensure_ascii=False)))
         q.refresh_from_db()
-        self.assertEqual(q.rows, self._sql("SELECT count(*) FROM metro_stations")[0][0])
+        self.assertEqual(q.rows, min(2, self._sql("SELECT count(*) FROM metro_stations")[0][0]))
         self.assertIn("تعداد عارضه", q.answer)
         self.assertIn("named", msg)
 
