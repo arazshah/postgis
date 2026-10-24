@@ -104,24 +104,37 @@ HINTS_BASE = (
     "پاسخ و نام ستون‌های جدید می‌تواند فارسی یا لاتین باشد. "
     "اگر کاربر خروجی «لایه»، «نقشه» یا «عارضه» خواسته، آخرین عملیات باید لایه برداری بدهد و نه summarize_vector یا "
     "attribute_statistics. "
-    "برای «بلندترین/طولانی‌ترین/بزرگ‌ترین/بیشترین» مقدار یک عارضه: اگر عارضه‌ها تکه‌تکه‌اند (مثل رودها) ابتدا با dissolve بر "
-    "اساس ستون نام ادغام کن، سپس به CRS متری ببر (crs_transform) و area_perimeter بزن تا ستون _length (متر) ساخته شود، "
-    "سپس top_n با score_field=_length و descending=true و limit=1 بگیر. "
-    "طول/مساحت را بعد از تبدیل به CRS متری حساب کن، نه روی درجه."
 )
-HINTS_FIELD = (
-    " اگر کاربر نام مشخصی برای ستون خواست (مثلاً طول به متر)، با calculate_field با عبارت geom_length یا geom_area "
-    "ستونی با همان نام بساز."
+HINT_LONGEST = (
+    "برای «بلندترین/طولانی‌ترین/بزرگ‌ترین/بیشترین» مقدار یک عارضه: {merge}به CRS متری ببر (crs_transform) و "
+    "area_perimeter بزن تا ستون _length (متر) ساخته شود، سپس top_n با score_field=_length و descending=true و limit=1 "
+    "بگیر. طول/مساحت را بعد از تبدیل به CRS متری حساب کن، نه روی درجه. "
+)
+HINT_MERGE = "اگر عارضه‌ها تکه‌تکه‌اند (مثل رودها) ابتدا با dissolve بر اساس ستون نام ادغام کن، سپس "
+HINT_FIELD = (
+    "اگر کاربر نام مشخصی برای ستون خواست (مثلاً طول به متر)، با calculate_field با عبارت geom_length یا geom_area "
+    "ستونی با همان نام بساز. "
 )
 
 
-def _hints() -> str:
-    """راهنمای مدل؛ بخش وابسته به عملیات جدید فقط وقتی اضافه می‌شود که نسخه نصب‌شده s3geo آن را داشته باشد."""
-    try:
-        from orchestrator.planning.op_catalog import OP_CATALOG
-    except Exception:  # noqa: BLE001  نسخه‌ای که این مسیر را ندارد
-        return HINTS_BASE
-    return HINTS_BASE + (HINTS_FIELD if "calculate_field" in OP_CATALOG else "")
+def _hints(catalog=None) -> str:
+    """راهنمای مدل؛ هر توصیه فقط وقتی داده می‌شود که عملیاتش در نسخهٔ نصب‌شدهٔ s3geo هست.
+
+    سرور ممکن است s3geo قدیمی‌تر از نسخه‌ای داشته باشد که عملیات تازه را دارد؛ توصیهٔ عملیات ناموجود باعث
+    «Unsupported operation» می‌شود (نمونه: dissolve در نسخه‌های پیش از ۰٫۶٫۰).
+    """
+    if catalog is None:
+        try:
+            from orchestrator.planning.op_catalog import OP_CATALOG as catalog
+        except Exception:  # noqa: BLE001  مسیر در این نسخه نیست
+            return HINTS_BASE.strip()
+    ops = set(catalog)
+    text = HINTS_BASE
+    if {"crs_transform", "area_perimeter", "top_n"} <= ops:
+        text += HINT_LONGEST.format(merge=HINT_MERGE if "dissolve" in ops else "")
+    if "calculate_field" in ops:
+        text += HINT_FIELD
+    return text.strip()
 
 
 # ---------------------------------------------------------------------- برداشت نتیجه

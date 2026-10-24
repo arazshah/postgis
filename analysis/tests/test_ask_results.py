@@ -75,7 +75,32 @@ class AnswerTextTests(SimpleTestCase):
 
 
 class HintsTests(SimpleTestCase):
-    def test_hints_cover_longest_pattern(self):
-        h = ask._hints()
-        for word in ("dissolve", "area_perimeter", "top_n", "_length", "summarize_vector"):
+    OLD = {k: None for k in ("crs_transform", "area_perimeter", "top_n", "summarize_vector", "filter_attribute")}
+    NEW = {**OLD, "dissolve": None, "calculate_field": None}
+
+    def test_new_catalog_gets_full_pattern(self):
+        h = ask._hints(self.NEW)
+        for word in ("dissolve", "area_perimeter", "top_n", "_length", "summarize_vector", "calculate_field"):
             self.assertIn(word, h)
+
+    def test_old_catalog_never_mentions_missing_ops(self):
+        # s3geo پیش از ۰٫۶٫۰ عملیات dissolve و calculate_field را ندارد؛ نباید پیشنهاد شوند
+        h = ask._hints(self.OLD)
+        self.assertNotIn("dissolve", h)
+        self.assertNotIn("calculate_field", h)
+        self.assertIn("top_n", h)
+
+    def test_tiny_catalog_has_only_base_hint(self):
+        h = ask._hints({"buffer": None})
+        self.assertNotIn("top_n", h)
+        self.assertIn("summarize_vector", h)
+
+    def test_every_mentioned_op_exists_in_installed_catalog(self):
+        try:
+            from orchestrator.planning.op_catalog import OP_CATALOG
+        except ImportError:
+            self.skipTest("s3geo نصب نیست")
+        import re
+        for op in set(re.findall(r"\b(dissolve|crs_transform|area_perimeter|top_n|calculate_field|summarize_vector|"
+                                 r"attribute_statistics)\b", ask._hints())):
+            self.assertIn(op, OP_CATALOG)
