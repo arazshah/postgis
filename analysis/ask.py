@@ -99,6 +99,110 @@ def _max_abs_x(features) -> float:
     return best
 
 
+# ---------------------------------------------------------------------- راهنمای مدل زبانی
+HINTS_BASE = (
+    "پاسخ و نام ستون‌های جدید می‌تواند فارسی یا لاتین باشد. "
+    "اگر کاربر خروجی «لایه»، «نقشه» یا «عارضه» خواسته، آخرین عملیات باید لایه برداری بدهد و نه summarize_vector یا "
+    "attribute_statistics. "
+    "برای «بلندترین/طولانی‌ترین/بزرگ‌ترین/بیشترین» مقدار یک عارضه: اگر عارضه‌ها تکه‌تکه‌اند (مثل رودها) ابتدا با dissolve بر "
+    "اساس ستون نام ادغام کن، سپس به CRS متری ببر (crs_transform) و area_perimeter بزن تا ستون _length (متر) ساخته شود، "
+    "سپس top_n با score_field=_length و descending=true و limit=1 بگیر. "
+    "طول/مساحت را بعد از تبدیل به CRS متری حساب کن، نه روی درجه."
+)
+HINTS_FIELD = (
+    " اگر کاربر نام مشخصی برای ستون خواست (مثلاً طول به متر)، با calculate_field با عبارت geom_length یا geom_area "
+    "ستونی با همان نام بساز."
+)
+
+
+def _hints() -> str:
+    """راهنمای مدل؛ بخش وابسته به عملیات جدید فقط وقتی اضافه می‌شود که نسخه نصب‌شده s3geo آن را داشته باشد."""
+    try:
+        from orchestrator.planning.op_catalog import OP_CATALOG
+    except Exception:  # noqa: BLE001  نسخه‌ای که این مسیر را ندارد
+        return HINTS_BASE
+    return HINTS_BASE + (HINTS_FIELD if "calculate_field" in OP_CATALOG else "")
+
+
+# ---------------------------------------------------------------------- برداشت نتیجه
+def _spatial_output(result, spec):
+    """آخرین خروجی مرحله‌ها که عارضهٔ دارای هندسه دارد؛ از آخر به اول (مرحلهٔ خلاصه‌ساز آخر نباید نتیجه را از بین ببرد)."""
+    for op in reversed(spec.operations):
+        out = result.outputs.get(op.output)
+        feats = [f for f in _features(out) if isinstance(f, dict) and f.get("geometry")]
+        if feats:
+            return op.output, feats
+    return None, []
+
+
+_SKIP_KEYS = {"type", "status", "created_at", "source_info", "metadata", "trace", "map_layers", "layers", "features",
+              "geometry", "bbox", "schema_version", "request_id"}
+MAX_ANSWER_CHARS = 1500
+
+
+def _fmt(v) -> str:
+    if isinstance(v, float):
+        return f"{v:,.2f}".rstrip("0").rstrip(".")
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, ensure_ascii=False)
+    return str(v)
+
+
+def _plain(out, depth: int = 0) -> list[str]:
+    """خروجی غیرمکانی را به چند خط خوانا برای کاربر تبدیل می‌کند (نه نمایش خام دیکشنری)."""
+    if out is None:
+        return []
+    if hasattr(out, "model_dump"):
+        out = out.model_dump()
+    elif hasattr(out, "__dict__") and not isinstance(out, (dict, list, str)):
+        out = {k: v for k, v in vars(out).items() if not k.startswith("_")}
+    if isinstance(out, str):
+        return [out.strip()] if out.strip() else []
+    if isinstance(out, (int, float, bool)):
+        return [_fmt(out)]
+    if isinstance(out, dict):
+        if out.get("type") == "vector_summary":
+            lines = [f"تعداد عارضه: {out.get('feature_count', 0):,}"]
+            gc = out.get("geometry_counts") or {}
+            if gc:
+                lines.append("نوع هندسه: " + "، ".join(f"{k} ({v})" for k, v in gc.items()))
+            keys = out.get("property_keys") or []
+            if keys:
+                lines.append("ستون‌ها: " + "، ".join(map(str, keys[:20])))
+            return lines
+        lines = []
+        for k, v in out.items():
+            if k in _SKIP_KEYS or v in (None, "", [], {}):
+                continue
+            if isinstance(v, dict) and depth < 2:
+                inner = _plain(v, depth + 1)
+                if inner:
+                    lines.append(f"{k}:")
+                    lines.extend("  " + x for x in inner)
+            elif isinstance(v, list) and v and isinstance(v[0], dict) and depth < 2:
+                lines.append(f"{k}:")
+                for row in v[:10]:
+                    lines.append("  " + "، ".join(f"{a}: {_fmt(b)}" for a, b in row.items() if a not in _SKIP_KEYS))
+            else:
+                lines.append(f"{k}: {_fmt(v)}")
+        return lines
+    if isinstance(out, (list, tuple)):
+        lines = []
+        for row in out[:10]:
+            lines.extend(_plain(row, depth + 1) if isinstance(row, (dict, list)) else [_fmt(row)])
+        return lines
+    return [_fmt(out)]
+
+
+def _answer_text(result, spec) -> str:
+    """پاسخ متنی تحلیل: خروجی آخرین مرحله‌ای که چیز قابل نمایشی دارد."""
+    for op in reversed(spec.operations):
+        lines = _plain(result.outputs.get(op.output))
+        if lines:
+            return "\n".join(lines)[:MAX_ANSWER_CHARS]
+    return ""
+
+
 def run(job: Job, client=None) -> str:
     import s3geo
     from s3geo import (
@@ -134,7 +238,7 @@ def run(job: Job, client=None) -> str:
     job.set_progress(25, "مدل زبانی برنامه تحلیل را می‌نویسد")
     generator = LLMQuerySpecGenerator(client, max_repair_attempts=1)
     try:
-        spec = generator.generate(q.text, context={}, system_hints="پاسخ و نام ستون‌های جدید می‌تواند فارسی یا لاتین باشد.",
+        spec = generator.generate(q.text, context={}, system_hints=_hints(),
                                   input_data_extent=extent, input_layers=describe_input_layers(layers))
     except Exception as exc:  # noqa: BLE001  خطای مدل زبانی (کلید، اینترنت، پاسخ نامعتبر)
         msg = str(exc)
@@ -151,12 +255,16 @@ def run(job: Job, client=None) -> str:
     if not result.success:
         q.save(update_fields=["goal", "operations"])
         raise AskError(f"اجرای تحلیل ناموفق بود: {str(result.error)[:400]}")
-    out = result.outputs[spec.operations[-1].output]
-    feats = [{"type": "Feature", "geometry": f.get("geometry"), "properties": _clean(f.get("properties"))}
-             for f in _features(out) if f.get("geometry")]
+    step, feats = _spatial_output(result, spec)
     if not feats:
-        q.save(update_fields=["goal", "operations"])
-        return f"{spec.goal} — نتیجه مکانی نداشت: {str(out)[:600]}"
+        # تحلیل درست اجرا شده اما لایه‌ای نساخته (عدد، آمار، متن…): این یک پاسخ است، نه خطا
+        q.answer = _answer_text(result, spec)
+        q.save(update_fields=["goal", "operations", "answer"])
+        return f"{spec.goal} — پاسخ متنی (بدون لایه مکانی)"
+    if step != spec.operations[-1].output:
+        q.answer = _answer_text(result, spec)  # خلاصهٔ مرحلهٔ آخر کنار لایه نمایش داده می‌شود
+    feats = [{"type": "Feature", "geometry": f.get("geometry"), "properties": _clean(f.get("properties"))}
+             for f in feats]
     job.set_progress(82, "ذخیره نتیجه در جدول")
     srid = 4326
     if _max_abs_x(feats) > 180:
@@ -170,5 +278,5 @@ def run(job: Job, client=None) -> str:
                                      "to4326": srid != 4326, "mode": "overwrite" if exists else "create",
                                      "geom_type": ""}, "UTF-8")
     q.rows = len(feats)
-    q.save(update_fields=["goal", "operations", "rows"])
+    q.save(update_fields=["goal", "operations", "rows", "answer"])
     return f"{spec.goal} — {len(feats):,} عارضه در جدول {q.output_table}"

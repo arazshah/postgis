@@ -100,12 +100,14 @@
         {% if e.detail %}<span>{{ e.detail }}</span>{% endif %}
       </div>
       {% if e.ops %}<div class="hist-ops">{{ e.ops|join:" → " }}</div>{% endif %}
+      {% if e.answer and j.status == 'done' %}<div class="hist-answer"><b>{% if e.rows %}خلاصه تحلیل{% else %}پاسخ{% endif %}</b><pre>{{ e.answer }}</pre></div>{% endif %}
     </div>
     <div class="hist-side">
       {% if j.status == 'done' and e.rows %}
         <span class="small muted">{{ e.rows|fanum }} عارضه</span>
         <a class="btn ghost sm" href="{% url 'databases:explore_table' db.pk 'public' e.table %}?tab=map"><span class="ltr">{{ e.table }}</span> ← نقشه</a>
         {% if e.together %}<a class="btn ghost sm" href="{{ e.together }}" title="نتیجه و لایه‌های ورودی روی یک نقشه">کنار ورودی‌ها</a>{% endif %}
+      {% elif j.status == 'done' and e.answer %}<span class="small muted">بدون لایه مکانی</span>
       {% elif j.status == 'done' %}<span class="small muted">{{ j.message|truncatechars:60 }}</span>{% endif %}
     </div>
     {% if j.status == 'queued' or j.status == 'running' %}
