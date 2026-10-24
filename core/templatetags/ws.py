@@ -18,6 +18,7 @@ ICONS = {
     "team": "M16 19v-1a4 4 0 00-4-4H8a4 4 0 00-4 4v1M10 11a3 3 0 100-6 3 3 0 000 6M20 19v-1a3 3 0 00-2-3M16 5a3 3 0 010 6",
     "backup": "M4 7c0-2 16-2 16 0v10c0 2-16 2-16 0zM4 12c0 2 16 2 16 0",
     "gauge": "M4 18a8 8 0 1116 0M12 18l4-6",
+    "survey": "M12 3v18M3 12h18M7 7l10 10M17 7L7 17",
     "building": "M3 21V8l9-5 9 5v13M9 21v-6h6v6",
 }
 
@@ -33,6 +34,7 @@ GROUPS = [
     ]),
     ("تحلیل و انتشار", [
         ("تحلیل", "analysis:page", ("analysis:page",), "chart", "editor"),
+        ("برداشت میدانی", "survey:index", ("survey:index", "survey:studio"), "survey", "viewer"),
         ("نقشه‌های چندلایه", "maps:index", ("maps:index", "maps:composer", "maps:quick"), "map", "viewer"),
         ("نقشه و API", "publish:manage", ("publish:manage", "publish:map_builder"), "globe", "editor"),
         ("WMS و WFS", "publish:ows", ("publish:ows", "publish:ows_detail"), "layers", "editor"),
@@ -48,14 +50,21 @@ GROUPS = [
 LEVEL = {"viewer": 0, "editor": 1, "owner": 2}
 
 
+def _survey_on() -> bool:
+    from core.models import SiteSettings
+
+    return bool(SiteSettings.get().survey_enabled)
+
+
 def build(db, view_name: str) -> dict:
+    survey_on = _survey_on()
     mine = bool(getattr(db, "is_mine", False))
     level = 2 if mine else (1 if getattr(db, "can_edit", False) else 0)
     groups, current = [], None
     for title, items in GROUPS:
         rows = []
         for label, url, views, icon, need in items:
-            if LEVEL[need] > level:
+            if LEVEL[need] > level or (url == "survey:index" and not survey_on):
                 continue
             on = view_name in views
             row = {"label": label, "url": url, "on": on, "icon": ICONS[icon]}

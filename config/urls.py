@@ -32,6 +32,7 @@ urlpatterns = [
     path("", include("kb.urls")),
     path("", include("publish.urls")),
     path("", include("maps.urls")),
+    path("", include("survey.urls")),
     path("", include("iranmap.urls")),
     path("", include("analysis.urls")),
     path("", include("restapi.urls")),
