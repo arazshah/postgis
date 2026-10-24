@@ -13,6 +13,7 @@ urlpatterns = [
     path("dashboard/<int:pk>/survey/<int:project_id>/data/", views.project_data, name="data"),
     path("dashboard/<int:pk>/survey/<int:project_id>/sync/", views.project_sync, name="sync"),
     path("dashboard/<int:pk>/survey/<int:project_id>/import/", views.project_import, name="import"),
+    path("dashboard/<int:pk>/survey/<int:project_id>/surface/", views.project_surface, name="surface"),
     path("dashboard/<int:pk>/survey/<int:project_id>/cogo/", views.project_cogo, name="cogo"),
     path("dashboard/<int:pk>/survey/<int:project_id>/export/<str:fmt>/", views.export, name="export"),
     path("dashboard/<int:pk>/survey/<int:project_id>/ntrip/", views.ntrip_profiles, name="ntrip_profiles"),

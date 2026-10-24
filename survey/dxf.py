@@ -35,13 +35,14 @@ class Dxf:
         self.ents.append(self._g(0, "TEXT") + self._g(8, layer) + self._g(10, f"{x:.4f}") + self._g(20, f"{y:.4f}")
                          + self._g(30, "0.0") + self._g(40, f"{height:.3f}") + self._g(1, clean))
 
-    def polyline(self, pts, layer="0", closed=False):
-        layer = self._layer(layer, 5)
+    def polyline(self, pts, layer="0", closed=False, z=0.0, color=5):
+        """z: ارتفاع (elevation) پلی‌لاین دوبعدی؛ برای منحنی میزان همان سطح منحنی است."""
+        layer = self._layer(layer, color)
         out = self._g(0, "POLYLINE") + self._g(8, layer) + self._g(66, 1) + self._g(10, "0.0") + self._g(20, "0.0") \
-            + self._g(30, "0.0") + self._g(70, 1 if closed else 0)
+            + self._g(30, f"{z:.4f}") + self._g(70, 1 if closed else 0)
         for x, y in pts:
             out += self._g(0, "VERTEX") + self._g(8, layer) + self._g(10, f"{x:.4f}") + self._g(20, f"{y:.4f}") \
-                + self._g(30, "0.0")
+                + self._g(30, f"{z:.4f}")
         out += self._g(0, "SEQEND") + self._g(8, layer)
         self.ents.append(out)
 
