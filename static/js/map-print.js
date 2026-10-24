@@ -4,6 +4,7 @@
   const $ = (id) => document.getElementById(id);
   const cfg = JSON.parse($("map-config").textContent);
   cfg.printable = true;
+  cfg.finder = false;  // بدون نشان و پیام روی برگه چاپی
   cfg.legend = false;  // راهنما در پایین برگه است، نه روی نقشه
   const gm = GPMap.createMulti($("map"), cfg);
   const sheet = $("pr-sheet"), msg = $("pr-msg");

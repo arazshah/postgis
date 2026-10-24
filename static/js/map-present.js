@@ -3,7 +3,7 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const cfg = JSON.parse($("map-config").textContent);
-  const gm = GPMap.createMulti($("map"), cfg);
+  const gm = GPMap.createMulti($("map"), Object.assign({}, cfg, {reveal: false}));  // اسلایدها خودشان نما را تعیین می‌کنند
   const defaults = {};
   cfg.layers.forEach((l) => { defaults[l.key] = l.visible !== false; });
   const intro = {title: cfg.title, body: cfg.description, view: cfg.view, layers: [], intro: true};

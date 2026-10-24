@@ -85,7 +85,7 @@ def tile(request, slug, z, x, y):
     if not (layer.min_zoom <= z <= layer.max_zoom):
         data = b""
     else:
-        ck = f"tile:{layer.pk}:{int(layer.updated_at.timestamp())}:{z}/{x}/{y}"
+        ck = f"tile2:{layer.pk}:{int(layer.updated_at.timestamp())}:{z}/{x}/{y}"
         data = cache.get(ck)
         if data is None:
             try:

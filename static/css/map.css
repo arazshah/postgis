@@ -21,3 +21,23 @@
 .gpm-legend i.bar{height:4px;border-radius:2px}
 .gpm-pop-h{font-weight:700;color:#0F5C59;margin:0 0 2px}
 .gpm-pop table+.gpm-pop-h{margin-top:8px;padding-top:6px;border-top:1px solid #DDE5DA}
+/* پیدا کردن لایه: ⌖، نشان «بیرون از دید»، نوار لایه‌های ناپیدا، پیام پایین نقشه */
+.gpm-lg-h{display:flex;align-items:center;gap:4px}
+.gpm-lg-h label{flex:1;min-width:0}
+.gpm-go{flex:none;background:none;border:1px solid transparent;border-radius:6px;width:26px;height:26px;line-height:1;cursor:pointer;color:#4B6269;font:inherit;font-size:17px}
+.gpm-go:hover,.gpm-go:focus-visible{border-color:#C5D2C2;color:#0F5C59}
+.gpm-where{display:flex;align-items:center;gap:4px;margin:2px 0 0;padding:1px 8px;border:1px dashed #D9A441;border-radius:999px;background:#FFF7E3;color:#7A5200;font:12px/1.7 Vazirmatn,Tahoma,sans-serif;cursor:pointer}
+.gpm-where[hidden]{display:none}
+.gpm-where:disabled{cursor:default;border-color:#C5D2C2;background:#F1F4EF;color:#4B6269}
+.gpm-where:not(:disabled):hover{background:#FFEFC2}
+.gpm-arrow{display:inline-block;font-style:normal;font-weight:700;width:1em;text-align:center;border:0;background:none}
+.gpm-legend i.gpm-arrow{width:1em;height:auto;border:0;border-radius:0;background:none}
+.gpm-miss{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px;padding:4px 8px;border-radius:8px;background:#FFF7E3;color:#7A5200;font-size:12px}
+.gpm-miss[hidden]{display:none}
+.gpm-miss button{flex:none;border:0;background:#0F5C59;color:#fff;border-radius:6px;padding:1px 8px;font:inherit;cursor:pointer}
+.gpm-fit{font-size:17px;line-height:1}
+.gpm-toast{position:absolute;z-index:4;bottom:28px;left:50%;transform:translateX(-50%);max-width:min(92%,520px);display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;padding:8px 14px;border-radius:12px;background:rgba(18,49,58,.94);color:#fff;font:13px/1.7 Vazirmatn,Tahoma,sans-serif;direction:rtl;box-shadow:0 8px 24px -10px rgba(0,0,0,.5)}
+.gpm-toast[hidden]{display:none}
+.gpm-toast button{border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;border-radius:8px;padding:1px 10px;font:inherit;cursor:pointer}
+.gpm-toast button:hover{background:rgba(255,255,255,.25)}
+@media (prefers-reduced-motion:reduce){.gpm-arrow{transition:none}}

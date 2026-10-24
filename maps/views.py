@@ -305,6 +305,23 @@ def layer_remove(request, pk, map_id, layer_id):
 
 
 @site_user_required
+@require_POST
+def layer_extent(request, pk, map_id, layer_id):
+    """محدوده لایه را از داده‌های فعلی جدول دوباره حساب و ذخیره می‌کند (داده بعد از افزودن لایه عوض شده است)."""
+    db = _db(request, pk)
+    layer = get_object_or_404(MapLayer.objects.select_related("webmap__database"), pk=layer_id,
+                              webmap=_map(db, map_id))
+    try:
+        bbox = engine.extent(layer)
+    except (engine.EngineError, ExplorerError) as exc:
+        return _json({"error": str(exc)}, 400)
+    if bbox != layer.bbox:
+        layer.bbox = bbox
+        layer.save(update_fields=["bbox", "updated_at"])  # تغییر زمان به‌روزرسانی، کش کاشی را هم تازه می‌کند
+    return _json({"bbox": bbox, "empty": not bbox})
+
+
+@site_user_required
 @require_GET
 def layer_stats(request, pk, map_id, layer_id):
     db = _db(request, pk)
@@ -444,7 +461,7 @@ def tile(request, slug, layer_id, z, x, y):
             access.count(db)
     except access.Denied as exc:
         return _json({"code": exc.code, "description": exc.message}, exc.status)
-    ck = f"maptile:{layer.pk}:{int(layer.updated_at.timestamp())}:{z}/{x}/{y}"
+    ck = f"maptile2:{layer.pk}:{int(layer.updated_at.timestamp())}:{z}/{x}/{y}"
     return _tile_response(layer, z, x, y, public=webmap.is_public, cache_key=ck)
 
 

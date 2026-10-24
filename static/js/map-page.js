@@ -89,6 +89,39 @@
   function geomIds(key) { return [key + "-fill", key + "-outline", key + "-line", key + "-circle"]; }
   const HIT = ["-circle", "-line", "-fill"];
 
+  // ------------------------------------------------------------------ پیدا کردن لایه
+  const validBox = (b) => Array.isArray(b) && b.length === 4 && b.every((v) => Number.isFinite(v));
+  const unionBox = (boxes) => boxes.length ? [Math.min(...boxes.map((b) => b[0])), Math.min(...boxes.map((b) => b[1])),
+    Math.max(...boxes.map((b) => b[2])), Math.max(...boxes.map((b) => b[3]))] : null;
+  const PREF = "gpm.autofly";
+  const prefGet = () => { try { return localStorage.getItem(PREF) === "1"; } catch (e) { return false; } };
+  const prefSet = (v) => { try { v ? localStorage.setItem(PREF, "1") : localStorage.removeItem(PREF); } catch (e) { /* بدون ذخیره */ } };
+
+  // دکمه «نمایش همه لایه‌ها» زیر دکمه‌های زوم
+  function fitControl(onClick) {
+    let box = null;
+    return {
+      onAdd() {
+        box = document.createElement("div");
+        box.className = "maplibregl-ctrl maplibregl-ctrl-group";
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "gpm-fit";
+        b.title = "نمایش همه لایه‌ها";
+        b.setAttribute("aria-label", "نمایش همه لایه‌ها");
+        b.textContent = "⤢";
+        b.addEventListener("click", onClick);
+        box.appendChild(b);
+        return box;
+      },
+      onRemove() { if (box) box.remove(); box = null; },
+    };
+  }
+
+  // جهت از مرکز نقشه به سوی مقصد، به درجه (۰ = بالا، ساعت‌گرد)
+  function bearingTo(dx, dy) { return Math.round(Math.atan2(dx, -dy) * 180 / Math.PI); }
+
+
   // cfg.layers: [{key, tiles, sourceLayer, geomType, style, title, visible}]؛ اولی بالاترین لایه روی نقشه است
   function createMulti(el, cfg) {
     ensureRTL(cfg);
@@ -104,6 +137,7 @@
       preserveDrawingBuffer: !!cfg.printable,
       attributionControl: {compact: true, customAttribution: '<a href="https://postgis.ir" target="_blank" rel="noopener">postgis.ir</a>'}});
     map.addControl(new maplibregl.NavigationControl({showCompass: false}), "top-left");
+    map.addControl(fitControl(() => api.fit(true)), "top-left");
     map.addControl(new maplibregl.FullscreenControl(), "top-left");
     map.addControl(new maplibregl.ScaleControl({unit: "metric"}), "bottom-left");
 
@@ -188,21 +222,127 @@
       if (cfg.single) { legend.innerHTML = legendHTML(cfg, layers[0].style); return; }
       if (cfg.legendTitle) legend.innerHTML = `<div class="gpm-legend-title">${esc(cfg.legendTitle)}</div>`;
       else legend.innerHTML = "";
+      const bar = document.createElement("div");
+      bar.className = "gpm-miss";
+      bar.hidden = true;
+      bar.innerHTML = '<span></span><button type="button">نمایش همه</button>';
+      bar.querySelector("button").addEventListener("click", () => api.fit(true));
+      legend.appendChild(bar);
       layers.forEach((l) => {
         const st = l.style, rows = legendRows(cfg, st);
         const sw = /POINT/.test(l.geomType || "") ? "dot" : /LINE/.test(l.geomType || "") ? "bar" : "";
         const box = document.createElement("div");
         box.className = "gpm-lg" + (l.visible ? "" : " off");
-        box.innerHTML = `<label><input type="checkbox"${l.visible ? " checked" : ""}>`
+        box.dataset.key = l.key;
+        box.innerHTML = `<div class="gpm-lg-h"><label><input type="checkbox"${l.visible ? " checked" : ""}>`
           + (rows ? "" : `<i class="${sw}" style="background:${st.color}"></i>`)
-          + `<span>${esc(l.title)}</span></label>` + (rows ? `<ul>${rows}</ul>` : "");
+          + `<span title="دوبار کلیک: رفتن به لایه">${esc(l.title)}</span></label>`
+          + (validBox(l.bbox) ? '<button type="button" class="gpm-go" title="رفتن به این لایه" aria-label="رفتن به این لایه">⌖</button>' : "")
+          + `</div><button type="button" class="gpm-where" hidden></button>` + (rows ? `<ul>${rows}</ul>` : "");
         box.querySelector("input").addEventListener("change", (e) => {
           api.setVisible(l.key, e.target.checked);
           if (api.onVisibility) api.onVisibility(l.key, e.target.checked);
+          if (e.target.checked) api.reveal(l.key);
         });
+        const go = box.querySelector(".gpm-go");
+        if (go) go.addEventListener("click", () => flyToLayer(l));
+        box.querySelector("label span").addEventListener("dblclick", (e) => { e.preventDefault(); flyToLayer(l); });
+        box.querySelector(".gpm-where").addEventListener("click", () => flyToLayer(l));
         legend.appendChild(box);
       });
+      updateFinder();
     }
+
+    // ---- پیدا کردن لایه: رابطه با نمای فعلی، نشان، پیام و پرش
+    function relation(l) {
+      const b = l.bbox;
+      if (!validBox(b)) return "none";
+      const v = map.getBounds();
+      if (b[0] > v.getEast() || b[2] < v.getWest() || b[1] > v.getNorth() || b[3] < v.getSouth()) return "out";
+      if (!/POINT/.test(l.geomType || "")) {
+        const p = map.project([b[0], b[1]]), q = map.project([b[2], b[3]]);
+        if (Math.abs(q.x - p.x) < 8 && Math.abs(q.y - p.y) < 8) return "tiny";  // کل لایه کوچک‌تر از چند پیکسل است
+      }
+      return "in";
+    }
+
+    function flyToLayer(l) {
+      const b = l.bbox;
+      if (!validBox(b)) return;
+      map.fitBounds([[b[0], b[1]], [b[2], b[3]]], {padding: 64, maxZoom: 16, duration: 1400, essential: true});
+    }
+
+    let toastEl = null, toastTimer = 0;
+    function toast(text, actions) {
+      if (cfg.finder === false) return;
+      if (!toastEl) {
+        toastEl = document.createElement("div");
+        toastEl.className = "gpm-toast";
+        toastEl.setAttribute("role", "status");
+        el.appendChild(toastEl);
+      }
+      toastEl.innerHTML = `<span>${esc(text)}</span>`;
+      (actions || []).forEach((a) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = a.label;
+        b.addEventListener("click", () => { toastEl.hidden = true; a.fn(); });
+        toastEl.appendChild(b);
+      });
+      toastEl.hidden = false;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { if (toastEl) toastEl.hidden = true; }, 8000);
+    }
+
+    // لایه تازه روشن شد: اگر نقشه با آن خالی می‌ماند، خودکار برو؛ وگرنه فقط پیشنهاد بده تا نمای کاربر به‌هم نریزد
+    function reveal(l) {
+      if (cfg.reveal === false || cfg.finder === false || !l.visible) return;
+      const rel = relation(l);
+      if (rel === "in" || rel === "none") return;
+      const othersSeen = layers.some((o) => o !== l && o.visible && relation(o) === "in");
+      const why = rel === "tiny" ? "در این زوم بسیار ریز است" : "در این نما نیست";
+      if (prefGet() || !othersSeen) {
+        flyToLayer(l);
+        toast(`رفتیم به «${l.title}»؛ ${why}.`, prefGet() ? [{label: "پرش خودکار را خاموش کن", fn: () => prefSet(false)}] : []);
+      } else {
+        toast(`«${l.title}» ${why}.`, [
+          {label: "برو به لایه", fn: () => flyToLayer(l)},
+          {label: "همیشه خودکار", fn: () => { prefSet(true); flyToLayer(l); }},
+        ]);
+      }
+    }
+
+    // نشان کنار هر لایه روشن و نوار «N لایه روشن در این نما نیست»
+    function updateFinder() {
+      if (cfg.single || cfg.finder === false || !ready) return;
+      let miss = 0;
+      const cx = map.getContainer().clientWidth / 2, cy = map.getContainer().clientHeight / 2;
+      layers.forEach((l) => {
+        const box = legend.querySelector(`[data-key="${l.key}"]`);
+        if (!box) return;
+        const chip = box.querySelector(".gpm-where");
+        const rel = l.visible ? relation(l) : "";
+        box.dataset.rel = rel;
+        if (rel === "out" || rel === "tiny") miss++;
+        if (rel === "out") {
+          const b = l.bbox, p = map.project([(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]);
+          chip.innerHTML = `<i class="gpm-arrow" style="transform:rotate(${bearingTo(p.x - cx, p.y - cy)}deg)">↑</i> بیرون از دید`;
+        } else if (rel === "tiny") {
+          chip.textContent = "⊕ ریز است؛ نزدیک‌تر شوید";
+        } else if (rel === "none" && l.visible) {
+          chip.textContent = "بدون داده";
+        }
+        chip.hidden = !(rel === "out" || rel === "tiny" || (rel === "none" && l.visible));
+        chip.disabled = rel === "none";
+      });
+      const bar = legend.querySelector(".gpm-miss");
+      if (bar) {
+        bar.hidden = miss === 0;
+        bar.querySelector("span").textContent = `${FA(miss)} لایه روشن در این نما دیده نمی‌شود`;
+      }
+    }
+    let finderFrame = 0;
+    map.on("moveend", () => { cancelAnimationFrame(finderFrame); finderFrame = requestAnimationFrame(updateFinder); });
 
     function byKey(key) { return layers.find((l) => l.key === key); }
 
@@ -258,12 +398,20 @@
       setTitle(key, t) { const l = byKey(key); if (!l) return; l.title = t; renderLegend(); },
       // فهرست تازه (افزودن، حذف، جابه‌جایی)؛ منبع کاشی لایه‌های قبلی دوباره ساخته نمی‌شود
       setLayers(next) { layers = next.map((l) => Object.assign({visible: true}, l)); build(); },
-      fit() {
-        const bs = layers.map((l) => l.bbox).filter((b) => b && b.length === 4);
-        if (!bs.length) return;
-        map.fitBounds([[Math.min(...bs.map((b) => b[0])), Math.min(...bs.map((b) => b[1]))],
-          [Math.max(...bs.map((b) => b[2])), Math.max(...bs.map((b) => b[3]))]], {padding: 48, maxZoom: 15});
+      // visibleOnly: فقط لایه‌های روشن (اگر هیچ‌کدام محدوده نداشت، همه)
+      fit(visibleOnly) {
+        const pool = visibleOnly ? layers.filter((l) => l.visible) : layers;
+        let box = unionBox(pool.map((l) => l.bbox).filter(validBox));
+        if (!box && visibleOnly) box = unionBox(layers.map((l) => l.bbox).filter(validBox));
+        if (!box) return;
+        map.fitBounds([[box[0], box[1]], [box[2], box[3]]], {padding: 56, maxZoom: 15});
       },
+      goToLayer(key) { const l = byKey(key); if (l) flyToLayer(l); },
+      // محدوده تازه‌شده لایه (از سرور)
+      setBBox(key, bbox) { const l = byKey(key); if (!l) return; l.bbox = bbox; updateFinder(); },
+      relation: (key) => { const l = byKey(key); return l ? relation(l) : "none"; },
+      // بعد از روشن کردن لایه توسط کاربر: اگر دیده نمی‌شود، پرش هوشمند یا پیشنهاد رفتن
+      reveal(key) { const l = byKey(key); if (l) reveal(l); },
       // نمای ذخیره‌شده با جابه‌جایی نرم (ارائه)؛ بدون نما: محدوده همه لایه‌ها
       goTo(view, instant) {
         if (view && view.center) {

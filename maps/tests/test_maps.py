@@ -153,6 +153,49 @@ class MapsIntegrationTests(TestCase):
         self.assertEqual(self.client.post(reverse("maps:composer", args=[self.db.pk, m.pk]), "nope",
                                           content_type="application/json").status_code, 400)
 
+    def test_layer_extent_is_recomputed(self):
+        self._create("public.parks")
+        m = WebMap.objects.get()
+        parks = m.layers.get()
+        url = reverse("maps:layer_extent", args=[self.db.pk, m.pk, parks.pk])
+        MapLayer.objects.filter(pk=parks.pk).update(bbox=[])  # مثل لایه‌ای که خالی اضافه شد
+        r = self.client.post(url)
+        self.assertEqual(r.status_code, 200)
+        first = r.json()["bbox"]
+        self.assertEqual(len(first), 4)
+        parks.refresh_from_db()
+        self.assertEqual(parks.bbox, first)
+        with self._pg() as c:  # داده تازه جای دیگری آمد
+            c.execute("INSERT INTO parks(name, geom) VALUES ('دور', ST_Buffer(ST_SetSRID(ST_MakePoint(59.6, 36.3), 4326),"
+                      " 0.01))")
+        second = self.client.post(url).json()["bbox"]
+        self.assertGreater(second[2], first[2] + 5)
+        self.assertEqual(self.client.get(url).status_code, 405)  # فقط POST
+        other = WebMap.objects.create(database=self.db, title="x")
+        self.assertEqual(self.client.post(reverse("maps:layer_extent", args=[self.db.pk, other.pk, parks.pk])).status_code,
+                         404)
+
+    def test_tiny_polygons_stay_visible_at_far_zoom(self):
+        import math
+        with self._pg() as c:
+            c.execute("CREATE TABLE specks(id serial PRIMARY KEY, geom geometry(Polygon, 4326))")
+            c.execute("INSERT INTO specks(geom) VALUES (ST_Buffer(ST_SetSRID(ST_MakePoint(51.34, 35.70), 4326), 0.0001))")
+        self._create("public.specks")
+        m = WebMap.objects.get()
+        layer = m.layers.get()
+        z = 6
+        x = int((51.34 + 180) / 360 * 2 ** z)
+        lat = math.radians(35.70)
+        y = int((1 - math.asinh(math.tan(lat)) / math.pi) / 2 * 2 ** z)
+        url = reverse("maps:tile", args=[m.slug, layer.pk, z, x, y])
+        self.assertGreater(len(self.client.get(url).content), 0)  # ۲۰ متر در زوم ۶: قبلاً حذف می‌شد، حالا نقطه است
+        layer.style = {**layer.style, "far_dots": False}
+        layer.save()
+        self.assertEqual(self.client.get(url).content, b"")  # با خاموش کردن، رفتار قبلی
+        z = 14  # نزدیک: خود چندضلعی کشیده می‌شود
+        x, y = int((51.34 + 180) / 360 * 2 ** z), int((1 - math.asinh(math.tan(lat)) / math.pi) / 2 * 2 ** z)
+        self.assertGreater(len(self.client.get(reverse("maps:tile", args=[m.slug, layer.pk, z, x, y])).content), 0)
+
     def test_layer_stats_use_all_columns(self):
         self._create("public.schools")
         m = WebMap.objects.get()

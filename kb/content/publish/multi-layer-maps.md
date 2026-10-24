@@ -3,7 +3,7 @@ title: نقشه چندلایه چیست و چطور چند جدول را روی 
 summary: در «نقشه‌های چندلایه» چند جدول مکانی پایگاه داده را روی یک نقشه می‌گذارید، برای هر لایه سبک جدا می‌دهید و لینک یا iframe می‌گیرید. «نمایش با هم» بدون ذخیره تا ۱۰ جدول را کنار هم نشان می‌دهد.
 kind: howto
 keywords: نقشه چندلایه, چند لایه, چند جدول, یک نقشه, نمایش با هم, webmap, لایه‌ها, روشن خاموش
-related: map-builder, multi-layer-style, multi-layer-quota, err-map-layer-missing
+related: map-builder, multi-layer-style, multi-layer-quota, err-map-layer-missing, map-find-layer
 order: 91
 reviewed: 2026-10-23
 ---
