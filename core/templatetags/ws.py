@@ -118,6 +118,7 @@ DASH_GROUPS = [
         ("جدول‌ها و داده‌ها", "جدول‌ها، ستون‌ها و روی نقشه را ببین؛ خروجی CSV و GeoJSON بگیر", "databases:explore", "tables"),
         ("اجرای SQL", "کوئری بنویس و نتیجه را همان‌جا ببین (به‌طور پیش‌فرض فقط‌خواندنی)", "databases:explore_sql", "sql"),
         ("ورود فایل", "Shapefile، GeoPackage، GeoJSON، KML یا CSV را آپلود کن", "databases:import", "import"),
+        ("برداشت میدانی", "با GPS یا گیرنده RTK در میدان نقطه برداشت کن؛ آفلاین هم کار می‌کند", "survey:index", "survey"),
     ]),
     ("share", "تحلیل کن و منتشر کن", [
         ("تحلیل مکانی", "بافر، نزدیک‌ترین، حوزه دسترسی و ... بدون کدنویسی", "analysis:page", "chart"),
@@ -137,7 +138,9 @@ def dash_actions(db):
     from django.urls import reverse
 
     groups = []
+    survey_on = _survey_on()
     for key, title, items in DASH_GROUPS:
         groups.append({"key": key, "title": title, "items": [
-            {"label": a, "hint": b, "url": reverse(u, args=[db.pk]), "icon": ICONS[i]} for a, b, u, i in items]})
+            {"label": a, "hint": b, "url": reverse(u, args=[db.pk]), "icon": ICONS[i]} for a, b, u, i in items
+            if survey_on or u != "survey:index"]})
     return {"groups": groups}
