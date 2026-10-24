@@ -1,0 +1,11 @@
+{
+  "id": "nmea-generic",
+  "name": "NMEA عمومی",
+  "vendor": "postgis.ir",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "transport": ["web-serial", "web-bluetooth", "bridge", "replay"],
+  "serial": { "baud": [115200, 38400, 9600] },
+  "capabilities": ["position", "accuracy", "satellites", "corrections_in"],
+  "level": "builtin"
+}

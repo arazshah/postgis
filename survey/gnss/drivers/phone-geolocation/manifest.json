@@ -1,0 +1,10 @@
+{
+  "id": "phone-geolocation",
+  "name": "GPS گوشی",
+  "vendor": "postgis.ir",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "transport": ["geolocation"],
+  "capabilities": ["position", "accuracy"],
+  "level": "builtin"
+}
