@@ -115,3 +115,38 @@ class FilterTests(SimpleTestCase):
         self.assertEqual(len(surface.filter_long_edges(tris, 10)), 1)
         self.assertEqual(len(surface.filter_long_edges(tris, None)), 2)
         self.assertEqual(surface.stats(tris[:1])["area"], 0.5)
+
+
+class BetweenTests(SimpleTestCase):
+    def test_flat_over_flat(self):
+        v = surface.volume_between(plane(lambda x, y: 2.0, 4), plane(lambda x, y: 1.0, 4), cell=0.5)
+        self.assertAlmostEqual(v["added"], 100.0, places=6)
+        self.assertAlmostEqual(v["removed"], 0.0, places=6)
+        self.assertAlmostEqual(v["area"], 100.0, places=6)
+
+    def test_tilted_over_flat_balances(self):
+        v = surface.volume_between(plane(lambda x, y: x, 5), plane(lambda x, y: 5.0, 3), cell=0.5)
+        self.assertAlmostEqual(v["added"], 125.0, delta=0.5)
+        self.assertAlmostEqual(v["removed"], 125.0, delta=0.5)
+        self.assertAlmostEqual(v["net"], 0.0, delta=0.5)
+
+    def test_only_overlap_counts(self):
+        a = plane(lambda x, y: 3.0, 2)
+        b = [tuple((x + 5, y, 1.0) for x, y, _ in t) for t in plane(lambda x, y: 0.0, 2)]  # [5,15]×[0,10]
+        v = surface.volume_between(a, b, cell=0.5)
+        self.assertAlmostEqual(v["area"], 50.0, places=6)
+        self.assertAlmostEqual(v["added"], 100.0, places=6)
+
+    def test_guards(self):
+        far = [tuple((x + 100, y, 0.0) for x, y, _ in t) for t in plane(lambda x, y: 0.0)]
+        with self.assertRaises(surface.SurfaceError):
+            surface.volume_between(plane(lambda x, y: 0.0), far)
+        with self.assertRaises(surface.SurfaceError):
+            surface.volume_between(plane(lambda x, y: 0.0), plane(lambda x, y: 1.0), cell=0.001)
+        with self.assertRaises(surface.SurfaceError):
+            surface.volume_between([], plane(lambda x, y: 1.0))
+
+    def test_agrees_with_exact_plane_volume_on_a_cone(self):
+        cone = plane(lambda x, y: max(0.0, 5 - math.hypot(x - 5, y - 5)), n=50)
+        v = surface.volume_between(cone, plane(lambda x, y: 0.0, 1), cell=0.1)
+        self.assertAlmostEqual(v["added"], surface.volume(cone, 0.0)["cut"], delta=0.8)

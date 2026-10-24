@@ -77,25 +77,30 @@ HEIGHT_FIELDS = ("h_ortho", "h_ellip")
 MAX_TIN_POINTS = 50000
 
 
-def tin(db, project, field: str):
+def tin(db, project, field: str, session=None):
     """مثلث‌های Delaunay نقاط دارای ارتفاع (مختصات پروژه). نقاط هم‌مکان (به دقت میلی‌متر) میانگین‌گیری می‌شوند."""
     from .surface import SurfaceError
     if field not in HEIGHT_FIELDS:
         raise SurfaceError("ستون ارتفاع نامعتبر است.")
     ddl.check_slug(project.slug)
     t, f = sql.Identifier(project.slug, "points"), sql.Identifier(field)
+    where = sql.SQL("deleted_at IS NULL AND {f} IS NOT NULL").format(f=f)
+    args: tuple = ()
+    if session:
+        where += sql.SQL(" AND session_id = %s")
+        args = (str(session),)
     with Explorer(db).connect() as conn:
-        n = conn.execute(sql.SQL("SELECT count(*) FROM {t} WHERE deleted_at IS NULL AND {f} IS NOT NULL").format(t=t, f=f)).fetchone()[0]
+        n = conn.execute(sql.SQL("SELECT count(*) FROM {t} WHERE ").format(t=t) + where, args).fetchone()[0]
         if n < 3:
             raise SurfaceError("برای ساخت سطح دست‌کم ۳ نقطه با ارتفاع لازم است.")
         if n > MAX_TIN_POINTS:
             raise SurfaceError(f"حداکثر {MAX_TIN_POINTS} نقطه برای ساخت سطح پشتیبانی می‌شود.")
         rows = conn.execute(sql.SQL("""
             WITH p AS (SELECT round(ST_X(geom)::numeric, 3) AS x, round(ST_Y(geom)::numeric, 3) AS y, avg({f}) AS z
-                       FROM {t} WHERE deleted_at IS NULL AND {f} IS NOT NULL GROUP BY 1, 2)
+                       FROM {t} WHERE {where} GROUP BY 1, 2)
             SELECT ST_AsGeoJSON(d.geom, 6)::text
             FROM (SELECT ST_Collect(ST_MakePoint(x::float8, y::float8, z::float8)) AS g FROM p) c,
-                 LATERAL ST_Dump(ST_DelaunayTriangles(c.g)) d""").format(t=t, f=f)).fetchall()
+                 LATERAL ST_Dump(ST_DelaunayTriangles(c.g)) d""").format(t=t, f=f, where=where), args).fetchall()
     tris = []
     for (g,) in rows:
         ring = json.loads(g)["coordinates"][0][:3]
@@ -141,3 +146,14 @@ def save_contours(db, project, lines: list[dict]) -> int:
                             .format(t=t), [(c["level"], c["index"], _wkt(c["coords"]), project.srid) for c in lines])
         conn.commit()
     return len(lines)
+
+
+def sessions(db, project) -> list[dict]:
+    """نشست‌های برداشت با تعداد نقاط دارای ارتفاع (برای مقایسه دو برداشت)."""
+    ddl.check_slug(project.slug)
+    with Explorer(db).connect() as conn:
+        rows = conn.execute(sql.SQL("""SELECT s.id::text, s.name, s.started_at, count(p.id) FILTER (WHERE p.deleted_at IS NULL
+                AND (p.h_ortho IS NOT NULL OR p.h_ellip IS NOT NULL))
+            FROM {s} s LEFT JOIN {p} p ON p.session_id = s.id GROUP BY s.id ORDER BY s.started_at DESC LIMIT 100""").format(
+            s=sql.Identifier(project.slug, "sessions"), p=sql.Identifier(project.slug, "points"))).fetchall()
+    return [{"id": r[0], "name": r[1] or "", "started_at": r[2].isoformat(), "points": r[3]} for r in rows if r[3]]
