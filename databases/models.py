@@ -189,6 +189,13 @@ class Plan(models.Model):
     basemap_api = models.BooleanField(
         "نقشه پایه ایران برای سایت خود کاربر", default=False,
         help_text="آدرس style.json با کلید API برای استفاده در سایت‌های دیگر (نقشه‌های داخل postgis.ir همیشه دارند).")
+    survey_projects = models.PositiveIntegerField(
+        "حداکثر پروژه برداشت میدانی", default=1, help_text="۰ یعنی برداشت میدانی ندارد.")
+    survey_max_points = models.PositiveIntegerField(
+        "سقف نقطه برداشت‌شده در هر پایگاه داده", default=200,
+        help_text="مجموع نقطه‌های همه پروژه‌های برداشت این پایگاه داده.")
+    gnss_external = models.BooleanField(
+        "اتصال گیرنده GNSS خارجی", default=False, help_text="گیرنده دقیق با RTK؛ پیش‌فرض خاموش.")
     dedicated_geoserver = models.BooleanField("GeoServer اختصاصی", default=False)
     raster_mb = models.PositiveIntegerField("فضای رستر (مگابایت)", default=0, help_text="۰ یعنی سرویس رستر ندارد.")
     clone_enabled = models.BooleanField("کپی آزمایشی پایگاه داده از بکاپ", default=False)

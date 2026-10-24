@@ -77,6 +77,9 @@ class SiteSettings(models.Model):
         "حداکثر طول پاسخ (توکن)", default=700, validators=[MinValueValidator(100), MaxValueValidator(2000)])
 
     # --- پرداخت ---
+    survey_enabled = models.BooleanField(
+        "برداشت میدانی (نقشه‌برداری و GNSS) فعال است", default=False,
+        help_text="تا زمانی که خاموش است، منو و مسیرهای برداشت میدانی برای هیچ کاربری دیده نمی‌شود.")
     pay_enabled = models.BooleanField("فروش پلن‌های پولی فعال است", default=False)
     invoice_ttl_minutes = models.PositiveSmallIntegerField("مهلت پرداخت هر فاکتور (دقیقه)", default=60,
                                                            validators=[MinValueValidator(5)])
