@@ -127,7 +127,7 @@ def studio(request, pk, project_id):
         "import": f"/dashboard/{db.pk}/survey/{p.pk}/import/", "cogo": f"/dashboard/{db.pk}/survey/{p.pk}/cogo/",
         "export": f"/dashboard/{db.pk}/survey/{p.pk}/export/", "list": f"/dashboard/{db.pk}/survey/",
         "ntrip": f"/dashboard/{db.pk}/survey/{p.pk}/ntrip/",
-        "surface": f"/dashboard/{db.pk}/survey/{p.pk}/surface/",
+        "surface": f"/dashboard/{db.pk}/survey/{p.pk}/surface/", "sessions": f"/dashboard/{db.pk}/survey/{p.pk}/surface/sessions/",
     }
     conf = {**base_config(request), "srid": p.srid, "project": p.name, "counts": counts, "codes": codes,
             "drivers": drivers, "urls": urls, "canEdit": bool(db.can_edit), "pointsCap": db.plan.survey_max_points,
@@ -469,11 +469,22 @@ def _num(params, key, default=None, lo=None):
     return x
 
 
+def _session_id(v):
+    if not v:
+        return None
+    try:
+        return str(uuid.UUID(str(v)))
+    except ValueError as exc:
+        raise surface.SurfaceError("شناسه نشست نامعتبر است.") from exc
+
+
 def _surface(db, p, params):
     """مثلث‌بندی، منحنی‌ها و آمار؛ params می‌تواند QueryDict یا dict باشد."""
     field = params.get("field") or "h_ortho"
-    tris, n = data.tin(db, p, field)
-    tris = surface.filter_long_edges(tris, _num(params, "max_edge", None, lo=0))
+    new_session, old_session = _session_id(params.get("session")), _session_id(params.get("compare"))
+    tris, n = data.tin(db, p, field, new_session)
+    max_edge = _num(params, "max_edge", None, lo=0)
+    tris = surface.filter_long_edges(tris, max_edge)
     if not tris:
         raise surface.SurfaceError("با این حداکثر طول لبه هیچ مثلثی نمانده است؛ عدد را بزرگ‌تر کنید.")
     st = surface.stats(tris)
@@ -482,6 +493,9 @@ def _surface(db, p, params):
     st["interval"] = interval
     every = int(_num(params, "index_every", 5, lo=0) or 0)
     lines = surface.contours(tris, interval, base=_num(params, "base", 0.0) or 0.0, index_every=every)
+    if old_session:
+        old, _n = data.tin(db, p, field, old_session)
+        st["between"] = surface.volume_between(tris, surface.filter_long_edges(old, max_edge), _num(params, "cell", None, lo=0))
     ref = _num(params, "ref")
     if ref is not None:
         st["volume"] = surface.volume(tris, ref)
@@ -510,3 +524,14 @@ def project_surface(request, pk, project_id):
     except ExplorerError as exc:
         return _json({"error": "unavailable", "message": str(exc)}, 503)
     return _json(out)
+
+
+@site_user_required
+@require_GET
+def surface_sessions(request, pk, project_id):
+    db = _db(request, pk)
+    p = _project(db, project_id)
+    try:
+        return _json({"sessions": data.sessions(db, p)})
+    except ExplorerError as exc:
+        return _json({"error": "unavailable", "message": str(exc)}, 503)

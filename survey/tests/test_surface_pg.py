@@ -144,3 +144,32 @@ class SurfaceViewTests(TestCase):
         conf.survey_enabled = False
         conf.save()
         self.assertEqual(self._post(f"{self.base}surface/", {}).status_code, 404)
+
+    def _session_points(self, name, h):
+        sid = str(uuid.uuid4())
+        items = [{"client_uuid": sid, "kind": "session", "name": name}]
+        for i in range(6):
+            for j in range(6):
+                it = point(500000 + i * 10, 3950000 + j * 10, h)
+                it["properties"]["session_id"] = sid
+                items.append(it)
+        r = self._post(f"{self.base}sync/", {"items": items})
+        self.assertTrue(all(x["status"] == "ok" for x in r.json()["results"]), r.content)
+        return sid
+
+    def test_volume_between_two_sessions(self):
+        old = self._session_points("قبل", 10.0)
+        new = self._session_points("بعد", 12.0)
+        sess = self.c.get(f"{self.base}surface/sessions/").json()["sessions"]
+        self.assertEqual({s["id"] for s in sess}, {old, new})
+        self.assertTrue(all(s["points"] == 36 for s in sess))
+        out = self._post(f"{self.base}surface/", {"session": new, "compare": old, "interval": 1}).json()
+        b = out["stats"]["between"]
+        self.assertEqual(out["stats"]["points"], 36)  # فقط برداشت جدید
+        self.assertAlmostEqual(b["added"], 2.0 * 2500, delta=2500 * 2 * 0.01)  # ۵۰×۵۰ متر × ۲ متر
+        self.assertAlmostEqual(b["removed"], 0.0, places=6)
+        # برعکس: کاهش
+        rev = self._post(f"{self.base}surface/", {"session": old, "compare": new, "interval": 1}).json()["stats"]["between"]
+        self.assertAlmostEqual(rev["removed"], b["added"], delta=1)
+        self.assertEqual(self._post(f"{self.base}surface/", {"compare": "not-a-uuid"}).status_code, 400)
+        self.assertEqual(self._post(f"{self.base}surface/", {"compare": str(uuid.uuid4())}).status_code, 400)

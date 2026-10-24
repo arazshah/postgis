@@ -539,7 +539,8 @@
   const fmtN = (v, d) => FA(Number(v).toLocaleString("en", {maximumFractionDigits: d == null ? 2 : d}));
   function sfParams() {
     const o = {field: $("sf-field").value};
-    for (const [k, id] of [["interval", "sf-int"], ["index_every", "sf-idx"], ["max_edge", "sf-edge"], ["ref", "sf-ref"]]) {
+    for (const [k, id] of [["interval", "sf-int"], ["index_every", "sf-idx"], ["max_edge", "sf-edge"], ["ref", "sf-ref"],
+      ["session", "sf-new"], ["compare", "sf-old"], ["cell", "sf-cell"]]) {
       const v = $(id).value.trim(); if (v !== "") o[k] = v;
     }
     return o;
@@ -558,9 +559,10 @@
       const st = j.stats, rows = [`${fmtN(st.points, 0)} نقطه، ${fmtN(st.triangles, 0)} مثلث، سطح ${fmtN(st.area, 1)} m²`,
         `ارتفاع ${fmtN(st.z_min)} تا ${fmtN(st.z_max)} · فاصله منحنی ${fmtN(st.interval)} · ${fmtN(j.contours.features.length, 0)} منحنی`];
       if (st.volume) rows.push(`حجم نسبت به تراز ${fmtN(st.ref)}: خاکبرداری ${fmtN(st.volume.cut, 1)} m³ · خاکریزی ${fmtN(st.volume.fill, 1)} m³ · خالص ${fmtN(st.volume.net, 1)} m³`);
+      if (st.between) rows.push(`تغییر نسبت به برداشت قبلی (ناحیه مشترک ${fmtN(st.between.area, 1)} m²): افزوده ${fmtN(st.between.added, 1)} m³ · کاسته ${fmtN(st.between.removed, 1)} m³ · خالص ${fmtN(st.between.net, 1)} m³`);
       if (j.saved != null) rows.push(`${fmtN(j.saved, 0)} منحنی در جدول ${j.table} ذخیره شد.`);
       out.innerHTML = rows.map(esc).join("<br>");
-      const q = new URLSearchParams(sfParams()); q.delete("ref");
+      const q = new URLSearchParams(sfParams()); ["ref", "compare", "cell"].forEach((k) => q.delete(k));
       $("sf-dxf").href = `${conf.urls.export}contours/?${q}`; $("sf-dxf").hidden = false; $("sf-clear").hidden = false;
       const b = new maplibregl.LngLatBounds();
       j.contours.features.forEach((f) => f.geometry.coordinates.forEach((c) => b.extend(c)));
@@ -568,6 +570,14 @@
     } catch (e) { out.className = "small sv-bad"; out.textContent = e.message; }
     $("sf-go").disabled = false;
   });
+  (async () => {
+    try {
+      const r = await fetch(conf.urls.sessions, {credentials: "same-origin"}).then((x) => x.json());
+      const label = (s) => `${s.name || new Date(s.started_at).toLocaleString("fa-IR", {dateStyle: "short", timeStyle: "short"})} (${FA(s.points)} نقطه)`;
+      const opts = (r.sessions || []).map((s) => `<option value="${esc(s.id)}">${esc(label(s))}</option>`).join("");
+      $("sf-new").insertAdjacentHTML("beforeend", opts); $("sf-old").insertAdjacentHTML("beforeend", opts);
+    } catch (e) { /* مقایسه اختیاری است */ }
+  })();
   $("sf-clear").addEventListener("click", () => { setContours(EMPTY); $("sf-clear").hidden = true; $("sf-out").textContent = ""; });
 })();
 

@@ -168,3 +168,71 @@ def volume(tris, ref: float) -> dict:
         cut += c
         fill += c - total
     return {"cut": cut, "fill": fill, "net": cut - fill}
+
+
+# ----------------------------------------------------------------------------- حجم بین دو سطح
+MAX_CELLS = 1_500_000
+
+
+def _bbox(tris):
+    xs = [v[0] for t in tris for v in t]
+    ys = [v[1] for t in tris for v in t]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _raster(tris, x0, y0, cell, nx, ny) -> dict:
+    """ارتفاع سطح در مرکز هر سلول شبکه (فقط سلول‌هایی که داخل یک مثلث‌اند)."""
+    grid: dict[tuple[int, int], float] = {}
+    for (ax, ay, az), (bx, by, bz), (cx, cy, cz) in tris:
+        den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+        if den == 0:
+            continue
+        i0 = max(0, math.ceil((min(ax, bx, cx) - x0) / cell - 0.5))
+        i1 = min(nx - 1, math.floor((max(ax, bx, cx) - x0) / cell - 0.5))
+        j0 = max(0, math.ceil((min(ay, by, cy) - y0) / cell - 0.5))
+        j1 = min(ny - 1, math.floor((max(ay, by, cy) - y0) / cell - 0.5))
+        for i in range(i0, i1 + 1):
+            px = x0 + (i + 0.5) * cell
+            for j in range(j0, j1 + 1):
+                py = y0 + (j + 0.5) * cell
+                u = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / den
+                v = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / den
+                w = 1 - u - v
+                if u >= -1e-12 and v >= -1e-12 and w >= -1e-12:
+                    grid[(i, j)] = u * az + v * bz + w * cz
+    return grid
+
+
+def volume_between(new, old, cell: float | None = None) -> dict:
+    """
+    تغییر حجم از سطح «قدیم» به «جدید» روی ناحیه مشترک: added = جاهایی که جدید بالاتر است، removed = پایین‌تر.
+    روش شبکه‌ای (قاعده نقطه میانی)؛ برای سطح خطی روی سلول‌های کامل دقیق است و خطا با اندازه سلول کم می‌شود.
+    """
+    if not new or not old:
+        raise SurfaceError("برای مقایسه هر دو سطح باید نقطه داشته باشند.")
+    a, b = _bbox(new), _bbox(old)
+    x0, y0, x1, y1 = max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3])
+    if x1 <= x0 or y1 <= y0:
+        raise SurfaceError("دو سطح هیچ ناحیه مشترکی ندارند.")
+    if not cell:
+        cell = max(math.sqrt((x1 - x0) * (y1 - y0) / 250_000), 1e-3)
+    nx, ny = math.ceil((x1 - x0) / cell), math.ceil((y1 - y0) / cell)
+    if nx * ny > MAX_CELLS:
+        raise SurfaceError("اندازه سلول برای این محدوده خیلی ریز است؛ عدد را بزرگ‌تر کنید.")
+    ga, gb = _raster(new, x0, y0, cell, nx, ny), _raster(old, x0, y0, cell, nx, ny)
+    added = removed = 0.0
+    n = 0
+    for key, za in ga.items():
+        zb = gb.get(key)
+        if zb is None:
+            continue
+        n += 1
+        d = za - zb
+        if d > 0:
+            added += d
+        else:
+            removed -= d
+    c2 = cell * cell
+    if n == 0:
+        raise SurfaceError("دو سطح هیچ ناحیه مشترکی ندارند.")
+    return {"added": added * c2, "removed": removed * c2, "net": (added - removed) * c2, "area": n * c2, "cell": cell}
