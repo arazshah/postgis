@@ -41,6 +41,7 @@ class Question(models.Model):
     goal = models.TextField(blank=True)
     operations = models.JSONField(default=list, blank=True)
     rows = models.IntegerField(default=0)
+    answer = models.TextField("پاسخ متنی", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

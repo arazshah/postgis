@@ -226,3 +226,40 @@ class AnalysisTests(TestCase):
         with self.assertRaisesMessage(ask.AskError, "مدل زبانی"):
             ask.run(q2.job, client=StaticLLMClient("not json"))
         self.assertEqual(Question.objects.count(), 2)
+
+    @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
+    def test_summary_last_still_saves_layer_and_answer(self):
+        """برنامهٔ مدل به summarize_vector ختم می‌شود: لایهٔ مرحلهٔ قبل باید ذخیره شود و خلاصه کنارش بیاید."""
+        from s3geo import StaticLLMClient
+
+        LlmConfig.objects.create(user=self.user, api_key_encrypted="")
+        q = ask.request(self.db, self.user, "ایستگاه‌هایی که نامشان دارد را فهرست کن", ["public.metro_stations"], "named")
+        plan = {"goal": "ایستگاه‌های نام‌دار",
+                "entities": [{"ref": "metro_stations", "kind": "layer"}],
+                "operations": [
+                    {"op": "filter_attribute", "inputs": {"vector": "metro_stations"}, "params": {"sort_by": "name", "limit": 2},
+                     "output": "shown"},
+                    {"op": "summarize_vector", "inputs": {"vector": "shown"}, "params": {}, "output": "summary"}]}
+        msg = ask.run(q.job, client=StaticLLMClient(json.dumps(plan, ensure_ascii=False)))
+        q.refresh_from_db()
+        self.assertEqual(q.rows, min(2, self._sql("SELECT count(*) FROM metro_stations")[0][0]))
+        self.assertIn("تعداد عارضه", q.answer)
+        self.assertIn("named", msg)
+
+    @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
+    def test_non_spatial_result_is_an_answer_not_an_error(self):
+        from s3geo import StaticLLMClient
+
+        LlmConfig.objects.create(user=self.user, api_key_encrypted="")
+        q = ask.request(self.db, self.user, "خلاصهٔ لایه ایستگاه‌ها را بده", ["public.metro_stations"], "never_created")
+        plan = {"goal": "خلاصهٔ ایستگاه‌ها",
+                "entities": [{"ref": "metro_stations", "kind": "layer"}],
+                "operations": [{"op": "summarize_vector", "inputs": {"vector": "metro_stations"}, "params": {},
+                                "output": "summary"}]}
+        msg = ask.run(q.job, client=StaticLLMClient(json.dumps(plan, ensure_ascii=False)))
+        q.refresh_from_db()
+        self.assertEqual(q.rows, 0)
+        self.assertIn("تعداد عارضه", q.answer)
+        self.assertNotIn("vector_summary", q.answer)
+        self.assertNotIn("نتیجه مکانی نداشت", msg)
+        self.assertEqual(self._sql("SELECT to_regclass('public.never_created')")[0][0], None)

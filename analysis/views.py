@@ -45,7 +45,7 @@ def _entries(db):
                                                                     [r.params.get("layer"), r.params.get("other")])})
     for q in Question.objects.filter(database=db).select_related("job")[:HISTORY_LIMIT]:
         out.append({"kind": "ask", "id": f"q{q.pk}", "title": q.text, "glyph": "؟", "detail": q.goal,
-                    "ops": q.operations, "table": q.output_table, "rows": q.rows, "job": q.job,
+                    "ops": q.operations, "answer": q.answer, "table": q.output_table, "rows": q.rows, "job": q.job,
                     "created": q.created_at, "together": _together(db, q.output_table, q.layers)})
     out.sort(key=lambda e: e["created"], reverse=True)
     return out[:HISTORY_LIMIT]
