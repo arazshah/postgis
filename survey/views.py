@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib import messages
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -29,6 +31,10 @@ FORMATS = {"csv", "geojson", "dxf", "report"}
 
 def _json(payload, status=200):
     return JsonResponse(payload, status=status, json_dumps_params={"ensure_ascii": False})
+
+
+def _label(user) -> str:
+    return str(getattr(user, "phone", None) or user.get_username() or user.pk)
 
 
 def _on():
@@ -121,6 +127,17 @@ def studio(request, pk, project_id):
     return render(request, "survey/studio.html", {"db": db, "project": p, "conf": conf, "formats": sorted(FORMATS)})
 
 
+@require_GET
+def service_worker(request, pk):
+    """Service Worker با دامنه‌ی بخش برداشت همین پایگاه داده؛ از مسیر static ارائه نمی‌شود چون دامنه‌اش کوچک‌تر می‌شد."""
+    _on()
+    path = Path(settings.BASE_DIR) / "static" / "js" / "survey" / "sw.js"
+    resp = HttpResponse(path.read_text(encoding="utf-8"), content_type="application/javascript; charset=utf-8")
+    resp["Service-Worker-Allowed"] = f"/dashboard/{int(pk)}/survey/"
+    resp["Cache-Control"] = "no-cache"
+    return resp
+
+
 @site_user_required
 @require_GET
 def project_data(request, pk, project_id):
@@ -156,7 +173,7 @@ def project_sync(request, pk, project_id):
     body = _body(request)
     if body is None:
         return _json({"error": "invalid", "message": "بدنه JSON معتبر نیست."}, 400)
-    return _apply(db, _project(db, project_id), body.get("items"), request.user.get_username())
+    return _apply(db, _project(db, project_id), body.get("items"), _label(request.user))
 
 
 @csrf_exempt
@@ -215,7 +232,7 @@ def project_import(request, pk, project_id):
     results = []
     for i in range(0, len(items), sync.MAX_ITEMS):
         try:
-            results += sync.apply(db, p, items[i:i + sync.MAX_ITEMS], request.user.get_username())
+            results += sync.apply(db, p, items[i:i + sync.MAX_ITEMS], _label(request.user))
         except sync.ItemError as exc:
             return _json({"error": exc.code, "message": str(exc)}, 400)
     ok = sum(r["status"] == "ok" for r in results)

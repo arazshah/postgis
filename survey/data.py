@@ -16,15 +16,18 @@ LIMIT = 20000
 
 def _rows(conn, project, table, cols, limit):
     ddl.check_slug(project.slug)
-    q = sql.SQL("SELECT {cols}, ST_AsGeoJSON(ST_Transform(geom, 4326))::text, ST_X(geom), ST_Y(geom) "
+    xy = table == "points"
+    q = sql.SQL("SELECT {cols}, ST_AsGeoJSON(ST_Transform(geom, 4326))::text{xy} "
                 "FROM {t} WHERE deleted_at IS NULL ORDER BY id LIMIT %s").format(
-        cols=sql.SQL(", ").join(map(sql.Identifier, cols)), t=sql.Identifier(project.slug, table))
+        cols=sql.SQL(", ").join(map(sql.Identifier, cols)), t=sql.Identifier(project.slug, table),
+        xy=sql.SQL(", ST_X(geom), ST_Y(geom)" if xy else ""))
     out = []
     for row in conn.execute(q, (limit,)).fetchall():
         props = {c: (v.isoformat() if hasattr(v, "isoformat") else (str(v) if c in ("client_uuid", "session_id") and v else v))
                  for c, v in zip(cols, row[:len(cols)], strict=True)}
-        props["x"], props["y"] = row[-2], row[-1]
-        out.append({"type": "Feature", "id": props["id"], "geometry": json.loads(row[-3]), "properties": props})
+        if xy:
+            props["x"], props["y"] = row[-2], row[-1]
+        out.append({"type": "Feature", "id": props["id"], "geometry": json.loads(row[len(cols)]), "properties": props})
     return out
 
 

@@ -175,6 +175,6 @@ def _session(conn, project, cu, it, user_label) -> str:
         "ON CONFLICT (id) DO UPDATE SET ended_at = CASE WHEN %s THEN now() ELSE {}.ended_at END RETURNING (xmax = 0)"
     ).format(sql.Identifier(project.slug, "sessions"), sql.Identifier(project.slug, "sessions")),
         (cu, _coerce("name", str, p.get("name")), _coerce("device", str, p.get("device")),
-         _coerce("driver_id", str, p.get("driver_id")), user_label[:TEXT_MAX] or None,
+         _coerce("driver_id", str, p.get("driver_id")), (user_label or "")[:TEXT_MAX] or None,
          _coerce("notes", str, p.get("notes")), bool(p.get("end")))).fetchone()
     return "ok" if row and row[0] else "duplicate"

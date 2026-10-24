@@ -1,0 +1,133 @@
+{% extends "base.html" %}{% load static fa %}
+{% block title %}{{ project.name }} — برداشت میدانی — {{ SITE_NAME }}{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+{% block body_class %}is-studio{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
+<link rel="stylesheet" href="{% static 'css/map.css' %}">
+<link rel="stylesheet" href="{% static 'css/studio.css' %}">
+<link rel="stylesheet" href="{% static 'css/survey.css' %}">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
+<div class="studio" id="studio" data-panel="open">
+  {% csrf_token %}
+  <header class="st-bar">
+    <a class="st-back" href="{% url 'survey:index' db.pk %}" title="پروژه‌ها" aria-label="بازگشت به پروژه‌ها">→</a>
+    <nav class="st-crumbs" aria-label="مسیر"><a class="ltr" href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a><span aria-hidden="true">/</span><a href="{% url 'survey:index' db.pk %}">برداشت</a></nav>
+    <strong class="sv-title">{{ project.name }}</strong>
+    <span class="badge active ltr">EPSG:{{ project.srid }}</span>
+    <span class="st-spacer"></span>
+    <span class="sv-net" id="sv-net" role="status" aria-live="polite">آنلاین</span>
+    <button class="btn ghost sm" type="button" id="sv-sync" title="ارسال داده‌های ذخیره‌شده روی دستگاه">ارسال <span id="sv-pending" class="sv-count">۰</span></button>
+  </header>
+
+  <div class="st-body">
+    <nav class="st-rail" role="tablist" aria-label="بخش‌های برداشت" aria-orientation="vertical">
+      <button type="button" class="st-tab" role="tab" data-tab="capture" aria-controls="tab-capture"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg><span>برداشت</span></button>
+      <button type="button" class="st-tab" role="tab" data-tab="points" aria-controls="tab-points"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 10h18M9 5v14"/></svg><span>نقاط</span><em class="st-badge" id="b-points"></em></button>
+      <button type="button" class="st-tab" role="tab" data-tab="files" aria-controls="tab-files"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg><span>فایل</span></button>
+      <button type="button" class="st-tab" role="tab" data-tab="tools" aria-controls="tab-tools"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20L20 4M7 17l-3 3M14 4h6v6"/></svg><span>ابزار</span></button>
+      <button type="button" class="st-collapse" id="st-collapse" aria-controls="st-panel" aria-expanded="true" title="بستن پنل"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+    </nav>
+
+    <aside class="st-panel" id="st-panel" aria-label="پنل برداشت">
+      <!-- ============ برداشت ============ -->
+      <section class="st-sec" id="tab-capture" data-tab="capture" role="tabpanel">
+        <div class="st-head"><h2>برداشت</h2></div>
+        <div class="st-scroll">
+          <div class="sv-card">
+            <div class="sv-row"><label for="sv-src" class="small">گیرنده</label>
+              <select id="sv-src"></select>
+              <button type="button" class="btn sm" id="sv-connect">اتصال</button></div>
+            <div class="sv-fix" id="sv-fix" data-q="none"><b id="sv-fixlabel">بدون اتصال</b><span id="sv-acc" class="ltr"></span></div>
+            <dl class="sv-grid ltr" id="sv-live">
+              <div><dt>E / lon</dt><dd id="sv-x">—</dd></div><div><dt>N / lat</dt><dd id="sv-y">—</dd></div>
+              <div><dt>H</dt><dd id="sv-h">—</dd></div><div><dt>ماهواره / HDOP</dt><dd id="sv-sats">—</dd></div>
+            </dl>
+          </div>
+
+          {% if db.can_edit %}
+          <div class="sv-card">
+            <div class="sv-modes" role="group" aria-label="نوع عارضه">
+              <button type="button" class="btn sm sv-mode on" data-mode="point">نقطه</button>
+              <button type="button" class="btn ghost sm sv-mode" data-mode="line">خط</button>
+              <button type="button" class="btn ghost sm sv-mode" data-mode="polygon">چندضلعی</button>
+            </div>
+            <div class="sv-row"><label for="sv-no" class="small">شماره</label><input id="sv-no" type="text" class="ltr" value="1" size="6">
+              <label for="sv-ah" class="small">ارتفاع آنتن (m)</label><input id="sv-ah" type="number" step="0.001" min="0" class="ltr" value="" size="5"></div>
+            <div class="sv-row"><label for="sv-code" class="small">کد</label><input id="sv-code" list="sv-codes" class="ltr" placeholder="GR"><datalist id="sv-codes"></datalist>
+              <label for="sv-avg" class="small">میانگین</label><select id="sv-avg"><option value="0">لحظه‌ای</option><option value="5">۵ ثانیه</option><option value="10">۱۰ ثانیه</option><option value="30">۳۰ ثانیه</option></select></div>
+            <div class="sv-row"><label for="sv-descr" class="small">توضیح</label><input id="sv-descr" type="text" maxlength="200"></div>
+            <div class="sv-row"><label for="sv-max" class="small">حداکثر خطای مجاز (m)</label><input id="sv-max" type="number" step="0.01" min="0" class="ltr" value="" size="5" placeholder="بدون محدودیت"></div>
+            <button class="btn sv-big" type="button" id="sv-record" disabled>ثبت نقطه</button>
+            <div class="sv-row" id="sv-vrow" hidden><button type="button" class="btn ghost sm" id="sv-undo">حذف آخرین رأس</button><button type="button" class="btn sm" id="sv-finish">پایان عارضه</button><span class="small muted" id="sv-vcount"></span></div>
+            <p class="small muted" id="sv-msg" role="status" aria-live="polite"></p>
+          </div>
+          {% else %}<p class="small muted">دسترسی شما فقط‌خواندنی است؛ ثبت نقطه برای ویرایشگر و مالک است.</p>{% endif %}
+        </div>
+      </section>
+
+      <!-- ============ نقاط ============ -->
+      <section class="st-sec" id="tab-points" data-tab="points" role="tabpanel" hidden>
+        <div class="st-head"><h2>نقاط <span class="muted small" id="pt-count"></span></h2></div>
+        <div class="st-scroll"><div class="sv-table-wrap"><table class="sv-table" id="pt-table"><thead><tr><th></th><th>شماره</th><th>کد</th><th>E</th><th>N</th><th>±</th><th></th></tr></thead><tbody></tbody></table></div>
+          <p class="small muted" id="pt-empty" hidden>هنوز نقطه‌ای برداشت نشده است.</p></div>
+      </section>
+
+      <!-- ============ فایل ============ -->
+      <section class="st-sec" id="tab-files" data-tab="files" role="tabpanel" hidden>
+        <div class="st-head"><h2>ورود و خروج فایل</h2></div>
+        <div class="st-scroll">
+          {% if db.can_edit %}
+          <form class="sv-card" id="sv-import" enctype="multipart/form-data">
+            <h3 class="sv-h">ورود نقاط</h3>
+            <input type="file" name="file" accept=".csv,.txt,.xyz,.geojson,.json" required aria-label="فایل نقاط">
+            <div class="sv-row"><label class="small" for="im-order">ستون‌ها</label>
+              <select id="im-order" name="order"><option value="pen">نام، شرق، شمال، ارتفاع، کد</option><option value="pne">نام، شمال، شرق، ارتفاع، کد</option><option value="en">شرق، شمال</option><option value="ne">شمال، شرق</option></select></div>
+            <div class="sv-row"><label class="small" for="im-crs">مختصات فایل</label>
+              <select id="im-crs" name="crs"><option value="project">سیستم پروژه (EPSG:{{ project.srid }})</option><option value="4326">طول و عرض جغرافیایی (WGS84)</option></select></div>
+            <button class="btn sm" type="submit">ورود</button><p class="small muted" id="im-msg" role="status" aria-live="polite"></p>
+            <p class="small muted">فایل GeoJSON هم پذیرفته می‌شود. سرستون فارسی یا انگلیسی خودکار شناخته می‌شود.</p>
+          </form>
+          {% endif %}
+          <div class="sv-card"><h3 class="sv-h">خروجی</h3>
+            <div class="sv-links">
+              <a class="btn ghost sm" href="{% url 'survey:export' db.pk project.pk 'dxf' %}">DXF (اتوکد)</a>
+              <a class="btn ghost sm" href="{% url 'survey:export' db.pk project.pk 'csv' %}">CSV نقاط</a>
+              <a class="btn ghost sm" href="{% url 'survey:export' db.pk project.pk 'geojson' %}">GeoJSON</a>
+              <a class="btn ghost sm" href="{% url 'survey:export' db.pk project.pk 'report' %}" target="_blank" rel="noopener">گزارش چاپی / PDF</a>
+            </div>
+            <p class="small muted">داده در جدول‌های <span class="ltr">{{ project.slug }}.points</span> و … در پایگاه داده شماست؛ از QGIS، نقشه‌های چندلایه و REST API هم قابل استفاده است.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ابزار ============ -->
+      <section class="st-sec" id="tab-tools" data-tab="tools" role="tabpanel" hidden>
+        <div class="st-head"><h2>ابزار</h2></div>
+        <div class="st-scroll">
+          <div class="sv-card"><h3 class="sv-h">پیاده‌سازی نقطه (Stake-out)</h3>
+            <div class="sv-row"><label class="small" for="so-target">نقطه هدف</label><select id="so-target"><option value="">—</option></select></div>
+            <div class="sv-stake" id="so-out" hidden><div class="sv-arrow" id="so-arrow" aria-hidden="true">↑</div>
+              <div><b id="so-dist" class="ltr">—</b><div class="small muted ltr" id="so-detail"></div></div></div></div>
+          <div class="sv-card"><h3 class="sv-h">محاسبه روی نقاط انتخاب‌شده</h3>
+            <p class="small muted">در جدول نقاط تیک بزنید: دو نقطه ← فاصله و آزیموت؛ سه نقطه یا بیشتر (به ترتیب) ← مساحت و محیط.</p>
+            <button class="btn sm" type="button" id="cg-run">محاسبه</button><div class="small ltr" id="cg-out" role="status"></div></div>
+        </div>
+      </section>
+    </aside>
+    <div class="st-resize" id="st-resize" role="separator" aria-orientation="vertical" tabindex="0" aria-label="تغییر عرض پنل"></div>
+    <div class="st-map" id="map"></div>
+  </div>
+</div>
+{{ conf|json_script:"sv-conf" }}
+<script src="{% static 'vendor/maplibre/maplibre-gl.js' %}"></script>
+<script src="{% static 'js/map-page.js' %}"></script>
+<script src="{% static 'js/survey/nmea.js' %}"></script>
+<script src="{% static 'js/survey/proj.js' %}"></script>
+<script src="{% static 'js/survey/queue.js' %}"></script>
+<script src="{% static 'js/survey/gnss.js' %}"></script>
+<script src="{% static 'js/survey/studio.js' %}"></script>
+{% endblock %}

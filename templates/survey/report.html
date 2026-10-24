@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}گزارش نقاط {{ project.name }}{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+{% block content %}
+<div class="wrap page sv-report">
+  <p class="no-print"><a href="{% url 'survey:studio' db.pk project.pk %}">← بازگشت</a> <button class="btn sm" type="button" onclick="window.print()">چاپ یا ذخیره PDF</button></p>
+  {{ table|safe }}
+</div>
+<style>.sv-report table{width:100%;border-collapse:collapse;font-size:.85rem}.sv-report th,.sv-report td{border:1px solid #bbb;padding:4px 6px;text-align:start}.sv-report td{direction:ltr;unicode-bidi:plaintext}@media print{.no-print,header,footer{display:none!important}}</style>
+{% endblock %}
