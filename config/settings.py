@@ -270,3 +270,8 @@ ANALYTICS_RETENTION_DAYS = int(os.environ.get("ANALYTICS_RETENTION_DAYS", "90"))
 TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "1"))
 # در حالت console و DEBUG کد روی صفحه هم نمایش داده شود (فقط برای توسعه)
 OTP_SHOW_IN_DEBUG = DEBUG and SMS_BACKEND == "console"
+
+# رله NTRIP (برداشت میدانی). اتصال به نشانی‌های داخلی فقط برای آزمون و توسعه باز می‌شود.
+NTRIP_ALLOW_PRIVATE = os.environ.get("NTRIP_ALLOW_PRIVATE", "") == "1"
+NTRIP_MAX_STREAMS_PER_PROCESS = int(os.environ.get("NTRIP_MAX_STREAMS_PER_PROCESS", "3"))  # از 12 رشته gunicorn
+NTRIP_MAX_SECONDS = int(os.environ.get("NTRIP_MAX_SECONDS", str(4 * 3600)))

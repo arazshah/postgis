@@ -15,5 +15,11 @@ urlpatterns = [
     path("dashboard/<int:pk>/survey/<int:project_id>/import/", views.project_import, name="import"),
     path("dashboard/<int:pk>/survey/<int:project_id>/cogo/", views.project_cogo, name="cogo"),
     path("dashboard/<int:pk>/survey/<int:project_id>/export/<str:fmt>/", views.export, name="export"),
+    path("dashboard/<int:pk>/survey/<int:project_id>/ntrip/", views.ntrip_profiles, name="ntrip_profiles"),
+    path("dashboard/<int:pk>/survey/<int:project_id>/ntrip/sourcetable/", views.ntrip_sourcetable, name="ntrip_sourcetable"),
+    path("dashboard/<int:pk>/survey/<int:project_id>/ntrip/start/", views.ntrip_start, name="ntrip_start"),
+    path("dashboard/<int:pk>/survey/<int:project_id>/ntrip/stream/<uuid:session>/", views.ntrip_stream, name="ntrip_stream"),
+    path("dashboard/<int:pk>/survey/<int:project_id>/ntrip/gga/<uuid:session>/", views.ntrip_gga, name="ntrip_gga"),
+    path("dashboard/<int:pk>/survey/<int:project_id>/ntrip/stop/<uuid:session>/", views.ntrip_stop, name="ntrip_stop"),
     path("api/v1/survey/<slug:slug>/sync/", views.api_sync, name="api_sync"),
 ]
