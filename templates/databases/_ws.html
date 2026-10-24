@@ -1,25 +1,23 @@
-{% extends "base.html" %}{% load fa ws %}
+{% extends "base.html" %}{% load fa ws static %}
 {% block content %}
-<div class="wrap ws">
-  <aside class="ws-side">
-    <a class="ws-back" href="{% url 'databases:dashboard' %}">← همه پایگاه‌های داده</a>
-    <div class="ws-db">
-      <a href="{% url 'databases:detail' db.pk %}" class="ws-name ltr">{{ db.db_name }}</a>
-      <div class="ws-meta"><span class="badge {{ db.status }}">{{ db.get_status_display }}</span><span class="small muted">{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span></div>
-      <div class="meter {{ db.usage_level }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ db.usage_percent|pct_width }}" aria-label="مصرف حجم"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
-    </div>
+<script>try{var d=document.documentElement,s=localStorage;if(s.getItem("gp.ws.c")==="1")d.dataset.wsC="1";if(s.getItem("gp.ws.w")==="1")d.dataset.wsW="1";}catch(e){}</script>
+<div class="wrap ws" data-ws>
+  <aside class="ws-side" id="ws-side" aria-label="منوی پایگاه داده">
     {% ws_nav db %}
   </aside>
+  <div class="ws-backdrop" data-ws-close hidden></div>
   <main class="ws-main" id="main">
-    <nav class="crumbs" aria-label="مسیر">
-      <a href="{% url 'databases:dashboard' %}">پایگاه‌ها</a><span>/</span>
-      <a class="ltr" href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a>{% ws_title db as wt %}{% if wt %}<span>/</span><b>{{ wt }}</b>{% endif %}
-    </nav>
+    <div class="ws-bar">
+      <button class="btn ghost sm ws-open" type="button" data-ws-open aria-controls="ws-side" aria-expanded="false">☰ منو{% ws_title db as wt0 %}{% if wt0 %}<span class="ws-open-cur">: {{ wt0 }}</span>{% endif %}</button>
+      <nav class="crumbs" aria-label="مسیر">
+        <a href="{% url 'databases:dashboard' %}">پایگاه‌ها</a><span>/</span>
+        <a class="ltr" href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a>{% ws_title db as wt %}{% if wt %}<span>/</span><b>{{ wt }}</b>{% endif %}
+      </nav>
+      <span class="ws-bar-gpa" data-gpa-slot="bar"></span>
+      <button class="btn ghost sm ws-wide-btn" type="button" data-ws-wide aria-pressed="false" title="منوها جمع می‌شوند تا محتوا بیشترین عرض را داشته باشد">⤢ حالت گسترده</button>
+    </div>
     {% block ws %}{% endblock %}
   </main>
 </div>
-<script>
-(() => { const d = document.querySelector('.ws-menu'); if (!d) return; const mq = matchMedia('(min-width:901px)');
-  const sync = () => { d.open = mq.matches; }; sync(); mq.addEventListener('change', sync); })();
-</script>
 {% endblock %}
+{% block scripts %}<script src="{% static 'js/ws-nav.js' %}" defer></script>{% block ws_scripts %}{% endblock %}{% endblock %}

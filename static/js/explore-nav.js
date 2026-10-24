@@ -16,9 +16,12 @@
   };
   let pinned = store.get("gp.ex.pin") === "1";
   let open = pinned && store.get("gp.ex.open") !== "0";
+  // «حالت گسترده» (ws-nav.js): فهرست سنجاق‌شده کنار صفحه نمی‌ماند تا محتوا بیشترین عرض را بگیرد
+  const wideMode = () => document.documentElement.dataset.wsW === "1";
+  const isDocked = () => pinned && wide.matches && !wideMode();
 
   function render() {
-    const docked = pinned && wide.matches;
+    const docked = isDocked();
     list.hidden = !open;
     layout.classList.toggle("docked", docked && open);
     layout.classList.toggle("popover", !docked);
@@ -31,7 +34,7 @@
     open = v;
     if (pinned) store.set("gp.ex.open", v ? "1" : "0");
     render();
-    if (v && focus && filter && !(pinned && wide.matches)) filter.focus();
+    if (v && focus && filter && !isDocked()) filter.focus();
   }
 
   toggle.addEventListener("click", () => setOpen(!open, true));
@@ -43,15 +46,20 @@
     render();
   });
   wide.addEventListener("change", render);
+  document.addEventListener("ws:wide", (e) => {
+    if (e.detail && e.detail.on && pinned) open = false; // فهرست بسته می‌شود؛ با دکمه «جدول‌ها» بازشو می‌شود
+    else if (e.detail && !e.detail.on && pinned) open = store.get("gp.ex.open") !== "0";
+    render();
+  });
 
   // بستن بازشو با کلیک بیرون یا Esc
   document.addEventListener("click", (e) => {
-    if (!open || (pinned && wide.matches)) return;
+    if (!open || isDocked()) return;
     if (list.contains(e.target) || toggle.contains(e.target)) return;
     setOpen(false);
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && open && !(pinned && wide.matches)) { setOpen(false); toggle.focus(); }
+    if (e.key === "Escape" && open && !isDocked()) { setOpen(false); toggle.focus(); }
   });
 
   // جست‌وجوی زنده؛ Enter اولین نتیجه را باز می‌کند
@@ -83,4 +91,5 @@
   // جدول فعلی همیشه در دید باشد
   const cur = list.querySelector("[aria-current=page]");
   if (cur && layout.classList.contains("docked")) cur.scrollIntoView({ block: "nearest" });
+  if (wideMode() && pinned) { open = false; render(); }
 })();

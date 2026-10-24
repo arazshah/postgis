@@ -214,11 +214,40 @@
     panel.hidden = !panel.hidden;
     fab.setAttribute("aria-expanded", String(!panel.hidden));
     fab.classList.toggle("gpa-open", !panel.hidden);
+    dock();
     if (!panel.hidden) { input.focus(); scroll(); }
   }
+
+  // ── جای دکمه: داخل منوی کنار صفحه یا نوار بالای صفحه‌های تمام‌صفحه، وگرنه شناور ──
+  // جای شناور گوشه‌ی نقشه‌ها (راهنما و مقیاس) را می‌پوشاند؛ پس هر جا که جای ثابتی هست، آنجا می‌نشیند.
+  const slot = (name) => document.querySelector('[data-gpa-slot="' + name + '"]');
+  const narrow = matchMedia("(max-width:900px)");
+  function place() {
+    let target = null, mode = "";
+    if (slot("studio")) { target = slot("studio"); mode = "compact"; }
+    else if (!narrow.matches && slot("menu")) { target = slot("menu"); mode = "inline"; }
+    else if (narrow.matches && slot("bar")) { target = slot("bar"); mode = "compact"; }
+    fab.classList.toggle("gpa-inline", mode === "inline");
+    fab.classList.toggle("gpa-compact", mode === "compact");
+    if (target) { if (fab.parentNode !== target) target.appendChild(fab); }
+    else if (fab.parentNode !== document.body) document.body.appendChild(fab);
+  }
+
+  // ── پنل کنار صفحه: روی صفحه‌ی عریض نقشه و منوها را نمی‌پوشاند، فقط کوچک‌ترشان می‌کند ──
+  const wideScreen = matchMedia("(min-width:1100px)");
+  const canDock = () => wideScreen.matches && !!document.querySelector(".ws, .studio");
+  function dock() {
+    if (!panel) return;
+    const on = !panel.hidden && canDock();
+    panel.classList.toggle("gpa-dock", on);
+    document.body.classList.toggle("gpa-docked", on);
+    window.dispatchEvent(new Event("resize")); // نقشه‌ها اندازه‌شان را دوباره بگیرند
+  }
+  wideScreen.addEventListener("change", dock);
+  narrow.addEventListener("change", place);
 
   fab = el("button", "gpa-fab"); fab.type = "button"; fab.setAttribute("aria-label", "دستیار هوشمند"); fab.setAttribute("aria-expanded", "false");
   fab.appendChild(el("span", "gpa-fab-ico", "💬")); fab.appendChild(el("span", "gpa-fab-txt", "دستیار"));
   fab.addEventListener("click", toggle);
-  document.body.appendChild(fab);
+  place();
 })();

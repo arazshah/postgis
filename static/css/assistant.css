@@ -1,4 +1,5 @@
 /* دستیار هوشمند — پایین‌چپ؛ از رنگ‌ها و فونت‌های app.css استفاده می‌کند */
+:root{--gpa-w:380px}
 .gpa-fab{position:fixed;left:16px;bottom:16px;z-index:40;display:flex;align-items:center;gap:8px;border:0;cursor:pointer;
   background:var(--teal);color:#fff;font:700 14px/1 var(--f-body);padding:12px 16px;border-radius:999px;
   box-shadow:0 6px 18px rgba(10,67,65,.35);transition:background .15s,transform .15s}
@@ -49,6 +50,19 @@
 .gpa-send:disabled,.gpa-form textarea:disabled{opacity:.55;cursor:wait}
 .gpa-foot{padding:6px 12px 9px;font-size:11px;color:var(--ink-2);background:var(--surface);line-height:1.7}
 .gpa-foot a{color:var(--teal)}
+
+/* جای ثابت دکمه: داخل منوی کنار صفحه یا نوار بالای استودیوها (assistant.js → place) تا روی نقشه و لایه‌ها نیفتد */
+.gpa-fab.gpa-inline,.gpa-fab.gpa-compact{position:static;box-shadow:none;transform:none}
+.gpa-fab.gpa-inline{width:100%;box-sizing:border-box;justify-content:center;padding:9px 12px;font-size:13.5px;border-radius:var(--r-md)}
+.gpa-fab.gpa-compact{padding:6px 12px;font-size:13px;gap:6px}
+.gpa-fab.gpa-compact .gpa-fab-ico{font-size:15px}
+html:is([data-ws-c="1"],[data-ws-w="1"]) .ws .gpa-fab.gpa-inline .gpa-fab-txt{display:none}
+html:is([data-ws-c="1"],[data-ws-w="1"]) .ws .gpa-fab.gpa-inline{padding:8px 0}
+@media (max-width:900px){.gpa-fab.gpa-compact .gpa-fab-txt{display:none}.gpa-fab.gpa-compact{padding:7px 10px}}
+/* حالت کنار صفحه (صفحه‌ی عریض با منو یا نقشه): پنل ستون کناری است و محتوا کوچک می‌شود، نه اینکه زیر پنل بماند */
+.gpa-panel.gpa-dock{left:0;top:0;bottom:0;width:var(--gpa-w);height:auto;border-radius:0;border-width:0 1px 0 0;box-shadow:6px 0 24px rgba(18,49,58,.12)}
+body.gpa-docked{padding-left:var(--gpa-w)}
+.gpa-docked .studio{left:var(--gpa-w);right:0}
 @media (max-width:640px){
   .gpa-fab{bottom:calc(16px + env(safe-area-inset-bottom))}
   .gpa-fab-txt{display:none}
