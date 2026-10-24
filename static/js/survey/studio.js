@@ -178,6 +178,7 @@
   const ext = conf.drivers.filter((d) => d.external);
   if (ext.length && SurveyGnss.hasSerial) sources.push({key: "serial", label: "گیرنده خارجی (کابل / بلوتوث سریال)", id: "nmea-generic", transport: "web-serial"});
   if (ext.length && SurveyGnss.hasBle) sources.push({key: "ble", label: "گیرنده خارجی (بلوتوث BLE)", id: "nmea-generic", transport: "web-bluetooth"});
+  sources.push({key: "replay", label: "نمونه آموزشی (بدون گیرنده)", id: "nmea-generic", transport: "replay"});
   if (!sources.length) sources.push({key: "none", label: "گیرنده‌ای در این مرورگر در دسترس نیست", id: "", transport: ""});
   srcSel.innerHTML = sources.map((s) => `<option value="${s.key}">${esc(s.label)}</option>`).join("");
   if (!ext.length) srcSel.title = "اتصال گیرنده خارجی در پلن‌های پولی فعال است.";
@@ -226,8 +227,11 @@
     if (!s || !s.id) return say("گیرنده‌ای در این مرورگر در دسترس نیست.", true);
     $("sv-connect").disabled = true;
     try {
-      driver = s.key === "phone" ? SurveyGnss.phone(bus) : SurveyGnss.nmea(bus, s.transport, {});
-      driverId = s.id; sourceLabel = s.key === "phone" ? "phone" : "external";
+      if (s.key === "replay") {
+        const text = await fetch(conf.sampleNmea, {credentials: "same-origin"}).then((r) => r.text());
+        driver = SurveyGnss.replay(bus, text);
+      } else driver = s.key === "phone" ? SurveyGnss.phone(bus) : SurveyGnss.nmea(bus, s.transport, {});
+      driverId = s.id; sourceLabel = s.key === "phone" ? "phone" : s.key === "replay" ? "replay" : "external";
       await driver.start();
       $("sv-connect").textContent = "قطع";
       say("");
@@ -289,7 +293,7 @@
       const p = await averaged(parseInt($("sv-avg").value, 10) || 0);
       await ensureSession();
       const props = {pt_no: $("sv-no").value.trim() || null, code: $("sv-code").value.trim() || null, descr: $("sv-descr").value.trim() || null,
-        pos_source: sourceLabel === "phone" ? "phone" : (acc.fix_quality === 4 || acc.fix_quality === 5 ? "rtk" : "external"),
+        pos_source: sourceLabel === "phone" ? "phone" : sourceLabel === "replay" ? "replay" : (acc.fix_quality === 4 || acc.fix_quality === 5 ? "rtk" : "external"),
         captured_at: new Date().toISOString(), device: navigator.userAgent.slice(0, 120), driver_id: driverId, driver_version: driverVersion, session_id: sess};
       const ah = parseFloat($("sv-ah").value); if (ah >= 0) props.antenna_h = ah;
       for (const [src, dst] of [["fix_quality", "fix_quality"], ["sats_used", "sats"], ["hdop", "hdop"], ["pdop", "pdop"], ["acc_h", "acc_h"], ["std_e", "std_e"], ["std_n", "std_n"], ["std_h", "std_h"], ["corr_age_s", "corr_age"]])

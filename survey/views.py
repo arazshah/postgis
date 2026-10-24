@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.templatetags.static import static
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
@@ -123,7 +124,8 @@ def studio(request, pk, project_id):
     }
     conf = {**base_config(request), "srid": p.srid, "project": p.name, "counts": counts, "codes": codes,
             "drivers": drivers, "urls": urls, "canEdit": bool(db.can_edit), "pointsCap": db.plan.survey_max_points,
-            "projectId": p.pk, "dbId": db.pk, "basemapKind": "osm", "layers": []}
+            "projectId": p.pk, "dbId": db.pk, "basemapKind": "osm", "layers": [],
+            "sampleNmea": static("survey/sample.nmea")}
     return render(request, "survey/studio.html", {"db": db, "project": p, "conf": conf, "formats": sorted(FORMATS)})
 
 
