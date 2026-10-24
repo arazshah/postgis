@@ -130,6 +130,18 @@
             <div class="sv-row"><label class="small" for="so-target">نقطه هدف</label><select id="so-target"><option value="">—</option></select></div>
             <div class="sv-stake" id="so-out" hidden><div class="sv-arrow" id="so-arrow" aria-hidden="true">↑</div>
               <div><b id="so-dist" class="ltr">—</b><div class="small muted ltr" id="so-detail"></div></div></div></div>
+          <div class="sv-card" id="of-card" hidden>
+            <h3 class="sv-h">نقشه آفلاین</h3>
+            <p class="small muted">پیش از رفتن به میدان، محدوده کار را روی نقشه نشان دهید و ذخیره کنید تا بدون اینترنت هم زمینه نقشه داشته باشید.</p>
+            <div class="sv-row"><label class="small" for="of-detail">جزئیات</label>
+              <select id="of-detail"></select></div>
+            <p class="small ltr" id="of-est" role="status" aria-live="polite"></p>
+            <div class="sv-row"><button type="button" class="btn sm" id="of-go">ذخیره محدوده فعلی</button>
+              <button type="button" class="btn ghost sm" id="of-stop" hidden>توقف</button>
+              <button type="button" class="btn ghost sm" id="of-del">حذف نقشه ذخیره‌شده</button></div>
+            <progress id="of-bar" max="1" value="0" hidden style="width:100%"></progress>
+            <p class="small muted" id="of-state" role="status" aria-live="polite"></p>
+          </div>
           <div class="sv-card"><h3 class="sv-h">محاسبه روی نقاط انتخاب‌شده</h3>
             <p class="small muted">در جدول نقاط تیک بزنید: دو نقطه ← فاصله و آزیموت؛ سه نقطه یا بیشتر (به ترتیب) ← مساحت و محیط.</p>
             <button class="btn sm" type="button" id="cg-run">محاسبه</button><div class="small ltr" id="cg-out" role="status"></div></div>
@@ -148,5 +160,6 @@
 <script src="{% static 'js/survey/queue.js' %}"></script>
 <script src="{% static 'js/survey/gnss.js' %}"></script>
 <script src="{% static 'js/survey/ntrip.js' %}"></script>
+<script src="{% static 'js/survey/offline.js' %}"></script>
 <script src="{% static 'js/survey/studio.js' %}"></script>
 {% endblock %}

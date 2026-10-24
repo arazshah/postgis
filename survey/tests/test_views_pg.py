@@ -4,6 +4,7 @@ import json
 import os
 import unittest
 import uuid
+from unittest import mock
 
 import psycopg
 from django.core.cache import cache
@@ -283,3 +284,15 @@ class SurveyViewTests(TestCase):
         self.assertIn(f"{self.p.slug}.points", keys)
         buf = io.StringIO()
         buf.write("ok")
+
+    # ---------------------------------------------------------------- نقشه پایه آفلاین‌پذیر
+    def test_studio_uses_own_vector_basemap_when_available(self):
+        url = f"{self.base}{self.p.pk}/"
+        conf = self.c.get(url).context["conf"]
+        self.assertEqual(conf["basemapKind"], "osm")  # ساخته نشده ⇒ کاشی تصویری
+        self.assertEqual(conf["baseMaxZoom"], 0)
+        with mock.patch("iranmap.basemap.available", return_value=True), mock.patch("iranmap.basemap.maxzoom", return_value=14):
+            conf = self.c.get(url).context["conf"]
+        self.assertEqual(conf["basemapKind"], "iran")
+        self.assertTrue(conf["iranStyle"].endswith("/basemap/style.json"))
+        self.assertEqual(conf["baseMaxZoom"], 14)

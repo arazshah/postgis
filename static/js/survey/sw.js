@@ -1,12 +1,13 @@
 // Service Worker برداشت میدانی: پوسته استودیو و نقشه‌های دیده‌شده را برای کار بدون اینترنت نگه می‌دارد.
 // داده برداشت در IndexedDB است (نه اینجا)؛ اینجا فقط فایل‌های ثابت و کاشی‌های نقشه پایه.
-const VERSION = "sv-v1";
+const VERSION = "sv-v2";
 const SHELL = "shell-" + VERSION, TILES = "tiles-" + VERSION;
+const OFFLINE = "tiles-offline-v1"; // کاشی‌هایی که کاربر عمداً ذخیره کرده؛ هرگز خودکار پاک نمی‌شود
 const MAX_TILES = 1500;
 
 self.addEventListener("install", (e) => { self.skipWaiting(); });
 self.addEventListener("activate", (e) => {
-  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => ![SHELL, TILES].includes(k)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => ![SHELL, TILES, OFFLINE].includes(k)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 async function trim(cache) {
@@ -24,18 +25,20 @@ self.addEventListener("fetch", (e) => {
   if (isData) return; // داده را خود برنامه از IndexedDB می‌خواند
   if (isTile) {
     e.respondWith(caches.open(TILES).then(async (c) => {
-      const hit = await c.match(req);
+      const hit = await caches.match(req, {ignoreVary: true}); // هم کاشی‌های ذخیره‌شده عمدی، هم کش خودکار
       const net = fetch(req).then((r) => { if (r.ok) { c.put(req, r.clone()).then(() => trim(c)); } return r; }).catch(() => hit);
       return hit || net;
     }));
   } else if (isStatic) {
     e.respondWith(caches.open(SHELL).then(async (c) => {
-      const hit = await c.match(req);
+      const hit = await c.match(req, {ignoreVary: true});
       const net = fetch(req).then((r) => { if (r.ok) c.put(req, r.clone()); return r; }).catch(() => hit);
       return hit || net;
     }));
   } else if (isStudio) {
-    e.respondWith(fetch(req).then((r) => { if (r.ok) caches.open(SHELL).then((c) => c.put(req, r.clone())); return r; })
-      .catch(() => caches.open(SHELL).then((c) => c.match(req)).then((r) => r || new Response("آفلاین هستید و این صفحه هنوز ذخیره نشده است.", {status: 503, headers: {"Content-Type": "text/plain; charset=utf-8"}}))));
+    // ignoreVary: پاسخ صفحه Vary: Cookie دارد و در ناوبری آفلاین هیچ‌وقت بدون آن جور نمی‌شود
+    e.respondWith(fetch(req).then((r) => { if (r.ok) { const copy = r.clone(); caches.open(SHELL).then((c) => c.put(req, copy)); } return r; }) // clone باید همزمان باشد، وگرنه بدنه پیش‌تر مصرف شده است
+
+      .catch(() => caches.open(SHELL).then((c) => c.match(req, {ignoreVary: true})).then((r) => r || new Response("آفلاین هستید و این صفحه هنوز ذخیره نشده است.", {status: 503, headers: {"Content-Type": "text/plain; charset=utf-8"}}))));
   }
 });
