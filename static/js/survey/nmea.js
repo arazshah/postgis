@@ -103,6 +103,7 @@
       while ((i = buf.search(/\r?\n/)) >= 0) {
         const line = buf.slice(0, i);
         buf = buf.slice(buf[i] === "\r" ? i + 2 : i + 1);
+        if (state.onLine) state.onLine(line);
         events.push(...parse(line, state));
       }
       if (buf.length > 2000) buf = "";

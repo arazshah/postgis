@@ -48,6 +48,24 @@
             </dl>
           </div>
 
+
+          <div class="sv-card" id="nt-card" hidden>
+            <h3 class="sv-h">تصحیحات RTK (NTRIP)</h3>
+            <div class="sv-row"><label for="nt-sel" class="small">اتصال</label><select id="nt-sel"></select>
+              <button type="button" class="btn sm" id="nt-go" disabled>دریافت</button>
+              <button type="button" class="btn ghost sm" id="nt-edit">تنظیم</button></div>
+            <p class="small muted" id="nt-state" role="status" aria-live="polite">برای دریافت تصحیح، ابتدا گیرنده خارجی را وصل کنید.</p>
+            <form id="nt-form" hidden autocomplete="off">
+              <div class="sv-row"><label for="nt-name" class="small">نام</label><input id="nt-name" maxlength="80"></div>
+              <div class="sv-row"><label for="nt-host" class="small">کستر</label><input id="nt-host" class="ltr" placeholder="caster.example.com"><input id="nt-port" class="ltr" type="number" min="1" max="65535" value="2101" size="5"></div>
+              <div class="sv-row"><label for="nt-user" class="small">کاربر</label><input id="nt-user" class="ltr" autocomplete="off"><label for="nt-pass" class="small">گذرواژه</label><input id="nt-pass" class="ltr" type="password" autocomplete="new-password" placeholder="بدون تغییر"></div>
+              <div class="sv-row"><label for="nt-mp" class="small">Mountpoint</label><input id="nt-mp" class="ltr" list="nt-mps" maxlength="40"><datalist id="nt-mps"></datalist>
+                <button type="button" class="btn ghost sm" id="nt-list">فهرست</button></div>
+              <div class="sv-row"><label class="small"><input type="checkbox" id="nt-tls"> TLS</label><label class="small"><input type="checkbox" id="nt-gga" checked> ارسال موقعیت به کستر (برای VRS)</label></div>
+              <div class="sv-row"><button type="submit" class="btn sm">ذخیره</button><button type="button" class="btn ghost sm" id="nt-del">حذف</button></div>
+              <p class="small muted">گذرواژه رمز‌شده ذخیره می‌شود و به مرورگر برنمی‌گردد. ارتباط با کستر از سرور ما برقرار می‌شود.</p>
+            </form>
+          </div>
           {% if db.can_edit %}
           <div class="sv-card">
             <div class="sv-modes" role="group" aria-label="نوع عارضه">
@@ -129,5 +147,6 @@
 <script src="{% static 'js/survey/proj.js' %}"></script>
 <script src="{% static 'js/survey/queue.js' %}"></script>
 <script src="{% static 'js/survey/gnss.js' %}"></script>
+<script src="{% static 'js/survey/ntrip.js' %}"></script>
 <script src="{% static 'js/survey/studio.js' %}"></script>
 {% endblock %}

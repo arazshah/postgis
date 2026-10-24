@@ -3,28 +3,31 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from pathlib import Path
 
 from django.conf import settings
 from django.contrib import messages
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
 from databases import team
+from databases.crypto import decrypt, encrypt
 from databases.explorer import ExplorerError
 from databases.models import UserDatabase
 from publish import access
 from publish.models import ApiKey
 from publish.views import base_config
 
-from . import cogo, crs, data, exports, importers, presets, services, sync
+from . import cogo, crs, data, exports, importers, ntrip, presets, services, sync
 from .gnss import registry
-from .models import GnssDriver, SurveyProject
+from .models import GnssDriver, NtripProfile, NtripSession, SurveyProject
 
 log = logging.getLogger(__name__)
 FORMATS = {"csv", "geojson", "dxf", "report"}
@@ -121,11 +124,12 @@ def studio(request, pk, project_id):
         "data": f"/dashboard/{db.pk}/survey/{p.pk}/data/", "sync": f"/dashboard/{db.pk}/survey/{p.pk}/sync/",
         "import": f"/dashboard/{db.pk}/survey/{p.pk}/import/", "cogo": f"/dashboard/{db.pk}/survey/{p.pk}/cogo/",
         "export": f"/dashboard/{db.pk}/survey/{p.pk}/export/", "list": f"/dashboard/{db.pk}/survey/",
+        "ntrip": f"/dashboard/{db.pk}/survey/{p.pk}/ntrip/",
     }
     conf = {**base_config(request), "srid": p.srid, "project": p.name, "counts": counts, "codes": codes,
             "drivers": drivers, "urls": urls, "canEdit": bool(db.can_edit), "pointsCap": db.plan.survey_max_points,
             "projectId": p.pk, "dbId": db.pk, "basemapKind": "osm", "layers": [],
-            "sampleNmea": static("survey/sample.nmea")}
+            "sampleNmea": static("survey/sample.nmea"), "ntripOn": bool(db.plan.gnss_external and db.can_edit)}
     return render(request, "survey/studio.html", {"db": db, "project": p, "conf": conf, "formats": sorted(FORMATS)})
 
 
@@ -305,3 +309,133 @@ def export(request, pk, project_id, fmt):
         return redirect("survey:studio", pk=db.pk, project_id=p.pk)
     resp["Content-Disposition"] = f'attachment; filename="survey-{p.slug}.{ext}"'
     return resp
+
+
+# ----------------------------------------------------------------------------- تصحیحات NTRIP (RTK)
+def _ntrip_db(request, pk):
+    db = _db(request, pk, "editor")
+    if not db.plan.gnss_external:
+        raise Http404
+    return db
+
+
+def _profile_json(pr):
+    return {"id": pr.pk, "name": pr.name, "host": pr.host, "port": pr.port, "mountpoint": pr.mountpoint,
+            "username": pr.username, "tls": pr.tls, "send_gga": pr.send_gga, "has_password": bool(pr.password_enc)}
+
+
+@site_user_required
+@require_http_methods(["GET", "POST"])
+def ntrip_profiles(request, pk, project_id):
+    db = _ntrip_db(request, pk)
+    p = _project(db, project_id)
+    if request.method == "GET":
+        return _json({"profiles": [_profile_json(x) for x in p.ntrip_profiles.all()]})
+    b = _body(request)
+    if b is None:
+        return _json({"error": "bad_json", "message": "درخواست نامعتبر است."}, 400)
+    if p.ntrip_profiles.count() >= 10 and not b.get("id"):
+        return _json({"error": "limit", "message": "حداکثر ۱۰ اتصال برای هر پروژه."}, 400)
+    pr = p.ntrip_profiles.filter(pk=b.get("id")).first() if b.get("id") else NtripProfile(project=p, created_by=request.user)
+    if b.get("id") and pr is None:
+        raise Http404
+    if b.get("delete"):
+        pr.delete()
+        return _json({"ok": True})
+    try:
+        port = int(b.get("port") or 2101)
+        host, mount = str(b.get("host", "")).strip(), str(b.get("mountpoint", "")).strip()
+        user, pwd = str(b.get("username", "")), b.get("password")
+        ntrip.validate_profile(host, port, mount, user, pwd if isinstance(pwd, str) else "")
+        ntrip.resolve_public(host, port)
+    except (ValueError, ntrip.NtripError) as exc:
+        return _json({"error": "invalid", "message": str(exc) if isinstance(exc, ntrip.NtripError) else "درگاه نامعتبر است."}, 400)
+    pr.name = (str(b.get("name") or host))[:80]
+    pr.host, pr.port, pr.mountpoint, pr.username = host, port, mount, user
+    pr.tls, pr.send_gga = bool(b.get("tls")), b.get("send_gga", True) is not False
+    if isinstance(pwd, str) and pwd != "":  # خالی = بدون تغییر
+        pr.password_enc = encrypt(pwd)
+    pr.save()
+    return _json({"profile": _profile_json(pr)})
+
+
+@site_user_required
+@require_POST
+def ntrip_sourcetable(request, pk, project_id):
+    db = _ntrip_db(request, pk)
+    p = _project(db, project_id)
+    b = _body(request)
+    if b is None:
+        return _json({"error": "bad_json", "message": "درخواست نامعتبر است."}, 400)
+    pr = p.ntrip_profiles.filter(pk=b.get("id")).first() if b.get("id") else None
+    try:
+        # مقدارهای فرم بر ذخیره‌شده می‌چربند؛ گذرواژه خالی یعنی همان گذرواژه ذخیره‌شده
+        host = str(b.get("host") or (pr.host if pr else "")).strip()
+        port = int(b.get("port") or (pr.port if pr else 2101))
+        tls = bool(b["tls"]) if "tls" in b else bool(pr and pr.tls)
+        user = str(b["username"]) if "username" in b else (pr.username if pr else "")
+        same = bool(pr and pr.host == host and pr.port == port)  # گذرواژه ذخیره‌شده هرگز به میزبان دیگر نمی‌رود
+        pwd = str(b.get("password") or "") or (decrypt(pr.password_enc) if same else "")
+        rows = ntrip.fetch_sourcetable(host, port, tls, user, pwd)
+    except (ValueError, ntrip.NtripError) as exc:
+        return _json({"error": "ntrip", "message": str(exc) if isinstance(exc, ntrip.NtripError) else "درگاه نامعتبر است."}, 502)
+    return _json({"mountpoints": rows})
+
+
+@site_user_required
+@require_POST
+def ntrip_start(request, pk, project_id):
+    db = _ntrip_db(request, pk)
+    p = _project(db, project_id)
+    b = _body(request)
+    pr = p.ntrip_profiles.filter(pk=(b or {}).get("id")).first()
+    if pr is None:
+        raise Http404
+    gga = str((b or {}).get("gga", ""))[:120]
+    NtripSession.objects.filter(user=request.user, closed=False).update(closed=True)  # یک نشست فعال برای هر کاربر
+    sess = NtripSession.objects.create(id=uuid.uuid4(), profile=pr, user=request.user,
+                                       gga=gga if ntrip.GGA_RE.match(gga) else "")
+    return _json({"session": str(sess.id), "stream": f"{request.path.rsplit('start/', 1)[0]}stream/{sess.id}/"})
+
+
+@site_user_required
+@require_GET
+def ntrip_stream(request, pk, project_id, session):
+    db = _ntrip_db(request, pk)
+    _project(db, project_id)
+    sess = get_object_or_404(NtripSession.objects.select_related("profile"), pk=session, user=request.user,
+                             closed=False, profile__project_id=project_id)
+    try:
+        relay = ntrip.open_relay(sess, sess.profile, decrypt(sess.profile.password_enc))
+    except ntrip.NtripError as exc:
+        NtripSession.objects.filter(pk=sess.pk).update(closed=True)
+        return _json({"error": "ntrip", "message": str(exc)}, 503 if "ظرفیت" in str(exc) else 502)
+    resp = StreamingHttpResponse(relay, content_type="application/octet-stream")
+    resp["Cache-Control"] = "no-store"
+    resp["X-Accel-Buffering"] = "no"
+    return resp
+
+
+@site_user_required
+@require_POST
+def ntrip_gga(request, pk, project_id, session):
+    """ضربان و موقعیت تازه: GGA فقط برای کستر شبکه‌ای (VRS) لازم است؛ بدون آن هم باید ضربان رسید."""
+    db = _ntrip_db(request, pk)
+    _project(db, project_id)
+    sess = get_object_or_404(NtripSession, pk=session, user=request.user, closed=False, profile__project_id=project_id)
+    b = _body(request) or {}
+    gga = str(b.get("gga", ""))[:120]
+    upd = {"last_seen": timezone.now()}
+    if ntrip.GGA_RE.match(gga):
+        upd.update(gga=gga, gga_seq=sess.gga_seq + 1)
+    NtripSession.objects.filter(pk=sess.pk).update(**upd)
+    return _json({"ok": True})
+
+
+@site_user_required
+@require_POST
+def ntrip_stop(request, pk, project_id, session):
+    db = _ntrip_db(request, pk)
+    _project(db, project_id)
+    NtripSession.objects.filter(pk=session, user=request.user).update(closed=True)
+    return _json({"ok": True})

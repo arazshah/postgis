@@ -64,3 +64,42 @@ class GnssDriver(models.Model):
 
     def __str__(self):
         return f"{self.driver_id} {self.version}"
+
+
+class NtripProfile(models.Model):
+    """اتصال به یک کستر NTRIP برای دریافت تصحیحات RTK. گذرواژه رمز‌شده ذخیره می‌شود و هرگز به مرورگر برنمی‌گردد."""
+    project = models.ForeignKey(SurveyProject, on_delete=models.CASCADE, related_name="ntrip_profiles")
+    name = models.CharField("نام", max_length=80)
+    host = models.CharField("میزبان", max_length=253)
+    port = models.PositiveIntegerField("درگاه", default=2101)
+    mountpoint = models.CharField("Mountpoint", max_length=40, blank=True)
+    username = models.CharField("نام کاربری", max_length=80, blank=True)
+    password_enc = models.TextField("گذرواژه (رمز‌شده)", blank=True)
+    tls = models.BooleanField("TLS", default=False)
+    send_gga = models.BooleanField("ارسال موقعیت (GGA) به کستر", default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "اتصال NTRIP"
+        verbose_name_plural = "اتصال‌های NTRIP"
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.host})"
+
+
+class NtripSession(models.Model):
+    """وضعیت اشتراکی یک رله؛ در پایگاه داده است چون درخواست‌های بعدی ممکن است به worker دیگری برسند."""
+    id = models.UUIDField(primary_key=True)
+    profile = models.ForeignKey(NtripProfile, on_delete=models.CASCADE, related_name="sessions")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    gga = models.CharField(max_length=120, blank=True)
+    gga_seq = models.PositiveIntegerField(default=0)
+    closed = models.BooleanField(default=False)
+    bytes_out = models.PositiveBigIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "closed"])]

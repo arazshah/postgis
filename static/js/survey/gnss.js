@@ -6,6 +6,7 @@
   const hasBle = "bluetooth" in navigator;
   const NUS_SERVICE = "6e400001-b5a8-f393-e0a9-e50e24dcca9e"; // Nordic UART، رایج در ماژول‌های BLE
   const NUS_TX = "6e400003-b5a8-f393-e0a9-e50e24dcca9e";
+  const NUS_RX = "6e400002-b5a8-f393-e0a9-e50e24dcca9e"; // نوشتن به گیرنده (تصحیحات)
 
   function mk() {
     const listeners = {};
@@ -44,11 +45,26 @@
 
   // ---------------------------------------------------------------- NMEA روی سریال یا بلوتوث
   function nmea(bus, transport, opts) {
-    const feed = Nmea.makeStream({});
+    let lastGga = "";
+    const feed = Nmea.makeStream({onLine: (l) => { if (/^\$G.GGA,/.test(l) && Nmea.checksumOk(l.trim())) lastGga = l.trim(); }});
     const handle = (bytes) => feed(bytes).forEach((e) => bus.emit(e));
-    let port, reader, device, running = false;
+    let port, reader, device, running = false, writer = null, rx = null, chain = Promise.resolve();
     return {
       id: "nmea-generic",
+      lastGga() { return lastGga; },
+      // نوشتن تصحیحات RTCM به گیرنده؛ روی BLE تکه‌های ۲۰ بایتی و پشت‌سرهم
+      write(bytes) {
+        if (writer) return writer.write(bytes);
+        if (rx) {
+          for (let i = 0; i < bytes.length; i += 20) {
+            const part = bytes.slice(i, i + 20);
+            chain = chain.then(() => rx.writeValueWithoutResponse(part));
+          }
+          return chain;
+        }
+        return Promise.reject(new Error("این منبع نوشتن به گیرنده ندارد."));
+      },
+      get canWrite() { return !!(writer || rx); },
       async start() {
         running = true;
         if (transport === "web-serial") {
@@ -56,6 +72,7 @@
           port = await navigator.serial.requestPort();
           await port.open({baudRate: (opts && opts.baud) || 115200});
           reader = port.readable.getReader();
+          if (port.writable) writer = port.writable.getWriter();
           (async () => {
             try { while (running) { const {value, done} = await reader.read(); if (done) break; handle(value); } }
             catch (e) { bus.emit({v: 1, kind: "error", data: {code: "serial", message: "ارتباط سریال قطع شد.", recoverable: true}}); }
@@ -68,11 +85,12 @@
           const ch = await svc.getCharacteristic(NUS_TX);
           ch.addEventListener("characteristicvaluechanged", (e) => handle(new Uint8Array(e.target.value.buffer)));
           await ch.startNotifications();
+          try { rx = await svc.getCharacteristic(NUS_RX); } catch (e) { rx = null; } // برخی ماژول‌ها فقط می‌فرستند
         } else throw new Error("حمل‌ونقل پشتیبانی نمی‌شود.");
       },
       async stop() {
         running = false;
-        try { if (reader) { await reader.cancel(); reader.releaseLock(); } if (port) await port.close(); } catch (e) { /* بسته شد */ }
+        try { if (writer) { writer.releaseLock(); writer = null; } if (reader) { await reader.cancel(); reader.releaseLock(); } if (port) await port.close(); } catch (e) { /* بسته شد */ }
         try { if (device && device.gatt.connected) device.gatt.disconnect(); } catch (e) { /* بسته شد */ }
       },
     };

@@ -222,7 +222,7 @@
   }
 
   $("sv-connect").addEventListener("click", async () => {
-    if (driver) { await driver.stop(); driver = null; $("sv-connect").textContent = "اتصال"; $("sv-fixlabel").textContent = "قطع شد"; return; }
+    if (driver) { await ntripStop(); await driver.stop(); driver = null; ntripRefresh(); $("sv-connect").textContent = "اتصال"; $("sv-fixlabel").textContent = "قطع شد"; return; }
     const s = sources.find((x) => x.key === srcSel.value);
     if (!s || !s.id) return say("گیرنده‌ای در این مرورگر در دسترس نیست.", true);
     $("sv-connect").disabled = true;
@@ -233,6 +233,7 @@
       } else driver = s.key === "phone" ? SurveyGnss.phone(bus) : SurveyGnss.nmea(bus, s.transport, {});
       driverId = s.id; sourceLabel = s.key === "phone" ? "phone" : s.key === "replay" ? "replay" : "external";
       await driver.start();
+      ntripRefresh();
       $("sv-connect").textContent = "قطع";
       say("");
     } catch (err) { driver = null; say(err.message || "اتصال ممکن نشد.", true); }
@@ -399,4 +400,76 @@
   if (codes) codes.innerHTML = conf.codes.filter((c) => c.geom_type === "point").map((c) => `<option value="${esc(c.code)}">${esc(c.name)}</option>`).join("");
   loadData(true).then(flush);
   window.__survey = {queue, flush, loadData, bus};
+
+  // ------------------------------------------------------------ تصحیحات NTRIP
+  const nt = {profiles: [], client: null, on: false};
+  const ntU = conf.urls.ntrip;
+  function ntState(t, bad) { const e = $("nt-state"); e.textContent = t; e.className = "small " + (bad ? "sv-bad" : "muted"); }
+  function ntripRefresh() {
+    const ok = !!(driver && driver.canWrite);
+    $("nt-go").disabled = !nt.profiles.length || (!ok && !nt.on);
+    if (!nt.on) ntState(ok ? (nt.profiles.length ? "آماده دریافت تصحیح." : "یک اتصال کستر تعریف کنید.") : "برای دریافت تصحیح، ابتدا گیرنده خارجی (سریال یا BLE) را وصل کنید.");
+  }
+  async function ntripStop() { if (nt.client) { await nt.client.stop(); nt.client = null; } nt.on = false; $("nt-go").textContent = "دریافت"; }
+  async function ntLoad() {
+    const r = await fetch(ntU, {credentials: "same-origin"}).then((x) => x.json());
+    nt.profiles = r.profiles;
+    const sel = $("nt-sel");
+    sel.innerHTML = nt.profiles.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+    ntripRefresh();
+  }
+  function ntFill(p) {
+    $("nt-name").value = p ? p.name : ""; $("nt-host").value = p ? p.host : ""; $("nt-port").value = p ? p.port : 2101;
+    $("nt-user").value = p ? p.username : ""; $("nt-pass").value = ""; $("nt-mp").value = p ? p.mountpoint : "";
+    $("nt-tls").checked = !!(p && p.tls); $("nt-gga").checked = p ? p.send_gga : true;
+    $("nt-pass").placeholder = p && p.has_password ? "بدون تغییر" : "";
+  }
+  const ntForm = () => ({id: nt.editing || undefined, name: $("nt-name").value, host: $("nt-host").value.trim(), port: Number($("nt-port").value) || 2101,
+    username: $("nt-user").value, password: $("nt-pass").value, mountpoint: $("nt-mp").value.trim(), tls: $("nt-tls").checked, send_gga: $("nt-gga").checked});
+  if (conf.ntripOn) {
+    $("nt-card").hidden = false;
+    ntLoad().catch(() => ntState("بارگذاری اتصال‌ها ممکن نشد.", true));
+    $("nt-edit").addEventListener("click", () => {
+      const f = $("nt-form"); f.hidden = !f.hidden;
+      nt.editing = Number($("nt-sel").value) || null;
+      ntFill(nt.profiles.find((p) => p.id === nt.editing));
+    });
+    $("nt-sel").addEventListener("change", () => { if (!$("nt-form").hidden) { nt.editing = Number($("nt-sel").value); ntFill(nt.profiles.find((p) => p.id === nt.editing)); } });
+    $("nt-form").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      try {
+        const r = await post(ntU, ntForm());
+        await ntLoad(); $("nt-sel").value = r.profile.id; nt.editing = r.profile.id; $("nt-pass").value = ""; ntState("ذخیره شد.");
+      } catch (e) { ntState("ذخیره نشد؛ نشانی، درگاه و Mountpoint را بررسی کنید.", true); }
+    });
+    $("nt-del").addEventListener("click", async () => {
+      if (!nt.editing || !confirm("این اتصال حذف شود؟")) return;
+      await post(ntU, {id: nt.editing, delete: true}); nt.editing = null; ntFill(null); await ntLoad();
+    });
+    $("nt-list").addEventListener("click", async () => {
+      ntState("در حال دریافت فهرست…");
+      try {
+        const f = ntForm();
+        const body = f; // id همراه فرم است؛ سرور گذرواژه خالی را از مقدار ذخیره‌شده پر می‌کند
+        const r = await post(ntU + "sourcetable/", body);
+        $("nt-mps").innerHTML = r.mountpoints.map((m) => `<option value="${esc(m.mountpoint)}">${esc(m.identifier)} ${m.needs_gga ? "(VRS)" : ""}</option>`).join("");
+        ntState(`${FA(r.mountpoints.length)} Mountpoint پیدا شد؛ از فهرست انتخاب کنید.`);
+      } catch (e) { ntState("فهرست دریافت نشد؛ نشانی و اطلاعات ورود را بررسی کنید.", true); }
+    });
+    $("nt-go").addEventListener("click", async () => {
+      if (nt.on) { await ntripStop(); ntripRefresh(); return; }
+      if (!driver || !driver.canWrite) return ntState("این منبع قابلیت نوشتن به گیرنده ندارد.", true);
+      nt.on = true; $("nt-go").textContent = "قطع تصحیح";
+      nt.client = SurveyNtrip.create({start: ntU + "start/", gga: ntU + "gga/", stop: ntU + "stop/"}, {
+        post, fetch: (u, o) => fetch(u, o), write: (b) => driver.write(b), getGga: () => driver.lastGga && driver.lastGga(),
+        onStatus(s) {
+          if (s.state === "connected") ntState(`دریافت تصحیح: ${FA(Math.round(s.bytes / 1024))} کیلوبایت` + (s.lastAt ? "" : " …"));
+          else if (s.state === "retry") ntState(`${s.message} (تلاش ${FA(s.retry)})`, true);
+          else if (s.state === "error") { ntState(s.message, true); nt.on = false; $("nt-go").textContent = "دریافت"; }
+        },
+      });
+      nt.client.start(Number($("nt-sel").value));
+    });
+  }
 })();
+
