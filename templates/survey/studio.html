@@ -130,6 +130,22 @@
             <div class="sv-row"><label class="small" for="so-target">نقطه هدف</label><select id="so-target"><option value="">—</option></select></div>
             <div class="sv-stake" id="so-out" hidden><div class="sv-arrow" id="so-arrow" aria-hidden="true">↑</div>
               <div><b id="so-dist" class="ltr">—</b><div class="small muted ltr" id="so-detail"></div></div></div></div>
+          <div class="sv-card" id="sf-card">
+            <h3 class="sv-h">سطح و منحنی میزان</h3>
+            <p class="small muted">از نقاط دارای ارتفاع، سطح TIN ساخته می‌شود؛ منحنی میزان و حجم خاکبرداری/خاکریزی از آن به‌دست می‌آید.</p>
+            <div class="sv-row"><label class="small" for="sf-field">ارتفاع</label>
+              <select id="sf-field"><option value="h_ortho">ارتومتریک (h_ortho)</option><option value="h_ellip">بیضوی (h_ellip)</option></select></div>
+            <div class="sv-row"><label class="small" for="sf-int">فاصله منحنی (m)</label><input id="sf-int" type="number" min="0" step="any" class="ltr" size="6" placeholder="خودکار">
+              <label class="small" for="sf-idx">اصلی هر</label><input id="sf-idx" type="number" min="0" step="1" class="ltr" size="3" value="5"></div>
+            <div class="sv-row"><label class="small" for="sf-edge">حداکثر طول لبه (m)</label><input id="sf-edge" type="number" min="0" step="any" class="ltr" size="6" placeholder="بدون محدودیت">
+              <label class="small" for="sf-ref">تراز مبنای حجم (m)</label><input id="sf-ref" type="number" step="any" class="ltr" size="6" placeholder="—"></div>
+            {% if db.can_edit %}<div class="sv-row"><label class="small"><input type="checkbox" id="sf-save"> ذخیره منحنی‌ها در جدول <span class="ltr">{{ project.slug }}.contours</span></label></div>{% endif %}
+            <div class="sv-row"><button type="button" class="btn sm" id="sf-go">محاسبه</button>
+              <a class="btn ghost sm" id="sf-dxf" href="#" hidden>DXF منحنی‌ها</a>
+              <button type="button" class="btn ghost sm" id="sf-clear" hidden>پاک‌کردن از نقشه</button></div>
+            <div class="small" id="sf-out" role="status" aria-live="polite"></div>
+            <p class="small muted">«حداکثر طول لبه» مثلث‌های کشیده روی نواحی بدون برداشت (لبه‌ی بیرونی) را حذف می‌کند.</p>
+          </div>
           <div class="sv-card" id="of-card" hidden>
             <h3 class="sv-h">نقشه آفلاین</h3>
             <p class="small muted">پیش از رفتن به میدان، محدوده کار را روی نقشه نشان دهید و ذخیره کنید تا بدون اینترنت هم زمینه نقشه داشته باشید.</p>

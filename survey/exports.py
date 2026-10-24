@@ -55,3 +55,15 @@ def report_html(cols: dict, project, db_name: str) -> str:
     return (f"<h1>{escape(project.name)}</h1><p>سیستم مختصات: EPSG:{project.srid} — پایگاه داده {escape(db_name)}</p>"
             "<table><thead><tr><th>شماره</th><th>شرق / طول</th><th>شمال / عرض</th><th>ارتفاع</th><th>کد</th>"
             "<th>توضیح</th><th>دقت (m)</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>")
+
+
+def contours_dxf(lines: list[dict], labels: bool = True) -> str:
+    """منحنی‌ها در لایه‌های CONTOUR و CONTOUR_INDEX با ارتفاع هر منحنی؛ برچسب فقط روی منحنی‌های اصلی."""
+    d = Dxf()
+    for c in lines:
+        layer, color = ("CONTOUR_INDEX", 1) if c["index"] else ("CONTOUR", 8)
+        d.polyline(c["coords"], layer, closed=c["closed"], z=c["level"], color=color)
+        if labels and c["index"] and len(c["coords"]) > 1:
+            x, y = c["coords"][len(c["coords"]) // 2]
+            d.text(x, y, f"{c['level']:g}", "CONTOUR_LABEL", 1.0)
+    return d.dumps()

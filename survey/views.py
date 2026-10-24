@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import uuid
 from pathlib import Path
 
@@ -26,12 +27,12 @@ from publish import access
 from publish.models import ApiKey
 from publish.views import base_config
 
-from . import cogo, crs, data, exports, importers, ntrip, presets, services, sync
+from . import cogo, crs, data, exports, importers, ntrip, presets, services, surface, sync
 from .gnss import registry
 from .models import GnssDriver, NtripProfile, NtripSession, SurveyProject
 
 log = logging.getLogger(__name__)
-FORMATS = {"csv", "geojson", "dxf", "report"}
+FORMATS = {"csv", "geojson", "dxf", "report", "contours"}
 
 
 def _json(payload, status=200):
@@ -126,6 +127,7 @@ def studio(request, pk, project_id):
         "import": f"/dashboard/{db.pk}/survey/{p.pk}/import/", "cogo": f"/dashboard/{db.pk}/survey/{p.pk}/cogo/",
         "export": f"/dashboard/{db.pk}/survey/{p.pk}/export/", "list": f"/dashboard/{db.pk}/survey/",
         "ntrip": f"/dashboard/{db.pk}/survey/{p.pk}/ntrip/",
+        "surface": f"/dashboard/{db.pk}/survey/{p.pk}/surface/",
     }
     conf = {**base_config(request), "srid": p.srid, "project": p.name, "counts": counts, "codes": codes,
             "drivers": drivers, "urls": urls, "canEdit": bool(db.can_edit), "pointsCap": db.plan.survey_max_points,
@@ -295,6 +297,11 @@ def export(request, pk, project_id, fmt):
     if fmt not in FORMATS:
         raise Http404
     try:
+        if fmt == "contours":
+            _tris, lines, _st = _surface(db, p, request.GET)
+            resp = HttpResponse(exports.contours_dxf(lines), content_type="application/dxf")
+            resp["Content-Disposition"] = f'attachment; filename="contours-{p.slug}.dxf"'
+            return resp
         cols = data.collections(db, p)
         if fmt == "csv":
             resp = HttpResponse(exports.points_csv(cols["points"], p), content_type="text/csv; charset=utf-8")
@@ -309,6 +316,9 @@ def export(request, pk, project_id, fmt):
             return render(request, "survey/report.html", {"db": db, "project": p,
                                                          "table": exports.report_html(cols, p, db.db_name)})
     except ExplorerError as exc:
+        messages.error(request, str(exc))
+        return redirect("survey:studio", pk=db.pk, project_id=p.pk)
+    except surface.SurfaceError as exc:
         messages.error(request, str(exc))
         return redirect("survey:studio", pk=db.pk, project_id=p.pk)
     resp["Content-Disposition"] = f'attachment; filename="survey-{p.slug}.{ext}"'
@@ -443,3 +453,60 @@ def ntrip_stop(request, pk, project_id, session):
     _project(db, project_id)
     NtripSession.objects.filter(pk=session, user=request.user).update(closed=True)
     return _json({"ok": True})
+
+
+# ----------------------------------------------------------------------------- سطح و منحنی میزان
+def _num(params, key, default=None, lo=None):
+    v = params.get(key)
+    if v in (None, ""):
+        return default
+    try:
+        x = float(v)
+    except (TypeError, ValueError) as exc:
+        raise surface.SurfaceError(f"مقدار «{key}» عدد نیست.") from exc
+    if not math.isfinite(x) or (lo is not None and x < lo):
+        raise surface.SurfaceError(f"مقدار «{key}» معتبر نیست.")
+    return x
+
+
+def _surface(db, p, params):
+    """مثلث‌بندی، منحنی‌ها و آمار؛ params می‌تواند QueryDict یا dict باشد."""
+    field = params.get("field") or "h_ortho"
+    tris, n = data.tin(db, p, field)
+    tris = surface.filter_long_edges(tris, _num(params, "max_edge", None, lo=0))
+    if not tris:
+        raise surface.SurfaceError("با این حداکثر طول لبه هیچ مثلثی نمانده است؛ عدد را بزرگ‌تر کنید.")
+    st = surface.stats(tris)
+    st["points"] = n
+    interval = _num(params, "interval", None, lo=0) or surface.auto_interval(st["z_min"], st["z_max"])
+    st["interval"] = interval
+    every = int(_num(params, "index_every", 5, lo=0) or 0)
+    lines = surface.contours(tris, interval, base=_num(params, "base", 0.0) or 0.0, index_every=every)
+    ref = _num(params, "ref")
+    if ref is not None:
+        st["volume"] = surface.volume(tris, ref)
+        st["ref"] = ref
+    return tris, lines, st
+
+
+@site_user_required
+@require_POST
+def project_surface(request, pk, project_id):
+    db = _db(request, pk)
+    p = _project(db, project_id)
+    b = _body(request)
+    if b is None:
+        return _json({"error": "invalid", "message": "درخواست نامعتبر است."}, 400)
+    try:
+        _tris, lines, st = _surface(db, p, b)
+        out = {"stats": st, "contours": data.contours_wgs84(db, p, lines)}
+        if b.get("save"):
+            if not db.can_edit:
+                return _json({"error": "forbidden", "message": "ذخیره در پایگاه داده برای ویرایشگر و مالک است."}, 403)
+            out["saved"] = data.save_contours(db, p, lines)
+            out["table"] = f"{p.slug}.contours"
+    except surface.SurfaceError as exc:
+        return _json({"error": "surface", "message": str(exc)}, 400)
+    except ExplorerError as exc:
+        return _json({"error": "unavailable", "message": str(exc)}, 503)
+    return _json(out)

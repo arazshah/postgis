@@ -44,10 +44,17 @@
   const map = gm.map;
   if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe($("map"));
   const EMPTY = {type: "FeatureCollection", features: []};
+  let contoursFC = EMPTY; // پس از تغییر سبک نقشه پایه دوباره روی نقشه گذاشته می‌شود
   const COLORS = ["match", ["get", "fq"], 4, "#168a4a", 5, "#d98e04", 2, "#2a6fb0", 1, "#7a7a7a", "#7a7a7a"];
   function addLayers() {
     if (map.getSource("sv-pts")) return;
     for (const s of ["sv-pts", "sv-lns", "sv-pgs", "sv-me"]) map.addSource(s, {type: "geojson", data: EMPTY});
+    map.addSource("sv-cont", {type: "geojson", data: contoursFC});
+    map.addLayer({id: "sv-cont-line", type: "line", source: "sv-cont", paint: {"line-color": "#7a5230",
+      "line-width": ["case", ["==", ["get", "index"], 1], 1.8, 0.8], "line-opacity": 0.9}});
+    map.addLayer({id: "sv-cont-label", type: "symbol", source: "sv-cont", filter: ["==", ["get", "index"], 1],
+      layout: {"symbol-placement": "line", "text-field": ["to-string", ["get", "level"]], "text-font": ["Vazirmatn Regular"], "text-size": 11},
+      paint: {"text-color": "#5b3a1f", "text-halo-color": "rgba(255,255,255,.9)", "text-halo-width": 1.5}});
     map.addLayer({id: "sv-pgs-fill", type: "fill", source: "sv-pgs", paint: {"fill-color": "#0F5C59", "fill-opacity": 0.18}});
     map.addLayer({id: "sv-pgs-line", type: "line", source: "sv-pgs", paint: {"line-color": "#0F5C59", "line-width": 2}});
     map.addLayer({id: "sv-lns", type: "line", source: "sv-lns", paint: {"line-color": "#b3541e", "line-width": 2.5}});
@@ -527,5 +534,40 @@
       showState();
     });
   }
+
+  // ------------------------------------------------------------ سطح و منحنی میزان
+  const fmtN = (v, d) => FA(Number(v).toLocaleString("en", {maximumFractionDigits: d == null ? 2 : d}));
+  function sfParams() {
+    const o = {field: $("sf-field").value};
+    for (const [k, id] of [["interval", "sf-int"], ["index_every", "sf-idx"], ["max_edge", "sf-edge"], ["ref", "sf-ref"]]) {
+      const v = $(id).value.trim(); if (v !== "") o[k] = v;
+    }
+    return o;
+  }
+  const setContours = (fc) => { contoursFC = fc; const src = map.getSource("sv-cont"); if (src) src.setData(fc); };
+  $("sf-go").addEventListener("click", async () => {
+    const out = $("sf-out"); out.className = "small muted"; out.textContent = "در حال محاسبه…";
+    $("sf-go").disabled = true;
+    try {
+      const body = sfParams(); if ($("sf-save") && $("sf-save").checked) body.save = true;
+      const r = await fetch(conf.urls.surface, {method: "POST", headers: {"Content-Type": "application/json", "X-CSRFToken": csrf},
+        credentials: "same-origin", body: JSON.stringify(body)});
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.message || "محاسبه ممکن نشد.");
+      setContours(j.contours);
+      const st = j.stats, rows = [`${fmtN(st.points, 0)} نقطه، ${fmtN(st.triangles, 0)} مثلث، سطح ${fmtN(st.area, 1)} m²`,
+        `ارتفاع ${fmtN(st.z_min)} تا ${fmtN(st.z_max)} · فاصله منحنی ${fmtN(st.interval)} · ${fmtN(j.contours.features.length, 0)} منحنی`];
+      if (st.volume) rows.push(`حجم نسبت به تراز ${fmtN(st.ref)}: خاکبرداری ${fmtN(st.volume.cut, 1)} m³ · خاکریزی ${fmtN(st.volume.fill, 1)} m³ · خالص ${fmtN(st.volume.net, 1)} m³`);
+      if (j.saved != null) rows.push(`${fmtN(j.saved, 0)} منحنی در جدول ${j.table} ذخیره شد.`);
+      out.innerHTML = rows.map(esc).join("<br>");
+      const q = new URLSearchParams(sfParams()); q.delete("ref");
+      $("sf-dxf").href = `${conf.urls.export}contours/?${q}`; $("sf-dxf").hidden = false; $("sf-clear").hidden = false;
+      const b = new maplibregl.LngLatBounds();
+      j.contours.features.forEach((f) => f.geometry.coordinates.forEach((c) => b.extend(c)));
+      if (!b.isEmpty()) map.fitBounds(b, {padding: 60, duration: 500, maxZoom: 19});
+    } catch (e) { out.className = "small sv-bad"; out.textContent = e.message; }
+    $("sf-go").disabled = false;
+  });
+  $("sf-clear").addEventListener("click", () => { setContours(EMPTY); $("sf-clear").hidden = true; $("sf-out").textContent = ""; });
 })();
 
