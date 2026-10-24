@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
@@ -42,6 +43,7 @@ def dashboard(request):
         last.setdefault(j.database_id, j)
     for d in dbs:
         d.last_backup = last.get(d.pk)
+        d.alerts = _db_alerts(d)
     stats = {"count": len(dbs), "size": sum(d.size_bytes or 0 for d in dbs),
              "quota": sum(d.plan.quota_bytes for d in dbs if getattr(d.plan, "quota_bytes", None)),
              "running": Job.objects.filter(database__in=dbs, status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).count(),
@@ -56,6 +58,27 @@ def dashboard(request):
                                                         "is_teacher": is_teacher,
                                                         "reason": reason,
                                                         "vouchers": unused_vouchers(request.user)})
+
+
+def _db_alerts(db) -> list[dict]:
+    from core.templatetags.fa import fanum
+
+    """نکته‌های «نیاز به توجه» برای کارت داشبورد؛ هر مورد یک جمله و یک اقدام روشن."""
+    out = []
+    if db.status == UserDatabase.Status.READONLY or db.usage_level == "full":
+        out.append({"level": "bad", "text": "حجم پر شده و پایگاه داده فقط‌خواندنی است.", "cta": "ارتقای پلن", "url": reverse("billing:plans")})
+    elif db.usage_level == "warn":
+        out.append({"level": "warn", "text": f"{fanum(round(db.usage_percent))}٪ از حجم پر شده است.",
+                    "cta": "بررسی مصرف", "url": reverse("databases:usage", args=[db.pk])})
+    if db.status == UserDatabase.Status.EXPIRED:
+        out.append({"level": "bad", "text": "اعتبار تمام شده؛ داده‌ها چند روز نگه داشته می‌شوند.", "cta": "تمدید", "url": reverse("billing:plans")})
+    elif db.status == UserDatabase.Status.SUSPENDED:
+        out.append({"level": "bad", "text": "این پایگاه داده معلق شده است.", "cta": "پشتیبانی", "url": reverse("support:new")})
+    elif db.is_live and db.days_left is not None and db.days_left <= 7:
+        out.append({"level": "warn", "text": f"فقط {fanum(db.days_left)} روز تا پایان اعتبار مانده است.", "cta": "تمدید", "url": reverse("billing:plans")})
+    if db.is_live and not getattr(db, "last_backup", None):
+        out.append({"level": "info", "text": "هنوز بکاپی نگرفته‌اید.", "cta": "گرفتن بکاپ", "url": reverse("databases:backups", args=[db.pk])})
+    return out
 
 
 @site_user_required

@@ -942,3 +942,45 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 .cls-maps li{display:flex;gap:var(--s3);align-items:center;justify-content:space-between;flex-wrap:wrap;border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px;background:var(--surface)}
 .cls-maps .wm-actions{margin-top:0}
 .cls-share{display:flex;flex-direction:column;gap:var(--s3);max-width:560px}
+
+/* ---------- داشبورد (v3): کارت فضای کار با میانبرهای توضیح‌دار ---------- */
+.ico{flex:none;vertical-align:-4px}
+.dash-head{display:flex;justify-content:space-between;align-items:flex-end;gap:var(--s4);flex-wrap:wrap;margin-bottom:var(--s5)}
+.dash-head h1{font-size:clamp(1.6rem,1.2rem + 1.6vw,2.1rem);margin:0 0 var(--s1)}
+.dash-sub{margin:0;max-width:60ch;font-size:.95rem}
+.dash-head-actions{display:flex;gap:var(--s2);flex-wrap:wrap}
+.dash-head-actions .btn,.dash-cta .btn{display:inline-flex;align-items:center;gap:6px}
+.dash-voucher{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.dash-reason{margin-bottom:var(--s3)}
+.dash-list{display:grid;gap:var(--s5)}
+.dash-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s5);display:flex;flex-direction:column;gap:var(--s4);box-shadow:0 1px 0 rgba(18,49,58,.03)}
+.dash-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s4);flex-wrap:wrap}
+.dash-id h2{font-family:var(--f-mono);font-size:1.3rem;margin:0 0 var(--s2);direction:ltr;text-align:right}
+.dash-id h2 a{color:var(--ink);text-decoration:none}
+.dash-id h2 a:hover{color:var(--teal)}
+.dash-cta{display:flex;gap:var(--s2);flex-wrap:wrap}
+.dash-alerts{list-style:none;margin:0;padding:0;display:grid;gap:var(--s2)}
+.dash-alerts li{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:var(--s2) var(--s3);border-radius:var(--r-sm);font-size:.92rem}
+.dash-alerts a{font-weight:700;white-space:nowrap}
+.dash-alerts .al-bad{background:var(--red-soft);color:var(--red)}
+.dash-alerts .al-warn{background:var(--ochre-soft);color:#7a5200}
+.dash-alerts .al-info{background:var(--teal-soft);color:var(--teal-dark)}
+.dash-alerts li a{color:inherit}
+.dash-usage .meter{width:100%;margin:0;height:10px}
+.dash-groups{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s4)}
+.dash-group h3{font-size:.95rem;color:var(--ink-2);margin:0 0 var(--s2);font-weight:700}
+.dash-group ul{list-style:none;margin:0;padding:0;display:grid;gap:var(--s2)}
+.dash-tile{display:flex;gap:var(--s3);align-items:flex-start;padding:var(--s3);border:1px solid var(--line);border-radius:var(--r-md);background:var(--paper);text-decoration:none;color:var(--ink);transition:border-color .15s,background .15s,transform .15s}
+.dash-tile:hover{border-color:var(--teal);background:#fff;transform:translateY(-1px)}
+.dash-ico{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:var(--teal-soft);color:var(--teal-dark);flex:none}
+.dg-share .dash-ico{background:var(--ochre-soft);color:#7a5200}
+.dg-manage .dash-ico{background:var(--paper-2);color:var(--ink-2)}
+.dash-tile:hover .dash-ico{background:var(--teal);color:#fff}
+.dash-txt{display:flex;flex-direction:column;gap:2px;line-height:1.6}
+.dash-txt b{font-size:.97rem}
+.dash-txt small{color:var(--ink-2);font-size:.8rem;line-height:1.65}
+.dash-off{margin:0}
+.dash-empty .dash-steps{list-style:none;margin:var(--s4) auto var(--s5);padding:0;display:grid;gap:var(--s2);max-width:420px;text-align:right}
+.dash-empty .dash-steps li{display:flex;gap:var(--s3);align-items:center}
+.dash-empty .dash-steps b{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--teal);color:#fff;font-size:.85rem;flex:none}
+@media (max-width:900px){.dash-groups{grid-template-columns:1fr}.dash-card{padding:var(--s4)}.dash-cta{width:100%}.dash-cta .btn{flex:1;justify-content:center}}

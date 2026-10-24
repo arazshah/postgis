@@ -1,46 +1,63 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "base.html" %}{% load fa ws %}
 {% block title %}پایگاه‌های داده من — {{ SITE_NAME }}{% endblock %}
 {% block content %}
-<div class="wrap page">
-  <div class="page-head">
-    <h1>پایگاه‌های داده من</h1>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      {% if is_teacher %}<a class="btn ghost" href="{% url 'classroom:teach' %}">کلاس‌های من</a>{% endif %}
-      {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">ساخت پایگاه داده</a>{% endif %}
+<div class="wrap page dash">
+  <div class="dash-head">
+    <div>
+      <h1>پایگاه‌های داده من</h1>
+      <p class="muted dash-sub">از همین‌جا به همه‌ی بخش‌ها می‌رسی: دیدن داده، تحلیل، انتشار نقشه، بکاپ و اتصال به QGIS یا GeoServer.</p>
+    </div>
+    <div class="dash-head-actions">
+      {% if is_teacher %}<a class="btn ghost" href="{% url 'classroom:teach' %}">{% icon "school" 18 %} کلاس‌های من</a>{% endif %}
+      {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">{% icon "plus" 18 %} ساخت پایگاه داده جدید</a>{% endif %}
     </div>
   </div>
 
   {% for v in vouchers %}
-  <div class="msg success" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+  <div class="msg success dash-voucher">
     <span>یک اعتبار پرداخت‌شده برای ساخت پایگاه داده با پلن <b>{{ v.plan.name }}</b> دارید.</span>
     <a class="btn sm" href="{% url 'databases:create' %}?voucher={{ v.pk }}">ساخت پایگاه داده</a>
   </div>
   {% endfor %}
   {% if dbs %}
-    {% if not can_create %}<p class="muted small">{{ reason }}</p>{% endif %}
+    {% if not can_create and reason %}<p class="muted small dash-reason">{{ reason }}</p>{% endif %}
+    {% if dbs|length > 1 or stats.running %}
     <div class="stat-row" aria-label="خلاصه حساب">
       <div class="stat"><span class="stat-n">{{ stats.count|fanum }}</span><span class="stat-l">پایگاه داده</span></div>
       <div class="stat"><span class="stat-n">{{ stats.size|fasize }}</span><span class="stat-l">مصرف کل{% if stats.quota %} از {{ stats.quota|fasize }}{% endif %}</span></div>
       <div class="stat"><span class="stat-n">{{ stats.backups|fanum }}<small> از {{ stats.count|fanum }}</small></span><span class="stat-l">دارای بکاپ</span></div>
       <div class="stat {% if stats.running %}live{% endif %}"><span class="stat-n">{{ stats.running|fanum }}</span><span class="stat-l">کار در حال انجام</span></div>
     </div>
-    <div class="db-list">
+    {% endif %}
+    <div class="dash-list">
     {% for db in dbs %}
-      <article class="db-card">
-        <header class="db-card-head">
-          <div>
-            <h2><a href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a></h2>
+      <article class="dash-card">
+        <header class="dash-card-head">
+          <div class="dash-id">
+            <h2><a class="ltr" href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a></h2>
             <div class="db-tags">
               <span class="badge {{ db.status }}">{{ db.get_status_display }}</span>
               <span class="tag">پلن {{ db.plan.name }}</span>
               {% if db.enrollment %}<span class="tag">کلاس: {{ db.enrollment.classroom.title }}</span>{% endif %}
             </div>
           </div>
-          <a class="btn sm" href="{% url 'databases:detail' db.pk %}">اطلاعات اتصال</a>
+          <div class="dash-cta">
+            {% if db.is_live %}<a class="btn" href="{% url 'databases:explore' db.pk %}" title="جدول‌ها، داده‌ها و نقشه">باز کردن داده‌ها</a>{% endif %}
+            <a class="btn ghost" href="{% url 'databases:detail' db.pk %}" title="آدرس، نام کاربری و رمز برای QGIS، GeoServer و برنامه‌ها">{% icon "plug" 18 %} اطلاعات اتصال</a>
+          </div>
         </header>
-        <div class="db-card-usage">
+
+        {% if db.alerts %}
+        <ul class="dash-alerts" aria-label="نیاز به توجه">
+          {% for a in db.alerts %}
+          <li class="al-{{ a.level }}"><span>{% if a.level == "info" %}{% icon "clock" 18 %}{% else %}{% icon "alert" 18 %}{% endif %} {{ a.text }}</span><a href="{{ a.url }}">{{ a.cta }}</a></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        <div class="dash-usage">
           <div class="meter {{ db.usage_level }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ db.usage_percent|pct_width }}" aria-label="مصرف حجم"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
-          <div class="meter-label"><span>{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span><span>{{ db.usage_percent|fanum }}٪</span></div>
+          <div class="meter-label"><span>{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }} مصرف شده</span><span>{{ db.usage_percent|fanum }}٪</span></div>
         </div>
         <dl class="db-facts">
           <div><dt>اعتبار</dt><dd>{% if db.days_left is not None %}{{ db.days_left|fanum }} روز مانده{% else %}—{% endif %}</dd></div>
@@ -48,26 +65,25 @@
           <div><dt>ساخته‌شده</dt><dd>{{ db.created_at|jdate }}</dd></div>
           <div><dt>اتصال همزمان</dt><dd>{{ db.plan.max_connections|fanum }}</dd></div>
         </dl>
+
         {% if db.is_live %}
-        <nav class="db-actions" aria-label="میانبرها">
-          <a href="{% url 'databases:explore' db.pk %}">جدول‌ها و داده‌ها</a>
-          <a href="{% url 'databases:explore_sql' db.pk %}">اجرای SQL</a>
-          <a href="{% url 'databases:import' db.pk %}">ورود فایل</a>
-          <a href="{% url 'analysis:page' db.pk %}">تحلیل</a>
-          <a href="{% url 'publish:manage' db.pk %}">انتشار نقشه و API</a>
-          <a href="{% url 'databases:backups' db.pk %}">بکاپ‌ها</a>
-          <a href="{% url 'databases:usage' db.pk %}">مصرف</a>
-          <a href="{% url 'databases:team' db.pk %}">تیم</a>
-        </nav>
+          {% dash_actions db %}
+        {% else %}
+          <p class="muted small dash-off">تا وقتی این پایگاه داده فعال نشود، بخش‌های کار با داده در دسترس نیستند. برای کمک <a href="{% url 'support:new' %}">تیکت پشتیبانی</a> بفرستید.</p>
         {% endif %}
       </article>
     {% endfor %}
     </div>
   {% else %}
-    <div class="empty">
-      <h2>هنوز پایگاه داده‌ای ندارید</h2>
-      <p class="muted">اولین پایگاه داده PostGIS خود را بسازید؛ کمتر از یک دقیقه طول می‌کشد.</p>
-      {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">ساخت پایگاه داده</a>{% else %}<p>{{ reason }}</p>{% endif %}
+    <div class="empty dash-empty">
+      <h2>اولین پایگاه داده مکانی‌ات را بساز</h2>
+      <p class="muted">PostGIS آماده برای QGIS، GeoServer و WebGIS؛ کمتر از یک دقیقه طول می‌کشد.</p>
+      <ol class="dash-steps">
+        <li><b>۱</b> یک نام و رمز انتخاب می‌کنی</li>
+        <li><b>۲</b> فایل‌هایت (Shapefile، GeoJSON، CSV...) را آپلود می‌کنی</li>
+        <li><b>۳</b> نقشه را منتشر می‌کنی یا از QGIS وصل می‌شوی</li>
+      </ol>
+      {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">{% icon "plus" 18 %} ساخت پایگاه داده</a>{% else %}<p>{{ reason }}</p>{% endif %}
     </div>
   {% endif %}
 

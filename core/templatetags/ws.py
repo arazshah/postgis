@@ -19,6 +19,13 @@ ICONS = {
     "backup": "M4 7c0-2 16-2 16 0v10c0 2-16 2-16 0zM4 12c0 2 16 2 16 0",
     "gauge": "M4 18a8 8 0 1116 0M12 18l4-6",
     "building": "M3 21V8l9-5 9 5v13M9 21v-6h6v6",
+    "plug": "M9 2v5M15 2v5M6 7h12v4a6 6 0 01-12 0zM12 17v5",
+    "plus": "M12 5v14M5 12h14",
+    "alert": "M12 3l10 18H2zM12 10v5M12 18v.5",
+    "clock": "M12 3a9 9 0 100 18 9 9 0 000-18zM12 7v5l3 2",
+    "check": "M5 12l5 5 9-10",
+    "school": "M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5",
+    "arrow": "M19 12H5M11 6l-6 6 6 6",
 }
 
 # (کلید گروه، عنوان، [(نام view برای تشخیص بخش فعال…, عنوان، url name، آیکون، حداقل دسترسی)])
@@ -81,3 +88,47 @@ def ws_title(context, db):
     name = request.resolver_match.view_name if request and request.resolver_match else ""
     cur = build(db, name)["current"]
     return cur["label"] if cur else ""
+
+
+@register.simple_tag
+def icon(name, size=20):
+    """آیکون خطی کوچک (SVG درون‌خطی) از همان مجموعه‌ی منوی فضای کار."""
+    from django.utils.html import format_html
+
+    path = ICONS.get(name, "")
+    return format_html(
+        '<svg class="ico" width="{0}" height="{0}" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{1}"/></svg>',
+        size, path)
+
+
+# کارت‌های میانبر داشبورد: هر دکمه یک عنوان کوتاه + یک جمله که دقیقاً می‌گوید چه می‌کند.
+# (کلید گروه، عنوان، [(عنوان، توضیح، url name، آیکون)])
+DASH_GROUPS = [
+    ("data", "داده‌هایت را ببین و وارد کن", [
+        ("جدول‌ها و داده‌ها", "جدول‌ها، ستون‌ها و روی نقشه را ببین؛ خروجی CSV و GeoJSON بگیر", "databases:explore", "tables"),
+        ("اجرای SQL", "کوئری بنویس و نتیجه را همان‌جا ببین (به‌طور پیش‌فرض فقط‌خواندنی)", "databases:explore_sql", "sql"),
+        ("ورود فایل", "Shapefile، GeoPackage، GeoJSON، KML یا CSV را آپلود کن", "databases:import", "import"),
+    ]),
+    ("share", "تحلیل کن و منتشر کن", [
+        ("تحلیل مکانی", "بافر، نزدیک‌ترین، حوزه دسترسی و ... بدون کدنویسی", "analysis:page", "chart"),
+        ("انتشار نقشه و API", "لایه را با لینک عمومی، کاشی برداری یا API در وب بگذار", "publish:manage", "globe"),
+        ("نقشه‌های چندلایه", "چند لایه را با سبک دلخواه یک‌جا بچین و ارائه بده", "maps:index", "map"),
+    ]),
+    ("manage", "مراقب پایگاه داده‌ات باش", [
+        ("بکاپ‌ها", "نسخه پشتیبان بگیر، دانلود کن یا بازگردانی کن", "databases:backups", "backup"),
+        ("مصرف و کارایی", "نمودار حجم و درخواست‌ها و پیشنهاد نمایه", "databases:usage", "gauge"),
+        ("تیم و دسترسی", "همکارانت را با نقش مشاهده‌گر یا ویرایشگر دعوت کن", "databases:team", "team"),
+    ]),
+]
+
+
+@register.inclusion_tag("databases/_dash_actions.html")
+def dash_actions(db):
+    from django.urls import reverse
+
+    groups = []
+    for key, title, items in DASH_GROUPS:
+        groups.append({"key": key, "title": title, "items": [
+            {"label": a, "hint": b, "url": reverse(u, args=[db.pk]), "icon": ICONS[i]} for a, b, u, i in items]})
+    return {"groups": groups}
