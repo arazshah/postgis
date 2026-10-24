@@ -59,5 +59,8 @@ class TileQueryTests(SimpleTestCase):
 
     def test_threshold_shrinks_with_zoom(self):
         import re
-        thr = lambda z: float(re.search(r"< ([0-9.e+-]+) AND", self._sql(self._layer(), z)).group(1))
+
+        def thr(z):
+            return float(re.search(r"< ([0-9.e+-]+) AND", self._sql(self._layer(), z)).group(1))
+
         self.assertAlmostEqual(thr(6) / thr(7), 2, places=3)
