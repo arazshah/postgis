@@ -15,3 +15,9 @@ class NodeTests(SimpleTestCase):
         for f in sorted(JS.glob("*.test.js")):
             r = subprocess.run(["node", str(f)], capture_output=True, text=True, timeout=60)
             self.assertEqual(r.returncode, 0, f"{f.name}\n{r.stdout}\n{r.stderr}")
+
+    def test_every_browser_script_parses(self):
+        """خطای نحوی در Service Worker یا اسکریپت استودیو بی‌صدا کل کار آفلاین را می‌شکند."""
+        for f in sorted((JS.parents[2] / "static" / "js" / "survey").glob("*.js")):
+            r = subprocess.run(["node", "--check", str(f)], capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.returncode, 0, f"{f.name}\n{r.stderr}")

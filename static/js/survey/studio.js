@@ -471,5 +471,61 @@
       nt.client.start(Number($("nt-sel").value));
     });
   }
+
+  // ------------------------------------------------------------ نقشه آفلاین
+  if (conf.iranStyle && conf.baseMaxZoom && window.caches && window.SurveyOffline) {
+    const O = SurveyOffline, KEY = `gp.survey.offline.${conf.dbId}`, CAP = 8000, MINZ = 5;
+    const top = conf.baseMaxZoom;
+    $("of-card").hidden = false;
+    $("of-detail").innerHTML = [[top - 2, "کم‌حجم (خیابان‌های اصلی)"], [top - 1, "متوسط"], [top, "کامل (ریزترین جزئیات)"]]
+      .map(([z, t]) => `<option value="${z}">${t}</option>`).join("");
+    $("of-detail").value = String(top - 1);
+    const meta = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {tiles: 0, bytes: 0}; } catch (e) { return {tiles: 0, bytes: 0}; } };
+    const mb = (b) => FA((b / 1048576).toFixed(1));
+    const view = () => { const b = map.getBounds(); return {w: b.getWest(), s: b.getSouth(), e: b.getEast(), n: b.getNorth()}; };
+    function showState() {
+      const m = meta();
+      $("of-state").textContent = m.tiles ? `ذخیره‌شده روی این دستگاه: ${FA(m.tiles)} کاشی (حدود ${mb(m.bytes)} مگابایت)` : "هنوز نقشه‌ای ذخیره نشده است.";
+    }
+    function estimate() {
+      const n = O.count(view(), MINZ, Number($("of-detail").value));
+      const ok = n <= CAP;
+      $("of-est").textContent = ok ? `≈ ${FA(n)} کاشی` : `${FA(n)} کاشی؛ بیش از سقف ${FA(CAP)}. محدوده را کوچک‌تر کنید یا جزئیات را کم کنید.`;
+      $("of-est").className = "small ltr " + (ok ? "muted" : "sv-bad");
+      $("of-go").disabled = !ok || !!ctl;
+      return n;
+    }
+    let ctl = null;
+    map.on("moveend", estimate); $("of-detail").addEventListener("change", estimate);
+    map.once("load", () => { estimate(); showState(); });
+    $("of-go").addEventListener("click", async () => {
+      if (!navigator.onLine) return ($("of-state").textContent = "برای ذخیره نقشه باید آنلاین باشید.");
+      ctl = new AbortController(); $("of-go").disabled = true; $("of-stop").hidden = false; $("of-bar").hidden = false;
+      try {
+        if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+        const style = await fetch(conf.iranStyle, {credentials: "same-origin"}).then((r) => r.json());
+        const src = Object.values(style.sources).find((x) => x.type === "vector");
+        const cache = await caches.open(O.CACHE);
+        await cache.put(conf.iranStyle, new Response(JSON.stringify(style), {headers: {"Content-Type": "application/json"}}));
+        const extra = O.glyphUrls(style.glyphs || conf.glyphs);
+        const st = await O.download({bounds: view(), minz: MINZ, maxz: Number($("of-detail").value), template: src.tiles[0], extra,
+          cache, fetch: (u, o) => fetch(u, o), signal: ctl.signal,
+          onProgress(p) { $("of-bar").value = p.done / p.total; $("of-state").textContent = `در حال ذخیره… ${FA(p.done)} از ${FA(p.total)}`; }});
+        const m = meta(); m.tiles = (await cache.keys()).length; m.bytes += st.bytes;
+        try { localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) { /* بدون حافظه */ }
+        showState();
+        if (st.failed) $("of-state").textContent += ` — ${FA(st.failed)} کاشی دریافت نشد؛ دوباره ذخیره کنید.`;
+        if (st.aborted) $("of-state").textContent += " (متوقف شد)";
+      } catch (e) { $("of-state").textContent = "ذخیره نقشه ممکن نشد: " + (e.message || "خطا"); }
+      ctl = null; $("of-stop").hidden = true; $("of-bar").hidden = true; estimate();
+    });
+    $("of-stop").addEventListener("click", () => ctl && ctl.abort());
+    $("of-del").addEventListener("click", async () => {
+      if (!confirm("نقشه ذخیره‌شده روی این دستگاه حذف شود؟")) return;
+      await caches.delete(O.CACHE);
+      try { localStorage.removeItem(KEY); } catch (e) { /* بدون حافظه */ }
+      showState();
+    });
+  }
 })();
 

@@ -21,6 +21,7 @@ from databases import team
 from databases.crypto import decrypt, encrypt
 from databases.explorer import ExplorerError
 from databases.models import UserDatabase
+from iranmap import basemap
 from publish import access
 from publish.models import ApiKey
 from publish.views import base_config
@@ -128,8 +129,11 @@ def studio(request, pk, project_id):
     }
     conf = {**base_config(request), "srid": p.srid, "project": p.name, "counts": counts, "codes": codes,
             "drivers": drivers, "urls": urls, "canEdit": bool(db.can_edit), "pointsCap": db.plan.survey_max_points,
-            "projectId": p.pk, "dbId": db.pk, "basemapKind": "osm", "layers": [],
+            "projectId": p.pk, "dbId": db.pk, "layers": [],
             "sampleNmea": static("survey/sample.nmea"), "ntripOn": bool(db.plan.gnss_external and db.can_edit)}
+    # نقشه برداری خود سایت (هم‌مبدأ ⇒ قابل ذخیره برای آفلاین)؛ بدون آن به کاشی تصویری OSM برمی‌گردد
+    conf["basemapKind"] = "iran" if conf.get("iranStyle") else "osm"
+    conf["baseMaxZoom"] = basemap.maxzoom() if conf.get("iranStyle") else 0
     return render(request, "survey/studio.html", {"db": db, "project": p, "conf": conf, "formats": sorted(FORMATS)})
 
 
