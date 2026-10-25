@@ -9,6 +9,7 @@
   <tr><td>حداکثر زمان اجرای هر کوئری</td><td>{{ plan.statement_timeout_s|fanum }} ثانیه</td></tr>
   <tr><td>اعتبار</td><td>{{ plan.duration_days|fanum }} روز، قابل تمدید رایگان</td></tr>
   <tr><td>بکاپ</td><td>روزانه، {{ plan.backup_retention_days|fanum }} روز نگهداری</td></tr>
+  <tr><td>برداشت میدانی</td><td>{{ plan.survey_projects|fanum }} پروژه، حداکثر {{ plan.survey_max_points|fanum }} نقطه{% if not plan.gnss_external %}، فقط GPS گوشی{% endif %}</td></tr>
 </table>
 {% endif %}
 <h2>وقتی حجم پر شود</h2>

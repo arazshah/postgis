@@ -7,8 +7,8 @@
 {% block jsonld %}
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
- {"@type":"HowTo","name":"{{ g.title|escapejs }}","description":"{{ g.summary|escapejs }}","inLanguage":"fa-IR","totalTime":"{{ g.iso_duration }}",
-  "video":{"@type":"VideoObject","name":"{{ g.title|escapejs }}","description":"{{ g.summary|escapejs }}","thumbnailUrl":"{{ BASE_URL }}{% static g.poster %}","contentUrl":"{{ BASE_URL }}{% static g.video %}","uploadDate":"2026-10-14","duration":"{{ g.iso_duration }}"},
+ {"@type":"HowTo","name":"{{ g.title|escapejs }}","description":"{{ g.summary|escapejs }}","inLanguage":"fa-IR",{% if g.has_video %}"totalTime":"{{ g.iso_duration }}",
+  "video":{"@type":"VideoObject","name":"{{ g.title|escapejs }}","description":"{{ g.summary|escapejs }}","thumbnailUrl":"{{ BASE_URL }}{% static g.poster %}","contentUrl":"{{ BASE_URL }}{% static g.video %}","uploadDate":"2026-10-14","duration":"{{ g.iso_duration }}"},{% endif %}
   "step":[{% for t, d in g.steps %}{"@type":"HowToStep","position":{{ forloop.counter }},"name":"{{ t|escapejs }}","text":"{{ d|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}]},
  {"@type":"BreadcrumbList","itemListElement":[
   {"@type":"ListItem","position":1,"name":"{{ SITE_NAME|escapejs }}","item":"{{ BASE_URL }}/"},
@@ -32,12 +32,16 @@
     <h1>{{ g.title }}</h1>
     <p class="lead">{{ g.summary }}</p>
 
+    {% if g.has_video %}
     <figure class="vplayer">
       <video controls playsinline preload="metadata" poster="{% static g.poster %}" aria-label="ویدیوی راهنما: {{ g.title }}">
         <source src="{% static g.video %}#t=0.1" type="video/mp4">
       </video>
       <figcaption>{% include "help/_icon.html" with name="play" %} مدت {{ g.duration }} · بدون گفتار؛ هر مرحله روی تصویر نوشته شده است</figcaption>
     </figure>
+    {% else %}
+    <p class="small muted help-novideo" role="note">ویدیوی این راهنما در دست تهیه است؛ مراحل نوشتاری زیر کامل است.</p>
+    {% endif %}
 
     <h2>مرحله به مرحله</h2>
     <ol class="help-steps">

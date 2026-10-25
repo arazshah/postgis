@@ -448,6 +448,9 @@ details.pay-option summary{cursor:pointer}
 .help-play{position:absolute;inset:0;display:grid;place-items:center;opacity:0;transition:opacity .25s;background:rgba(10,67,65,.35)}
 .help-play .hicon{width:58px;height:58px;padding:16px;border-radius:50%;background:var(--ochre);color:var(--ink);box-shadow:0 8px 24px rgba(0,0,0,.3)}
 .help-card:hover .help-play,.help-card:focus-visible .help-play{opacity:1}
+.help-thumb.no-video{display:grid;place-items:center}
+.help-thumb.no-video .hicon{width:58px;height:58px;padding:16px;border-radius:50%;background:var(--ochre);color:var(--ink)}
+.help-novideo{padding:var(--s3) var(--s4);border-radius:8px;background:var(--surface-2,rgba(0,0,0,.04))}
 .help-dur{position:absolute;left:10px;bottom:10px;background:rgba(18,49,58,.88);color:#fff;font-size:.8rem;padding:1px 9px;border-radius:6px}
 .help-card-body{display:flex;flex-direction:column;gap:var(--s2);padding:var(--s4) var(--s5) var(--s5)}
 .help-card-title{display:flex;gap:var(--s2);align-items:flex-start;font-family:var(--f-display);font-weight:700;font-size:1.05rem;line-height:1.6}

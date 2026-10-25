@@ -11,6 +11,8 @@
    "description": "کوئری‌های مکانی، ابزارهای بدون SQL، پرسش فارسی و مسیریابی"},
   {"slug": "publish", "title": "انتشار نقشه و API", "icon": "🗺️", "order": 60,
    "description": "کاشی برداری، OGC API، WMS/WFS، نقشه قابل اشتراک و REST API"},
+  {"slug": "survey", "title": "برداشت میدانی و GNSS", "icon": "📡", "order": 65,
+   "description": "برداشت نقطه با GPS و گیرنده RTK، کار آفلاین، منحنی میزان، حجم و خروجی DXF"},
   {"slug": "iran-data", "title": "داده و نقشه آماده ایران", "icon": "📍", "order": 70,
    "description": "داده OpenStreetMap هر استان و شهر، شبکه مسیریابی و نقشه پایه فارسی"},
   {"slug": "billing", "title": "پلن، پرداخت و اعتبار", "icon": "💳", "order": 80,

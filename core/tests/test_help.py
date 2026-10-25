@@ -24,7 +24,8 @@ class HelpCenterTests(TestCase):
         html = r.content.decode()
         for g in GUIDES:
             self.assertIn(f'href="/help/{g.slug}/"', html)
-            self.assertIn(f"/static/help/video/{g.slug}.jpg", html)
+            if g.has_video:
+                self.assertIn(f"/static/help/video/{g.slug}.jpg", html)
         self.assertIn("/static/help/video/intro.mp4", html)
         graph = jsonld(html)[-1]["@graph"]
         items = next(x for x in graph if x["@type"] == "ItemList")["itemListElement"]
@@ -36,11 +37,18 @@ class HelpCenterTests(TestCase):
             self.assertEqual(r.status_code, 200, g.slug)
             html = r.content.decode()
             self.assertIn(f"<h1>{g.title}</h1>", html)
-            self.assertIn(f"/static/help/video/{g.slug}.mp4", html)
+            if g.has_video:
+                self.assertIn(f"/static/help/video/{g.slug}.mp4", html)
+            else:
+                self.assertNotIn("<video", html)
+                self.assertIn("در دست تهیه است", html)
             self.assertIn('aria-current="page"', html)
             howto = next(x for x in jsonld(html)[-1]["@graph"] if x["@type"] == "HowTo")
             self.assertEqual(len(howto["step"]), len(g.steps))
-            self.assertEqual(howto["video"]["duration"], g.iso_duration)
+            if g.has_video:
+                self.assertEqual(howto["video"]["duration"], g.iso_duration)
+            else:
+                self.assertNotIn("video", howto)
             if i + 1 < len(GUIDES):
                 self.assertIn(f'href="/help/{GUIDES[i + 1].slug}/"', html)
 
@@ -50,12 +58,26 @@ class HelpCenterTests(TestCase):
     def test_guides_are_grouped_and_have_media_files(self):
         self.assertEqual({g.group for g in GUIDES}, set(GROUPS))
         self.assertEqual(len({g.slug for g in GUIDES}), len(GUIDES))
-        for name in [*(g.slug for g in GUIDES), "intro"]:
+        # راهنمایی که مدت ویدیو دارد باید فایل mp4 و jpg هم داشته باشد؛ بدون ویدیو (seconds=0) فقط مراحل نوشتاری
+        for name in [*(g.slug for g in GUIDES if g.seconds), "intro"]:
             for ext in ("mp4", "jpg"):
                 self.assertTrue((STATIC / "help" / "video" / f"{name}.{ext}").is_file(), f"{name}.{ext}")
         for g in GUIDES:
-            self.assertGreater(g.seconds, 20)
+            self.assertEqual(g.has_video, g.seconds > 0)
+            if g.seconds:
+                self.assertGreater(g.seconds, 20)
             self.assertGreaterEqual(len(g.steps), 4)
+
+    def test_index_shows_guides_without_video(self):
+        html = self.client.get("/help/").content.decode()
+        for slug in ("survey", "gnss", "surface"):
+            self.assertIn(f'href="/help/{slug}/"', html)
+            self.assertNotIn(f"/static/help/video/{slug}.jpg", html)
+
+    def test_survey_doc_page(self):
+        r = self.client.get("/docs/survey/")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("برداشت میدانی", r.content.decode())
 
     def test_nav_footer_sitemap_and_home_video(self):
         html = self.client.get("/").content.decode()
