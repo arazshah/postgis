@@ -376,3 +376,5 @@ class SuggestionTests(TestCase):
     def test_defaults_and_rules(self):
         self.assertEqual(service.suggestions("/"), service._SUGGEST_DEFAULT)
         self.assertIn("SRID", service.suggestions("/dashboard/1/explore/")[0])
+        self.assertIn("برداشت", service.suggestions("/dashboard/1/survey/")[0])
+        self.assertIn("چندلایه", service.suggestions("/dashboard/1/maps/")[0])

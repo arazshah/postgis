@@ -38,10 +38,10 @@
     <div class="help-grid">
       {% for g in items %}
       <a class="help-card" href="{% url 'core:help_page' g.slug %}">
-        <span class="help-thumb">
-          <img src="{% static g.poster %}" alt="" loading="lazy" width="640" height="360">
+        <span class="help-thumb{% if not g.has_video %} no-video{% endif %}">
+          {% if g.has_video %}<img src="{% static g.poster %}" alt="" loading="lazy" width="640" height="360">
           <span class="help-play">{% include "help/_icon.html" with name="play" %}</span>
-          <span class="help-dur">{{ g.duration }}</span>
+          <span class="help-dur">{{ g.duration }}</span>{% else %}{% include "help/_icon.html" with name=g.icon %}{% endif %}
         </span>
         <span class="help-card-body">
           <span class="help-card-title">{% include "help/_icon.html" with name=g.icon %}{{ g.title }}</span>
