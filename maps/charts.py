@@ -136,7 +136,8 @@ def _run(layer, kind: str, cfg: dict, bbox) -> dict:
             if cfg.get("agg", "count") in ("count", "sum") and len(rows) >= cfg["limit"]:
                 total = run(notnull, (sql.SQL("SELECT {}::float8").format(agg), sql.SQL("")))[0][0]
                 rest = round(float(total or 0) - sum(v or 0 for v in out["values"]), 4)
-                out["other"] = rest if rest > 0 else None
+                # جمع منفی هم جزو «سایر» است تا ردیف‌ها با کل جور شوند؛ فقط دایره‌ای مقدار منفی ندارد
+                out["other"] = rest if (rest > 0 if kind == "pie" else rest != 0) else None
             return out
         if kind == "hist":
             col = sql.SQL("{}::float8").format(field)
@@ -155,7 +156,9 @@ def _run(layer, kind: str, cfg: dict, bbox) -> dict:
                     counts[b] = c
             else:
                 counts[0] = n
-            return {"edges": [round(v, 6) for v in [lo, *breaks, hi]], "counts": counts,
+            # با محدوده دیده‌شده، کمینه و بیشینه ممکن است وسط مرزهای طبقه بیفتند؛ لبه‌ها باید مرتب بمانند
+            edges = [min(lo, breaks[0]), *breaks, max(hi, breaks[-1])] if breaks else [lo, hi]
+            return {"edges": [round(v, 6) for v in edges], "counts": counts,
                     "classes": bool(cfg["classes"] and class_breaks(layer, cfg["field"]))}
         rows = run(notnull, (sql.SQL("SELECT date_trunc(%s, {})::date AS d, {}::float8").format(field, agg),
                              sql.SQL("GROUP BY 1 ORDER BY 1 DESC LIMIT %s")), lead=(cfg["unit"],),

@@ -27,7 +27,10 @@
     }
     if (chart.kind === "hist") {
       const num = ["to-number", ["get", f]], last = i === data.counts.length - 1;
-      return ["all", ["has", f], [">=", num, data.edges[i]], [last ? "<=" : "<", num, data.edges[i + 1]]];
+      // طبقه‌های سیمبولوژی بازند (کمتر از اولین مرز، و از آخرین مرز به بالا) حتی اگر نمودار فقط محدوده دیده‌شده باشد
+      const lo = data.classes && i === 0 ? null : [">=", num, data.edges[i]];
+      const hi = data.classes && last ? null : [last ? "<=" : "<", num, data.edges[i + 1]];
+      return ["all", ["has", f], ...[lo, hi].filter(Boolean)];
     }
     return null;
   }

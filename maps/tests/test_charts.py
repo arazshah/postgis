@@ -139,6 +139,23 @@ class ChartsIntegrationTests(TestCase):
         self.layer.style = {**self.layer.style, "field": "kind"}  # طبقه‌بندی روی ستون دیگر است
         self.assertFalse(charts.data(self.layer, "hist", {"field": "sales"})["classes"])
 
+    def test_class_histogram_edges_stay_ordered_inside_bbox(self):
+        self.layer.style = {**self.layer.style, "mode": "graduated", "field": "sales", "breaks": [10, 20]}
+        box = [51.0, 35.0, 51.185, 36.0]  # g = 12 تا 18 هم داخل است؛ ولی لبه‌های محدوده از مرزها بیرون نمی‌زنند
+        got = charts.data(self.layer, "hist", {"field": "sales"}, [51.115, 35.0, 51.185, 36.0])
+        self.assertEqual(got["edges"], sorted(got["edges"]))
+        self.assertEqual(len(got["edges"]), len(got["counts"]) + 1)
+        got = charts.data(self.layer, "hist", {"field": "sales"}, box)
+        self.assertEqual(got["edges"], sorted(got["edges"]))
+
+    def test_other_keeps_negative_sums(self):
+        with self._pg() as c:
+            c.execute("UPDATE shops SET sales = -sales WHERE kind IN ('d', 'e', 'f')")
+        got = charts.data(self.layer, "bar", {"field": "kind", "agg": "sum", "value": "sales", "limit": 3})
+        total = charts.data(self.layer, "kpi", {"agg": "sum", "value": "sales"})["value"]
+        self.assertAlmostEqual(sum(got["values"]) + got["other"], total)
+        self.assertLess(got["other"], 0)
+
     def test_histogram_single_value_and_empty(self):
         with self._pg() as c:
             c.execute("DELETE FROM shops WHERE sales <> 7 OR sales IS NULL")
