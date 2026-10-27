@@ -8,6 +8,7 @@ from databases.explorer import Explorer, ExplorerError
 from publish import engine
 from publish.styles import CATEGORY_COLORS, STYLE_DEFAULT
 
+from . import charts
 from .models import MapLayer, WebMap
 
 QUICK_MAX = 10  # «نمایش با هم» بدون ذخیره
@@ -128,6 +129,11 @@ def duplicate(webmap: WebMap, user) -> WebMap:
             slide.webmap = copy
             slide.layers = [ids[i] for i in slide.layers if i in ids]
             slide.save()
+        for chart in webmap.charts.all():
+            chart.pk = None
+            chart.webmap = copy
+            chart.layer_id = ids[chart.layer_id]
+            chart.save()
     return copy
 
 
@@ -187,4 +193,23 @@ def copy_to(webmap: WebMap, target_db, user) -> tuple[WebMap, list[str]]:
             slide.webmap = copy
             slide.layers = [ids[i] for i in slide.layers if i in ids]
             slide.save()
+        fields = {}
+        for chart in webmap.charts.all():
+            if chart.layer_id not in ids:
+                continue
+            if chart.layer_id not in fields:
+                try:
+                    fields[chart.layer_id] = dict(all_fields(MapLayer.objects.get(pk=ids[chart.layer_id])))
+                except (engine.EngineError, ExplorerError):
+                    fields[chart.layer_id] = {}
+            try:  # ستون‌ها یا نوعشان در جدول مقصد فرق کرده باشد، نمودار کنار گذاشته می‌شود
+                config = charts.clean(chart.kind, chart.config, fields[chart.layer_id])
+            except charts.ChartError:
+                skipped.append("نمودار «" + (chart.title or charts.title_for(chart.kind, chart.config)) + "»")
+                continue
+            chart.pk = None
+            chart.webmap = copy
+            chart.layer_id = ids[chart.layer_id]
+            chart.config = config
+            chart.save()
     return copy, skipped

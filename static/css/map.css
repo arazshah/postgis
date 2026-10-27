@@ -41,3 +41,33 @@
 .gpm-toast button{border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;border-radius:8px;padding:1px 10px;font:inherit;cursor:pointer}
 .gpm-toast button:hover{background:rgba(255,255,255,.25)}
 @media (prefers-reduced-motion:reduce){.gpm-arrow{transition:none}}
+/* نمودارهای نقشه: کارت‌ها (هم در طراح و هم در نقشه عمومی) و پنل کنار نقشه */
+.gc-host{display:flex;flex-direction:column;gap:10px}
+.gc{background:#fff;border:1px solid #D4DED1;border-radius:12px;padding:10px 12px 8px;font:13px/1.7 Vazirmatn,Tahoma,sans-serif;color:#12313A;direction:rtl;transition:opacity .15s}
+.gc.busy{opacity:.6}
+.gc header{display:flex;align-items:center;gap:8px}
+.gc h3{flex:1;min-width:0;margin:0;font-size:.95rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gc-tools{display:flex;gap:2px;flex:none}
+.gc-tools button{border:1px solid transparent;background:none;border-radius:6px;min-width:26px;height:24px;padding:0 6px;cursor:pointer;color:#4B6269;font:11px/1 Vazirmatn,Tahoma,sans-serif}
+.gc-tools button:hover,.gc-tools button:focus-visible{border-color:#C5D2C2;color:#0F5C59}
+.gc-body{margin-top:4px;min-height:40px;direction:ltr}  /* ECharts جای متن SVG را برای چپ‌به‌راست حساب می‌کند */
+.gc-empty,.gc-kpi{direction:rtl}
+.gc-empty{margin:10px 0;text-align:center;color:#4B6269;font-size:.85rem}
+.gc-empty.err{color:#B42318}
+.gc-kpi{display:flex;flex-direction:column;align-items:center;padding:8px 0 4px}
+.gc-kpi b{font-size:2.1rem;line-height:1.3;color:#0F5C59}
+.gc-kpi span{color:#4B6269}
+.gc-kpi small{color:#6B7F86;font-size:.75rem}
+.gc-note{min-height:1em;font-size:.75rem;color:#6B7F86}
+.gp-chartbtn{position:fixed;top:12px;inset-inline-end:52px;z-index:4;border:1px solid #C5D2C2;background:rgba(249,251,248,.97);color:#0F5C59;border-radius:999px;padding:5px 14px;font:700 13px/1.6 Vazirmatn,Tahoma,sans-serif;cursor:pointer;box-shadow:0 6px 16px -10px rgba(18,49,58,.5)}
+.gp-chartbtn[aria-expanded=true]{background:#0F5C59;color:#fff;border-color:#0F5C59}
+.gp-charts{position:fixed;z-index:5;top:54px;bottom:28px;inset-inline-end:52px;width:min(380px,calc(100vw - 64px));display:flex;flex-direction:column;background:rgba(238,242,236,.98);border:1px solid #C5D2C2;border-radius:14px;box-shadow:0 14px 34px -16px rgba(18,49,58,.55);direction:rtl;font:13px/1.7 Vazirmatn,Tahoma,sans-serif;color:#12313A}
+.gp-charts[hidden]{display:none}
+.gp-charts>header{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #D4DED1;flex:none}
+.gp-charts h2{margin:0;font-size:1rem;flex:1}
+.gp-charts label{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.8rem}
+.gp-charts input{margin:0;accent-color:#0F5C59}
+.gp-charts>header button{border:0;background:none;font-size:1rem;cursor:pointer;color:#4B6269;border-radius:6px;width:28px;height:28px}
+.gp-charts>header button:hover{background:#DDE8DA}
+.gp-charts .gc-host{padding:10px;overflow:auto;overscroll-behavior:contain}
+@media (max-width:640px){.gp-charts{inset-inline:8px;width:auto;top:auto;bottom:8px;height:58vh}}

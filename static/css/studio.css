@@ -119,3 +119,10 @@
   .st-toast{bottom:14px}
 }
 .st-gpa:empty{display:none}
+
+/* ---------- نمودارها ---------- */
+.ch-form{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--paper);padding:12px}
+.ch-form [hidden]{display:none!important}
+.ch-err{margin:0;color:var(--red)}
+.ch-hint{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--teal-soft);border-radius:8px;padding:5px 10px}
+.studio .gc{box-shadow:none}

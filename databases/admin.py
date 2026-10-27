@@ -175,7 +175,7 @@ class PlanAdmin(admin.ModelAdmin):
         (None, {"fields": ("name", "slug", "description", "order")}),
         ("منابع", {"fields": ("quota_mb", "max_connections", "statement_timeout_s", "temp_file_limit_mb",
                                "backup_retention_days", "allowed_extensions")}),
-        ("انتشار نقشه", {"fields": ("publish_layers", "publish_daily_requests", "map_badge", "maps", "map_layers")}),
+        ("انتشار نقشه", {"fields": ("publish_layers", "publish_daily_requests", "map_badge", "maps", "map_layers", "map_charts")}),
         ("برداشت میدانی", {"fields": ("survey_projects", "survey_max_points", "gnss_external")}),
         ("مدت و قیمت", {"fields": ("duration_days", "price_toman", "is_free", "is_renewable"),
                         "description": "درگاه پرداخت فعلاً فعال نیست؛ پلن‌های پولی در سایت با دکمه «درخواست از پشتیبانی» "

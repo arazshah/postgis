@@ -41,6 +41,8 @@
     <nav class="st-rail" role="tablist" aria-label="بخش‌های نقشه" aria-orientation="vertical">
       <button type="button" class="st-tab" role="tab" data-tab="layers" aria-controls="tab-layers">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5"/></svg><span>لایه‌ها</span><em class="st-badge" id="b-layers"></em></button>
+      <button type="button" class="st-tab" role="tab" data-tab="charts" aria-controls="tab-charts">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>نمودارها</span><em class="st-badge" id="b-charts"></em></button>
       <button type="button" class="st-tab" role="tab" data-tab="slides" aria-controls="tab-slides">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><span>اسلایدها</span><em class="st-badge" id="b-slides"></em></button>
       <button type="button" class="st-tab" role="tab" data-tab="map" aria-controls="tab-map">
@@ -125,6 +127,48 @@
         </div>
       </section>
 
+      <!-- ============ نمودارها ============ -->
+      <section class="st-sec" id="tab-charts" data-tab="charts" role="tabpanel" hidden>
+        <div class="st-view">
+          <div class="st-head"><h2>نمودارها <span class="muted small" id="ch-count"></span></h2></div>
+          <div class="st-scroll">
+            <p class="small muted" style="margin:0">نمودار از داده‌های یک لایه ساخته می‌شود و کنار نقشه عمومی هم دیده می‌شود. روی ردیف یا ستون نمودار بزنید تا عارضه‌هایش روی نقشه برجسته شود.</p>
+            <button class="btn" type="button" id="ch-add">+ افزودن نمودار</button>
+            <form class="ch-form" id="ch-form" hidden>
+              <div class="field"><label for="ch-kind">نوع نمودار</label><select id="ch-kind">
+                <option value="bar">میله‌ای (تعداد یا جمع هر دسته)</option>
+                <option value="pie">دایره‌ای (سهم هر دسته)</option>
+                <option value="hist">هیستوگرام (توزیع ستون عددی)</option>
+                <option value="time">سری زمانی (بر اساس تاریخ)</option>
+                <option value="kpi">کارت عددی (یک عدد کلی)</option></select></div>
+              <div class="field"><label for="ch-layer">لایه</label><select id="ch-layer"></select></div>
+              <div class="field"><label for="ch-title">عنوان <span class="muted small">(اختیاری)</span></label><input id="ch-title" type="text" maxlength="120"></div>
+              <div class="field" data-ch="field"><label for="ch-field" id="ch-field-l">ستون</label><select id="ch-field"></select></div>
+              <div class="bf-row" data-ch="agg">
+                <div class="field"><label for="ch-agg">محاسبه</label><select id="ch-agg">
+                  <option value="count">تعداد عارضه</option><option value="sum">جمع یک ستون</option><option value="avg">میانگین یک ستون</option>
+                  <option value="min">کمینه</option><option value="max">بیشینه</option></select></div>
+                <div class="field" data-ch="value"><label for="ch-value">ستون عددی</label><select id="ch-value"></select></div>
+              </div>
+              <div class="bf-row" data-ch="limit">
+                <div class="field"><label for="ch-limit">حداکثر دسته</label><input id="ch-limit" type="number" min="3" max="20" value="10"></div>
+                <div class="field"><label for="ch-order">ترتیب</label><select id="ch-order"><option value="value">بیشترین اول</option><option value="label">الفبایی</option></select></div>
+              </div>
+              <div class="field" data-ch="bins"><label for="ch-bins">تعداد بازه</label><input id="ch-bins" type="number" min="3" max="30" value="10"></div>
+              <label class="chk" data-ch="classes"><input id="ch-classes" type="checkbox" checked> هم‌مرز با طبقه‌بندی رنگی لایه
+                <small class="muted">اگر لایه روی همین ستون طبقه‌بندی عددی دارد، بازه‌ها و رنگ‌ها همان‌هایند.</small></label>
+              <div class="field" data-ch="unit"><label for="ch-unit">بازه زمانی</label><select id="ch-unit"><option value="day">روز</option><option value="month" selected>ماه</option><option value="year">سال</option></select></div>
+              <p class="small ch-err" id="ch-err" role="alert" hidden></p>
+              <div class="wm-actions"><button class="btn sm" type="submit" id="ch-ok">ثبت نمودار</button><button class="btn ghost sm" type="button" id="ch-cancel">انصراف</button></div>
+            </form>
+            <label class="check small"><input type="checkbox" id="ch-visible"><span>فقط عارضه‌های محدوده دیده‌شده روی نقشه</span></label>
+            <div class="ch-hint small" id="ch-sel" hidden><span id="ch-sel-t"></span> <button type="button" class="st-link" id="ch-sel-x">برداشتن برجسته‌سازی</button></div>
+            <div class="gc-host" id="ch-list"></div>
+            <p class="small muted" id="ch-note">حداکثر {{ config.chartCap|fanum }} نمودار در هر نقشه. برای ذخیره، دکمه «ذخیره» بالا را بزنید.</p>
+          </div>
+        </div>
+      </section>
+
       <!-- ============ اسلایدها ============ -->
       <section class="st-sec" id="tab-slides" data-tab="slides" role="tabpanel" hidden>
         <div class="st-view">
@@ -190,8 +234,10 @@
   </div>
 </div>
 {{ config|json_script:"map-config" }}
-<script id="wm-urls" type="application/json">{"save": "{% url 'maps:composer' db.pk webmap.pk %}", "add": "{% url 'maps:layer_add' db.pk webmap.pk %}", "remove": "{% url 'maps:layer_remove' db.pk webmap.pk 0 %}", "stats": "{% url 'maps:layer_stats' db.pk webmap.pk 0 %}", "extent": "{% url 'maps:layer_extent' db.pk webmap.pk 0 %}"}</script>
+<script id="wm-urls" type="application/json">{"save": "{% url 'maps:composer' db.pk webmap.pk %}", "add": "{% url 'maps:layer_add' db.pk webmap.pk %}", "remove": "{% url 'maps:layer_remove' db.pk webmap.pk 0 %}", "stats": "{% url 'maps:layer_stats' db.pk webmap.pk 0 %}", "extent": "{% url 'maps:layer_extent' db.pk webmap.pk 0 %}", "chartPreview": "{% url 'maps:chart_preview' db.pk webmap.pk %}"}</script>
 <script src="{% static 'vendor/maplibre/maplibre-gl.js' %}"></script>
 <script src="{% static 'js/map-page.js' %}"></script>
+<script src="{% static 'vendor/echarts/echarts.min.js' %}"></script>
+<script src="{% static 'js/map-charts.js' %}"></script>
 <script src="{% static 'js/map-composer.js' %}"></script>
 {% endblock %}

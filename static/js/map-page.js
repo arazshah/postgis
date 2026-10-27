@@ -88,6 +88,9 @@
 
   function geomIds(key) { return [key + "-fill", key + "-outline", key + "-line", key + "-circle"]; }
   const HIT = ["-circle", "-line", "-fill"];
+  // برجسته‌سازی عارضه‌های یک دسته یا طبقه نمودار؛ هرکدام روی همه هندسه‌ها و بالاتر از لایه‌ها
+  const HL = {"-hl-fill": ["Polygon"], "-hl-line": ["Polygon", "LineString"], "-hl-circle": ["Point"]};
+  const geomFilter = (types) => ["any", ...types.map((t) => ["==", ["geometry-type"], t])];
 
   // ------------------------------------------------------------------ پیدا کردن لایه
   const validBox = (b) => Array.isArray(b) && b.length === 4 && b.every((v) => Number.isFinite(v));
@@ -145,7 +148,7 @@
     legend.className = "gpm-legend" + (cfg.single ? "" : " multi");
     if (cfg.legend === false) legend.hidden = true;
     el.appendChild(legend);
-    let baseKind = null, ready = false, ours = new Set();
+    let baseKind = null, ready = false, ours = new Set(), hl = null;
     const api = {map, onVisibility: null};
 
     function overlayIds() {
@@ -175,6 +178,27 @@
         paint: {"text-color": "#1B2B2F", "text-halo-color": "rgba(255,255,255,.92)", "text-halo-width": 1.4}});
     }
 
+    function addHighlight(l) {
+      const src = {source: l.key, "source-layer": l.sourceLayer, metadata: {gp: l.key}, layout: {visibility: "none"}};
+      map.addLayer({id: l.key + "-hl-fill", type: "fill", ...src, filter: geomFilter(HL["-hl-fill"]),
+        paint: {"fill-color": "#E0A526", "fill-opacity": 0.65}});
+      map.addLayer({id: l.key + "-hl-line", type: "line", ...src, filter: geomFilter(HL["-hl-line"]),
+        layout: {visibility: "none", "line-cap": "round", "line-join": "round"},
+        paint: {"line-color": "#12313A", "line-width": 2.5}});
+      map.addLayer({id: l.key + "-hl-circle", type: "circle", ...src, filter: geomFilter(HL["-hl-circle"]),
+        paint: {"circle-color": "#E0A526", "circle-stroke-color": "#12313A", "circle-stroke-width": 2, "circle-radius": 8}});
+    }
+
+    function applyHighlight() {
+      layers.forEach((l) => Object.entries(HL).forEach(([suffix, types]) => {
+        const id = l.key + suffix;
+        if (!map.getLayer(id)) return;
+        const on = !!hl && hl.key === l.key && l.visible;
+        map.setFilter(id, on ? ["all", geomFilter(types), hl.expr] : geomFilter(types));
+        map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+      }));
+    }
+
     // لایه‌ها از پایین به بالا ساخته می‌شوند؛ برچسب‌ها روی همه هندسه‌ها
     function build() {
       if (!ready) return;
@@ -186,6 +210,7 @@
       const bottomUp = layers.slice().reverse();
       bottomUp.forEach(addGeom);
       bottomUp.forEach(addLabel);
+      bottomUp.forEach(addHighlight);
       layers.forEach(paintLayer);
       renderLegend();
     }
@@ -206,6 +231,7 @@
       map.setPaintProperty(key + "-circle", "circle-radius", size);
       map.setPaintProperty(key + "-circle", "circle-opacity", Math.min(1, op + 0.15));
       map.setPaintProperty(key + "-circle", "circle-stroke-color", st.outline);
+      map.setPaintProperty(key + "-hl-circle", "circle-radius", size + 3);
       const vis = l.visible ? "visible" : "none";
       geomIds(key).forEach((id) => map.setLayoutProperty(id, "visibility", vis));
       if (st.label && l.visible) {
@@ -216,6 +242,7 @@
       } else {
         map.setLayoutProperty(key + "-label", "visibility", "none");
       }
+      applyHighlight();
     }
 
     function renderLegend() {
@@ -393,6 +420,8 @@
     return Object.assign(api, {
       setBasemap,
       layers: () => layers,
+      // expr: شرط MapLibre روی ویژگی‌های کاشی؛ بدون expr برجسته‌سازی برداشته می‌شود
+      highlight(key, expr) { hl = key && expr ? {key, expr} : null; applyHighlight(); },
       setLayerStyle(key, st) { const l = byKey(key); if (!l) return; l.style = st; paintLayer(l); renderLegend(); },
       setVisible(key, v) { const l = byKey(key); if (!l) return; l.visible = !!v; paintLayer(l); renderLegend(); },
       setTitle(key, t) { const l = byKey(key); if (!l) return; l.title = t; renderLegend(); },
@@ -444,5 +473,5 @@
         style: cfg.style, title: cfg.title, bbox: cfg.bbox}]}));
     return {map: m.map, setStyle(next) { m.setLayerStyle("gp", next); }, setBasemap: m.setBasemap};
   }
-  window.GPMap = {create, createMulti, pick, FA, legendRows, legendItems, esc};
+  window.GPMap = {create, createMulti, pick, FA, fmt, legendRows, legendItems, esc};
 })();

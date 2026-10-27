@@ -16,6 +16,7 @@ urlpatterns = [
     path("dashboard/<int:pk>/maps/<int:map_id>/duplicate/", views.duplicate, name="duplicate"),
     path("dashboard/<int:pk>/maps/<int:map_id>/qgis/", views.qgis_project, name="qgis"),
     path("dashboard/<int:pk>/maps/<int:map_id>/ows/", views.publish_ows, name="publish_ows"),
+    path("dashboard/<int:pk>/maps/<int:map_id>/charts/preview/", views.chart_preview, name="chart_preview"),
     path("dashboard/<int:pk>/maps/<int:map_id>/layers/", views.layer_add, name="layer_add"),
     path("dashboard/<int:pk>/maps/<int:map_id>/layers/<int:layer_id>/remove/", views.layer_remove,
          name="layer_remove"),
@@ -29,5 +30,6 @@ urlpatterns = [
     path("maps/<slug:slug>/present/", views.present, name="present"),
     path("maps/<slug:slug>/print/", views.print_map, name="print"),
     path("maps/<slug:slug>/compare/", views.compare, name="compare"),
+    path("maps/<slug:slug>/c/<int:chart_id>.json", views.chart_data, name="chart_data"),
     path("maps/<slug:slug>/t/<int:layer_id>/<int:z>/<int:x>/<int:y>.mvt", views.tile, name="tile"),
 ]
