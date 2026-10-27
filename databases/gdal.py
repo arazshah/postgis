@@ -103,10 +103,18 @@ def guess_encoding(path: Path) -> str | None:
 
 
 def _open_options(path: Path, encoding: str | None) -> list[str]:
+    from .csvgeo import COL_WKT, COL_X, COL_Y, PREPARED_DIR
+
     opts = []
-    if encoding:
+    is_csv = path.suffix.lower() == ".csv"
+    if encoding and not is_csv:
         opts += ["-oo", f"ENCODING={encoding}"]
-    if path.suffix.lower() == ".csv":
+    if is_csv and path.parent.name == PREPARED_DIR:
+        # فایل آماده‌شده با csvgeo: ستون‌های مکانی قطعی‌اند؛ GDAL نباید ستون دیگری را حدس بزند
+        opts += ["-oo", f"X_POSSIBLE_NAMES={COL_X}", "-oo", f"Y_POSSIBLE_NAMES={COL_Y}",
+                 "-oo", f"GEOM_POSSIBLE_NAMES={COL_WKT}", "-oo", "KEEP_GEOM_COLUMNS=NO",
+                 "-oo", "AUTODETECT_TYPE=YES"]
+    elif is_csv:
         opts += ["-oo", f"X_POSSIBLE_NAMES={CSV_X}", "-oo", f"Y_POSSIBLE_NAMES={CSV_Y}",
                  "-oo", f"GEOM_POSSIBLE_NAMES={CSV_GEOM}", "-oo", "KEEP_GEOM_COLUMNS=NO",
                  "-oo", "AUTODETECT_TYPE=YES"]
@@ -208,7 +216,9 @@ def import_layer(db, path: Path, layer: dict, encoding: str | None) -> None:
         cmd += ["-overwrite"]
     elif layer.get("mode") == "append":
         cmd += ["-append"]
-    assign = layer.get("srid") and layer.get("assign_srid")
+    is_csv = path.suffix.lower() == ".csv"
+    # CSV سیستم مختصات ندارد؛ SRID انتخاب‌شده (یا حدس‌زده) همیشه باید روی هندسه بنشیند
+    assign = layer.get("srid") and (layer.get("assign_srid") or is_csv)
     if assign and layer.get("to4326"):
         # -a_srs فقط برچسب می‌زند و تبدیل نمی‌کند؛ برای تبدیل باید سیستم مبدأ با -s_srs گفته شود
         cmd += ["-s_srs", f"EPSG:{int(layer['srid'])}", "-t_srs", "EPSG:4326"]
@@ -216,7 +226,7 @@ def import_layer(db, path: Path, layer: dict, encoding: str | None) -> None:
         cmd += ["-a_srs", f"EPSG:{int(layer['srid'])}"]
     elif layer.get("to4326"):
         cmd += ["-t_srs", "EPSG:4326"]
-    if path.suffix.lower() == ".csv" and not layer.get("srid"):
+    if is_csv and not layer.get("srid"):
         cmd += ["-a_srs", "EPSG:4326"]
     _run(cmd, env=tgt.env)
 

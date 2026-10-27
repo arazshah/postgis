@@ -508,6 +508,11 @@ details.pay-option summary{cursor:pointer}
 .imp-layer legend{display:flex;gap:var(--s3);align-items:center;padding:0 6px}
 .imp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s4);align-items:end;margin-bottom:var(--s4)}
 .imp-grid .check{grid-column:1/-1}
+.csv-geo{border-top:1px solid var(--line);padding-top:var(--s4);margin-bottom:var(--s4)}
+.csv-geo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--s3);align-items:end}
+.csv-geo-grid [hidden]{display:none}
+.csv-geo .table-scroll{margin-top:var(--s3)}
+.csv-geo-col{background:var(--ochre-soft)}
 .table-scroll{overflow-x:auto}
 .dl-more{position:relative;display:inline-block}
 .dl-more summary{list-style:none;cursor:pointer}

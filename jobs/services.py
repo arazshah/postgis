@@ -283,6 +283,9 @@ def _do_import(job: Job) -> None:
             try:
                 gdal.import_layer(db, path, layer, job.params.get("encoding"))
                 done.append(layer["table"])
+                if layer.get("csv_bad") and layer.get("csv_mode") != "none":
+                    bad = str(layer["csv_bad"]).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+                    errors.append(f"{layer['table']}: {bad} سطر مختصات معتبر نداشت و بدون هندسه وارد شد")
             except gdal.GdalError as exc:
                 errors.append(f"{layer['name']}: {exc}")
     finally:

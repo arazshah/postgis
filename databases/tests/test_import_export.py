@@ -138,6 +138,77 @@ class ImportExportIntegrationTests(TestCase):
         issues = [i for i in Explorer(self.db).health() if i["table"] == "schools"]
         self.assertEqual([i["fix"] for i in issues if i["fix"] != "analyze"], [])
 
+    def _upload_csv(self, text: str, name="شعبه‌ها.csv", encoding="utf-8"):
+        self.client.post(reverse("databases:import", args=[self.db.pk]),
+                         {"file": SimpleUploadedFile(name, text.encode(encoding))})
+        job = Job.objects.filter(kind="import").latest("pk")
+        return job, reverse("databases:import_review", args=[self.db.pk, job.pk])
+
+    def test_csv_odd_column_names_get_geometry(self):
+        """نام‌های غیرمعمول طول و عرض، رقم فارسی و جای برعکس: ستون geom نباید خالی بماند."""
+        job, url = self._upload_csv("کد;مختصات شمالی (درجه);مختصات شرقی (درجه);نام\n"
+                                    "1;۳۵٫۶۸۹۲;۵۱٫۳۸۹۰;شعبه مرکزی\n2;35.7012;51.4012;شعبه دو\n3;;;بی‌آدرس\n")
+        r = self.client.get(url)
+        self.assertContains(r, "مکان هر سطر کجای فایل است")
+        self.assertContains(r, "مختصات قابل‌خواندن نداشت")  # سطر سوم
+        self.client.post(url, {"sel_0": "on", "table_0": "branches", "srid_0": "4326", "mode_0": "create",
+                               "csv_mode": "xy", "csv_x": "مختصات شرقی (درجه)", "csv_y": "مختصات شمالی (درجه)",
+                               "action": "go"})
+        job.refresh_from_db()
+        self.assertEqual(job.status, "queued", job.params.get("layers"))
+        jobs.run_inline(job)
+        self.assertEqual(job.status, "done", job.message)
+        self.assertIn("بدون هندسه", job.message)
+        rows = self._sql("SELECT count(*), count(geom), min(ST_SRID(geom)), round(min(ST_X(ST_GeometryN(geom,1)))::numeric, 3),"
+                         " round(min(ST_Y(ST_GeometryN(geom,1)))::numeric, 3) FROM branches")
+        self.assertEqual(rows[0][:3], (3, 2, 4326))
+        self.assertEqual([float(v) for v in rows[0][3:]], [51.389, 35.689])
+        cols = {c for (c,) in self._sql("SELECT column_name FROM information_schema.columns WHERE table_name='branches'")}
+        self.assertNotIn("gp_x", cols)
+        self.assertIn("نام", cols)
+
+    def test_csv_manual_mapping_and_utm(self):
+        """کاربر ستون‌ها را دستی انتخاب می‌کند؛ مختصات UTM بدون زون خطا می‌دهد و با زون تبدیل می‌شود."""
+        job, url = self._upload_csv("a,b,c\np1,535000.5,3950000.2\np2,535100.0,3950100.0\n", name="pts.csv")
+        job.refresh_from_db()
+        self.assertEqual(job.params["layers"][0]["srid"], None)
+        # بدون انتخاب ستون‌ها: تشخیص خودکار از روی مقدار
+        self.assertEqual((job.params["csv"]["spec"]["x"], job.params["csv"]["spec"]["y"]), ("b", "c"))
+        r = self.client.post(url, {"sel_0": "on", "table_0": "pts", "srid_0": "", "mode_0": "create",
+                                   "csv_mode": "xy", "csv_x": "b", "csv_y": "c", "action": "go"})
+        self.assertContains(r, "سیستم مختصات لایه")
+        # انتخاب اشتباه ستون‌ها با 4326 → خطای محدوده
+        r = self.client.post(url, {"sel_0": "on", "table_0": "pts", "srid_0": "4326", "mode_0": "create",
+                                   "csv_mode": "xy", "csv_x": "b", "csv_y": "c", "action": "go"})
+        self.assertContains(r, "بیرون از محدوده")
+        self.client.post(url, {"sel_0": "on", "table_0": "pts", "srid_0": "32639", "mode_0": "create",
+                               "to4326_0": "on", "csv_mode": "xy", "csv_x": "b", "csv_y": "c", "action": "go"})
+        job.refresh_from_db()
+        jobs.run_inline(job)
+        self.assertEqual(job.status, "done", job.message)
+        lon, lat, srid = self._sql("SELECT ST_X(ST_GeometryN(geom,1)), ST_Y(ST_GeometryN(geom,1)), ST_SRID(geom) FROM pts LIMIT 1")[0]
+        self.assertEqual(srid, 4326)
+        self.assertAlmostEqual(lon, 51.38, places=1)
+        self.assertAlmostEqual(lat, 35.69, places=1)
+
+    def test_csv_remap_pair_column(self):
+        job, url = self._upload_csv('name,where\nA,"35.69, 51.41"\nB,"35.70, 51.42"\n', name="pair.csv")
+        job.refresh_from_db()
+        self.assertEqual(job.params["csv"]["spec"]["mode"], "pair")
+        # کاربر نوع مکان را «بدون مکان» می‌کند و دوباره بررسی می‌کند
+        self.client.post(url, {"sel_0": "on", "table_0": "pair", "mode_0": "create", "csv_mode": "none",
+                               "action": "resample"})
+        job.refresh_from_db()
+        self.assertEqual((job.params["layers"][0]["geom_type"], job.params["layers"][0]["csv_mode"]), ("", "none"))
+        self.client.post(url, {"sel_0": "on", "table_0": "pair", "mode_0": "create", "csv_mode": "pair",
+                               "csv_pair": "where", "csv_pair_order": "latlon", "action": "resample"})
+        job.refresh_from_db()
+        self.assertEqual(job.params["layers"][0]["srid"], 4326)
+        self.client.post(url, {"sel_0": "on", "table_0": "pair", "mode_0": "create", "srid_0": "4326",
+                               "csv_mode": "pair", "csv_pair": "where", "csv_pair_order": "latlon", "action": "go"})
+        jobs.run_inline(Job.objects.get(pk=job.pk))
+        self.assertEqual(self._sql("SELECT count(geom), round(min(ST_X(ST_GeometryN(geom,1)))::numeric,2) FROM pair")[0][0], 2)
+
     def test_assign_and_reproject(self):
         """SRID اعلام‌شده کاربر + تبدیل به 4326 باید مختصات را واقعاً تبدیل کند (نه فقط برچسب)."""
         src = self.tmp / "utm.geojson"
