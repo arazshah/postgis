@@ -1,5 +1,5 @@
 // استودیوی نقشه چندلایه: ریل تب‌ها + پنل کنار نقشه (قابل بستن و تغییر عرض)، لایه‌ها (فهرست ← سبک)،
-// اسلایدها با پیش‌نمایش روی نقشه، تنظیمات نقشه و اشتراک؛ همه با یک دکمه ذخیره
+// نمودارها، اسلایدها با پیش‌نمایش روی نقشه، تنظیمات نقشه و اشتراک؛ همه با یک دکمه ذخیره
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -14,7 +14,7 @@
   let selected = null, dirty = false;
 
   // ------------------------------------------------------------------ وضعیت رابط (به خاطر سپرده می‌شود)
-  const KEY = "gp.studio.v1", TABS = ["layers", "slides", "map", "share"], DEFAULT_W = 380;
+  const KEY = "gp.studio.v1", TABS = ["layers", "charts", "slides", "map", "share"], DEFAULT_W = 380;
   const clampW = (w) => Math.max(300, Math.min(w, Math.min(640, Math.round(window.innerWidth * 0.6))));
   const stored = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
   const ui = {
@@ -83,6 +83,10 @@
     c.setAttribute("aria-expanded", ui.open ? "true" : "false");
     c.title = ui.open ? "بستن پنل" : "باز کردن پنل";
     if (!ui.open || ui.tab !== "slides") leaveSlides();
+    // نمودارها فقط وقتی تب دیده می‌شود رسم و پرسیده می‌شوند (ECharts در بخش پنهان اندازه ندارد)
+    const onCharts = ui.open && ui.tab === "charts";
+    if (!onCharts) chartsUI.clear();
+    else if (chartsStale) renderCharts();
     updateChip();
   }
   function setTab(name, toggle) {
@@ -233,6 +237,7 @@
       } catch (err) { say(err.message, true); return; }
       layers = layers.filter((x) => x.key !== key);
       slides.forEach((s) => { s.layers = s.layers.filter((k) => k !== key); });
+      dropCharts(key);
       if (selected === key) select(null);
       gm.setLayers(layers);
       renderList();
@@ -483,6 +488,127 @@
   $("chip-prev").addEventListener("click", () => { if (curSlide > 0) selectSlide(curSlide - 1, true); });
   $("chip-next").addEventListener("click", () => { if (curSlide < slides.length - 1) selectSlide(curSlide + 1, true); });
 
+  // ------------------------------------------------------------------ نمودارها
+  const NUM = new Set(["int2", "int4", "int8", "float4", "float8", "numeric"]), DATE = new Set(["date", "timestamp", "timestamptz"]);
+  const charts = (cfg.charts || []).map((x, i) => Object.assign({key: "c" + x.id + "-" + i}, x));
+  const chForm = $("ch-form"), chErr = $("ch-err");
+  let chartsStale = true, editing = null, chartUid = 0;
+  const draftStyle = (key) => { const l = byKey(key); return l ? {mode: l.style.mode, field: l.style.field, breaks: l.style.breaks} : null; };
+
+  const chartsUI = GPCharts.create($("ch-list"), {
+    gm, cfg, visibleOnly: $("ch-visible"),
+    actions: [{act: "edit", label: "✎", title: "ویرایش نمودار"}, {act: "up", label: "↑", title: "بالاتر"},
+      {act: "down", label: "↓", title: "پایین‌تر"}, {act: "remove", label: "✕", title: "حذف نمودار"}],
+    // نمودار ذخیره‌نشده هم دیده می‌شود: داده از همین پیش‌نمایش می‌آید (با طبقه‌بندی فعلی لایه)
+    load: async (chart, bbox) => (await post(urls.chartPreview, {layer: chart.layer, kind: chart.kind, config: chart.config,
+      bbox, style: draftStyle(chart.layer)}, true)).data,
+    onSelect: (c) => {
+      $("ch-sel").hidden = !c;
+      if (c) $("ch-sel-t").textContent = `روی نقشه برجسته است: «${c.title || c.autoTitle}»`;
+    },
+    onAction: (act, chart) => {
+      const i = charts.indexOf(chart);
+      if (act === "edit") return openChartForm(chart);
+      if (act === "up" && i > 0) [charts[i - 1], charts[i]] = [charts[i], charts[i - 1]];
+      else if (act === "down" && i < charts.length - 1) [charts[i + 1], charts[i]] = [charts[i], charts[i + 1]];
+      else if (act === "remove") { if (!confirm("این نمودار حذف شود؟")) return; charts.splice(i, 1); }
+      else return;
+      setDirty(true);
+      renderCharts();
+    },
+  });
+  $("ch-sel-x").addEventListener("click", () => chartsUI.clear());
+
+  function renderCharts() {
+    chartsStale = !(ui.open && ui.tab === "charts");
+    if (!chartsStale) chartsUI.render(charts);
+    $("ch-count").textContent = charts.length ? `(${FA(charts.length)})` : "";
+    $("b-charts").textContent = charts.length ? FA(charts.length) : "";
+    $("ch-add").disabled = charts.length >= (cfg.chartCap || 0) && editing === null;
+  }
+  // نمودارِ لایه‌ای که برداشته شد (سرور هم با حذف لایه آن‌ها را برمی‌دارد)
+  function dropCharts(layerKey) {
+    const n = charts.length;
+    for (let i = charts.length - 1; i >= 0; i--) if (charts[i].layer === layerKey) charts.splice(i, 1);
+    if (charts.length !== n) renderCharts();
+  }
+  // رنگ نمودارها از سیمبولوژی می‌آید؛ با تغییر سبک لایه دوباره رنگ می‌شوند
+  const origSetStyle = gm.setLayerStyle;
+  gm.setLayerStyle = (key, st) => { origSetStyle(key, st); chartsUI.restyle(); };
+
+  const chShow = (name, on) => chForm.querySelectorAll(`[data-ch="${name}"]`).forEach((e) => { e.hidden = !on; });
+  function options(sel, items, keep) {
+    sel.innerHTML = items.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join("");
+    if (keep && items.some(([v]) => v === keep)) sel.value = keep;
+  }
+  function syncChartForm(keep) {
+    const kind = $("ch-kind").value, fields = (byKey($("ch-layer").value) || {}).fields || [];
+    const want = kind === "hist" ? NUM : kind === "time" ? DATE : null;
+    $("ch-field-l").textContent = kind === "hist" ? "ستون عددی" : kind === "time" ? "ستون تاریخ" : "ستون دسته";
+    const st = (byKey($("ch-layer").value) || {}).style || {};
+    // هیستوگرام تازه: اگر لایه روی یک ستون عددی طبقه‌بندی شده، همان ستون پیش‌فرض است
+    const pre = keep ? keep.field : kind === "hist" && st.mode === "graduated" ? st.field : "";
+    options($("ch-field"), fields.filter(([, t]) => !want || want.has(t)).map(([n]) => [n, n]), pre);
+    options($("ch-value"), fields.filter(([, t]) => NUM.has(t)).map(([n]) => [n, n]), keep && keep.value);
+    const agg = $("ch-agg").value;
+    chShow("field", kind !== "kpi");
+    chShow("agg", kind !== "hist");
+    chShow("value", kind !== "hist" && agg !== "count");
+    chShow("limit", kind === "bar" || kind === "pie");
+    chShow("bins", kind === "hist");
+    chShow("classes", kind === "hist");
+    chShow("unit", kind === "time");
+  }
+  function openChartForm(chart) {
+    editing = chart || "new";
+    const c = chart ? chart.config : {};
+    options($("ch-layer"), layers.map((l) => [l.key, l.title]), chart ? chart.layer : layers[0] && layers[0].key);
+    $("ch-kind").value = chart ? chart.kind : "bar";
+    $("ch-title").value = chart ? chart.title : "";
+    $("ch-agg").value = c.agg || "count";
+    $("ch-limit").value = c.limit || 10;
+    $("ch-order").value = c.order || "value";
+    $("ch-bins").value = c.bins || 10;
+    $("ch-classes").checked = c.classes !== false;
+    $("ch-unit").value = c.unit || "month";
+    syncChartForm(c);
+    chErr.hidden = true;
+    chForm.hidden = false;
+    $("ch-add").hidden = true;
+    $("ch-kind").focus();
+  }
+  function closeChartForm() { editing = null; chForm.hidden = true; $("ch-add").hidden = false; renderCharts(); }
+  $("ch-add").addEventListener("click", () => {
+    if (!layers.length) { say("اول یک لایه به نقشه اضافه کنید.", true); return; }
+    if (charts.length >= (cfg.chartCap || 0)) { say(`پلن شما حداکثر ${FA(cfg.chartCap || 0)} نمودار در هر نقشه دارد.`, true); return; }
+    openChartForm(null);
+  });
+  ["ch-kind", "ch-layer", "ch-agg"].forEach((id) => $(id).addEventListener("change", () => syncChartForm()));
+  $("ch-cancel").addEventListener("click", closeChartForm);
+  chForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const draft = {layer: $("ch-layer").value, kind: $("ch-kind").value, title: $("ch-title").value.trim(), config: {
+      field: $("ch-field").value, agg: $("ch-agg").value, value: $("ch-value").value, limit: Number($("ch-limit").value),
+      order: $("ch-order").value, bins: Number($("ch-bins").value), classes: $("ch-classes").checked, unit: $("ch-unit").value}};
+    $("ch-ok").disabled = true;
+    chErr.hidden = true;
+    try {  // سرور تنظیمات را بررسی و پاک‌سازی می‌کند؛ اگر داده نداشت همین‌جا خطا می‌دهد
+      const d = await post(urls.chartPreview, {layer: draft.layer, kind: draft.kind, config: draft.config, style: draftStyle(draft.layer)}, true);
+      draft.config = d.config;
+      draft.autoTitle = d.autoTitle;
+    } catch (err) {
+      chErr.textContent = err.message;
+      chErr.hidden = false;
+      return;
+    } finally {
+      $("ch-ok").disabled = false;
+    }
+    if (editing && editing !== "new") Object.assign(editing, draft);
+    else charts.push(Object.assign(draft, {key: "n" + (++chartUid)}));
+    setDirty(true);
+    closeChartForm();
+  });
+
   // ------------------------------------------------------------------ تنظیمات نقشه، اشتراک و ذخیره
   $("wm-base").value = cfg.basemapKind || "osm";
   if (!$("wm-base").value) $("wm-base").value = "osm";
@@ -519,10 +645,12 @@
         visible: l.visible, style: l.style})),
       slides: slides.map((x) => ({title: x.title, body: x.body, view: x.view,
         layers: x.layers.filter((k) => byKey(k)).map((k) => Number(k.slice(2)))})),
+      charts: charts.map((c) => ({id: c.id, layer: c.layer, kind: c.kind, title: c.title, config: c.config})),
     };
     $("wm-save").disabled = true;
     try {
       const d = await post(urls.save, body, true);
+      if (d.charts && d.charts.length === charts.length) d.charts.forEach((x, i) => { charts[i].id = x.id; });
       setDirty(false);
       say(d.message);
     } catch (err) {
@@ -540,6 +668,7 @@
 
   apply();
   renderSlides();
+  renderCharts();
   renderList();
   if (layers.length === 1) select(layers[0].key);
 })();

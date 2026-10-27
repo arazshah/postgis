@@ -1,8 +1,10 @@
 """نقشه‌های چندلایه: فهرست، طراحی، «نمایش با هم» بدون ذخیره، صفحه عمومی، embed و کاشی هر لایه."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import math
 from urllib.parse import quote
 
 from django.contrib import messages
@@ -10,6 +12,7 @@ from django.core.cache import cache
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_exempt
 from django.views.decorators.http import require_GET, require_POST
 
@@ -21,8 +24,8 @@ from publish import access, engine, styles
 from publish.styles import CATEGORY_COLORS
 from publish.views import base_config
 
-from . import qgis_export, services
-from .models import MapLayer, MapSlide, WebMap
+from . import charts, qgis_export, services
+from .models import MapChart, MapLayer, MapSlide, WebMap
 from .services import MapError
 
 log = logging.getLogger(__name__)
@@ -85,7 +88,15 @@ def map_config(request, webmap: WebMap, embed=False, fields=False) -> dict:
         "layers": [_layer_conf(request, x, _tiles_path(webmap, x), f"ml{x.pk}", fields) for x in layers],
         "slides": [{"title": x.title, "body": x.body, "view": x.view, "layers": [f"ml{i}" for i in x.layers]}
                    for x in webmap.slides.all()],
+        "charts": [_chart_conf(x) for x in webmap.charts.all()], "chartsUrl": f"/maps/{webmap.slug}/c/",
+        "categoryColors": CATEGORY_COLORS,
+        "chartCap": webmap.database.plan.map_charts,
     }
+
+
+def _chart_conf(chart: MapChart) -> dict:
+    return {"id": chart.pk, "layer": f"ml{chart.layer_id}", "kind": chart.kind, "title": chart.title,
+            "autoTitle": charts.title_for(chart.kind, chart.config), "config": chart.config}
 
 
 # ---------------------------------------------------------------------- فهرست و ساخت
@@ -253,6 +264,59 @@ def _save_slides(webmap: WebMap, items: list, layer_ids: set[int]):
     MapSlide.objects.bulk_create(slides)
 
 
+def _layer_ref(value, layers: dict[int, MapLayer]) -> MapLayer | None:
+    try:
+        return layers.get(int(str(value).removeprefix("ml")))
+    except ValueError:
+        return None
+
+
+def _prepare_charts(webmap: WebMap, items: list) -> list[tuple]:
+    """نمودارها را پیش از هر تغییری بررسی می‌کند؛ خطا یعنی هیچ‌چیز ذخیره نشود."""
+    cap = webmap.database.plan.map_charts
+    items = [x for x in items if isinstance(x, dict)]
+    if len(items) > cap:
+        raise MapError(f"پلن شما حداکثر {cap} نمودار در هر نقشه دارد.")
+    layers = {x.pk: x for x in webmap.layers.all()}
+    fields: dict[int, dict] = {}
+    out = []
+    for item in items:
+        layer = _layer_ref(item.get("layer"), layers)
+        if layer is None:
+            raise charts.ChartError("لایه نمودار پیدا نشد.")
+        if layer.pk not in fields:
+            try:
+                fields[layer.pk] = dict(services.all_fields(layer))
+            except (engine.EngineError, ExplorerError) as exc:
+                raise charts.ChartError(f"جدول «{layer.display_title}» در دسترس نیست.") from exc
+        kind = str(item.get("kind") or "")
+        out.append((item.get("id"), layer, kind, str(item.get("title") or "").strip()[:120],
+                    charts.clean(kind, item.get("config"), fields[layer.pk])))
+    return out
+
+
+def _save_charts(webmap: WebMap, prepared: list[tuple]) -> list[MapChart]:
+    """نمودارهای موجود (با شناسه) به‌روز می‌شوند، تازه‌ها ساخته و بقیه حذف؛ ترتیب همان ترتیب فهرست است."""
+    old = {x.pk: x for x in webmap.charts.all()}
+    touched = {x.layer_id for x in old.values()}
+    saved = []
+    for position, (cid, layer, kind, title, config) in enumerate(prepared):
+        try:
+            chart = old.get(int(cid))
+        except (TypeError, ValueError):
+            chart = None
+        if chart is None or chart in saved:
+            chart = MapChart(webmap=webmap)
+        chart.layer, chart.kind, chart.title, chart.config, chart.position = layer, kind, title, config, position
+        chart.save()
+        saved.append(chart)
+        touched.add(layer.pk)
+    webmap.charts.exclude(pk__in=[x.pk for x in saved]).delete()
+    # ستون نمودار در کاشی می‌آید؛ کلید کش کاشی با زمان به‌روزرسانی لایه عوض می‌شود
+    MapLayer.objects.filter(pk__in=touched).update(updated_at=timezone.now())
+    return saved
+
+
 @site_user_required
 def composer(request, pk, map_id):
     db = _db(request, pk)
@@ -264,8 +328,15 @@ def composer(request, pk, map_id):
             return _json({"error": "داده نامعتبر است."}, 400)
         if not isinstance(data, dict):
             return _json({"error": "داده نامعتبر است."}, 400)
+        try:
+            prepared = _prepare_charts(webmap, data["charts"]) if isinstance(data.get("charts"), list) else None
+        except (charts.ChartError, MapError) as exc:
+            return _json({"error": str(exc)}, 400)
         _save(webmap, data)
-        return _json({"ok": True, "message": "نقشه ذخیره شد."})
+        out = {"ok": True, "message": "نقشه ذخیره شد."}
+        if prepared is not None:
+            out["charts"] = [_chart_conf(x) for x in _save_charts(webmap, prepared)]
+        return _json(out)
     try:
         tables = services.spatial_tables(db)
     except ExplorerError as exc:
@@ -280,6 +351,32 @@ def composer(request, pk, map_id):
         "public_url": public_url, "embed_url": request.build_absolute_uri(reverse("maps:embed", args=[webmap.slug])),
         "layer_cap": db.plan.map_layers,
     })
+
+
+@site_user_required
+@require_POST
+def chart_preview(request, pk, map_id):
+    """نتیجه نمودار ذخیره‌نشده برای پیش‌نمایش در طراح."""
+    db = _db(request, pk)
+    webmap = _map(db, map_id)
+    try:
+        body = json.loads(request.body or b"{}")
+        layer = _layer_ref(body.get("layer"), {x.pk: x for x in webmap.layers.all()})
+        if layer is None:
+            raise charts.ChartError("لایه نمودار پیدا نشد.")
+        layer.webmap = webmap
+        # طبقه‌بندی ذخیره‌نشده‌ای که الان روی نقشه است (برای هم‌مرز شدن هیستوگرام)
+        draft = body.get("style") if isinstance(body.get("style"), dict) else {}
+        layer.style = {**layer.style, "mode": draft.get("mode"), "field": draft.get("field"),
+                       "breaks": [float(b) for b in (draft.get("breaks") or [])][:8]} if draft else layer.style
+        kind = str(body.get("kind") or "")
+        config = charts.clean(kind, body.get("config"), dict(services.all_fields(layer)))
+        result = charts.data(layer, kind, config, _bbox_param(body.get("bbox")))
+    except (ValueError, TypeError, AttributeError):
+        return _json({"error": "داده نامعتبر است."}, 400)
+    except (charts.ChartError, engine.EngineError, ExplorerError) as exc:
+        return _json({"error": str(exc)}, 400)
+    return _json({"data": result, "config": config, "autoTitle": charts.title_for(kind, config)})
 
 
 @site_user_required
@@ -441,13 +538,9 @@ def _tile_response(layer, z, x, y, public: bool, cache_key: str | None = None):
     return resp
 
 
-@require_GET
-def tile(request, slug, layer_id, z, x, y):
-    layer = MapLayer.objects.select_related("webmap__database__plan", "webmap__database__server").filter(
-        pk=layer_id, webmap__slug=slug).first()
-    if layer is None:
-        return _json({"code": "NotFound", "description": "لایه پیدا نشد."}, 404)
-    webmap, db = layer.webmap, layer.webmap.database
+def _authorize(request, webmap: WebMap):
+    """دسترسی به داده نقشه (کاشی و نمودار): None یعنی مجاز، وگرنه پاسخ خطا. بازدید غیرتیمی از سهمیه روزانه کم می‌شود."""
+    db = webmap.database
     try:
         access.check_database(db)
         # تیم و اعضای کلاسی که نقشه با آن به اشتراک گذاشته شده: نقشه خصوصی را می‌بینند و شمرده نمی‌شوند
@@ -461,8 +554,62 @@ def tile(request, slug, layer_id, z, x, y):
             access.count(db)
     except access.Denied as exc:
         return _json({"code": exc.code, "description": exc.message}, exc.status)
+    return None
+
+
+@require_GET
+def tile(request, slug, layer_id, z, x, y):
+    layer = MapLayer.objects.select_related("webmap__database__plan", "webmap__database__server").filter(
+        pk=layer_id, webmap__slug=slug).first()
+    if layer is None:
+        return _json({"code": "NotFound", "description": "لایه پیدا نشد."}, 404)
+    denied = _authorize(request, layer.webmap)
+    if denied:
+        return denied
     ck = f"maptile2:{layer.pk}:{int(layer.updated_at.timestamp())}:{z}/{x}/{y}"
-    return _tile_response(layer, z, x, y, public=webmap.is_public, cache_key=ck)
+    return _tile_response(layer, z, x, y, public=layer.webmap.is_public, cache_key=ck)
+
+
+def _bbox_param(value) -> list[float] | None:
+    """محدوده «فقط آنچه دیده می‌شود»: چهار عدد طول و عرض؛ نامعتبر یعنی بدون محدوده."""
+    if isinstance(value, str):
+        value = value.split(",")
+    try:
+        w, s, e, n = (round(float(v), 4) for v in value)
+    except (TypeError, ValueError):
+        return None
+    if not all(math.isfinite(v) for v in (w, s, e, n)) or not (-180 <= w <= e <= 180 and -90 <= s <= n <= 90):
+        return None
+    return [w, s, e, n]
+
+
+@require_GET
+def chart_data(request, slug, chart_id):
+    chart = MapChart.objects.select_related("layer__webmap__database__plan", "layer__webmap__database__server").filter(
+        pk=chart_id, webmap__slug=slug).first()
+    if chart is None:
+        return _json({"code": "NotFound", "description": "نمودار پیدا نشد."}, 404)
+    layer, webmap = chart.layer, chart.layer.webmap
+    denied = _authorize(request, webmap)
+    if denied:
+        return denied
+    bbox = _bbox_param(request.GET.get("bbox"))
+    sig = hashlib.md5(json.dumps([chart.kind, chart.config, layer.style.get("breaks"), bbox],
+                                 sort_keys=True).encode()).hexdigest()
+    ck = f"mapchart:{chart.pk}:{int(layer.updated_at.timestamp())}:{sig}"
+    result = cache.get(ck)
+    if result is None:
+        try:
+            result = charts.data(layer, chart.kind, chart.config, bbox)
+        except (charts.ChartError, engine.EngineError) as exc:
+            return _json({"code": "ChartError", "description": str(exc)}, 400)
+        except Exception as exc:  # noqa: BLE001  (مثلاً اتصال به سرور پایگاه داده)
+            log.exception("map chart failed")
+            return _json({"code": "Unavailable", "description": f"محاسبه نمودار ممکن نشد: {exc}"}, 503)
+        cache.set(ck, result, TILE_TTL)
+    resp = _json({"id": chart.pk, "kind": chart.kind, "data": result})
+    resp["Cache-Control"] = f"public, max-age={TILE_TTL}" if webmap.is_public else "private, max-age=0, no-store"
+    return resp
 
 
 def class_member(request, webmap: WebMap) -> bool:

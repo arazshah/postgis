@@ -42,9 +42,21 @@ body{background:#EEF2EC}
 {% if webmap.database.plan.map_badge %}
 <a class="map-badge" href="{{ SITE_URL|default:'https://postgis.ir' }}/?utm_source=map&amp;utm_medium=badge" target="_blank" rel="noopener"><img src="{% static 'img/favicon.svg' %}" alt="">ساخته‌شده با postgis.ir</a>
 {% endif %}
+{% if config.charts %}
+<button type="button" class="gp-chartbtn" id="chart-toggle" aria-expanded="false" aria-controls="chart-panel">نمودارها</button>
+<aside class="gp-charts" id="chart-panel" aria-label="نمودارهای نقشه" hidden>
+  <header><h2>نمودارها</h2>
+    <label><input type="checkbox" id="chart-visible"> فقط محدوده دیده‌شده</label>
+    <button type="button" id="chart-close" aria-label="بستن نمودارها">✕</button></header>
+  <div class="gc-host" id="chart-host"></div>
+</aside>
+{% endif %}
 {{ config|json_script:"map-config" }}
 <script src="{% static 'vendor/maplibre/maplibre-gl.js' %}"></script>
 <script src="{% static 'js/map-page.js' %}"></script>
+{% if config.charts %}<script src="{% static 'vendor/echarts/echarts.min.js' %}" defer></script>
+<script src="{% static 'js/map-charts.js' %}" defer></script>
+<script src="{% static 'js/map-charts-public.js' %}" defer></script>{% endif %}
 <script>
   const cfg = JSON.parse(document.getElementById("map-config").textContent);
   window.gpMap = GPMap.createMulti(document.getElementById("map"), cfg);

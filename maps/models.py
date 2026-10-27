@@ -82,6 +82,9 @@ class MapLayer(models.Model):
         if not popup:
             return []
         extra = [st.get(k) for k in ("field", "label") if st.get(k)]
+        # نمودار با کلیک روی دسته یا طبقه، عارضه‌ها را روی نقشه برجسته می‌کند؛ ستونش باید در کاشی باشد
+        if self.pk:
+            extra += [c.config["field"] for c in self.charts.all() if c.config.get("field")]
         return list(dict.fromkeys(popup + extra))
 
 
@@ -102,3 +105,23 @@ class MapSlide(models.Model):
 
     def __str__(self):
         return self.title or f"اسلاید {self.position + 1}"
+
+
+class MapChart(models.Model):
+    """یک نمودار روی داده‌های یک لایه نقشه؛ تجمیع در PostGIS انجام می‌شود (maps.charts) و تنظیمات اینجا می‌ماند."""
+
+    webmap = models.ForeignKey(WebMap, on_delete=models.CASCADE, related_name="charts", verbose_name="نقشه")
+    layer = models.ForeignKey(MapLayer, on_delete=models.CASCADE, related_name="charts", verbose_name="لایه")
+    position = models.PositiveIntegerField("ترتیب", default=0)
+    title = models.CharField("عنوان", max_length=120, blank=True)
+    kind = models.CharField("نوع", max_length=10)
+    config = models.JSONField("تنظیمات", default=dict, blank=True,
+                              help_text="{field, value, agg, limit, bins, unit}؛ با maps.charts.clean پاک‌سازی می‌شود.")
+
+    class Meta:
+        verbose_name = "نمودار نقشه"
+        verbose_name_plural = "نمودارهای نقشه"
+        ordering = ["position", "id"]
+
+    def __str__(self):
+        return self.title or f"{self.kind} ({self.layer.table})"

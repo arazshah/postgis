@@ -180,6 +180,7 @@ class Plan(models.Model):
     map_badge = models.BooleanField("نشان postgis.ir روی نقشه‌های عمومی", default=True)
     maps = models.PositiveIntegerField("حداکثر نقشه چندلایه", default=2)
     map_layers = models.PositiveIntegerField("حداکثر لایه در هر نقشه", default=5)
+    map_charts = models.PositiveIntegerField("حداکثر نمودار در هر نقشه", default=4, help_text="۰ یعنی نمودار ندارد.")
     ows_projects = models.PositiveIntegerField("حداکثر پروژه WMS/WFS (QGIS Server)", default=1)
     db_roles = models.PositiveIntegerField(
         "حداکثر کاربر اضافه پایگاه داده", default=1,

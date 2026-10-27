@@ -202,6 +202,6 @@ def copy_map(request, code, share_id):
         return redirect("classroom:join", code=c.code)
     msg = f"نقشه «{copy.title}» در پایگاه داده شما ساخته شد."
     if skipped:
-        msg += " این لایه‌ها جدول هم‌نام در پایگاه داده شما نداشتند و کپی نشدند: " + "، ".join(skipped)
+        msg += " این موارد جدول یا ستون‌های هم‌نام در پایگاه داده شما نداشتند و کپی نشدند: " + "، ".join(skipped)
     messages.success(request, msg)
     return redirect("maps:composer", pk=mine.database.pk, map_id=copy.pk)
