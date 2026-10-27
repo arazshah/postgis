@@ -14,6 +14,7 @@
       <select id="enc" name="encoding">
         <option value="UTF-8" {% if job.params.encoding == 'UTF-8' %}selected{% endif %}>UTF-8</option>
         <option value="CP1256" {% if job.params.encoding == 'CP1256' %}selected{% endif %}>ویندوز فارسی/عربی (CP1256)</option>
+        {% if csv %}<option value="UTF-16" {% if job.params.encoding == 'UTF-16' %}selected{% endif %}>UTF-16 (متن یونیکد اکسل)</option>{% endif %}
       </select>
       <button class="btn ghost sm" name="action" value="resample" type="submit">نمایش دوباره نمونه</button>
       <span class="small muted">اگر نوشته‌های فارسی نمونه به‌هم‌ریخته است، انکودینگ دیگر را امتحان کنید.</span>
@@ -40,6 +41,52 @@
           </select>{% if l.exists %}<small class="help">جدولی با این نام از قبل وجود دارد.</small>{% endif %}</div>
         <label class="check small"><input type="checkbox" name="to4326_{{ forloop.counter0 }}" {% if l.to4326 %}checked{% endif %}><span>تبدیل به طول و عرض جغرافیایی (EPSG:4326)</span></label>
       </div>
+      {% if csv %}{% with s=csv.spec %}
+      <div class="csv-geo" data-csv-geo>
+        <h3 class="small" style="margin:0 0 var(--s2)">مکان هر سطر کجای فایل است؟</h3>
+        {% if s.how == 'name' or s.how == 'content' %}
+          <p class="small muted" style="margin:0 0 var(--s3)">
+            {% if s.mode == 'none' %}ستون مکانی پیدا نشد؛ اگر فایل مختصات دارد، ستون‌ها را خودتان انتخاب کنید.
+            {% else %}تشخیص خودکار {% if s.how == 'name' %}از روی نام ستون‌ها{% else %}از روی مقدارها{% endif %}. اگر درست نیست، تغییر دهید.{% endif %}
+            {% if s.swapped %}<b>جای طول و عرض در فایل برعکس بود و درست شد.</b>{% endif %}
+          </p>
+        {% endif %}
+        <div class="csv-geo-grid">
+          <div class="field"><label class="small" for="cm">نوع مکان</label>
+            <select id="cm" name="csv_mode" data-csv-mode>
+              {% for v, label in csv_modes %}<option value="{{ v }}" {% if s.mode == v %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select></div>
+          <div class="field" data-show="xy"><label class="small" for="cx">ستون طول (X، Longitude، Easting)</label>
+            <select id="cx" name="csv_x"><option value="">—</option>{% for c in csv.columns %}<option {% if s.x == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+          <div class="field" data-show="xy"><label class="small" for="cy">ستون عرض (Y، Latitude، Northing)</label>
+            <select id="cy" name="csv_y"><option value="">—</option>{% for c in csv.columns %}<option {% if s.y == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+          <div class="field" data-show="pair"><label class="small" for="cp">ستون مختصات</label>
+            <select id="cp" name="csv_pair"><option value="">—</option>{% for c in csv.columns %}<option {% if s.pair == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+          <div class="field" data-show="pair"><label class="small" for="co">ترتیب</label>
+            <select id="co" name="csv_pair_order">
+              <option value="latlon" {% if s.pair_order != 'lonlat' %}selected{% endif %}>اول عرض، بعد طول (مثل گوگل‌مپ)</option>
+              <option value="lonlat" {% if s.pair_order == 'lonlat' %}selected{% endif %}>اول طول، بعد عرض</option>
+            </select></div>
+          <div class="field" data-show="wkt"><label class="small" for="cg">ستون WKT</label>
+            <select id="cg" name="csv_geom"><option value="">—</option>{% for c in csv.columns %}<option {% if s.geom == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+          <div class="field"><button class="btn ghost sm" name="action" value="resample" type="submit">اعمال و بررسی دوباره</button></div>
+        </div>
+        {% if l.csv_mode != 'none' %}
+        <p class="small" style="margin:var(--s3) 0">
+          {{ l.csv_rows|fanum }} سطر خوانده شد{% if l.csv_bad %}؛ <b>{{ l.csv_bad|fanum }} سطر</b> مختصات قابل‌خواندن نداشت و بدون هندسه وارد می‌شود{% else %}؛ همه سطرها مختصات معتبر دارند{% endif %}.
+          {% if l.csv_stats.xmin is not None %}<span class="muted ltr" dir="ltr">X: {{ l.csv_stats.xmin|floatformat:"-6" }} … {{ l.csv_stats.xmax|floatformat:"-6" }} · Y: {{ l.csv_stats.ymin|floatformat:"-6" }} … {{ l.csv_stats.ymax|floatformat:"-6" }}</span>{% endif %}
+        </p>
+        {% if not l.srid and l.csv_stats.xmin is not None %}<div class="msg info small">مختصات این فایل جغرافیایی (طول و عرض) نیست؛ احتمالاً UTM است. «سیستم مختصات فایل» را انتخاب کنید (برای بیشتر ایران زون ۳۹ یا ۴۰).</div>{% endif %}
+        {% if l.csv_warn %}<div class="msg warning small" role="alert">{{ l.csv_warn }}</div>{% endif %}
+        {% endif %}
+        {% if csv.sample %}
+        <div class="table-scroll"><table class="data-table small">
+          <thead><tr>{% for c in csv.columns %}<th class="{% if c == s.x or c == s.y or c == s.pair or c == s.geom %}csv-geo-col{% endif %}">{{ c }}{% if c == s.x %} <span class="tag">X</span>{% elif c == s.y %} <span class="tag">Y</span>{% elif c == s.pair or c == s.geom %} <span class="tag">مکان</span>{% endif %}</th>{% endfor %}</tr></thead>
+          <tbody>{% for row in csv.sample %}<tr>{% for v in row %}<td>{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+        </table></div>
+        {% endif %}
+      </div>
+      {% endwith %}{% endif %}
       {% if l.sample %}
       <div class="table-scroll"><table class="data-table small">
         <thead><tr>{% for k in l.sample.0.keys %}<th>{{ k }}</th>{% endfor %}</tr></thead>
@@ -53,6 +100,18 @@
       <button class="btn ghost" type="submit" name="action" value="cancel" formnovalidate>انصراف</button>
     </div>
   </form>
+  {% if csv %}<script>
+  (function () {
+    var box = document.querySelector("[data-csv-geo]");
+    if (!box) return;
+    var mode = box.querySelector("[data-csv-mode]");
+    function sync() {
+      box.querySelectorAll("[data-show]").forEach(function (el) { el.hidden = el.dataset.show !== mode.value; });
+    }
+    mode.addEventListener("change", sync);
+    sync();
+  })();
+  </script>{% endif %}
 {% elif job.active %}
   <div class="msg info" role="status">در حال ورود داده… این صفحه خودکار تازه می‌شود.</div>
 {% elif job.status == 'done' %}

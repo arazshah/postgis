@@ -10,7 +10,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
 
-from . import services
+from . import csvgeo, services
 from .crypto import generate_password
 from .explorer import EXPORT_LIMIT, MAP_LIMIT, SQL_MAX_ROWS, Explorer, ExplorerError
 from .forms import AddExtensionForm, CreateDatabaseForm, DeleteConfirmForm, PasswordResetForm
@@ -548,15 +548,20 @@ def import_start(request, pk):
             with open(folder / f"upload{ext}", "wb") as out:
                 for chunk in f.chunks():
                     out.write(chunk)
+            existing = {t.name for t in ex.tables() if t.schema == "public"}
             try:
-                info = gdal.inspect(folder / f"upload{ext}")
-            except gdal.GdalError as exc:
+                if ext == ".csv":
+                    info = _csv_start(job, folder, existing)
+                else:
+                    info = gdal.inspect(folder / f"upload{ext}")
+            except (gdal.GdalError, ValueError) as exc:
                 shutil.rmtree(folder, ignore_errors=True)
                 job.delete()
                 error = f"فایل خوانده نشد: {exc}"
             else:
-                existing = {t.name for t in ex.tables() if t.schema == "public"}
                 for lyr in info["layers"]:
+                    if ext == ".csv":
+                        continue  # لایه CSV در _csv_start کامل ساخته شده است
                     lyr["selected"] = bool(lyr["geom_type"] or ext == ".csv")
                     lyr["exists"] = lyr["table"] in existing
                     lyr["mode"] = "create"
@@ -592,7 +597,16 @@ def import_review(request, pk, job_id):
             job.delete()
             return redirect("databases:import", pk=db.pk)
         enc = request.POST.get("encoding") or None
-        if job.params.get("encoding") and enc in ("UTF-8", "CP1256") and enc != job.params["encoding"]:
+        if job.params.get("csv"):
+            try:
+                errors += _csv_update(job, request.POST, enc, {t.name for t in ex.tables() if t.schema == "public"})
+            except (gdal.GdalError, ValueError) as exc:
+                errors.append(f"فایل با این تنظیمات خوانده نشد: {exc}")
+            layers = job.params["layers"]
+            if request.POST.get("action") == "resample" and not errors:
+                job.save(update_fields=["params"])
+                return redirect("databases:import_review", pk=db.pk, job_id=job.pk)
+        elif job.params.get("encoding") and enc in ("UTF-8", "CP1256") and enc != job.params["encoding"]:
             job.params["encoding"] = enc
             path = import_dir(job) / job.params["file"]
             for lyr in layers:
@@ -620,6 +634,8 @@ def import_review(request, pk, job_id):
                 errors.append(f"جدول «{lyr['table']}» از قبل وجود دارد؛ نام دیگری بدهید یا «جایگزینی» یا «افزودن» را انتخاب کنید.")
             if lyr["geom_type"] and not lyr["srid"]:
                 errors.append(f"سیستم مختصات لایه «{lyr['name']}» مشخص نیست؛ آن را انتخاب کنید.")
+            if "csv_bad" in lyr:
+                errors += _csv_checks(lyr)
             names.append(lyr["table"])
         if not names:
             errors.append("حداقل یک لایه را انتخاب کنید.")
@@ -635,9 +651,91 @@ def import_review(request, pk, job_id):
     known = {code for code, _ in gdal.SRID_CHOICES}
     for lyr in layers:
         lyr["srid_in_list"] = lyr.get("srid") in known
+        if "csv_bad" in lyr:
+            lyr["csv_warn"] = csvgeo.range_check(lyr.get("csv_stats") or {}, lyr.get("srid"))[1]
+    csv_info = job.params.get("csv")
     return render(request, "databases/import_review.html", {
         "db": db, "tables": ex.tables(), "section": "import", "job": job, "layers": layers, "errors": errors,
-        "srid_choices": gdal.SRID_CHOICES})
+        "srid_choices": gdal.SRID_CHOICES, "csv": csv_info, "csv_modes": CSV_MODES,
+        "csv_encodings": list(csvgeo.ENCODINGS)})
+
+
+# ---------------------------------------------------------------------- ورود CSV: ستون‌های مکانی
+CSV_MODES = [
+    ("xy", "دو ستون جدا: طول (X) و عرض (Y)"),
+    ("pair", "یک ستون با هر دو مقدار (مثل «35.7, 51.4»)"),
+    ("wkt", "ستون هندسه به‌صورت WKT"),
+    ("none", "بدون مکان (فقط جدول)"),
+]
+
+
+def _csv_start(job, folder, existing: set) -> dict:
+    """بعد از آپلود CSV: تحلیل، پیشنهاد ستون‌ها، بازنویسی و ساخت لایه."""
+    src = folder / job.params["file"]
+    job.params["source"] = job.params["file"]
+    job.params["csv"] = csvgeo.analyze(src)
+    lyr = _csv_refresh(job, folder, existing, None)
+    return {"driver": "CSV", "encoding": job.params["csv"]["encoding"], "layers": [lyr]}
+
+
+def _csv_refresh(job, folder, existing: set, prev: dict | None) -> dict:
+    """فایل را با spec فعلی آماده می‌کند و لایه را می‌سازد؛ انتخاب‌های قبلی کاربر (نام جدول، حالت، SRID) حفظ می‌شود."""
+    from . import gdal
+
+    info = job.params["csv"]
+    spec = info["spec"]
+    dst = csvgeo.prepared_path(folder, job.params.get("original", ""))
+    stats = csvgeo.prepare(folder / job.params["source"], dst, info["encoding"], info["delimiter"], spec)
+    job.params["file"] = str(dst.relative_to(folder))
+    lyr = gdal.inspect(dst)["layers"][0]
+    lyr["sample"] = []  # برای CSV نمونه خام فایل در بخش ستون‌ها نمایش داده می‌شود
+    guess = stats.get("srid") or spec.get("srid") or csvgeo.guess_srid(stats)
+    keep_srid = prev and prev.get("srid") and prev.get("csv_mode") == spec["mode"]
+    srid = prev["srid"] if keep_srid else guess
+    if spec["mode"] == "none":
+        srid = None
+    lyr.update({
+        "srid": srid, "selected": True, "mode": "create", "to4326": False,
+        "csv_mode": spec["mode"], "csv_bad": stats["bad"], "csv_rows": stats["rows"],
+        "csv_stats": {k: stats[k] for k in ("xmin", "xmax", "ymin", "ymax", "points")},
+    })
+    if prev:
+        lyr.update({k: prev[k] for k in ("table", "mode", "to4326", "selected") if k in prev})
+    lyr["exists"] = lyr["table"] in existing
+    return lyr
+
+
+def _csv_update(job, post, enc: str | None, existing: set) -> list[str]:
+    """تغییر انکودینگ یا ستون‌های مکانی از فرم بررسی؛ فقط در صورت تغییر، فایل دوباره ساخته می‌شود."""
+    from jobs.services import import_dir
+
+    folder = import_dir(job)
+    info = job.params["csv"]
+    prev = (job.params.get("layers") or [None])[0]
+    if enc in csvgeo.ENCODINGS and enc != info["encoding"]:
+        # نام ستون‌ها با انکودینگ دیگر عوض می‌شود؛ تحلیل از نو
+        job.params["csv"] = csvgeo.analyze(folder / job.params["source"], enc)
+        job.params["encoding"] = enc
+    else:
+        spec, errors = csvgeo.clean_spec(info["columns"], {
+            "mode": post.get("csv_mode"), "x": post.get("csv_x"), "y": post.get("csv_y"),
+            "pair": post.get("csv_pair"), "pair_order": post.get("csv_pair_order"), "geom": post.get("csv_geom")})
+        if errors:
+            return errors
+        if csvgeo.same_spec(spec, info["spec"]):
+            return []
+        info["spec"] = {**spec, "srid": None}
+    job.params["layers"] = [_csv_refresh(job, folder, existing, prev)]
+    return []
+
+
+def _csv_checks(lyr: dict) -> list[str]:
+    if lyr.get("csv_mode") == "none":
+        return []
+    if lyr.get("csv_rows") and lyr["csv_bad"] >= lyr["csv_rows"]:
+        return ["در هیچ سطری مختصات قابل‌خواندن پیدا نشد. ستون‌های مکانی را درست انتخاب کنید یا «بدون مکان» را بزنید."]
+    level, msg = csvgeo.range_check(lyr.get("csv_stats") or {}, lyr.get("srid"))
+    return [msg] if level == "error" else []
 
 
 
