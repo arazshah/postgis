@@ -96,8 +96,14 @@ class MapsIntegrationTests(TestCase):
         # استودیوی تمام‌صفحه: ریل چهار تب، بدون فوتر سایت؛ صفحه‌های دیگر فوتر دارند
         self.assertContains(page, 'id="studio"')
         self.assertContains(page, 'class="is-studio"')
-        for tab in ("layers", "slides", "map", "share"):
+        for tab in ("layers", "charts", "slides", "map"):
             self.assertContains(page, f'data-tab="{tab}"')
+        # اشتراک و ابزارهای خروجی مودال‌اند، نه تب ریل
+        self.assertNotContains(page, 'data-tab="share"')
+        for marker in ('id="st-share"', 'id="tpl-share"', 'id="tpl-add"', 'id="st-film"', 'js/studio-ui.js'):
+            self.assertContains(page, marker)
+        self.assertContains(page, reverse("maps:publish_ows", args=[self.db.pk, m.pk]))
+        self.assertContains(page, reverse("maps:qgis", args=[self.db.pk, m.pk]))
         self.assertNotContains(page, 'class="footer"')
         self.assertContains(self.client.get(reverse("maps:index", args=[self.db.pk])), 'class="footer"')
 
