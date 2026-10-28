@@ -191,7 +191,7 @@ const map = new maplibregl.Map({
         <tr>
           <td>{{ k.name }}</td><td><span class="ltr">{{ k.prefix }}…</span></td><td class="small">{% if k.can_write %}خواندن و نوشتن{% else %}فقط خواندن{% endif %}</td><td>{{ k.created_at|jdate }}</td>
           <td>{{ k.last_used_at|jdate }}</td>
-          <td>{% if k.active %}<form method="post" action="{% url 'publish:revoke_key' db.pk k.pk %}" data-confirm="این کلید باطل شود؟ برنامه‌هایی که از آن استفاده می‌کنند دیگر کار نمی‌کنند.">{% csrf_token %}<button class="btn ghost sm" type="submit">باطل کردن</button></form>{% else %}<span class="badge expired">باطل‌شده</span>{% endif %}</td>
+          <td>{% if k.active %}<form method="post" action="{% url 'publish:revoke_key' db.pk k.pk %}" data-confirm="این کلید باطل شود؟ برنامه‌هایی که از آن استفاده می‌کنند دیگر کار نمی‌کنند." data-confirm-title="باطل کردن کلید API" data-confirm-text="باطل کن">{% csrf_token %}<button class="btn ghost sm" type="submit">باطل کردن</button></form>{% else %}<span class="badge expired">باطل‌شده</span>{% endif %}</td>
         </tr>{% endfor %}</tbody>
     </table>
     {% endif %}

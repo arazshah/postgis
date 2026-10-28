@@ -167,15 +167,16 @@ class Explorer:
                 WHERE i.indrelid = %s AND i.indisprimary""", (table.oid,))}
             rows = conn.execute("""
                 SELECT a.attname, format_type(a.atttypid, a.atttypmod), a.attnotnull,
-                       pg_get_expr(d.adbin, d.adrelid), t.typname
+                       pg_get_expr(d.adbin, d.adrelid), t.typname, a.attidentity, a.attgenerated
                 FROM pg_attribute a
                 JOIN pg_type t ON t.oid = a.atttypid
                 LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
                 WHERE a.attrelid = %s AND a.attnum > 0 AND NOT a.attisdropped
                 ORDER BY a.attnum""", (table.oid,)).fetchall()
         return [{"name": n, "type": t, "not_null": nn, "default": d or "", "pk": n in pk,
-                 "spatial": base in ("geometry", "geography"), "base": base}
-                for n, t, nn, d, base in rows]
+                 "spatial": base in ("geometry", "geography"), "base": base,
+                 "identity": ident, "generated": bool(gen)}
+                for n, t, nn, d, base, ident, gen in rows]
 
     def _select_list(self, cols: list[dict]):
         parts = []
@@ -187,20 +188,37 @@ class Explorer:
                 parts.append(sql.SQL("{}::text").format(ident))
         return sql.SQL(", ").join(parts)
 
-    def rows(self, table: TableRef, page: int = 1) -> dict:
+    @staticmethod
+    def _key_select(cols: list[dict]):
+        """نسخه‌ی سطر (md5 متن سطر) و کلید اصلی؛ برای تشخیص تغییر هم‌زمان در حالت ویرایش."""
+        pks = [c for c in cols if c["pk"]]
+        pk_json = sql.SQL("json_build_object({})").format(sql.SQL(", ").join(
+            sql.SQL("{}, t.{}::text").format(sql.Literal(c["name"]), sql.Identifier(c["name"])) for c in pks))
+        return sql.SQL("md5(t::text), {}").format(pk_json)
+
+    def rows(self, table: TableRef, page: int = 1, with_keys: bool = False) -> dict:
         cols = self.columns(table)
         page = max(page, 1)
         rel = sql.Identifier(table.schema, table.name)
+        pks = [c for c in cols if c["pk"]]
+        order = (sql.SQL(" ORDER BY ") + sql.SQL(", ").join(sql.Identifier(c["name"]) for c in pks)) if pks else sql.SQL("")
+        keys_sql = (sql.SQL(", ") + self._key_select(cols)) if with_keys and pks else sql.SQL("")
         with self.connect() as conn:
             exact = None
             if table.rows_estimate < 200_000:
                 exact = conn.execute(sql.SQL("SELECT count(*) FROM {}").format(rel)).fetchone()[0]
-            data = conn.execute(sql.SQL("SELECT {} FROM {} LIMIT {} OFFSET {}").format(
-                self._select_list(cols), rel, sql.Literal(PAGE_SIZE), sql.Literal((page - 1) * PAGE_SIZE))).fetchall()
+            data = conn.execute(sql.SQL("SELECT {}{} FROM {} AS t{} LIMIT {} OFFSET {}").format(
+                self._select_list(cols), keys_sql, rel, order, sql.Literal(PAGE_SIZE),
+                sql.Literal((page - 1) * PAGE_SIZE))).fetchall()
         total = exact if exact is not None else table.rows_estimate
+        keys = []
+        if with_keys and pks:
+            keys = [{"v": r[-2], "pk": r[-1]} for r in data]
+            data = [r[:-2] for r in data]
         return {
             "columns": cols,
             "rows": [[_cell(v) for v in r] for r in data],
+            "keys": keys,
             "page": page,
             "offset": (page - 1) * PAGE_SIZE,
             "pages": max((total + PAGE_SIZE - 1) // PAGE_SIZE, 1),
@@ -209,19 +227,26 @@ class Explorer:
         }
 
     # ------------------------------------------------------------------ نقشه و خروجی
-    def geojson(self, table: TableRef, geom_column: str | None = None, limit: int = MAP_LIMIT) -> str:
+    def geojson(self, table: TableRef, geom_column: str | None = None, limit: int = MAP_LIMIT,
+                with_keys: bool = False) -> str:
         if not table.geometry:
             raise ExplorerError("این جدول ستون مکانی ندارد.")
         names = [g["column"] for g in table.geometry]
         geom_column = geom_column if geom_column in names else names[0]
-        cols = [c for c in self.columns(table) if not c["spatial"]]
+        all_cols = self.columns(table)
+        cols = [c for c in all_cols if not c["spatial"]]
         g = sql.Identifier(geom_column)
-        props = sql.SQL(", ").join(sql.Identifier(c["name"]) for c in cols)
+        props = sql.SQL(", ").join(sql.SQL("t.{}").format(sql.Identifier(c["name"])) for c in cols)
+        extra = sql.SQL("")
+        if with_keys and any(c["pk"] for c in all_cols):
+            extra = sql.SQL(", md5(t::text) AS __v, json_build_object({}) AS __pk").format(
+                sql.SQL(", ").join(sql.SQL("{}, t.{}::text").format(sql.Literal(c["name"]), sql.Identifier(c["name"]))
+                                   for c in all_cols if c["pk"]))
         inner = sql.SQL(
-            "SELECT {props}{comma} CASE WHEN ST_SRID({g}::geometry) IN (0, 4326) THEN {g}::geometry "
-            "ELSE ST_Transform({g}::geometry, 4326) END AS __geom "
-            "FROM {rel} WHERE {g} IS NOT NULL LIMIT {lim}"
-        ).format(props=props, comma=sql.SQL(",") if cols else sql.SQL(""), g=g,
+            "SELECT {props}{comma} CASE WHEN ST_SRID(t.{g}::geometry) IN (0, 4326) THEN t.{g}::geometry "
+            "ELSE ST_Transform(t.{g}::geometry, 4326) END AS __geom{extra} "
+            "FROM {rel} AS t WHERE t.{g} IS NOT NULL LIMIT {lim}"
+        ).format(props=props, comma=sql.SQL(",") if cols else sql.SQL(""), g=g, extra=extra,
                  rel=sql.Identifier(table.schema, table.name), lim=sql.Literal(int(limit)))
         query = sql.SQL(
             "SELECT json_build_object('type','FeatureCollection','features', "

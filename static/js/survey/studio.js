@@ -158,7 +158,7 @@
     const tr = e.target.closest("tr[data-id]"); if (!tr) return;
     const id = tr.dataset.id, f = allPoints().find((x) => uidOf(x) === id);
     if (e.target.classList.contains("go") && f) map.flyTo({center: f.geometry.coordinates, zoom: Math.max(map.getZoom(), 18)});
-    else if (e.target.classList.contains("del") && f && confirm("این نقطه حذف شود؟")) await deletePoint(f);
+    else if (e.target.classList.contains("del") && f && await Ui.confirm({title: "حذف نقطه", message: "این نقطه برای همیشه حذف شود؟", kind: "danger", confirmText: "حذف نقطه"})) await deletePoint(f);
     else if (e.target.type === "checkbox") toggleSel(id, e.target.checked);
   });
   function toggleSel(id, on) {
@@ -288,7 +288,7 @@
     const max = parseFloat($("sv-max").value);
     const flags = [];
     if (max > 0 && acc.acc_h != null && acc.acc_h > max) {
-      if (!confirm(`خطای فعلی (±${fmt(acc.acc_h, 2)} m) از حد مجاز بیشتر است. باز هم ثبت شود؟`)) return;
+      if (!await Ui.confirm({title: "دقت کمتر از حد مجاز", message: `خطای فعلی (±${fmt(acc.acc_h, 2)} m) از حد مجاز بیشتر است. باز هم ثبت شود؟ نقطه با برچسب «دقت پایین» ذخیره می‌شود.`, kind: "warn", confirmText: "با همین دقت ثبت کن", cancelText: "منتظر دقت بهتر می‌مانم"})) return;
       flags.push("low_accuracy");
     }
     if (mode !== "point") {
@@ -450,7 +450,7 @@
       } catch (e) { ntState("ذخیره نشد؛ نشانی، درگاه و Mountpoint را بررسی کنید.", true); }
     });
     $("nt-del").addEventListener("click", async () => {
-      if (!nt.editing || !confirm("این اتصال حذف شود؟")) return;
+      if (!nt.editing || !await Ui.confirm({title: "حذف اتصال NTRIP", message: "این اتصال حذف شود؟", kind: "danger", confirmText: "حذف اتصال"})) return;
       await post(ntU, {id: nt.editing, delete: true}); nt.editing = null; ntFill(null); await ntLoad();
     });
     $("nt-list").addEventListener("click", async () => {
@@ -528,7 +528,7 @@
     });
     $("of-stop").addEventListener("click", () => ctl && ctl.abort());
     $("of-del").addEventListener("click", async () => {
-      if (!confirm("نقشه ذخیره‌شده روی این دستگاه حذف شود؟")) return;
+      if (!await Ui.confirm({title: "حذف نقشه‌ی آفلاین", message: "نقشه‌ی ذخیره‌شده روی این دستگاه حذف شود؟ بدون اینترنت دیگر نقشه نخواهید داشت.", kind: "danger", confirmText: "حذف از دستگاه"})) return;
       await caches.delete(O.CACHE);
       try { localStorage.removeItem(KEY); } catch (e) { /* بدون حافظه */ }
       showState();

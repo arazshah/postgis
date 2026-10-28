@@ -1,5 +1,5 @@
 {% extends "databases/_explore_base.html" %}{% load fa static %}
-{% block head %}{% if tab == 'map' %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endif %}{% endblock %}
+{% block head %}{% if tab == 'map' %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% if edit_cfg.capable %}<link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">{% endif %}{% endif %}{% endblock %}
 {% block ex %}
 <div class="ex-title">
   <div>
@@ -8,6 +8,13 @@
       {% for g in t.geometry %} · <span class="ltr">{{ g.type }} / SRID {{ g.srid }}</span>{% endfor %}</p>
   </div>
   <div class="ex-actions">
+    {% if edit_cfg %}
+      {% if edit_cfg.capable %}<button type="button" class="btn sm edit-enter" id="edit-enter" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4Z"/><path d="m13 7 4 4"/></svg>
+        ویرایش جدول</button>
+      {% else %}<span class="chip lock" title="{{ edit_cfg.reason }}">فقط‌خواندنی</span>{% endif %}
+      <a class="btn ghost sm" href="{% url 'core:help_page' 'edittable' %}" target="_blank" rel="noopener" title="ویدیوی آموزشی ویرایش جدول">آموزش تصویری</a>
+    {% endif %}
     <a class="btn ghost sm" href="{% url 'databases:explore_csv' db.pk t.schema t.name %}">دانلود CSV</a>
     {% if t.geometry %}<a class="btn ghost sm" href="{% url 'databases:explore_geojson' db.pk t.schema t.name %}?download=1">دانلود GeoJSON</a>{% endif %}
     <details class="dl-more">
@@ -23,6 +30,23 @@
   </div>
 </div>
 
+{% if edit_cfg and not edit_cfg.capable %}<p class="edit-why small"><b>ویرایش این جدول ممکن نیست:</b> {{ edit_cfg.reason }}</p>{% endif %}
+{% if edit_cfg.capable %}
+<div class="edit-dock" id="edit-bar" role="region" aria-label="نوار حالت ویرایش" hidden>
+  <span class="dock-state"><span class="edit-dot" aria-hidden="true"></span><b>حالت ویرایش</b><span class="small muted" id="edit-idle"></span></span>
+  <span class="edit-count" id="edit-count" aria-live="polite">بدون تغییر</span>
+  <div class="dock-acts">
+    {% if tab == 'data' %}<button type="button" class="btn ghost sm" id="edit-add-row">+ سطر تازه</button>
+    <button type="button" class="btn ghost sm danger-ghost" id="edit-del-sel" hidden>حذف انتخاب‌شده‌ها</button>{% endif %}
+    <button type="button" class="btn ghost sm" id="edit-undo-last" hidden></button>
+    <button type="button" class="btn ghost sm" id="edit-discard" hidden>دور ریختن تغییرها</button>
+    <button type="button" class="btn sm" id="edit-review" hidden title="میان‌بر: Ctrl+S">بازبینی و ذخیره</button>
+    <a class="btn ghost sm" href="{% url 'core:help_page' 'edittable' %}" target="_blank" rel="noopener">آموزش</a>
+    <button type="button" class="btn ghost sm" id="edit-exit">خروج از ویرایش</button>
+  </div>
+</div>
+{{ edit_cfg|json_script:"edit-config" }}
+{% endif %}
 <div class="tabs" role="tablist" aria-label="نمای جدول">
   <a role="tab" href="?tab=data" aria-selected="{% if tab == 'data' %}true{% else %}false{% endif %}">داده‌ها</a>
   <a role="tab" href="?tab=columns" aria-selected="{% if tab == 'columns' %}true{% else %}false{% endif %}">ستون‌ها</a>
@@ -40,7 +64,7 @@
   </table>
   </div>
 {% elif tab == 'map' %}
-  <div id="map" class="ex-map" data-src="{% url 'databases:explore_geojson' db.pk t.schema t.name %}"
+  <div id="map" class="ex-map" data-src="{% url 'databases:explore_geojson' db.pk t.schema t.name %}{% if edit_cfg.capable %}?keys=1{% endif %}"
        data-tiles="{{ SITE.map_tile_url }}" data-attr="{{ SITE.map_tile_attribution }}"></div>
   <p class="small muted" id="map-note" style="margin-top:8px">حداکثر ۲٬۰۰۰ عارضه اول نمایش داده می‌شود. روی هر عارضه کلیک کنید تا ویژگی‌هایش را ببینید.</p>
   {% if mappable %}
@@ -60,13 +84,14 @@
   </div>
   {% endif %}
   <script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>
+  {% if edit_cfg.capable %}<script src="{% static 'vendor/leaflet-geoman/leaflet-geoman.min.js' %}" defer></script>{% endif %}
   <script src="{% static 'js/explore-map.js' %}" defer></script>
 {% else %}
   {% if data.rows %}
   <div class="table-scroll ltr-table">
   <table class="data-table">
-    <thead><tr><th class="rownum">#</th>{% for c in data.columns %}<th class="ltr">{{ c.name }}{% if c.spatial %} <span class="geo-dot"></span>{% endif %}</th>{% endfor %}</tr></thead>
-    <tbody>{% for r in data.rows %}<tr><td class="rownum">{{ forloop.counter|add:data.offset|fanum }}</td>{% for v in r %}<td class="ltr">{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    <thead><tr><th class="rownum">#</th>{% if edit_cfg.capable %}<th class="rowact"><span class="sr-label">عملیات</span></th>{% endif %}{% for c in data.columns %}<th class="ltr">{{ c.name }}{% if c.spatial %} <span class="geo-dot"></span>{% endif %}</th>{% endfor %}</tr></thead>
+    <tbody>{% for r, k in data.pairs %}<tr{% if k %} data-key="{{ k|json_attr }}"{% endif %}><td class="rownum">{{ forloop.counter|add:data.offset|fanum }}</td>{% if edit_cfg.capable %}<td class="rowact"><input type="checkbox" class="row-sel" aria-label="انتخاب سطر" tabindex="-1"><button type="button" class="row-edit" title="ویرایش این سطر" aria-label="ویرایش این سطر">✎</button></td>{% endif %}{% for v in r %}<td class="ltr">{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody>
   </table>
   </div>
   <div class="pager-row">
@@ -80,6 +105,7 @@
   <div class="empty" style="padding:48px 24px"><h2>این جدول خالی است</h2></div>
   {% endif %}
 {% endif %}
+{% if edit_cfg.capable %}<script src="{% static 'js/table-edit.js' %}" defer></script>{% endif %}
 {% if db.can_edit and db.status == 'active' %}
 <details class="danger-zone drop-zone">
   <summary>حذف {{ t.kind_label }}</summary>

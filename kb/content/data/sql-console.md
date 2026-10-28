@@ -3,7 +3,7 @@ title: کنسول SQL چیست و چه محدودیت‌هایی دارد؟
 summary: در مرورگر داده می‌توانید SQL بنویسید و اجرا کنید. به‌طور پیش‌فرض فقط‌خواندنی است، حداکثر ۵۰۰ ردیف نتیجه نشان می‌دهد و اجرای هر کوئری پس از زمان مجاز متوقف می‌شود. نتیجه مکانی روی نقشه نمایش داده می‌شود.
 kind: concept
 keywords: کنسول sql, sql console, کوئری, اجرای sql, select, ۵۰۰ ردیف, timeout, فقط خواندنی, نوشتن sql
-related: sql-nearest-features, sql-buffer, err-statement-timeout, explorer-overview
+related: sql-nearest-features, sql-buffer, err-statement-timeout, explorer-overview, edit-table-data
 featured: yes
 order: 150
 reviewed: 2026-10-21

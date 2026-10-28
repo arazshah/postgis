@@ -28,7 +28,7 @@
         <a class="btn ghost sm" href="{% url 'maps:map' m.slug %}" target="_blank" rel="noopener">مشاهده</a>
         {% if db.can_edit %}
         <form method="post" action="{% url 'maps:duplicate' db.pk m.pk %}" class="inline-form">{% csrf_token %}<button class="btn ghost sm" type="submit">کپی</button></form>
-        <form method="post" action="{% url 'maps:delete' db.pk m.pk %}" class="inline-form" onsubmit="return confirm('نقشه «{{ m.title|escapejs }}» حذف شود؟ لینک و کد جاسازی آن دیگر کار نمی‌کند.')">{% csrf_token %}<button class="btn ghost sm wm-del" type="submit">حذف</button></form>
+        <form method="post" action="{% url 'maps:delete' db.pk m.pk %}" class="inline-form" data-confirm="نقشه «{{ m.title }}» حذف شود؟ لینک و کد جاسازی آن دیگر کار نمی‌کند." data-confirm-title="حذف نقشه" data-confirm-text="حذف نقشه">{% csrf_token %}<button class="btn ghost sm wm-del" type="submit">حذف</button></form>
         {% endif %}
       </div>
     </article>

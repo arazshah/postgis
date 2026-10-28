@@ -68,7 +68,7 @@
           <label class="check small"><input type="checkbox" name="public" {% if r.is_public %}checked{% endif %}><span>عمومی</span></label>
           <button class="btn ghost sm" type="submit">ذخیره</button></form>{% endif %}</td>
         <td style="white-space:nowrap">{% if r.status == 'ready' %}<a class="btn ghost sm" href="{% url 'enterprise:raster_view' r.slug %}" target="_blank" rel="noopener">نقشه</a>{% endif %}
-          <form method="post" style="display:inline" data-confirm="رستر حذف شود؟">{% csrf_token %}<input type="hidden" name="action" value="raster_delete"><input type="hidden" name="raster" value="{{ r.pk }}"><button class="btn ghost sm" type="submit">حذف</button></form></td>
+          <form method="post" style="display:inline" data-confirm="رستر حذف شود؟" data-confirm-title="حذف رستر" data-confirm-text="حذف رستر">{% csrf_token %}<input type="hidden" name="action" value="raster_delete"><input type="hidden" name="raster" value="{{ r.pk }}"><button class="btn ghost sm" type="submit">حذف</button></form></td>
       </tr>{% if r.status == 'ready' %}<tr><td colspan="4" class="small"><span class="muted">XYZ:</span> <code class="ltr" id="rx-{{ r.pk }}">{{ base }}/raster/{{ r.slug }}/{z}/{x}/{y}.png{% if not r.is_public %}?key=کلید_API{% endif %}</code> <button class="copy" data-copy-target="#rx-{{ r.pk }}">کپی</button></td></tr>{% endif %}
       {% endfor %}</tbody>
     </table></div>

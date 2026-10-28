@@ -3,7 +3,7 @@ title: چطور بکاپ دستی بگیرم و دانلود کنم؟
 summary: در صفحه «بکاپ» دکمه «بکاپ جدید» را بزنید؛ بعد از آماده شدن فایل را دانلود کنید. هر ۲۴ ساعت حداکثر ۳ بکاپ دستی مجاز است و تا پایان بکاپ قبلی نمی‌توان بکاپ دیگری شروع کرد.
 kind: howto
 keywords: بکاپ دستی, دانلود بکاپ, backup now, بکاپ جدید, فایل بکاپ, ۳ بکاپ در روز, مدیریت بکاپ
-related: backups-overview, backup-restore, drop-table, import-replace-append
+related: backups-overview, backup-restore, drop-table, edit-table-data, import-replace-append
 order: 20
 reviewed: 2026-10-21
 ---
@@ -15,5 +15,5 @@ reviewed: 2026-10-21
 
 - حداکثر **۳ بکاپ دستی در هر ۲۴ ساعت**.
 - هم‌زمان یک بکاپ یا بازگردانی برای هر پایگاه داده اجرا می‌شود.
-- پیش از کارهای پرخطر ([جایگزینی جدول](kb:import-replace-append)، [حذف جدول](kb:drop-table)، اصلاح گسترده) بکاپ بگیرید.
+- پیش از کارهای پرخطر ([جایگزینی جدول](kb:import-replace-append)، [حذف جدول](kb:drop-table)، [ویرایش یا حذف تعداد زیادی سطر](kb:edit-table-data)، اصلاح گسترده) بکاپ بگیرید.
 - فایل بکاپ بعد از {{plan_backup_days}} روز (طبق پلن) پاک می‌شود؛ [توضیح کلی](kb:backups-overview).

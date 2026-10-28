@@ -172,7 +172,7 @@ print(gpd.read_postgis("SELECT * FROM parcels LIMIT 5", engine, geom_col="geomet
         <details class="danger-zone">
           <summary>حذف پایگاه داده</summary>
           <p class="small" style="margin-top:12px">همه جدول‌ها و داده‌ها برای همیشه پاک می‌شوند و قابل بازگشت نیستند.</p>
-          <form method="post" action="{% url 'databases:delete' db.pk %}" data-confirm="این پایگاه داده برای همیشه حذف شود؟">{% csrf_token %}
+          <form method="post" action="{% url 'databases:delete' db.pk %}" data-confirm="این پایگاه داده برای همیشه حذف شود؟ همه‌ی جدول‌ها و داده‌های آن از بین می‌رود." data-confirm-title="حذف پایگاه داده" data-confirm-text="حذف همیشگی">{% csrf_token %}
             <div class="field" style="margin-bottom:8px">
               <label for="{{ delete_form.confirm.id_for_label }}" class="small">برای تأیید، <b class="ltr">{{ db.label }}</b> را تایپ کنید</label>
               {{ delete_form.confirm }}
