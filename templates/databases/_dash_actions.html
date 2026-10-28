@@ -6,7 +6,7 @@
     <ul>
     {% for a in g.items %}
       <li><a class="dash-tile" href="{{ a.url }}">
-        <span class="dash-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ a.icon }}"/></svg></span>
+        <span class="dash-ico">{% icon a.icon 20 %}</span>
         <span class="dash-txt"><b>{{ a.label }}</b><small>{{ a.hint }}</small></span>
       </a></li>
     {% endfor %}

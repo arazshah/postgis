@@ -1,23 +1,25 @@
 {% extends "base.html" %}{% load fa ws static %}
+{% block app_burger %}<button class="ib app-burger" type="button" data-ws-open aria-controls="ws-side" aria-expanded="false" aria-label="منوی پایگاه داده">{% icon "menu" 20 %}</button>{% endblock %}
+{% block app_dbchip %}<a class="app-dbchip ltr" href="{% url 'databases:detail' db.pk %}" title="{{ db.db_name }}"><span class="st {{ db.status }}"></span><b>{{ db.db_name }}</b></a>{% endblock %}
+{% block app_search %}<button class="app-search" type="button" data-ws-jump title="جستجوی سریع بخش‌ها و پایگاه‌ها (Ctrl+K)">{% icon "search" 16 %}<span class="app-search-t">جستجو در بخش‌ها و پایگاه‌ها…</span><kbd>Ctrl K</kbd></button>{% endblock %}
 {% block content %}
-<script>try{var d=document.documentElement,s=localStorage;if(s.getItem("gp.ws.c")==="1")d.dataset.wsC="1";if(s.getItem("gp.ws.w")==="1")d.dataset.wsW="1";}catch(e){}</script>
-<div class="wrap ws" data-ws>
+<script>try{var d=document.documentElement,s=localStorage;if(s.getItem("gp.ws.c")==="1")d.dataset.wsC="1";}catch(e){}</script>
+<div class="ws" data-ws>
   <aside class="ws-side" id="ws-side" aria-label="منوی پایگاه داده">
     {% ws_nav db %}
   </aside>
   <div class="ws-backdrop" data-ws-close hidden></div>
-  <main class="ws-main" id="main">
+  <div class="ws-main">
     <div class="ws-bar">
-      <button class="btn ghost sm ws-open" type="button" data-ws-open aria-controls="ws-side" aria-expanded="false">☰ منو{% ws_title db as wt0 %}{% if wt0 %}<span class="ws-open-cur">: {{ wt0 }}</span>{% endif %}</button>
       <nav class="crumbs" aria-label="مسیر">
         <a href="{% url 'databases:dashboard' %}">پایگاه‌ها</a><span>/</span>
         <a class="ltr" href="{% url 'databases:detail' db.pk %}">{{ db.db_name }}</a>{% ws_title db as wt %}{% if wt %}<span>/</span><b>{{ wt }}</b>{% endif %}
       </nav>
       <span class="ws-bar-gpa" data-gpa-slot="bar"></span>
-      <button class="btn ghost sm ws-wide-btn" type="button" data-ws-wide aria-pressed="false" title="منوها جمع می‌شوند تا محتوا بیشترین عرض را داشته باشد">⤢ حالت گسترده</button>
     </div>
     {% block ws %}{% endblock %}
-  </main>
+  </div>
 </div>
+{% ws_tabs db %}
 {% endblock %}
 {% block scripts %}<script src="{% static 'js/ws-nav.js' %}" defer></script>{% block ws_scripts %}{% endblock %}{% endblock %}

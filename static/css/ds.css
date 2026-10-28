@@ -1,0 +1,207 @@
+/* ژئوپایگاه — سیستم طراحی (لایه‌ی دوم، بعد از app.css)
+   قواعد: docs/design-system.md. هر صفحه‌ی تازه از همین توکن‌ها و اجزا می‌سازد؛ رنگ و اندازه‌ی دلخواه در صفحه‌ها ننویسید.
+   ۱) توکن‌ها  ۲) نوار بالای برنامه  ۳) فضای کار (ریل کناری + محتوا)  ۴) اجزای مشترک (فقط body.app)  ۵) نوار تب گوشی */
+
+/* ---------- ۱) توکن‌های تکمیلی ---------- */
+:root{
+  --card:#fff; --line-2:#DDE5DA; --ink-3:#5F7479; --on-accent:#fff;
+  --blue:#3E7CB1; --shadow:0 18px 44px -22px rgba(18,49,58,.55); --shadow-sm:0 8px 20px -16px rgba(18,49,58,.6);
+  --r-card:14px; --r-ctl:10px; --top-h:58px; --rail-w:248px; --rail-mini:68px;
+  --ctl-h:38px; --ctl-h-sm:30px;
+}
+.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.i.sm{width:16px;height:16px}.i.lg{width:28px;height:28px}
+.ico{flex:none}
+
+/* ---------- ۲) نوار بالای برنامه (کاربر واردشده) ---------- */
+body.app{font-size:14.5px;line-height:1.75}
+.app-top{position:sticky;top:0;z-index:40;height:var(--top-h);display:flex;align-items:center;gap:10px;padding:0 14px;
+  background:var(--surface);border-bottom:1px solid var(--line)}
+.app-top .brand{font-size:1.02rem;gap:9px;color:var(--teal);margin-inline-end:4px}
+.app-top .brand img{width:30px;height:30px;border-radius:9px}
+.app-gap{flex:1}
+.app-top .ib,.ib{width:36px;height:36px;border-radius:var(--r-ctl);border:1px solid transparent;background:none;display:inline-grid;place-items:center;
+  cursor:pointer;color:var(--ink-2);flex:none;padding:0;text-decoration:none}
+.app-top .ib:hover,.app-top .ib[aria-expanded=true],.ib:hover{background:var(--teal-soft);color:var(--teal)}
+.ib.sm{width:var(--ctl-h-sm);height:var(--ctl-h-sm);border-radius:8px}
+.app-burger{display:none!important}
+.app-av{width:34px;height:34px;border-radius:50%;border:0;background:var(--ochre-soft);color:#7a5200;display:grid;place-items:center;cursor:pointer}
+.app-av:hover,.app-av[aria-expanded=true]{box-shadow:0 0 0 3px var(--teal-soft)}
+.app-dbchip{display:none;align-items:center;gap:7px;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--card);
+  text-decoration:none;color:var(--ink);max-width:200px;min-width:0}
+.app-dbchip b{font:700 12.5px var(--f-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-dbchip .st{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--green-soft);flex:none}
+.app-dbchip .st:not(.active){background:var(--ochre);box-shadow:0 0 0 3px var(--ochre-soft)}
+.app-search{flex:1;max-width:460px;margin-inline:auto;height:var(--ctl-h);display:flex;align-items:center;gap:8px;padding:0 12px;border:1px solid var(--line);
+  background:var(--card);border-radius:var(--r-ctl);color:var(--ink-3);cursor:text;text-align:start;font:inherit;font-size:13px;min-width:0}
+.app-search:hover,.app-search:focus-within{border-color:var(--teal)}
+.app-search input{flex:1;min-width:0;border:0;background:none;outline:none;font:inherit;color:var(--ink)}
+.app-search-t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-search kbd{font:11px var(--f-body);background:var(--paper);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 6px;color:var(--ink-3);direction:ltr}
+.app-top-gpa:empty{display:none}
+.pop-wrap{position:relative}
+.pop-m{position:absolute;top:calc(100% + 8px);inset-inline-end:0;z-index:60;min-width:240px;background:var(--card);border:1px solid var(--line);
+  border-radius:14px;box-shadow:var(--shadow);padding:6px;display:flex;flex-direction:column}
+.pop-m[hidden]{display:none}
+.pop-m h6{margin:6px 10px 2px;font-size:11.5px;color:var(--ink-3);font-weight:800}
+.pop-m a,.pop-m button{display:flex;align-items:center;gap:10px;border:0;background:none;border-radius:9px;padding:8px 10px;cursor:pointer;text-align:start;
+  font:inherit;font-size:13px;color:var(--ink);text-decoration:none;width:100%}
+.pop-m a:hover,.pop-m button:hover,.pop-m a:focus-visible,.pop-m button:focus-visible{background:var(--teal-soft);color:var(--teal);outline:none}
+.pop-m .i{color:var(--ink-2)}.pop-m a:hover .i,.pop-m button:hover .i{color:inherit}
+.pop-m button.danger,.pop-m button.danger .i{color:var(--red)}.pop-m button.danger:hover{background:var(--red-soft)}
+.pop-m form{margin:0}
+.pop-who{padding:8px 10px 4px;display:flex;flex-direction:column;line-height:1.5}
+.msep{height:1px;background:var(--line-2);margin:4px 6px}
+
+/* ---------- نوار پایین ساده‌ی برنامه ---------- */
+.app-foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px clamp(16px,2.4vw,32px) 18px;font-size:12px;color:var(--ink-3);border-top:1px solid var(--line-2)}
+.app-foot nav{display:flex;gap:16px}.app-foot a{color:inherit;text-decoration:none}.app-foot a:hover{color:var(--teal)}
+
+/* ---------- ۳) فضای کار: ریل کناری + محتوای تمام‌عرض ---------- */
+body.app main#main{min-height:calc(100vh - var(--top-h))}
+.ws{display:grid;grid-template-columns:var(--rail-w) minmax(0,1fr);align-items:start;gap:0;padding:0;min-height:calc(100vh - var(--top-h))}
+html[data-ws-c="1"] .ws{grid-template-columns:var(--rail-mini) minmax(0,1fr)}
+.ws-side{position:sticky;top:var(--top-h);height:calc(100vh - var(--top-h));display:flex;flex-direction:column;gap:0;min-height:0;background:var(--surface);
+  border-inline-end:1px solid var(--line)}
+.ws-side-top{flex:none;display:flex;flex-direction:column;gap:8px;padding:12px 12px 4px}
+.ws-side-head{display:none}
+.ws-db{position:relative;background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-card);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.ws-db-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.ws-name{font:700 13px var(--f-mono);color:var(--ink);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.ws-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.ws-db .meter{width:100%;margin:0;height:6px}
+.ws-sw-btn{flex:none;width:28px;height:28px;border:1px solid var(--line);border-radius:8px;background:var(--card);display:grid;place-items:center;cursor:pointer;color:var(--ink-2);padding:0}
+.ws-sw-btn:hover,.ws-sw-btn[aria-expanded=true]{border-color:var(--teal);color:var(--teal)}
+.ws-sw{position:absolute;inset-inline:0;top:calc(100% + 6px);z-index:30;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:6px;max-height:min(60vh,360px);overflow:auto}
+.ws-sw[hidden],.ws-sw li[hidden],.ws-sw-none[hidden]{display:none}
+.ws-sw ul{list-style:none;margin:0;padding:0}
+.ws-sw a{display:flex;justify-content:space-between;gap:6px;padding:7px 9px;border-radius:9px;text-decoration:none;color:var(--ink);font:13px var(--f-mono)}
+.ws-sw a small{font-family:var(--f-body);color:var(--ink-3)}
+.ws-sw a:hover,.ws-sw a:focus-visible{background:var(--teal-soft);outline:none}
+.ws-sw-q{width:100%;margin-bottom:6px;height:34px;font:inherit;font-size:13px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--card)}
+.ws-sw-none{margin:6px 8px}
+.ws-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:2px 10px 10px}
+.ws-nav{display:flex;flex-direction:column;gap:2px}
+.ws-group{display:flex;flex-direction:column;gap:2px}
+.ws-group+.ws-group{margin-top:4px}
+.ws-gt{display:flex;justify-content:space-between;align-items:center;cursor:pointer;list-style:none;font-size:11.5px;font-weight:800;color:var(--ink-3);padding:10px 10px 4px;user-select:none}
+.ws-gt::-webkit-details-marker{display:none}
+.ws-gt:hover{color:var(--ink)}
+.ws-gt i{width:7px;height:7px;border-inline-end:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s;margin-top:-3px}
+.ws-group:not([open]) .ws-gt i{transform:rotate(45deg);margin-top:0}
+.ws-items{display:flex;flex-direction:column;gap:2px}
+.ws-item{position:relative;display:flex;align-items:center;gap:11px;height:40px;padding:0 10px;border-radius:var(--r-ctl);text-decoration:none;color:var(--ink-2);font-size:13.5px;font-weight:500}
+.ws-item .i{stroke:currentColor}
+.ws-item:hover{background:var(--paper);color:var(--teal)}
+.ws-item.on{background:var(--teal-soft);color:var(--teal-dark);font-weight:800}
+.ws-item.on::before{content:"";position:absolute;inset-inline-end:-10px;top:9px;bottom:9px;width:3px;border-radius:2px 0 0 2px;background:var(--teal)}
+.ws-item:focus-visible,.ws-gt:focus-visible,.ws-collapse:focus-visible{outline:3px solid var(--ochre);outline-offset:-2px}
+.ws-side-foot{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-top:1px solid var(--line-2)}
+.ws-gpa:empty{display:none}
+.ws-collapse{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border:0;background:none;border-radius:var(--r-ctl);color:var(--ink-2);cursor:pointer;font:inherit;font-size:13px}
+.ws-collapse:hover{background:var(--paper);color:var(--teal)}
+.ws-collapse .i{transition:transform .15s}
+html[data-ws-c="1"] .ws-collapse .i{transform:rotate(180deg)}
+.ws-backdrop{position:fixed;inset:0;z-index:69;background:rgba(12,32,36,.45)}
+.ws-backdrop[hidden]{display:none}
+body.ws-lock{overflow:hidden}
+.ws-main{min-width:0;padding:16px clamp(16px,2.4vw,32px) 36px;display:flex;flex-direction:column;gap:14px}
+.ws-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0}
+.ws-bar .crumbs{margin:0;flex:1;min-width:0;font-size:12px;color:var(--ink-3)}
+.ws-bar-gpa:empty{display:none}
+.ws-main>*{width:100%}
+.ws-main .wrap{max-width:none;padding:0;margin:0}
+.ws-main .page{padding:0;max-width:1600px;margin:0}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:.85rem;color:var(--ink-2);margin-bottom:var(--s4)}
+.crumbs a{color:inherit;text-decoration:none}.crumbs a:hover{color:var(--teal);text-decoration:underline}
+.crumbs span{opacity:.5}.crumbs b{color:var(--ink)}
+.ex-layout.solo{grid-template-columns:minmax(0,1fr)}
+/* نوار آیکون (جمع‌شده): فقط دسکتاپ */
+@media (min-width:901px){
+  html[data-ws-c="1"] .ws .ws-lbl,html[data-ws-c="1"] .ws .ws-gt,html[data-ws-c="1"] .ws .ws-sw-btn,html[data-ws-c="1"] .ws .ws-sw,
+  html[data-ws-c="1"] .ws .ws-db{display:none}
+  html[data-ws-c="1"] .ws .ws-item,html[data-ws-c="1"] .ws .ws-collapse{justify-content:center;padding:0}
+  html[data-ws-c="1"] .ws .ws-item.on::before{inset-inline-end:-10px}
+  html[data-ws-c="1"] .ws .ws-side-top{padding-top:6px}
+}
+@media (prefers-reduced-motion:reduce){.ws-gt i,.ws-collapse .i{transition:none}}
+
+/* ---------- پرش سریع Ctrl+K ---------- */
+.ws-pal{position:fixed;inset:0;z-index:150;background:rgba(12,32,36,.46);display:flex;justify-content:center;align-items:flex-start;padding:12vh 16px 0}
+.ws-pal[hidden]{display:none}
+.ws-pal-box{width:min(600px,100%);background:var(--surface);border-radius:18px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;max-height:70vh}
+.ws-pal-q{border:0;border-bottom:1px solid var(--line);padding:0 18px;height:54px;font:inherit;font-size:15px;background:transparent;outline:none;color:var(--ink)}
+.ws-pal-box ul{list-style:none;margin:0;padding:8px;overflow:auto}
+.ws-pal-box li a{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 12px;border-radius:9px;text-decoration:none;color:var(--ink)}
+.ws-pal-box li[aria-selected=true] a{background:var(--teal-soft);color:var(--teal-dark)}
+.ws-pal-box small{color:var(--ink-3);white-space:nowrap}
+.ws-pal-none{padding:12px;color:var(--ink-2)}
+.ws-pal-help{margin:0;padding:8px 16px;border-top:1px solid var(--line)}
+
+/* ---------- ۵) گوشی: ریل کشو است و نوار تب پایین ---------- */
+.ws-tabs{display:none}
+@media (max-width:900px){
+  .app-top{padding:0 8px;gap:6px}
+  .app-burger{display:inline-grid!important}
+  .app-top .brand-n,.app-search kbd,.app-search-t{display:none}
+  .app-dbchip{display:inline-flex}
+  .app-search{flex:none;width:38px;padding:0;justify-content:center;margin-inline:0}
+  form.app-search{width:auto;flex:1;padding:0 10px;justify-content:flex-start}
+  .ws{display:block;min-height:0}
+  .ws-side{position:fixed;z-index:70;top:0;bottom:0;inset-inline-start:0;height:auto;width:min(310px,88vw);transform:translateX(110%);visibility:hidden;
+    box-shadow:var(--shadow);transition:transform .2s ease,visibility 0s linear .2s}
+  .ws-side.open{transform:none;visibility:visible;transition:transform .2s ease}
+  .ws-side-head{display:flex;align-items:center;justify-content:space-between}
+  .ws-back{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2);text-decoration:none}
+  .ws-x{display:grid;width:34px;height:34px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--card);cursor:pointer;color:var(--ink-2);place-items:center}
+  .ws-collapse{display:none}
+  .ws-main{padding:12px 14px 88px}
+  .ws-bar .crumbs{flex-basis:100%}
+  .ws-tabs{display:flex;position:fixed;z-index:50;inset-inline:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);
+    padding:4px 4px calc(4px + env(safe-area-inset-bottom,0px));justify-content:space-around}
+  .ws-tabs a,.ws-tabs button{flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:1px;font:inherit;font-size:10.5px;color:var(--ink-2);
+    padding:5px 0;border-radius:10px;cursor:pointer;text-decoration:none}
+  .ws-tabs a[aria-current=page]{background:var(--teal-soft);color:var(--teal-dark);font-weight:800}
+  body.app .app-foot{padding-bottom:76px}
+  .pop-m{inset-inline-end:-4px}
+}
+@media (min-width:901px){.ws-back{display:none}}
+@media (prefers-reduced-motion:reduce){.ws-side{transition:none}}
+
+/* ---------- ۴) اجزای مشترک (بازنویسی کلاس‌های قدیمی فقط داخل برنامه) ---------- */
+body.app h1{font-size:clamp(1.35rem,1.1rem + .9vw,1.7rem)}
+body.app h2{font-size:1.15rem;margin-bottom:var(--s3)}
+body.app h3{font-size:1rem}
+body.app .btn{min-height:var(--ctl-h);padding:0 14px;border-radius:var(--r-ctl);border-width:1px;font-size:13.5px;gap:7px}
+body.app .btn.sm{min-height:var(--ctl-h-sm);padding:0 10px;font-size:12.5px;border-radius:8px}
+body.app .btn.ghost{background:transparent;color:var(--teal);border-color:var(--line)}
+body.app .btn.ghost:hover{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-dark)}
+body.app .btn.danger{background:var(--red);border-color:var(--red)}
+body.app .btn.ghost.danger{background:transparent;color:var(--red);border-color:var(--line)}
+body.app .btn .i{width:18px;height:18px}
+body.app .btn.sm .i{width:16px;height:16px}
+body.app .panel{background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-card);padding:16px 18px}
+body.app .panel>h2,body.app .panel>h3{font:800 15px var(--f-display);margin:0 0 var(--s3)}
+body.app .field input[type=text],body.app .field input[type=email],body.app .field input[type=password],body.app .field input[type=tel],
+body.app .field input[type=search],body.app .field input[type=number],body.app .field input[type=date],body.app .field input[type=datetime-local],
+body.app .field input:not([type]),body.app .field select,body.app .field textarea{min-height:var(--ctl-h);border:1px solid var(--line);border-radius:var(--r-ctl)}
+body.app .field label{font-size:12.5px;font-weight:800;color:var(--ink-2)}
+body.app .msg{padding:10px 14px;border-radius:12px;border:0;font-size:13.5px}
+body.app .msg.success{background:var(--green-soft)}body.app .msg.error{background:var(--red-soft)}
+body.app .msg.warning{background:var(--ochre-soft)}body.app .msg.info{background:var(--teal-soft)}
+body.app .badge{font-size:11.5px;padding:1px 9px}
+body.app .page-head h1{font:800 22px/1.5 var(--f-display);margin:0}
+body.app .empty{border-radius:var(--r-card);background:none;padding:28px 16px}
+body.app .meter{height:6px}
+body.app .copy{border:1px solid var(--line);background:var(--card);color:var(--teal);border-radius:8px;padding:2px 10px;cursor:pointer;font:inherit;font-size:12px}
+body.app .copy:hover{background:var(--teal-soft)}
+body.app code,body.app .mono{font-size:.9em}
+body.app table.kv{width:100%;border-collapse:collapse}
+body.app table.kv th,body.app table.kv td{padding:9px 4px;border-bottom:1px solid var(--line-2);text-align:start;vertical-align:middle;font-weight:500}
+body.app table.kv th{color:var(--ink-3);font-size:12.5px;width:40%}
+body.app table.kv tr:last-child th,body.app table.kv tr:last-child td{border-bottom:0}
+body.app .data-table{width:100%;border-collapse:collapse;font-size:13px}
+body.app .data-table th{text-align:start;font-size:12px;color:var(--ink-3);font-weight:800;padding:8px 10px;border-bottom:1px solid var(--line)}
+body.app .data-table td{padding:9px 10px;border-bottom:1px solid var(--line-2)}
+body.app .data-table tr:hover td{background:#F3F7F1}
+body.app main#main>.wrap.page,body.app main#main>.wrap.narrow{padding-top:20px}

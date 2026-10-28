@@ -1,0 +1,5 @@
+{% load ws %}
+<nav class="ws-tabs" aria-label="دسترسی سریع">
+  {% for t in tabs %}<a href="{{ t.url }}"{% if t.on %} aria-current="page"{% endif %}>{% icon t.icon 22 %}<span>{{ t.label }}</span></a>{% endfor %}
+  <button type="button" data-ws-open aria-controls="ws-side" aria-expanded="false">{% icon "menu" 22 %}<span>بیشتر</span></button>
+</nav>

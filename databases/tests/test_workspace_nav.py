@@ -32,7 +32,9 @@ class WorkspaceNavTests(BaseCase):
         self.assertContains(r, 'data-key="share"')
         self.assertContains(r, 'data-key="manage"')
         self.assertContains(r, "data-ws-collapse")
-        self.assertContains(r, "data-ws-wide")
+        self.assertContains(r, "ws-tabs")  # نوار تب پایین گوشی
+        self.assertContains(r, "app-top")  # نوار بالای برنامه
+        self.assertNotContains(r, "data-ws-wide")
         self.assertContains(r, "data-ws-jump")
         self.assertContains(r, 'data-gpa-slot="menu"')  # جای ثابت دکمه‌ی دستیار، نه شناور روی محتوا
         self.assertContains(r, 'data-gpa-slot="bar"')

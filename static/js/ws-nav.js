@@ -1,4 +1,4 @@
-// منوی فضای کار: گروه‌های بازشو، جمع‌شدن به نوار آیکون، حالت گسترده، کشوی موبایل،
+// منوی فضای کار: گروه‌های بازشو، جمع‌شدن به نوار آیکون، کشوی موبایل،
 // تعویض سریع پایگاه داده و پرش سریع با Ctrl+K. بدون کتابخانه خارجی.
 (function () {
   "use strict";
@@ -23,7 +23,7 @@
   // ── گروه‌های باز و بسته ─────────────────────────────────────────────
   const scroller = $(".ws-scroll", side);
   const groups = $$(".ws-group[data-key]", side);
-  const isRail = () => desktop.matches && (root.dataset.wsC === "1" || root.dataset.wsW === "1");
+  const isRail = () => desktop.matches && root.dataset.wsC === "1";
   // پیش‌فرض: روی صفحه‌ی بلند همه باز؛ روی صفحه‌ی کوتاه فقط گروه فعلی. در نوار آیکون همه باز می‌مانند.
   const want = (d) => {
     const stored = store.get("gp.ws.g." + d.dataset.key);
@@ -61,43 +61,23 @@
   if (colBtn) colBtn.addEventListener("click", () => setCollapsed(root.dataset.wsC !== "1"));
   syncCollapse();
 
-  // ── حالت گسترده: منوها جمع و جدول‌ها از کنار صفحه برداشته می‌شوند ─────
-  const wideBtn = $("[data-ws-wide]");
-  function syncWide() {
-    const on = root.dataset.wsW === "1";
-    if (wideBtn) {
-      wideBtn.setAttribute("aria-pressed", on ? "true" : "false");
-      wideBtn.textContent = on ? "⤡ خروج از حالت گسترده" : "⤢ حالت گسترده";
-    }
-  }
-  if (wideBtn) wideBtn.addEventListener("click", () => {
-    const on = root.dataset.wsW !== "1";
-    if (on) root.dataset.wsW = "1"; else delete root.dataset.wsW;
-    store.set("gp.ws.w", on ? "1" : "0");
-    syncWide();
-    applyGroups();
-    document.dispatchEvent(new CustomEvent("ws:wide", { detail: { on } }));
-    window.dispatchEvent(new Event("resize"));
-  });
-  syncWide();
-
   // ── کشوی موبایل ──────────────────────────────────────────────────────
   const backdrop = $(".ws-backdrop");
-  const openBtn = $("[data-ws-open]");
+  const openBtns = $$("[data-ws-open]");
   let lastFocus = null;
   function drawer(open) {
     if (desktop.matches && open) return;
     side.classList.toggle("open", open);
     if (backdrop) backdrop.hidden = !open;
     document.body.classList.toggle("ws-lock", open);
-    if (openBtn) openBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    openBtns.forEach((b) => b.setAttribute("aria-expanded", open ? "true" : "false"));
     if (open) {
       lastFocus = document.activeElement;
       const first = $(".ws-item.on", side) || $(".ws-item", side);
       if (first) first.focus();
     } else if (lastFocus && lastFocus.focus) { lastFocus.focus(); lastFocus = null; }
   }
-  if (openBtn) openBtn.addEventListener("click", () => drawer(true));
+  openBtns.forEach((b) => b.addEventListener("click", () => drawer(true)));
   $$("[data-ws-close]").forEach((b) => b.addEventListener("click", () => drawer(false)));
   side.addEventListener("click", (e) => { if (e.target.closest("a.ws-item") && !desktop.matches) drawer(false); });
   desktop.addEventListener("change", () => { if (desktop.matches) drawer(false); applyGroups(); });
