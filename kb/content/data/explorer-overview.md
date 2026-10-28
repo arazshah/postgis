@@ -3,7 +3,7 @@ title: مرورگر داده چیست و چه کارهایی با آن می‌ت
 summary: مرورگر داده بخش وب پایگاه داده است: جدول‌ها و ستون‌ها را ببینید، ردیف‌ها را مرور کنید، جدول مکانی را روی نقشه ببینید، فایل وارد کنید، خروجی بگیرید، سلامت داده را بسنجید و SQL اجرا کنید؛ بدون نصب هیچ نرم‌افزاری.
 kind: concept
 keywords: مرورگر داده, explorer, جدول ها, نمایش روی نقشه, دیدن داده, ستون ها, ردیف ها, مرور جدول
-related: explorer-map-limit, import-formats, export-formats, data-health, sql-console
+related: edit-table-data, explorer-map-limit, import-formats, export-formats, data-health, sql-console
 featured: yes
 order: 100
 reviewed: 2026-10-21
@@ -19,8 +19,9 @@ reviewed: 2026-10-21
 | ورود فایل | [آپلود داده](kb:import-formats) |
 | خروجی | [دانلود جدول](kb:export-formats) |
 | سلامت داده | [بررسی و رفع مشکل](kb:data-health) |
+| ویرایش (ویرایشگر و مالک) | [افزودن، ویرایش و حذف سطر و شکل](kb:edit-table-data) |
 | SQL | [کنسول SQL](kb:sql-console) |
 
 ## چه زمانی از ابزار دیگر استفاده کنم؟
 
-برای ویرایش مکانی سنگین (رسم و اصلاح عارضه) از [QGIS](kb:connect-qgis) به پایگاه داده وصل شوید؛ مرورگر داده برای مشاهده، بررسی و کارهای سریع است.
+برای اصلاح چند سطر یا شکل، همین‌جا [حالت ویرایش](kb:edit-table-data) کافی است. برای ویرایش مکانی سنگین (رسم و اصلاح انبوه عارضه، توپولوژی) از [QGIS](kb:connect-qgis) به پایگاه داده وصل شوید.

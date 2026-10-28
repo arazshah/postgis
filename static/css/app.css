@@ -1170,18 +1170,26 @@ textarea.ui-input{padding:8px 12px;line-height:1.7;resize:vertical}
 .edit-enter svg{flex:none}
 .chip.lock{background:var(--paper-2);color:var(--ink-2);cursor:help}
 .edit-why{background:var(--ochre-soft);border:1px solid #e5cf86;border-radius:var(--r-sm);padding:var(--s2) var(--s3)}
-.edit-bar{position:sticky;top:8px;z-index:20;display:flex;justify-content:space-between;align-items:center;gap:var(--s3);flex-wrap:wrap;
-  margin-bottom:var(--s3);padding:var(--s2) var(--s3);background:#fff8e4;border:1.5px solid var(--ochre);border-radius:var(--r-md);box-shadow:0 6px 22px rgba(122,82,0,.18)}
-.edit-bar-main{display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap}
-.edit-state{display:inline-flex;align-items:center;gap:8px;color:#7a5200}
+/* داک ویرایش: فقط بعد از «ویرایش جدول» می‌آید و با خروج جمع می‌شود؛ هیچ‌وقت جای ثابتی از صفحه را اشغال نمی‌کند */
+.edit-dock{position:fixed;z-index:900;bottom:18px;left:50%;display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;justify-content:center;
+  width:max-content;max-width:calc(100vw - 24px);padding:8px 10px 8px 14px;background:#fff8e4;border:1.5px solid var(--ochre);border-radius:99px;
+  box-shadow:0 14px 40px rgba(18,49,58,.28);transform:translate(-50%,24px) scale(.96);opacity:0;pointer-events:none;
+  transition:transform .22s cubic-bezier(.2,.9,.3,1.2),opacity .18s ease}
+.edit-dock.in{transform:translate(-50%,0) scale(1);opacity:1;pointer-events:auto}
+.edit-dock[hidden]{display:none}
+.dock-state{display:inline-flex;align-items:center;gap:8px;color:#7a5200;font-weight:700}
 .edit-dot{width:10px;height:10px;border-radius:50%;background:var(--ochre);box-shadow:0 0 0 0 rgba(224,165,38,.6);animation:edit-pulse 1.8s infinite}
 @keyframes edit-pulse{70%{box-shadow:0 0 0 9px rgba(224,165,38,0)}100%{box-shadow:0 0 0 0 rgba(224,165,38,0)}}
-.edit-count{font-weight:700;color:var(--ink-2)}.edit-count.has{color:var(--teal-dark)}
-.edit-bar-acts{display:flex;gap:var(--s2);flex-wrap:wrap}
+.edit-count{font-weight:700;color:var(--ink-2);font-size:.9rem}.edit-count.has{color:var(--teal-dark)}
+.dock-acts{display:flex;gap:var(--s2);flex-wrap:wrap;justify-content:center}
+.dock-acts .btn{border-radius:99px}
+body.is-editing{padding-bottom:84px}
+@media (max-width:640px){.edit-dock{border-radius:var(--r-lg);left:12px;right:12px;width:auto;transform:translateY(24px) scale(.98)}.edit-dock.in{transform:none}.dock-state b{display:none}}
+@media (prefers-reduced-motion:reduce){.edit-dock{transition:none}.edit-dot{animation:none}}
 .btn.ghost.danger-ghost{color:var(--red);border-color:var(--red)}
 .btn.ghost.danger-ghost:hover{background:var(--red-soft);color:var(--red)}
 .btn.ghost.danger-ghost[disabled]{color:var(--ink-2);border-color:var(--line)}
-body.is-editing .ex-view,body.is-editing .table-scroll,body.is-editing .ex-map{outline:2px dashed var(--ochre);outline-offset:3px;border-radius:var(--r-sm)}
+body.is-editing .table-scroll,body.is-editing .ex-map{outline:2px solid rgba(224,165,38,.55);outline-offset:3px;border-radius:var(--r-sm)}
 .data-table .rowact,.data-table th.rowact{display:none;width:1%;white-space:nowrap}
 body.is-editing .data-table .rowact,body.is-editing .data-table th.rowact{display:table-cell}
 .row-edit,.row-rm{border:1px solid var(--line);background:var(--surface);border-radius:6px;width:28px;height:28px;cursor:pointer;color:var(--teal-dark);font-size:.95rem;line-height:1;margin-inline-start:6px}
