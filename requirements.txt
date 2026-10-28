@@ -8,7 +8,7 @@ jdatetime>=5.0
 Pillow>=10
 defusedxml>=0.7
 pmtiles>=3.4
-smart-spatial-system>=0.5.9  # s3geo: پرسش فارسی از داده
+smart-spatial-system>=0.6.1  # s3geo: پرسش فارسی از داده
 rio-tiler>=7,<10  # کاشی تصویری رستر (پلن سازمانی)
 # نسخه‌های ۲٫۴ به بالا فقط روی پردازنده‌های x86-64-v2 اجرا می‌شوند؛ سرور ما این را ندارد
 numpy>=2.1,<2.4
