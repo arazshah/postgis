@@ -1,12 +1,13 @@
-{% extends "databases/_explore_base.html" %}{% load fa %}
+{% extends "databases/_explore_base.html" %}{% load fa ws %}
 {% block ex %}
-<form method="post" class="panel sql-form">
+<div class="page-head"><div><h1>{% icon "code" 22 %} کنسول SQL</h1><p class="muted page-sub">دستور بنویسید و نتیجه را همین‌جا ببینید.</p></div></div>
+<form method="post" class="card sql-form">
   {% csrf_token %}
   <label for="sql-q" class="sr-label">دستور SQL</label>
   <textarea id="sql-q" name="query" dir="ltr" spellcheck="false" rows="7" placeholder="SELECT * FROM my_table LIMIT 10">{{ query }}</textarea>
   <div class="sql-bar">
     {% if db.can_edit %}<label class="check small"><input type="checkbox" name="allow_write" {% if allow_write %}checked{% endif %}><span>اجازه تغییر داده (INSERT، UPDATE، DELETE، CREATE…)</span></label>{% else %}<span class="small muted">دسترسی شما مشاهده‌گر است؛ فقط پرس‌وجوی خواندنی اجرا می‌شود.</span>{% endif %}
-    <button class="btn" type="submit">اجرا</button>
+    <button class="btn" type="submit">{% icon "bolt" 18 %}اجرا</button>
   </div>
   <div class="chips sql-examples" aria-label="نمونه کوئری">
     {% for x in tables|slice:":1" %}

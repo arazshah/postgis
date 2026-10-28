@@ -1,11 +1,11 @@
-{% extends "base.html" %}{% load fa humanize %}
+{% extends "base.html" %}{% load fa humanize ws %}
 {% block title %}فاکتور {{ inv.number }} — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page">
-  <p class="small"><a href="{% url 'billing:invoices' %}">صورتحساب‌های من</a></p>
+  <a class="back-link" href="{% url 'billing:invoices' %}">{% icon "back" 16 %}صورتحساب‌های من</a>
   <div class="detail-grid">
     <div class="stack">
-      <section class="panel invoice-card">
+      <section class="card invoice-card">
         <div class="inv-head">
           <div><h1 style="font-size:1.4rem;margin:0">فاکتور <span class="ltr mono">{{ inv.number }}</span></h1>
             <p class="muted small" style="margin:4px 0 0">{{ inv.title }}</p></div>
@@ -64,7 +64,7 @@
         {% endif %}
       </section>
     </div>
-    <aside class="panel">
+    <aside class="card">
       <h3>جزئیات</h3>
       <table class="kv small">
         <tr><th>پلن</th><td class="rtl">{{ inv.plan.name }}</td></tr>

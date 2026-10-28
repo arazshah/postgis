@@ -1,4 +1,4 @@
-{% extends "databases/_ws.html" %}{% load fa static %}
+{% extends "databases/_ws.html" %}{% load fa static ws %}
 {% block title %}مرورگر {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
   {# فهرست جدول‌ها فقط داخل یک جدول یا در کنسول SQL لازم است؛ در «خلاصه جدول‌ها» خود صفحه فهرست است. #}
@@ -6,7 +6,7 @@
     {% if tables and t or tables and section == 'sql' %}
     <div class="ex-bar">
       <button type="button" class="btn ghost sm ex-toggle" aria-expanded="false" aria-controls="ex-list" data-ex-toggle>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        {% icon "table" 16 %}
         جدول‌ها <span class="muted">({{ tables|length|fanum }})</span>
       </button>
       {% if t %}<span class="ex-current ltr" title="جدول فعلی">{% if t.schema != 'public' %}{{ t.schema }}.{% endif %}{{ t.name }}</span>{% endif %}
@@ -15,7 +15,7 @@
       <div class="ex-side-head">
         <input type="search" class="ex-filter ltr" placeholder="جست‌وجوی جدول…" aria-label="جست‌وجوی جدول" data-ex-filter autocomplete="off">
         <button type="button" class="ex-pin" aria-pressed="false" title="نمایش فهرست کنار صفحه" data-ex-pin>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3z"/></svg>
+          {% icon "pin" 16 %}
           <span class="sr-label">سنجاق</span>
         </button>
       </div>

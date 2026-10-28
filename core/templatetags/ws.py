@@ -4,6 +4,7 @@ from django.urls import reverse
 
 register = template.Library()
 
+# مسیرهای قدیمی (برای آیکون‌های قدیمی داشبورد)؛ آیکون‌های تازه از core/icons.py می‌آیند
 ICONS = {
     "home": "M3 11l9-8 9 8M5 10v10h14V10",
     "tables": "M3 5h18v14H3zM3 10h18M9 5v14",
@@ -34,25 +35,25 @@ ICONS = {
 GROUPS = [
     ("", [("نمای کلی و اتصال", "databases:detail", ("databases:detail",), "home", "viewer")]),
     ("داده", [
-        ("جدول‌ها", "databases:explore", ("databases:explore", "databases:explore_table"), "tables", "viewer"),
-        ("اجرای SQL", "databases:explore_sql", ("databases:explore_sql",), "sql", "viewer"),
-        ("ورود فایل", "databases:import", ("databases:import", "databases:import_review"), "import", "editor"),
+        ("جدول‌ها", "databases:explore", ("databases:explore", "databases:explore_table"), "table", "viewer"),
+        ("اجرای SQL", "databases:explore_sql", ("databases:explore_sql",), "code", "viewer"),
+        ("ورود فایل", "databases:import", ("databases:import", "databases:import_review"), "upload", "editor"),
         ("داده آماده ایران", "iranmap:ready", ("iranmap:ready",), "pin", "editor"),
-        ("سلامت داده", "databases:explore_health", ("databases:explore_health",), "health", "viewer"),
+        ("سلامت داده", "databases:explore_health", ("databases:explore_health",), "pulse", "viewer"),
     ]),
     ("تحلیل و انتشار", [
         ("تحلیل", "analysis:page", ("analysis:page",), "chart", "editor"),
-        ("برداشت میدانی", "survey:index", ("survey:index", "survey:studio"), "survey", "viewer"),
-        ("نقشه‌های چندلایه", "maps:index", ("maps:index", "maps:composer", "maps:quick"), "map", "viewer"),
+        ("برداشت میدانی", "survey:index", ("survey:index", "survey:studio"), "target", "viewer"),
+        ("نقشه‌های چندلایه", "maps:index", ("maps:index", "maps:composer", "maps:quick"), "layers", "viewer"),
         ("نقشه و API", "publish:manage", ("publish:manage", "publish:map_builder"), "globe", "editor"),
-        ("WMS و WFS", "publish:ows", ("publish:ows", "publish:ows_detail"), "layers", "editor"),
-        ("REST API و فرم میدانی", "restapi:manage", ("restapi:manage",), "code", "editor"),
+        ("WMS و WFS", "publish:ows", ("publish:ows", "publish:ows_detail"), "cube", "editor"),
+        ("REST API و فرم میدانی", "restapi:manage", ("restapi:manage",), "braces", "editor"),
     ]),
     ("مدیریت", [
-        ("تیم و کاربران", "databases:team", ("databases:team",), "team", "owner"),
-        ("بکاپ و بازگردانی", "databases:backups", ("databases:backups",), "backup", "owner"),
+        ("تیم و کاربران", "databases:team", ("databases:team",), "users", "owner"),
+        ("بکاپ و بازگردانی", "databases:backups", ("databases:backups",), "clock", "owner"),
         ("مصرف و کارایی", "databases:usage", ("databases:usage",), "gauge", "owner"),
-        ("امکانات سازمانی", "enterprise:page", ("enterprise:page",), "building", "owner"),
+        ("امکانات سازمانی", "enterprise:page", ("enterprise:page",), "server", "owner"),
     ]),
 ]
 LEVEL = {"viewer": 0, "editor": 1, "owner": 2}
@@ -76,7 +77,7 @@ def build(db, view_name: str) -> dict:
             if LEVEL[need] > level or (url == "survey:index" and not survey_on):
                 continue
             on = view_name in views
-            row = {"label": label, "url": url, "on": on, "icon": ICONS[icon]}
+            row = {"label": label, "url": url, "on": on, "icon": icon}
             rows.append(row)
             if on:
                 current, has_current = row, True
@@ -145,35 +146,40 @@ def ws_title(context, db):
 
 
 @register.simple_tag
-def icon(name, size=20):
-    """آیکون خطی کوچک (SVG درون‌خطی) از همان مجموعه‌ی منوی فضای کار."""
+def icon(name, size=20, cls=""):
+    """آیکون خطی (SVG درون‌خطی) از مجموعه‌ی سیستم طراحی (core/icons.py)؛ نام ناشناخته‌ی قدیمی از مسیرهای قدیمی می‌خواند."""
     from django.utils.html import format_html
+    from django.utils.safestring import mark_safe
 
-    path = ICONS.get(name, "")
+    from core.icons import ICONS as SET
+
+    inner = SET.get(name)
+    if inner is None:
+        inner = format_html('<path d="{}"/>', ICONS.get(name, ""))
     return format_html(
-        '<svg class="ico" width="{0}" height="{0}" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-        'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{1}"/></svg>',
-        size, path)
+        '<svg class="i {2}" width="{0}" height="{0}" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{1}</svg>',
+        size, mark_safe(inner), cls)  # noqa: S308 (مجموعه‌ی ثابت داخل مخزن)
 
 
 # کارت‌های میانبر داشبورد: هر دکمه یک عنوان کوتاه + یک جمله که دقیقاً می‌گوید چه می‌کند.
 # (کلید گروه، عنوان، [(عنوان، توضیح، url name، آیکون)])
 DASH_GROUPS = [
     ("data", "داده‌هایت را ببین و وارد کن", [
-        ("جدول‌ها و داده‌ها", "جدول‌ها، ستون‌ها و روی نقشه را ببین؛ خروجی CSV و GeoJSON بگیر", "databases:explore", "tables"),
-        ("اجرای SQL", "کوئری بنویس و نتیجه را همان‌جا ببین (به‌طور پیش‌فرض فقط‌خواندنی)", "databases:explore_sql", "sql"),
-        ("ورود فایل", "Shapefile، GeoPackage، GeoJSON، KML یا CSV را آپلود کن", "databases:import", "import"),
-        ("برداشت میدانی", "با GPS یا گیرنده RTK در میدان نقطه برداشت کن؛ آفلاین هم کار می‌کند", "survey:index", "survey"),
+        ("جدول‌ها و داده‌ها", "جدول‌ها، ستون‌ها و روی نقشه را ببین؛ خروجی CSV و GeoJSON بگیر", "databases:explore", "table"),
+        ("اجرای SQL", "کوئری بنویس و نتیجه را همان‌جا ببین (به‌طور پیش‌فرض فقط‌خواندنی)", "databases:explore_sql", "code"),
+        ("ورود فایل", "Shapefile، GeoPackage، GeoJSON، KML یا CSV را آپلود کن", "databases:import", "upload"),
+        ("برداشت میدانی", "با GPS یا گیرنده RTK در میدان نقطه برداشت کن؛ آفلاین هم کار می‌کند", "survey:index", "target"),
     ]),
     ("share", "تحلیل کن و منتشر کن", [
         ("تحلیل مکانی", "بافر، نزدیک‌ترین، حوزه دسترسی و ... بدون کدنویسی", "analysis:page", "chart"),
         ("انتشار نقشه و API", "لایه را با لینک عمومی، کاشی برداری یا API در وب بگذار", "publish:manage", "globe"),
-        ("نقشه‌های چندلایه", "چند لایه را با سبک دلخواه یک‌جا بچین و ارائه بده", "maps:index", "map"),
+        ("نقشه‌های چندلایه", "چند لایه را با سبک دلخواه یک‌جا بچین و ارائه بده", "maps:index", "layers"),
     ]),
     ("manage", "مراقب پایگاه داده‌ات باش", [
-        ("بکاپ‌ها", "نسخه پشتیبان بگیر، دانلود کن یا بازگردانی کن", "databases:backups", "backup"),
+        ("بکاپ‌ها", "نسخه پشتیبان بگیر، دانلود کن یا بازگردانی کن", "databases:backups", "clock"),
         ("مصرف و کارایی", "نمودار حجم و درخواست‌ها و پیشنهاد نمایه", "databases:usage", "gauge"),
-        ("تیم و دسترسی", "همکارانت را با نقش مشاهده‌گر یا ویرایشگر دعوت کن", "databases:team", "team"),
+        ("تیم و دسترسی", "همکارانت را با نقش مشاهده‌گر یا ویرایشگر دعوت کن", "databases:team", "users"),
     ]),
 ]
 
@@ -184,7 +190,7 @@ def dash_actions(db):
     survey_on = _survey_on()
     for key, title, items in DASH_GROUPS:
         groups.append({"key": key, "title": title, "items": [
-            {"label": a, "hint": b, "url": reverse(u, args=[db.pk]), "icon": ICONS[i]} for a, b, u, i in items
+            {"label": a, "hint": b, "url": reverse(u, args=[db.pk]), "icon": i} for a, b, u, i in items
             if survey_on or u != "survey:index"]})
     return {"groups": groups}
 
@@ -200,3 +206,19 @@ def dash_menu(db):
         if rows:
             groups.append({"title": title, "items": rows})
     return {"groups": groups}
+
+
+# نوار تب پایین گوشی: چهار بخش پرکاربرد (فقط آن‌هایی که کاربر به آن‌ها دسترسی دارد) + «بیشتر»
+TAB_VIEWS = ("databases:detail", "databases:explore", "maps:index", "analysis:page")
+TAB_LABELS = {"databases:detail": "نمای کلی", "databases:explore": "جدول‌ها", "maps:index": "نقشه‌ها", "analysis:page": "تحلیل"}
+
+
+@register.inclusion_tag("databases/_ws_tabs.html", takes_context=True)
+def ws_tabs(context, db):
+    request = context.get("request")
+    name = request.resolver_match.view_name if request and request.resolver_match else ""
+    data = build(db, name)
+    rows = {it["url"]: it for g in data["groups"] for it in g["items"]}
+    tabs = [{"label": TAB_LABELS[u], "url": reverse(u, args=[db.pk]), "icon": rows[u]["icon"], "on": rows[u]["on"]}
+            for u in TAB_VIEWS if u in rows]
+    return {"tabs": tabs}

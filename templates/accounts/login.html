@@ -1,11 +1,12 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load ws %}
 {% block title %}ورود و ثبت‌نام — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page">
   <div class="auth">
+    <span class="auth-ico">{% icon "users" 26 %}</span>
     <h1>ورود یا ثبت‌نام</h1>
     <p class="muted">شماره موبایل خود را وارد کنید تا کد تأیید برایتان پیامک شود. اگر حساب ندارید، با همین کد ساخته می‌شود.</p>
-    <form method="post" class="panel" novalidate>
+    <form method="post" class="card" novalidate>
       {% csrf_token %}
       {% include "partials/form_errors.html" %}
       {% include "partials/field.html" with field=form.phone %}

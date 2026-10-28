@@ -1,4 +1,4 @@
-{% extends "databases/_ws.html" %}{% load static fa %}
+{% extends "databases/_ws.html" %}{% load static fa ws %}
 {% block title %}{{ p.title }} — WMS/WFS — {{ SITE_NAME }}{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
@@ -6,10 +6,19 @@
 {% endblock %}
 {% block ws %}
 <div class="wrap page">
-  <p class="small"><a href="{% url 'publish:ows' db.pk %}">← WMS و WFS</a></p>
+  <a class="back-link" href="{% url 'publish:ows' db.pk %}">{% icon "back" 16 %}WMS و WFS</a>
   <div class="page-head">
-    <h1>{{ p.title }}</h1>
-    <span class="badge {% if p.is_public %}active{% else %}pending{% endif %}">{% if p.is_public %}عمومی{% else %}خصوصی · با کلید{% endif %}</span>
+    <div><h1>{{ p.title }}</h1>
+      <p class="muted page-sub"><span class="badge {% if p.is_public %}active{% else %}pending{% endif %}">{% if p.is_public %}عمومی{% else %}خصوصی · با کلید{% endif %}</span> {% if p.source == 'database' %}از پایگاه داده{% else %}فایل <span class="ltr">{{ p.source_name }}</span>{% endif %}</p></div>
+    <div class="page-acts">
+      <div class="pop-wrap">
+        <button class="ib" type="button" data-pop="ows-m" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های پروژه">{% icon "more" 20 %}</button>
+        <div class="pop-m" id="ows-m" role="menu" hidden>
+          <form method="post" action="{% url 'publish:ows_delete' db.pk p.pk %}" data-confirm="این پروژه و آدرس‌های WMS/WFS آن حذف شود؟ برنامه‌هایی که از این آدرس‌ها استفاده می‌کنند دیگر کار نمی‌کنند." data-confirm-title="حذف پروژه‌ی منتشرشده" data-confirm-text="حذف پروژه">{% csrf_token %}
+            <button role="menuitem" class="danger" type="submit">{% icon "trash" 18 %}<span>حذف پروژه</span></button></form>
+        </div>
+      </div>
+    </div>
   </div>
 
   {% if p.warnings %}
@@ -20,19 +29,15 @@
   {% endif %}
 
   <div class="ows-grid">
-    <section class="panel">
-      <h2 style="font-size:1.1rem;margin-top:0">پیش‌نمایش WMS</h2>
+    <section class="card">
+      <div class="ch"><h2>پیش‌نمایش WMS</h2></div>
       <div id="ows-map" class="ows-map" aria-label="پیش‌نمایش نقشه WMS"></div>
       <p class="small muted" style="margin:var(--s2) 0 0">همان تصویری که QGIS Server برای هر برنامه دیگری می‌کشد. روی عارضه کلیک کنید تا اطلاعاتش (GetFeatureInfo) را ببینید.</p>
     </section>
 
-    <section class="panel">
-      <h2 style="font-size:1.1rem;margin-top:0">آدرس‌ها</h2>
-      <dl class="pub-urls">
-        <dt>WMS</dt><dd><code id="u-wms">{{ url }}</code><button class="copy" data-copy-target="#u-wms">کپی</button></dd>
-        <dt>WFS</dt><dd>{% if p.wfs_enabled %}<code id="u-wfs">{{ url }}</code><button class="copy" data-copy-target="#u-wfs">کپی</button>{% else %}<span class="small muted">خاموش</span>{% endif %}</dd>
-        <dt>GetCapabilities</dt><dd><code id="u-cap">{{ url }}?SERVICE=WMS&amp;REQUEST=GetCapabilities</code><button class="copy" data-copy-target="#u-cap">کپی</button></dd>
-      </dl>
+    <section class="card">
+      <div class="ch"><h2>آدرس‌ها</h2></div>
+      <div class="url-rows"><div class="fld"><label>WMS</label><code id="u-wms">{{ url }}</code><button class="copy" data-copy-target="#u-wms">کپی</button></div><div class="fld"><label>WFS</label>{% if p.wfs_enabled %}<code id="u-wfs">{{ url }}</code><button class="copy" data-copy-target="#u-wfs">کپی</button>{% else %}<span class="small muted">خاموش</span>{% endif %}</div><div class="fld"><label>GetCapabilities</label><code id="u-cap">{{ url }}?SERVICE=WMS&amp;REQUEST=GetCapabilities</code><button class="copy" data-copy-target="#u-cap">کپی</button></div></div>
       <p class="small">نام لایه کل نقشه: <code class="ltr">{{ root }}</code> · لایه‌ها:
         {% for l in p.layers %}<code class="ltr">{{ l.name }}</code>{% if not forloop.last %}، {% endif %}{% endfor %}</p>
       {% if not p.is_public %}<p class="small muted">این سرویس خصوصی است: در QGIS کلید API را در بخش <b>Authentication › Basic</b> به‌عنوان رمز (Password) وارد کنید (نام کاربری هر چیزی می‌تواند باشد)؛ در کد، <span class="ltr">?key=</span> را به آدرس اضافه کنید. کلید را از <a href="{% url 'publish:manage' db.pk %}">صفحه انتشار</a> بسازید.</p>{% endif %}
@@ -56,31 +61,28 @@ new ol.layer.Tile({source: new ol.source.TileWMS({
   </div>
 
   <div class="ows-grid">
-    <section class="panel">
-      <h2 style="font-size:1.1rem;margin-top:0">تنظیمات</h2>
-      <form method="post" class="pub-form">{% csrf_token %}
-        <div class="field"><label class="small" for="o-title">عنوان سرویس</label><input id="o-title" type="text" name="title" value="{{ p.title }}" maxlength="120"></div>
-        <label class="check small"><input type="checkbox" name="public" {% if p.is_public %}checked{% endif %}><span>عمومی (بدون کلید API)</span></label>
-        <label class="check small"><input type="checkbox" name="wfs" {% if p.wfs_enabled %}checked{% endif %}><span>WFS روشن باشد (دانلود عوارض برداری؛ حداکثر ۱۰٬۰۰۰ عارضه در هر درخواست)</span></label>
-        <button class="btn sm" type="submit">ذخیره</button>
+    <section class="card">
+      <div class="ch"><h2>تنظیمات</h2></div>
+      <form method="post" class="pub-form" style="display:flex;flex-direction:column;gap:12px">{% csrf_token %}
+        <div class="field" style="margin:0"><label for="o-title">عنوان سرویس</label><input id="o-title" type="text" name="title" value="{{ p.title }}" maxlength="120"></div>
+        <label class="sw-row"><input type="checkbox" name="public" {% if p.is_public %}checked{% endif %}><span><b>عمومی</b><small>بدون کلید API دیده می‌شود.</small></span></label>
+        <label class="sw-row"><input type="checkbox" name="wfs" {% if p.wfs_enabled %}checked{% endif %}><span><b>WFS روشن باشد</b><small>دانلود عوارض برداری؛ حداکثر ۱۰٬۰۰۰ عارضه در هر درخواست.</small></span></label>
+        <div><button class="btn" type="submit">{% icon "check" 18 %}ذخیره</button></div>
       </form>
     </section>
 
-    <section class="panel">
-      <h2 style="font-size:1.1rem;margin-top:0">به‌روزرسانی پروژه</h2>
+    <section class="card">
+      <div class="ch"><h2>به‌روزرسانی پروژه</h2></div>
       {% if p.source == 'database' %}
-      <p class="small muted">این پروژه از پایگاه داده (<span class="ltr">{{ p.source_schema }}.qgis_projects › {{ p.source_name }}</span>) آمده است. بعد از ذخیره دوباره در QGIS، نسخه منتشرشده را به‌روز کنید.</p>
-      <form method="post" action="{% url 'publish:ows_refresh' db.pk p.pk %}">{% csrf_token %}<button class="btn sm" type="submit">به‌روزرسانی از پایگاه داده</button></form>
+      <p class="small muted" style="margin:0">این پروژه از پایگاه داده (<span class="ltr">{{ p.source_schema }}.qgis_projects › {{ p.source_name }}</span>) آمده است. بعد از ذخیره دوباره در QGIS، نسخه منتشرشده را به‌روز کنید.</p>
+      <form method="post" action="{% url 'publish:ows_refresh' db.pk p.pk %}">{% csrf_token %}<button class="btn" type="submit">{% icon "refresh" 18 %}به‌روزرسانی از پایگاه داده</button></form>
       {% else %}
-      <p class="small muted">فایل جدید پروژه را بدهید؛ آدرس‌ها عوض نمی‌شوند.</p>
-      <form method="post" action="{% url 'publish:ows_refresh' db.pk p.pk %}" enctype="multipart/form-data" class="inline-form">{% csrf_token %}
+      <p class="small muted" style="margin:0">فایل جدید پروژه را بدهید؛ آدرس‌ها عوض نمی‌شوند.</p>
+      <form method="post" action="{% url 'publish:ows_refresh' db.pk p.pk %}" enctype="multipart/form-data" class="inline-form" style="display:flex;gap:8px;flex-wrap:wrap">{% csrf_token %}
         <input type="file" name="file" accept=".qgz,.qgs" required>
-        <button class="btn sm" type="submit">جایگزینی</button>
+        <button class="btn" type="submit">{% icon "upload" 18 %}جایگزینی</button>
       </form>
       {% endif %}
-      <form method="post" action="{% url 'publish:ows_delete' db.pk p.pk %}" style="margin-top:var(--s4)" data-confirm="این پروژه و آدرس‌های WMS/WFS آن حذف شود؟ برنامه‌هایی که از این آدرس‌ها استفاده می‌کنند دیگر کار نمی‌کنند." data-confirm-title="حذف پروژه‌ی منتشرشده" data-confirm-text="حذف پروژه">{% csrf_token %}
-        <button class="btn danger sm" type="submit">حذف پروژه</button>
-      </form>
     </section>
   </div>
 </div>

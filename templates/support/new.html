@@ -1,16 +1,17 @@
 {% extends "base.html" %}
+{% load ws %}
 {% block title %}تیکت جدید — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page" style="max-width:760px">
-  <p class="small"><a href="{% url 'support:list' %}">تیکت‌های من</a></p>
+  <a class="back-link" href="{% url 'support:list' %}">{% icon "back" 16 %}تیکت‌های من</a>
   <form method="post" enctype="multipart/form-data" class="panel" novalidate>
     {% csrf_token %}
-    <h1 style="font-size:1.5rem">ثبت تیکت پشتیبانی</h1>
+    <h1 class="form-h">ثبت تیکت پشتیبانی</h1>
     {% if blocked %}<p class="msg warning">{{ blocked }}</p>{% endif %}
     {% include "partials/form_errors.html" %}
     {% for field in form %}{% include "partials/field.html" %}{% endfor %}
     <p class="small muted">رمز پایگاه داده را هرگز در تیکت ننویسید؛ پشتیبانی به آن نیازی ندارد.</p>
-    <button class="btn" type="submit" {% if blocked %}disabled{% endif %}>ثبت تیکت</button>
+    <button class="btn" type="submit" {% if blocked %}disabled{% endif %}>{% icon "check" 18 %}ثبت تیکت</button>
   </form>
 </div>
 {% endblock %}

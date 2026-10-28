@@ -1,10 +1,10 @@
-{% extends "base.html" %}{% load fa humanize %}
+{% extends "base.html" %}{% load fa humanize ws %}
 {% block title %}خرید پلن — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page">
-  <div class="page-head"><h1>خرید یا ارتقای پلن</h1><a class="small" href="{% url 'billing:invoices' %}">صورتحساب‌های من</a></div>
+  <div class="page-head"><div><h1>خرید یا ارتقای پلن</h1><p class="muted page-sub">پلن را انتخاب کنید و روی همان پایگاه داده ارتقا بدهید؛ داده‌ها دست نمی‌خورند.</p></div><div class="page-acts"><a class="btn ghost" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}صورتحساب‌های من</a></div></div>
   {% if not enabled %}
-    <div class="empty"><h2>فروش پلن پولی فعلاً فعال نیست</h2><p class="muted">به‌زودی فعال می‌شود. برای سؤال با پشتیبانی تماس بگیرید.</p></div>
+    <div class="empty">{% icon "card" 28 %}<h2>فروش پلن پولی فعلاً فعال نیست</h2><p class="muted">به‌زودی فعال می‌شود. برای سؤال با پشتیبانی تماس بگیرید.</p></div>
   {% elif not plans %}
     <div class="empty"><h2>هنوز پلن پولی تعریف نشده است</h2></div>
   {% else %}
@@ -29,7 +29,7 @@
           <option value="new" {% if not dbs or selected_db == 'new' %}selected{% endif %}>پایگاه داده جدید</option>
         </select>
       </div>
-      <button class="btn" type="submit" style="width:100%">ادامه و پرداخت</button>
+      <button class="btn" type="submit" style="width:100%">{% icon "check" 18 %}ادامه و پرداخت</button>
     </form>
     {% endfor %}
   </div>

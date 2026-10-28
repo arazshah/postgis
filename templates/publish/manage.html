@@ -1,39 +1,36 @@
-{% extends "databases/_ws.html" %}{% load fa %}
+{% extends "databases/_ws.html" %}{% load fa ws %}
 {% block title %}انتشار نقشه {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 {% with sample=published.0 %}
 <div class="wrap page">
   <div class="page-head">
-    <h1>انتشار نقشه و API</h1>
-    <a class="btn ghost sm" href="{% url 'databases:explore' db.pk %}" style="margin-inline-start:auto">مرورگر داده</a>
+    <div>
+      <h1>انتشار نقشه و API</h1>
+      <p class="muted page-sub">هر جدول مکانی را با یک کلیک منتشر کنید تا بدون نصب GeoServer در صفحه وب (MapLibre، OpenLayers، Leaflet)، QGIS و ArcGIS دیده شود. لایه عمومی بدون کلید باز است؛ لایه خصوصی کلید API می‌خواهد.</p>
+    </div>
+    <div class="page-acts"><a class="btn ghost" href="{% url 'databases:explore' db.pk %}">{% icon "table" 18 %}مرورگر داده</a></div>
   </div>
-  <p class="lead muted" style="max-width:72ch">هر جدول مکانی را با یک کلیک منتشر کنید تا بدون نصب GeoServer در صفحه وب (MapLibre، OpenLayers، Leaflet)، QGIS و ArcGIS دیده شود. لایه عمومی بدون کلید باز است؛ لایه خصوصی کلید API می‌خواهد.</p>
 
-  <section class="panel ows-callout">
-    <div><h2 style="font-size:1.1rem;margin:0 0 4px">WMS و WFS با QGIS Server</h2>
-      <p class="small muted" style="margin:0">پروژه QGIS خودتان را با همان سبک و برچسب‌ها منتشر کنید؛ برای GeoServer، ArcGIS و سامانه‌هایی که WMS می‌خواهند.</p></div>
-    <a class="btn sm" href="{% url 'publish:ows' db.pk %}">انتشار پروژه QGIS</a>
-  </section>
-
-  <div class="pub-stats">
-    <div><b>{{ published|length|fanum }}</b> از {{ max_layers|fanum }} لایه منتشرشده</div>
-    <div><b>{{ used|fanum }}</b> از {{ cap|fanum }} درخواست امروز
-      <span class="meter" aria-hidden="true"><i style="width:{% widthratio used cap 100 %}%"></i></span></div>
+  <div class="kpis">
+    <div class="card kpi"><small>{% icon "globe" 16 %}لایه‌های منتشرشده</small><b>{{ published|length|fanum }}</b><span class="sub">از {{ max_layers|fanum }} لایه مجاز</span></div>
+    <div class="card kpi"><small>{% icon "bolt" 16 %}درخواست امروز</small><b>{{ used|fanum }}</b><div class="meter" aria-hidden="true"><i style="width:{% widthratio used cap 100 %}%"></i></div><span class="sub">از {{ cap|fanum }} درخواست روزانه</span></div>
+    <a class="card kpi kpi-link" href="{% url 'publish:ows' db.pk %}"><small>{% icon "cube" 16 %}WMS و WFS</small><b>QGIS Server</b><span class="sub">پروژه QGIS را با همان سبک منتشر کنید</span></a>
+    <a class="card kpi kpi-link" href="{% url 'restapi:manage' db.pk %}"><small>{% icon "braces" 16 %}REST API و فرم میدانی</small><b>مدیریت</b><span class="sub">خواندن و نوشتن سطرها بدون بک‌اند</span></a>
   </div>
 
   {% if new_key %}
-  <section class="once" aria-labelledby="key-title" style="margin-bottom:var(--s5)">
-    <h2 id="key-title">کلید API ساخته شد؛ همین حالا ذخیره‌اش کنید</h2>
+  <section class="once alert-card" aria-labelledby="key-title">
+    <h2 id="key-title">{% icon "lock" 18 %}کلید API ساخته شد؛ همین حالا ذخیره‌اش کنید</h2>
     <p class="small" style="margin:0">این کلید فقط همین یک بار نمایش داده می‌شود. آن را در کد سمت سرور یا تنظیمات QGIS نگه دارید، نه در صفحه وب عمومی.</p>
     <div class="secret"><code id="new-key">{{ new_key }}</code><button class="copy" data-copy-target="#new-key">کپی</button></div>
   </section>
   {% endif %}
 
-  <section class="panel">
-    <h2 style="font-size:1.2rem">جدول‌های مکانی</h2>
+  <section class="card">
+    <div class="ch"><h2>جدول‌های مکانی</h2></div>
     {% if rows %}
-    <table class="data-table">
-      <thead><tr><th>جدول</th><th>هندسه</th><th>سطر</th><th>وضعیت</th><th></th></tr></thead>
+    <div class="table-scroll"><table class="data-table">
+      <thead><tr><th>جدول</th><th>هندسه</th><th>سطر</th><th>وضعیت</th><th><span class="sr-label">عملیات</span></th></tr></thead>
       <tbody>
       {% for r in rows %}
       <tr>
@@ -41,56 +38,79 @@
         <td class="small"><span class="ltr">{{ r.geom.type }} · {{ r.geom.srid }}</span></td>
         <td>{{ r.t.rows_estimate|fanum }}</td>
         <td>{% if r.layer %}<span class="badge active">منتشرشده · {% if r.layer.is_public %}عمومی{% else %}خصوصی{% endif %}</span>{% else %}<span class="muted small">منتشر نشده</span>{% endif %}</td>
-        <td>{% if not r.layer %}
-          <form method="post" action="{% url 'publish:publish_table' db.pk %}" class="inline-form">{% csrf_token %}
-            <input type="hidden" name="schema" value="{{ r.t.schema }}"><input type="hidden" name="table" value="{{ r.t.name }}">
-            <label class="check small"><input type="checkbox" name="public"><span>عمومی</span></label>
-            <button class="btn sm" type="submit" {% if not r.geom.srid %}disabled title="SRID مشخص نیست"{% endif %}>انتشار</button>
-          </form>{% else %}<a class="small" href="#layer-{{ r.layer.pk }}">تنظیمات و آدرس‌ها</a>{% endif %}</td>
+        <td class="row-acts">{% if not r.layer %}
+          <button class="btn sm" type="button" data-dialog-open="pub-{{ forloop.counter }}" {% if not r.geom.srid %}disabled title="SRID مشخص نیست"{% endif %}>{% icon "globe" 16 %}انتشار</button>
+          {% else %}<a class="btn ghost sm" href="#layer-{{ r.layer.pk }}">{% icon "link" 16 %}تنظیمات و آدرس‌ها</a>{% endif %}</td>
       </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% else %}
-    <p class="muted">هنوز جدول مکانی ندارید. از <a href="{% url 'databases:import' db.pk %}">ورود فایل</a> یک لایه وارد کنید.</p>
+    <div class="empty">{% icon "table" 28 %}<h2>هنوز جدول مکانی ندارید</h2><p class="muted">یک لایه وارد کنید تا اینجا منتشر شود.</p><a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a></div>
     {% endif %}
   </section>
+  {% for r in rows %}{% if not r.layer %}
+  <dialog class="dlg" id="pub-{{ forloop.counter }}" aria-labelledby="pub-t-{{ forloop.counter }}">
+    <form method="post" action="{% url 'publish:publish_table' db.pk %}">{% csrf_token %}
+      <input type="hidden" name="schema" value="{{ r.t.schema }}"><input type="hidden" name="table" value="{{ r.t.name }}">
+      <div class="dlg-h"><span class="dlg-i">{% icon "globe" 22 %}</span><h2 id="pub-t-{{ forloop.counter }}">انتشار <span class="ltr">{{ r.t.name }}</span></h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+      <div class="dlg-b">
+        <div class="choice-grid">
+          <label class="choice"><input type="radio" name="public" value="" checked><span>{% icon "lock" 20 %}<b>خصوصی</b><small>فقط با کلید API دیده می‌شود.</small></span></label>
+          <label class="choice"><input type="radio" name="public" value="on"><span>{% icon "globe" 20 %}<b>عمومی</b><small>هر کسی با لینک می‌بیند؛ بدون کلید.</small></span></label>
+        </div>
+        <p class="small muted" style="margin:0">بعد از انتشار، آدرس‌های TileJSON، کاشی برداری و OGC API همین‌جا می‌آید.</p>
+      </div>
+      <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}منتشر کن</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
+    </form>
+  </dialog>
+  {% endif %}{% endfor %}
 
   {% for l in published %}
-  <section class="panel pub-layer" id="layer-{{ l.pk }}">
-    <div class="pub-head">
-      <h2 class="ltr" style="font-size:1.2rem;margin:0">{{ l.table }}</h2>
+  <section class="card pub-layer" id="layer-{{ l.pk }}">
+    <div class="ch">
+      <h2 class="ltr">{{ l.table }}</h2>
       <span class="badge {% if l.is_public %}active{% else %}pending{% endif %}">{% if l.is_public %}عمومی{% else %}خصوصی · با کلید{% endif %}</span>
-    </div>
-    <p style="margin:0 0 var(--s3)"><a class="btn sm" href="{% url 'publish:map_builder' db.pk l.pk %}">طراحی و اشتراک نقشه</a>
-      {% if l.is_public %}<a class="btn ghost sm" href="{% url 'publish:map' l.slug %}" target="_blank" rel="noopener">مشاهده نقشه عمومی</a>{% endif %}</p>
-    <dl class="pub-urls">
-      <dt>TileJSON (MapLibre)</dt><dd><code id="tj-{{ l.pk }}">{{ base }}/tiles/{{ l.slug }}.json</code><button class="copy" data-copy-target="#tj-{{ l.pk }}">کپی</button></dd>
-      <dt>کاشی برداری (XYZ)</dt><dd><code id="xyz-{{ l.pk }}">{{ base }}/tiles/{{ l.slug }}/{z}/{x}/{y}.mvt</code><button class="copy" data-copy-target="#xyz-{{ l.pk }}">کپی</button></dd>
-      <dt>GeoJSON (OGC API)</dt><dd><code id="gj-{{ l.pk }}">{{ base }}/ogc/{{ service.slug }}/collections/{{ l.collection_id }}/items</code><button class="copy" data-copy-target="#gj-{{ l.pk }}">کپی</button></dd>
-    </dl>
-    <details>
-      <summary class="small">تنظیمات لایه</summary>
-      <form method="post" action="{% url 'publish:update_layer' db.pk l.pk %}" class="pub-form">{% csrf_token %}
-        <div class="field"><label class="small" for="title-{{ l.pk }}">عنوان نمایشی</label><input id="title-{{ l.pk }}" type="text" name="title" value="{{ l.title }}" placeholder="{{ l.table }}"></div>
-        <label class="check small"><input type="checkbox" name="public" {% if l.is_public %}checked{% endif %}><span>عمومی (بدون کلید API)</span></label>
-        <fieldset class="cols"><legend class="small">ستون‌های منتشرشده</legend>
-          {% for name, typ in l.meta.columns %}{% if name != l.geom_column %}
-          <label class="check small"><input type="checkbox" name="columns" value="{{ name }}" {% if not l.columns or name in l.columns %}checked{% endif %}><span class="ltr">{{ name }}</span></label>
-          {% endif %}{% endfor %}
-        </fieldset>
-        <div style="display:flex;gap:var(--s3)">
-          <button class="btn sm" type="submit" name="action" value="save">ذخیره</button>
-          <button class="btn danger sm" type="submit" name="action" value="unpublish" formnovalidate>لغو انتشار</button>
+      <div class="pop-wrap">
+        <button class="ib sm" type="button" data-pop="pl-m{{ l.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های {{ l.table }}">{% icon "more" 16 %}</button>
+        <div class="pop-m" id="pl-m{{ l.pk }}" role="menu" hidden>
+          <a role="menuitem" href="{% url 'publish:map_builder' db.pk l.pk %}">{% icon "edit" 18 %}<span>طراحی و اشتراک نقشه</span></a>
+          {% if l.is_public %}<a role="menuitem" href="{% url 'publish:map' l.slug %}" target="_blank" rel="noopener">{% icon "eye" 18 %}<span>مشاهده نقشه عمومی</span></a>{% endif %}
+          <button role="menuitem" type="button" data-dialog-open="ls-{{ l.pk }}">{% icon "settings" 18 %}<span>تنظیمات لایه</span></button>
+          <div class="msep"></div>
+          <form method="post" action="{% url 'publish:update_layer' db.pk l.pk %}" data-confirm="لایه «{{ l.table }}» از انتشار برداشته شود؟ آدرس‌ها و نقشه‌های عمومی آن از کار می‌افتد." data-confirm-title="لغو انتشار" data-confirm-text="لغو انتشار">{% csrf_token %}<input type="hidden" name="action" value="unpublish"><button role="menuitem" class="danger" type="submit">{% icon "trash" 18 %}<span>لغو انتشار</span></button></form>
         </div>
-      </form>
-    </details>
+      </div>
+    </div>
+    <div class="url-rows">
+      <div class="fld"><label>TileJSON (MapLibre)</label><code id="tj-{{ l.pk }}">{{ base }}/tiles/{{ l.slug }}.json</code><button class="copy" data-copy-target="#tj-{{ l.pk }}">کپی</button></div>
+      <div class="fld"><label>کاشی برداری (XYZ)</label><code id="xyz-{{ l.pk }}">{{ base }}/tiles/{{ l.slug }}/{z}/{x}/{y}.mvt</code><button class="copy" data-copy-target="#xyz-{{ l.pk }}">کپی</button></div>
+      <div class="fld"><label>GeoJSON (OGC API)</label><code id="gj-{{ l.pk }}">{{ base }}/ogc/{{ service.slug }}/collections/{{ l.collection_id }}/items</code><button class="copy" data-copy-target="#gj-{{ l.pk }}">کپی</button></div>
+    </div>
+    <div class="page-acts"><a class="btn sm" href="{% url 'publish:map_builder' db.pk l.pk %}">{% icon "edit" 16 %}طراحی و اشتراک نقشه</a>
+      {% if l.is_public %}<a class="btn ghost sm" href="{% url 'publish:map' l.slug %}" target="_blank" rel="noopener">{% icon "eye" 16 %}نقشه عمومی</a>{% endif %}</div>
   </section>
+  <dialog class="dlg" id="ls-{{ l.pk }}" aria-labelledby="ls-t-{{ l.pk }}">
+    <form method="post" action="{% url 'publish:update_layer' db.pk l.pk %}">{% csrf_token %}<input type="hidden" name="action" value="save">
+      <div class="dlg-h"><span class="dlg-i">{% icon "settings" 22 %}</span><h2 id="ls-t-{{ l.pk }}">تنظیمات <span class="ltr">{{ l.table }}</span></h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+      <div class="dlg-b">
+        <div class="field"><label for="title-{{ l.pk }}">عنوان نمایشی</label><input id="title-{{ l.pk }}" type="text" name="title" value="{{ l.title }}" placeholder="{{ l.table }}"></div>
+        <div class="choice-grid">
+          <label class="choice"><input type="radio" name="public" value="" {% if not l.is_public %}checked{% endif %}><span>{% icon "lock" 20 %}<b>خصوصی</b><small>فقط با کلید API.</small></span></label>
+          <label class="choice"><input type="radio" name="public" value="on" {% if l.is_public %}checked{% endif %}><span>{% icon "globe" 20 %}<b>عمومی</b><small>بدون کلید API.</small></span></label>
+        </div>
+        <fieldset class="wm-pick"><legend>ستون‌های منتشرشده</legend>
+          <div class="chips">{% for name, typ in l.meta.columns %}{% if name != l.geom_column %}<label class="pick-chip"><input type="checkbox" name="columns" value="{{ name }}" {% if not l.columns or name in l.columns %}checked{% endif %}><span class="ltr">{{ name }}</span></label>{% endif %}{% endfor %}</div>
+        </fieldset>
+      </div>
+      <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}ذخیره</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
+    </form>
+  </dialog>
   {% endfor %}
 
   {% if service and published %}
-  <section class="panel">
-    <h2 style="font-size:1.2rem">اتصال از نرم‌افزار و کد</h2>
+  <section class="card">
+    <div class="ch"><h2>اتصال از نرم‌افزار و کد</h2></div>
     <p class="small muted">آدرس سرویس OGC API این پایگاه داده (همه لایه‌ها):</p>
     <div class="secret"><code id="ogc-base">{{ base }}/ogc/{{ service.slug }}/</code><button class="copy" data-copy-target="#ogc-base">کپی</button></div>
     <div class="tabs" role="tablist" aria-label="نمونه کد" style="margin-top:var(--s4)">
@@ -156,8 +176,8 @@ print(gdf.head())</code></pre>
   {% endif %}
 
   {% if iran_basemap %}
-  <section class="panel" id="basemap">
-    <h2 style="font-size:1.2rem">نقشه پایه ایران برای سایت شما</h2>
+  <section class="card" id="basemap">
+    <div class="ch"><h2>نقشه پایه ایران برای سایت شما</h2></div>
     <p class="small">نقشه پایه برداری فارسی (از OpenStreetMap) روی سرورهای خود postgis.ir؛ بدون وابستگی به Google یا Mapbox. نقشه‌هایی که در همین سایت می‌سازید همیشه از آن استفاده می‌کنند.</p>
     {% if db.plan.basemap_api %}
     <p class="small muted">در سایت یا اپلیکیشن خودتان، به جای <span class="ltr">style</span> آدرس زیر را با یکی از کلیدهای API همین پایگاه داده بگذارید. هر کاشی از سهمیه درخواست روزانه کم می‌کند.</p>
@@ -174,33 +194,32 @@ const map = new maplibregl.Map({
   </section>
   {% endif %}
 
-  <section class="panel ows-callout">
-    <div><h2 style="font-size:1.1rem;margin:0 0 4px">REST API و فرم جمع‌آوری میدانی</h2>
-      <p class="small muted" style="margin:0">خواندن، افزودن، ویرایش و حذف سطرها از اپلیکیشن وب یا موبایل بدون نوشتن بک‌اند؛ و فرم موبایلی با GPS که مستقیم در جدول شما می‌نویسد.</p></div>
-    <a class="btn sm" href="{% url 'restapi:manage' db.pk %}">مدیریت</a>
-  </section>
-
 {% if db.is_mine %}
-  <section class="panel">
-    <h2 style="font-size:1.2rem">کلیدهای API</h2>
-    <p class="small muted">برای لایه‌های خصوصی. کلید را با هدر <span class="ltr">Authorization: Bearer …</span>، هدر <span class="ltr">X-API-Key</span>، رمز Basic در QGIS یا پارامتر <span class="ltr">?key=</span> بفرستید.</p>
+  <section class="card">
+    <div class="ch"><h2>کلیدهای API</h2><button class="btn sm" type="button" data-dialog-open="key-new">{% icon "plus" 16 %}کلید تازه</button></div>
+    <p class="small muted" style="margin:0">برای لایه‌های خصوصی. کلید را با هدر <span class="ltr">Authorization: Bearer …</span>، هدر <span class="ltr">X-API-Key</span>، رمز Basic در QGIS یا پارامتر <span class="ltr">?key=</span> بفرستید.</p>
     {% if keys %}
-    <table class="data-table">
-      <thead><tr><th>نام</th><th>شروع کلید</th><th>دسترسی</th><th>ساخت</th><th>آخرین استفاده</th><th></th></tr></thead>
+    <div class="table-scroll"><table class="data-table">
+      <thead><tr><th>نام</th><th>شروع کلید</th><th>دسترسی</th><th>ساخت</th><th>آخرین استفاده</th><th><span class="sr-label">عملیات</span></th></tr></thead>
       <tbody>{% for k in keys %}
         <tr>
           <td>{{ k.name }}</td><td><span class="ltr">{{ k.prefix }}…</span></td><td class="small">{% if k.can_write %}خواندن و نوشتن{% else %}فقط خواندن{% endif %}</td><td>{{ k.created_at|jdate }}</td>
           <td>{{ k.last_used_at|jdate }}</td>
-          <td>{% if k.active %}<form method="post" action="{% url 'publish:revoke_key' db.pk k.pk %}" data-confirm="این کلید باطل شود؟ برنامه‌هایی که از آن استفاده می‌کنند دیگر کار نمی‌کنند." data-confirm-title="باطل کردن کلید API" data-confirm-text="باطل کن">{% csrf_token %}<button class="btn ghost sm" type="submit">باطل کردن</button></form>{% else %}<span class="badge expired">باطل‌شده</span>{% endif %}</td>
+          <td class="row-acts">{% if k.active %}<form method="post" action="{% url 'publish:revoke_key' db.pk k.pk %}" data-confirm="این کلید باطل شود؟ برنامه‌هایی که از آن استفاده می‌کنند دیگر کار نمی‌کنند." data-confirm-title="باطل کردن کلید API" data-confirm-text="باطل کن">{% csrf_token %}<button class="btn ghost sm danger" type="submit">{% icon "trash" 16 %}باطل کردن</button></form>{% else %}<span class="badge expired">باطل‌شده</span>{% endif %}</td>
         </tr>{% endfor %}</tbody>
-    </table>
-    {% endif %}
-    <form method="post" action="{% url 'publish:create_key' db.pk %}" class="inline-form" style="margin-top:var(--s4)">{% csrf_token %}
-      <input type="text" name="name" placeholder="نام کلید (مثلاً سایت شهرداری)" maxlength="80" required>
-      <label class="check small"><input type="checkbox" name="can_write"><span>اجازه نوشتن با REST API</span></label>
-      <button class="btn sm" type="submit">ساخت کلید جدید</button>
-    </form>
+    </table></div>
+    {% else %}<div class="empty">{% icon "lock" 28 %}<h2>هنوز کلیدی نساخته‌اید</h2><p class="muted">لایه‌ی عمومی کلید نمی‌خواهد؛ برای لایه‌ی خصوصی کلید بسازید.</p></div>{% endif %}
   </section>
+  <dialog class="dlg" id="key-new" aria-labelledby="key-new-t">
+    <form method="post" action="{% url 'publish:create_key' db.pk %}">{% csrf_token %}
+      <div class="dlg-h"><span class="dlg-i">{% icon "lock" 22 %}</span><h2 id="key-new-t">کلید API تازه</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+      <div class="dlg-b">
+        <div class="field"><label for="key-name">نام کلید</label><input id="key-name" type="text" name="name" placeholder="مثلاً سایت شهرداری" maxlength="80" required></div>
+        <label class="sw-row"><input type="checkbox" name="can_write"><span><b>اجازه نوشتن با REST API</b><small>بدون آن، کلید فقط می‌خواند.</small></span></label>
+      </div>
+      <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}ساخت کلید</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
+    </form>
+  </dialog>
   {% endif %}
 </div>
 {% endwith %}

@@ -1,22 +1,23 @@
-{% extends "databases/_explore_base.html" %}{% load fa %}
+{% extends "databases/_explore_base.html" %}{% load fa ws %}
 {% block ex %}
-<h2 style="margin-top:0">ورود فایل به پایگاه داده</h2>
-<p class="muted">فایل را انتخاب کنید؛ قبل از ورود، لایه‌ها، سیستم مختصات و چند سطر نمونه را می‌بینید و تأیید می‌کنید.</p>
+<div class="page-head"><div><h1>ورود فایل به پایگاه داده</h1>
+  <p class="muted page-sub">فایل را انتخاب کنید؛ قبل از ورود، لایه‌ها، سیستم مختصات و چند سطر نمونه را می‌بینید و تأیید می‌کنید.</p></div></div>
+<ol class="steps" aria-label="مراحل"><li class="on"><i>۱</i>انتخاب فایل</li><li><i>۲</i>بازبینی</li><li><i>۳</i>ورود به جدول</li></ol>
 {% if error %}<div class="msg error" role="alert">{{ error }}</div>{% endif %}
 {% if db.status != 'active' %}<div class="msg warning">این پایگاه داده فقط‌خواندنی یا غیرفعال است و فعلاً نمی‌توان داده وارد کرد.</div>{% endif %}
-<form method="post" enctype="multipart/form-data" class="panel upload-box">
+<form method="post" enctype="multipart/form-data" class="card upload-box">
   {% csrf_token %}
   <label class="drop" for="imp-file">
-    <span class="drop-title">فایل را اینجا بکشید یا کلیک کنید</span>
+    <span class="drop-ico">{% icon "upload" 28 %}</span><span class="drop-title">فایل را اینجا بکشید یا کلیک کنید</span>
     <span class="small muted">Shapefile (همه فایل‌ها در یک zip)، GeoPackage، GeoJSON، KML/KMZ، CSV با ستون طول و عرض یا WKT، DXF · حداکثر {{ max_mb|fanum }} مگابایت</span>
     <input id="imp-file" type="file" name="file" required accept="{{ accept }}">
     <span class="drop-name small" data-file-name></span>
   </label>
-  <button class="btn" type="submit" {% if db.status != 'active' %}disabled{% endif %}>بررسی فایل</button>
+  <button class="btn" type="submit" {% if db.status != 'active' %}disabled{% endif %}>{% icon "check" 18 %}بررسی فایل</button>
 </form>
 {% if recent %}
-<section class="recent-imports" aria-labelledby="recent-h">
-  <h3 id="recent-h">ورودهای اخیر</h3>
+<section class="card recent-imports" aria-labelledby="recent-h">
+  <div class="ch"><h2 id="recent-h">ورودهای اخیر</h2></div>
   <div class="table-scroll">
     <table class="data-table imp-recent">
       <thead><tr><th>فایل</th><th>وضعیت</th><th>لایه‌ها</th><th>توضیح</th><th>زمان</th><th></th></tr></thead>
@@ -29,7 +30,7 @@
           <td>{% if j.params.imported %}{{ j.params.imported|length|fanum }}{% else %}—{% endif %}</td>
           <td class="small imp-msg">{% if j.status == 'failed' or j.params.errors %}<span class="imp-err">{{ j.message|default:j.stage|truncatechars:140 }}</span>{% elif j.message %}{{ j.message|truncatechars:140 }}{% else %}{{ j.stage|default:"—" }}{% endif %}</td>
           <td class="small muted">{{ j.created_at|jdatetime_full }}</td>
-          <td><a class="btn ghost small" href="{% url 'databases:import_review' db.pk j.pk %}">جزئیات</a></td>
+          <td class="row-acts"><a class="btn ghost sm" href="{% url 'databases:import_review' db.pk j.pk %}">جزئیات</a></td>
         </tr>
       {% endfor %}
       </tbody>
@@ -37,8 +38,8 @@
   </div>
 </section>
 {% endif %}
-<div class="help-tips" style="margin-top:var(--s5)">
-  <h3 style="font-size:1rem">نکته‌ها</h3>
+<div class="card help-tips">
+  <div class="ch"><h2>{% icon "info" 18 %}نکته‌ها</h2></div>
   <ul class="small">
     <li>فایل‌های shp، shx، dbf و prj باید با هم در یک zip باشند. نوشته‌های فارسی Shapefile (UTF-8 یا انکودینگ ویندوز فارسی) خودکار تشخیص داده می‌شوند.</li>
     <li>هر لایه یک جدول می‌شود، با کلید اصلی <span class="ltr">gid</span>، ستون هندسه <span class="ltr">geom</span> و نمایه مکانی.</li>

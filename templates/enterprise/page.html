@@ -1,14 +1,14 @@
-{% extends "databases/_ws.html" %}{% load fa %}
+{% extends "databases/_ws.html" %}{% load fa ws %}
 {% block title %}امکانات سازمانی {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 <div class="wrap page">
-  <h1>امکانات سازمانی</h1>
+  <div class="page-head"><div><h1>{% icon "cube" 22 %} امکانات سازمانی</h1><p class="muted page-sub">GeoServer اختصاصی، رستر، بکاپ ساعتی و کپی آزمایشی.</p></div></div>
   {% if not db.plan.dedicated_geoserver and not db.plan.raster_mb and not db.plan.snapshot_hours and not db.plan.clone_enabled %}
   <div class="msg info">این امکانات در پلن سازمانی فعال است: GeoServer اختصاصی، سرویس رستر، بکاپ ساعتی و کپی آزمایشی پایگاه داده. <a href="{% url 'billing:plans' %}">مشاهده پلن‌ها</a></div>
   {% endif %}
 
   <div class="grid-2">
-  <section class="panel">
+  <section class="card">
     <h2 class="u-h">GeoServer اختصاصی</h2>
     <p class="small muted">یک GeoServer کامل فقط برای شما، روی کانتینر جدا با حافظه و پردازنده خودش؛ با اتصال آماده به همین پایگاه داده (با کاربر فقط‌خواندنی جدا) و همه لایه‌های مکانی منتشرشده. سبک SLD، گروه لایه و افزونه‌های GeoServer در اختیار خودتان است.</p>
     {% if not db.plan.dedicated_geoserver %}<p class="small">در پلن فعلی فعال نیست.</p>
@@ -29,7 +29,7 @@
     {% endif %}
   </section>
 
-  <section class="panel">
+  <section class="card">
     <h2 class="u-h">بکاپ ساعتی و کپی آزمایشی</h2>
     {% if db.plan.snapshot_hours %}<p class="small">هر {{ db.plan.snapshot_hours|fanum }} ساعت یک بکاپ کامل گرفته می‌شود و ۴۸ ساعت می‌ماند؛ پس اگر داده‌ای اشتباهی حذف شد، حداکثر {{ db.plan.snapshot_hours|fanum }} ساعت کار از دست می‌رود و آن نسخه را از <a href="{% url 'databases:backups' db.pk %}">صفحه بکاپ‌ها</a> برمی‌گردانید.</p>
     {% else %}<p class="small muted">بکاپ ساعتی در پلن فعلی فعال نیست (بکاپ روزانه هست).</p>{% endif %}
@@ -46,7 +46,7 @@
   </section>
   </div>
 
-  <section class="panel" style="margin-top:var(--s5)">
+  <section class="card" style="margin-top:var(--s5)">
     <h2 class="u-h">سرویس رستر</h2>
     <p class="small muted">GeoTIFF (تصویر ماهواره‌ای، عکس هوایی، DEM و نقشه‌های پیوسته) را بارگذاری کنید؛ به COG تبدیل و به‌صورت کاشی تصویری روی وب، در QGIS (XYZ) و در نقشه‌های شما نمایش داده می‌شود.</p>
     {% if db.plan.raster_mb %}

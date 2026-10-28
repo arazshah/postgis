@@ -1,12 +1,12 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "base.html" %}{% load fa ws %}
 {% block title %}ساخت پایگاه داده — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page">
   <div class="detail-grid">
-    <form method="post" class="panel" novalidate>
+    <form method="post" class="card" novalidate>
       {% csrf_token %}
       {% if voucher %}<input type="hidden" name="voucher" value="{{ voucher.pk }}">{% endif %}
-      <h1 style="font-size:1.6rem">ساخت پایگاه داده مکانی</h1>
+      <div class="page-head"><div><h1>{% icon "server" 22 %} ساخت پایگاه داده مکانی</h1><p class="muted page-sub">نام را بنویسید؛ پایگاه PostGIS شما در چند ثانیه آماده می‌شود.</p></div></div>
       {% if voucher %}<p class="msg success">این پایگاه داده با پلن پولی <b>{{ voucher.plan.name }}</b> ساخته می‌شود.</p>{% endif %}
       {% include "partials/form_errors.html" %}
 
@@ -56,7 +56,7 @@
         <small class="help">افزونه‌هایی که به PostGIS نیاز دارند، PostGIS را خودکار نصب می‌کنند.</small>
       </fieldset>
 
-      <button class="btn" type="submit">ساخت پایگاه داده</button>
+      <button class="btn" type="submit">{% icon "check" 18 %}ساخت پایگاه داده</button>
     </form>
 
     <aside class="stack">
@@ -70,7 +70,7 @@
         </dl>
       </div>
       {% if plan %}
-      <div class="panel">
+      <div class="card">
         <h3>پلن {{ plan.name }}</h3>
         <ul class="steps-mini muted small">
           <li>حجم: {{ plan.quota_display|fanum }}</li>

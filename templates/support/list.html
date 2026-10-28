@@ -1,9 +1,9 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "base.html" %}{% load fa ws %}
 {% block title %}پشتیبانی — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page">
-  <div class="page-head"><h1>تیکت‌های پشتیبانی</h1>
-    {% if not can_open %}<a class="btn sm" href="{% url 'support:new' %}">تیکت جدید</a>{% endif %}</div>
+  <div class="page-head"><div><h1>تیکت‌های پشتیبانی</h1><p class="muted page-sub">سؤال فنی، مشکل اتصال یا درخواست خرید پلن را اینجا بپرسید؛ پاسخ را همین‌جا می‌خوانید.</p></div>
+    <div class="page-acts">{% if not can_open %}<a class="btn" href="{% url 'support:new' %}">{% icon "plus" 18 %}تیکت جدید</a>{% endif %}</div></div>
   {% if can_open %}<p class="msg warning small">{{ can_open }}</p>{% endif %}
   {% if tickets %}
   <div class="table-scroll">
@@ -19,9 +19,9 @@
   </table>
   </div>
   {% else %}
-  <div class="empty"><h2>هنوز تیکتی ثبت نکرده‌اید</h2>
+  <div class="empty">{% icon "life" 28 %}<h2>هنوز تیکتی ثبت نکرده‌اید</h2>
     <p class="muted">سؤال فنی، مشکل اتصال یا درخواست خرید پلن را از این‌جا بپرسید.</p>
-    <a class="btn" href="{% url 'support:new' %}">ثبت تیکت</a></div>
+    <a class="btn" href="{% url 'support:new' %}">{% icon "plus" 18 %}ثبت تیکت</a></div>
   {% endif %}
 </div>
 {% endblock %}

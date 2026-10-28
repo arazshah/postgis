@@ -2,7 +2,7 @@
 {% block title %}نتیجه پرداخت — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page" style="max-width:640px">
-  <section class="panel">
+  <section class="card">
     <h1 style="font-size:1.4rem">فاکتور <span class="ltr mono">{{ inv.number }}</span></h1>
     {% if inv.status == Status.PAID %}
       <div class="msg success">پرداخت تأیید شد و پلن فعال شد.{% if inv.gateway_ref %} کد رهگیری: <b class="ltr mono">{{ inv.gateway_ref }}</b>{% endif %}</div>

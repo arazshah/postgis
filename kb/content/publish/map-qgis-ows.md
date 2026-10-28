@@ -5,11 +5,11 @@ kind: howto
 keywords: پروژه qgis, qgs, دانلود پروژه, wms, wfs, ows, انتشار نقشه, qgis server
 related: multi-layer-maps, wms-wfs-qgis-server, connect-qgis
 order: 97
-reviewed: 2026-10-23
+reviewed: 2026-10-28
 ---
 ## باز کردن در QGIS
 
-1. در **ابزارها** گزینه **دانلود پروژه QGIS** را بزنید.
+1. در **اشتراک و خروجی** گزینه **پروژه QGIS** را بزنید.
 2. فایل `.qgs` را در QGIS باز کنید.
 3. بار اول نام کاربری و رمز پایگاه داده را وارد کنید؛ رمز در فایل نیست.
 

@@ -262,9 +262,12 @@
 
   // ------------------------------------------------------------------ نمونه‌ساز
   // opts: {gm, cfg, load(chart, bbox) → Promise<داده>, visibleOnly: <checkbox>, onSelect(chart|null),
-  //        actions: [{act, label, title}] دکمه‌های اضافه روی هر کارت، onAction(act, chart)}
+  //        actions: [{act, label, title}] دکمه‌های اضافه روی هر کارت، onAction(act, chart, button),
+  //        head(chart) → {icon, sub, more}: سربرگ استودیو (عنوان قابل‌کلیک + منوی ⋯ به‌جای دکمه‌های متنی)،
+  //        preview: بدون برجسته‌سازی روی نقشه، tools: false بدون دکمه‌ها، scale: ضریب ارتفاع، draggable}
   function create(host, opts) {
-    const {gm, cfg} = opts;
+    const {gm, cfg} = opts, scale = opts.scale || 1;
+    const hOf = (chart, data) => Math.round(heightOf(chart, data) * scale);
     let cards = [], visibleOnly = !!(opts.visibleOnly && opts.visibleOnly.checked), active = null, moveTimer = 0;
     const layerOf = (chart) => gm.layers().find((l) => l.key === chart.layer);
     const lname = (chart) => { const l = layerOf(chart); return l ? l.title : ""; };
@@ -286,7 +289,7 @@
     }
 
     function select(card, i) {
-      if (!card.data || !clickable(card.chart)) return;
+      if (opts.preview || !card.data || !clickable(card.chart)) return;
       if (active && active.key === card.chart.key && active.i === i) return clearHighlight();
       const prev = active && cards.find((c) => c.chart.key === active.key);
       active = {key: card.chart.key, i};
@@ -312,7 +315,7 @@
           + (chart.config.agg !== "count" ? `<small>از ${fmt(data.count)} عارضه</small>` : "") + "</div>";
         return;
       }
-      body.style.height = heightOf(chart, data) + "px";
+      body.style.height = hOf(chart, data) + "px";
       let fresh = false;
       if (!card.inst || card.inst.isDisposed()) {
         body.innerHTML = "";
@@ -324,11 +327,12 @@
         fresh = true;
       }
       const sel = active && active.key === chart.key ? active.i : null;
-      card.inst.resize({height: heightOf(chart, data)});
+      card.inst.resize({height: hOf(chart, data)});
       // ادغام (نه جایگزینی): با جایگزینی کامل، راهنمای نشانگر زیر ماوس وسط کلیک از بین می‌رود
       card.inst.setOption(option(chart, data, colors(chart, data, layerOf(chart), cfg), sel), !fresh && card.kind !== chart.kind);
       card.kind = chart.kind;
-      if (clickable(chart)) card.note.textContent = sel === null ? "برای برجسته شدن روی نقشه، روی یک ردیف بزنید." : "عارضه‌های انتخاب‌شده روی نقشه برجسته‌اند.";
+      if (clickable(chart) && opts.preview) card.note.textContent = "";
+      else if (clickable(chart)) card.note.textContent = sel === null ? "برای برجسته شدن روی نقشه، روی یک ردیف بزنید." : "عارضه‌های انتخاب‌شده روی نقشه برجسته‌اند.";
       else if (chart.kind === "profile") card.note.textContent = `طول ${fmt(Math.round(data.length_m / 100) / 10)} کیلومتر · صعود ${fmt(data.gain)} متر · نزول ${fmt(data.loss)} متر`;
       else if (chart.kind === "scatter" && data.sampled) card.note.textContent = `نمونه ${fmt(data.points.length)} نقطه از ${fmt(data.total)}`;
     }
@@ -391,23 +395,29 @@
         const el = document.createElement("article");
         el.className = "gc";
         const extra = (opts.actions || []).map((a) => `<button type="button" data-act="${a.act}" title="${esc(a.title || "")}" aria-label="${esc(a.title || a.label)}">${a.label}</button>`).join("");
-        el.innerHTML = `<header><h3></h3><span class="gc-tools">${extra}`
-          + (chart.kind === "kpi" ? "" : '<button type="button" data-act="png" title="ذخیره تصویر PNG" aria-label="ذخیره تصویر نمودار">PNG</button>')
-          + '<button type="button" data-act="csv" title="ذخیره داده‌ها (CSV)" aria-label="ذخیره داده‌های نمودار">CSV</button></span></header>'
+        const head = opts.head ? opts.head(chart) : null;
+        const png = chart.kind === "kpi" ? "" : '<button type="button" data-act="png" title="ذخیره تصویر PNG" aria-label="ذخیره تصویر نمودار">PNG</button>';
+        const tools = opts.tools === false ? "" : `<span class="gc-tools">${extra}${png}<button type="button" data-act="csv" title="ذخیره داده‌ها (CSV)" aria-label="ذخیره داده‌های نمودار">CSV</button></span>`;
+        el.innerHTML = (head
+          ? `<header class="gc-studio"><button type="button" class="gc-title" data-act="expand" title="بزرگ‌نمایی و جدول داده">${head.icon}<span class="gc-tt"><b></b><small></small></span></button>`
+            + (opts.tools === false ? "" : `<button type="button" class="gc-more" data-act="menu" data-menu aria-label="گزینه‌های نمودار">${head.more}</button>`) + "</header>"
+          : `<header><h3></h3>${tools}</header>`)
           + '<div class="gc-body"><p class="gc-empty">در حال بارگذاری…</p></div><footer class="gc-note"></footer>';
-        el.querySelector("h3").textContent = chart.title || chart.autoTitle;
-        el.querySelector("h3").title = (chart.title || chart.autoTitle) + (lname(chart) ? " — " + lname(chart) : "");
+        const ttl = chart.title || chart.autoTitle;
+        if (head) { el.querySelector(".gc-tt b").textContent = ttl; el.querySelector(".gc-tt small").textContent = head.sub; el.querySelector(".gc-title").title = ttl; }
+        else { el.querySelector("h3").textContent = ttl; el.querySelector("h3").title = ttl + (lname(chart) ? " — " + lname(chart) : ""); }
+        el.dataset.key = chart.key;
         const card = {chart, el, body: el.querySelector(".gc-body"), note: el.querySelector(".gc-note"), data: null, inst: null, dead: false};
         el.addEventListener("click", (e) => {
           const b = e.target.closest("[data-act]");
           if (!b) return;
           if (b.dataset.act === "png" || b.dataset.act === "csv") tools(card, b.dataset.act);
-          else if (opts.onAction) opts.onAction(b.dataset.act, chart);
+          else if (opts.onAction) opts.onAction(b.dataset.act, chart, b);
         });
         host.appendChild(el);
         return card;
       });
-      fontsReady.then(() => cards.forEach((c) => { if (!c.dead) load(c); }));
+      return fontsReady.then(() => Promise.all(cards.map((c) => (c.dead ? null : load(c)))));
     }
 
     // لایه‌ای که سبکش عوض شد: رنگ‌ها دوباره، بدون پرسش از سرور
@@ -420,8 +430,11 @@
     }
     if (window.ResizeObserver) new ResizeObserver(() => cards.forEach((c) => c.inst && c.inst.resize())).observe(host);
 
-    return {render, refresh, restyle, clear: clearHighlight, count: () => cards.length};
+    const byKey = (key) => cards.find((c) => c.chart.key === key);
+    return {render, refresh, restyle, clear: clearHighlight, count: () => cards.length,
+      dataOf: (key) => (byKey(key) || cards[0] || {}).data || null,
+      save: (key, act) => { const c = byKey(key); if (c) tools(c, act); }};
   }
 
-  window.GPCharts = {create};
+  window.GPCharts = {create, rows: csvRows};
 })();
