@@ -13,6 +13,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4Z"/><path d="m13 7 4 4"/></svg>
         ویرایش جدول</button>
       {% else %}<span class="chip lock" title="{{ edit_cfg.reason }}">فقط‌خواندنی</span>{% endif %}
+      <a class="btn ghost sm" href="{% url 'core:help_page' 'edittable' %}" target="_blank" rel="noopener" title="ویدیوی آموزشی ویرایش جدول">آموزش تصویری</a>
     {% endif %}
     <a class="btn ghost sm" href="{% url 'databases:explore_csv' db.pk t.schema t.name %}">دانلود CSV</a>
     {% if t.geometry %}<a class="btn ghost sm" href="{% url 'databases:explore_geojson' db.pk t.schema t.name %}?download=1">دانلود GeoJSON</a>{% endif %}
@@ -43,6 +44,7 @@
     <button type="button" class="btn ghost sm" id="edit-undo-last" hidden></button>
     <button type="button" class="btn ghost sm" id="edit-discard" disabled>دور ریختن تغییرها</button>
     <button type="button" class="btn sm" id="edit-review" disabled>بازبینی و ذخیره</button>
+    <a class="btn ghost sm" href="{% url 'core:help_page' 'edittable' %}" target="_blank" rel="noopener">آموزش</a>
     <button type="button" class="btn ghost sm" id="edit-exit">خروج از ویرایش</button>
   </div>
 </div>

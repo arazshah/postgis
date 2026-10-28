@@ -3,7 +3,7 @@ title: چطور یک جدول را حذف کنم و آیا قابل بازگشت
 summary: جدول را با دستور DROP TABLE در کنسول SQL (حالت نوشتن) یا ابزار دسکتاپ حذف کنید. حذف برگشت‌پذیر نیست مگر از بکاپ؛ پس قبل از آن بکاپ بگیرید. حذف جدول فضای سهمیه را آزاد می‌کند.
 kind: howto
 keywords: حذف جدول, drop table, پاک کردن لایه, آزاد کردن فضا, حذف داده, truncate
-related: backup-manual, quota-and-readonly, sql-console
+related: backup-manual, quota-and-readonly, sql-console, edit-table-data
 order: 160
 reviewed: 2026-10-21
 ---
@@ -21,5 +21,6 @@ DROP TABLE IF EXISTS old_roads;
 
 ## نکته‌ها
 
+- برای حذف چند **سطر** (نه کل جدول) از [حالت ویرایش](kb:edit-table-data) استفاده کنید؛ حذف با پیش‌نویس، تأیید و بازگردانی همراه است.
 - اگر لایه‌ای منتشر شده روی این جدول بود، قبلش آن را از انتشار خارج کنید.
 - فضا بلافاصله کامل آزاد نمی‌شود؛ بعد از حذف‌های بزرگ در صورت لزوم `VACUUM FULL` (در ابزار دسکتاپ) فضا را برمی‌گرداند. [سهمیه](kb:quota-and-readonly) را از صفحه پایگاه داده ببینید.

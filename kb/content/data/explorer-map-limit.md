@@ -3,7 +3,7 @@ title: چرا روی نقشه مرورگر داده همه عارضه‌های �
 summary: برای سریع ماندن مرورگر، نقشه حداکثر ۲۰۰۰ عارضه از جدول را نشان می‌دهد. جدول شما کامل است. برای دیدن همه عارضه‌ها لایه را در QGIS باز کنید یا آن را به‌صورت لایه نقشه (تایل برداری) منتشر کنید.
 kind: faq
 keywords: ۲۰۰۰ عارضه, محدودیت نقشه, نمایش ناقص, نقشه همه داده را نشان نمی دهد, limit, تایل
-related: explorer-overview, publish-layer-overview, vector-tiles-vs-geojson, connect-qgis
+related: explorer-overview, edit-table-data, publish-layer-overview, vector-tiles-vs-geojson, connect-qgis
 order: 110
 reviewed: 2026-10-21
 ---
@@ -16,3 +16,5 @@ reviewed: 2026-10-21
 - **QGIS:** لایه را از پایگاه داده اضافه کنید ([راهنما](kb:connect-qgis)).
 - **انتشار لایه:** لایه را [به‌صورت تایل برداری منتشر کنید](kb:publish-layer-overview)؛ تایل برداری فقط بخش قابل‌دیدن را می‌فرستد ([مقایسه](kb:vector-tiles-vs-geojson)).
 - **فیلتر:** در [کنسول SQL](kb:sql-console) فقط بخش مورد نظر را بخوانید.
+
+در [حالت ویرایش](kb:edit-table-data) هم فقط همین ۲۰۰۰ عارضه‌ی اول روی نقشه ویرایش‌شدنی است؛ برای بقیه از تب «داده‌ها» (با صفحه‌بندی) استفاده کنید.

@@ -309,6 +309,7 @@ class TableEditTests(TestCase):
         page = self.client.get(reverse("databases:explore_table", args=[self.db.pk, "public", "parcels"]))
         self.assertContains(page, "edit-config")
         self.assertContains(page, "data-key=")
+        self.assertContains(page, "/help/edittable/")  # آموزش تصویری کنار دکمه‌ی ویرایش
 
     def test_mode_refused_for_table_without_pk_and_shown_reason(self):
         self.client.force_login(self.user)
