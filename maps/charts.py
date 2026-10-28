@@ -1,6 +1,9 @@
 """نمودار روی داده‌های یک لایه نقشه: پاک‌سازی تنظیمات و تجمیع در PostGIS (فقط نتیجه به مرورگر می‌رسد).
 
-انواع: کارت عددی (kpi)، میله‌ای (bar)، دایره‌ای (pie)، هیستوگرام (hist) و سری زمانی (time).
+انواع: کارت عددی (kpi)، میله‌ای (bar)، دایره‌ای (pie)، هیستوگرام (hist، با حالت درصد تجمعی)، سری زمانی (time)،
+ستونی انباشته (stacked: دو ستون دسته‌ای)، پراکنش (scatter: دو ستون عددی، نمونه‌گیری‌شده)،
+رادار (radar: چند شاخص عددی برای چند عارضه یا گروه)، جریان (sankey: دو ستون دسته‌ای، مثلاً کاربری قدیم به جدید) و
+پروفیل ارتفاعی (profile: یک خط دارای Z).
 اگر لایه روی همان ستون طبقه‌بندی عددی داشته باشد، هیستوگرام با همان مرزها بریده می‌شود و رنگ‌هایش از سیمبولوژی می‌آید.
 """
 from __future__ import annotations
@@ -10,13 +13,21 @@ from psycopg import sql
 
 from publish import engine
 
-KINDS = {"kpi": "کارت عددی", "bar": "میله‌ای", "pie": "دایره‌ای", "hist": "هیستوگرام", "time": "سری زمانی"}
+KINDS = {"kpi": "کارت عددی", "bar": "میله‌ای", "pie": "دایره‌ای", "hist": "هیستوگرام", "time": "سری زمانی",
+         "stacked": "ستونی انباشته", "scatter": "پراکنش", "radar": "رادار", "sankey": "جریان (Sankey)",
+         "profile": "پروفیل ارتفاعی"}
 AGGS = {"count": "تعداد", "sum": "جمع", "avg": "میانگین", "min": "کمینه", "max": "بیشینه"}
 UNITS = {"day": "روز", "month": "ماه", "year": "سال"}
 DATE_TYPES = {"date", "timestamp", "timestamptz"}
 MAX_CHARTS_LIMIT = 20
 PIE_MAX = 8
 TIME_POINTS = 500
+STACK_SERIES = 8  # بیشتر از این سری در «سایر» جمع می‌شود
+SCATTER_POINTS = 2000
+RADAR_AXES = (3, 8)
+RADAR_ENTITIES = 6
+SANKEY_LINKS = 60
+PROFILE_POINTS = 400
 
 
 class ChartError(Exception):
@@ -36,7 +47,7 @@ def clean(kind: str, data, types: dict[str, str]) -> dict:
         raise ChartError("نوع نمودار نامعتبر است.")
     data = data if isinstance(data, dict) else {}
     cfg: dict = {}
-    if kind != "hist":
+    if kind not in ("hist", "scatter", "radar", "profile"):
         agg = data.get("agg") if data.get("agg") in AGGS else "count"
         cfg["agg"] = agg
         value = data.get("value") if isinstance(data.get("value"), str) else ""
@@ -47,17 +58,52 @@ def clean(kind: str, data, types: dict[str, str]) -> dict:
     field = data.get("field") if isinstance(data.get("field"), str) else ""
     if kind == "kpi":
         return cfg
+    if kind == "radar":
+        inds = data.get("indicators")
+        inds = inds.split(",") if isinstance(inds, str) else inds if isinstance(inds, list) else []
+        inds = list(dict.fromkeys(i for i in inds if isinstance(i, str) and i))
+        if field not in types:
+            raise ChartError("ستون گروه (هر چندضلعی یا دسته) را انتخاب کنید.")
+        if not RADAR_AXES[0] <= len(inds) <= RADAR_AXES[1] or any(types.get(i) not in engine.NUMERIC_TYPES for i in inds):
+            raise ChartError(f"برای رادار {RADAR_AXES[0]} تا {RADAR_AXES[1]} ستون عددی انتخاب کنید.")
+        return {"field": field, "indicators": inds, "limit": _int(data.get("limit"), 4, 2, RADAR_ENTITIES)}
+    if kind == "profile":
+        fid = str(data.get("fid") if data.get("fid") is not None else "").strip()[:200]
+        if field not in types or not fid:
+            raise ChartError("ستون شناسه و مقدار شناسه‌ی خط را وارد کنید.")
+        return {"field": field, "fid": fid}
+    if kind == "scatter":
+        x, y = (data.get(k) if isinstance(data.get(k), str) else "" for k in ("x", "y"))
+        if types.get(x) not in engine.NUMERIC_TYPES or types.get(y) not in engine.NUMERIC_TYPES:
+            raise ChartError("برای پراکنش دو ستون عددی انتخاب کنید.")
+        if x == y:
+            raise ChartError("دو ستون پراکنش باید متفاوت باشند.")
+        return {"x": x, "y": y}
     if field not in types:
         raise ChartError("ستون نمودار را انتخاب کنید.")
     cfg["field"] = field
     if kind in ("bar", "pie"):
         cfg["limit"] = _int(data.get("limit"), 10, 3, PIE_MAX if kind == "pie" else MAX_CHARTS_LIMIT)
         cfg["order"] = "label" if data.get("order") == "label" else "value"
+    elif kind == "sankey":
+        target = data.get("target") if isinstance(data.get("target"), str) else ""
+        if target not in types or target == field:
+            raise ChartError("برای جریان دو ستون متفاوت (مبدأ و مقصد) انتخاب کنید.")
+        cfg["target"] = target
+        cfg["limit"] = _int(data.get("limit"), 30, 5, SANKEY_LINKS)
+    elif kind == "stacked":
+        series = data.get("series") if isinstance(data.get("series"), str) else ""
+        if series not in types or series == field:
+            raise ChartError("برای ستونی انباشته دو ستون متفاوت (محور و سری) انتخاب کنید.")
+        cfg["series"] = series
+        cfg["limit"] = _int(data.get("limit"), 12, 3, MAX_CHARTS_LIMIT)
+        cfg["percent"] = data.get("percent") is not False
     elif kind == "hist":
         if types[field] not in engine.NUMERIC_TYPES:
             raise ChartError("برای هیستوگرام یک ستون عددی انتخاب کنید.")
         cfg["bins"] = _int(data.get("bins"), 10, 3, 30)
         cfg["classes"] = data.get("classes") is not False
+        cfg["cumulative"] = data.get("cumulative") is True
     else:
         if types[field] not in DATE_TYPES:
             raise ChartError("برای سری زمانی یک ستون تاریخ انتخاب کنید.")
@@ -72,7 +118,17 @@ def title_for(kind: str, cfg: dict) -> str:
     if kind == "kpi":
         return what
     if kind == "hist":
-        return f"توزیع {cfg['field']}"
+        return f"{'درصد تجمعی' if cfg.get('cumulative') else 'توزیع'} {cfg['field']}"
+    if kind == "scatter":
+        return f"{cfg['y']} در برابر {cfg['x']}"
+    if kind == "radar":
+        return f"مقایسه {cfg['field']} روی {len(cfg['indicators'])} شاخص"
+    if kind == "profile":
+        return f"پروفیل ارتفاعی {cfg['fid']}"
+    if kind == "sankey":
+        return f"جریان از {cfg['field']} به {cfg['target']}"
+    if kind == "stacked":
+        return f"{what} بر اساس {cfg['field']} و {cfg['series']}"
     if kind == "time":
         return f"{what} به تفکیک {UNITS[cfg.get('unit', 'month')]}"
     return f"{what} بر اساس {cfg['field']}"
@@ -126,8 +182,18 @@ def _run(layer, kind: str, cfg: dict, bbox) -> dict:
         if kind == "kpi":
             row = run([], (sql.SQL("SELECT {}::float8, count(*)").format(agg), sql.SQL("")))[0]
             return {"value": _num(row[0]), "count": row[1]}
+        if kind == "scatter":
+            return _scatter(conn, rel, where, params, cfg)
+        if kind == "radar":
+            return _radar(conn, rel, where, params, cfg)
+        if kind == "profile":
+            return _profile(conn, rel, layer, cfg)
         field = sql.Identifier(cfg["field"])
         notnull = [sql.SQL("{} IS NOT NULL").format(field)]
+        if kind == "stacked":
+            return _stacked(conn, rel, where, params, cfg, agg)
+        if kind == "sankey":
+            return _sankey(conn, rel, where, params, cfg, agg)
         if kind in ("bar", "pie"):
             order = sql.SQL("v DESC NULLS LAST, 1") if cfg["order"] == "value" else sql.SQL("1")
             rows = run(notnull, (sql.SQL("SELECT {}::text AS k, {}::float8 AS v").format(field, agg),
@@ -165,3 +231,97 @@ def _run(layer, kind: str, cfg: dict, bbox) -> dict:
                     more=(TIME_POINTS,))
         rows.reverse()
         return {"labels": [r[0].isoformat() for r in rows], "values": [_num(r[1]) for r in rows], "unit": cfg["unit"]}
+
+
+def _stacked(conn, rel, where, params, cfg, agg) -> dict:
+    """مقدار هر (محور × سری)؛ فقط «limit» محور با بیشترین مجموع، و سری‌های بعد از هشتم در «سایر» (تعداد و جمع)."""
+    x, s = sql.Identifier(cfg["field"]), sql.Identifier(cfg["series"])
+    clause = sql.SQL(" AND ").join([*where, sql.SQL("{} IS NOT NULL").format(x), sql.SQL("{} IS NOT NULL").format(s)])
+    rows = conn.execute(sql.SQL(
+        "WITH b AS (SELECT {x}::text AS xs, {s}::text AS ss, {agg}::float8 AS v FROM {rel} WHERE {clause} GROUP BY 1, 2), "
+        "t AS (SELECT xs FROM b GROUP BY xs ORDER BY sum(v) DESC NULLS LAST, xs LIMIT %s) "
+        "SELECT b.xs, b.ss, b.v FROM b JOIN t USING (xs)").format(x=x, s=s, agg=agg, rel=rel, clause=clause),
+        [*params, cfg["limit"]]).fetchall()
+    xs_total: dict[str, float] = {}
+    ss_total: dict[str, float] = {}
+    for xs, ss, v in rows:
+        xs_total[xs] = xs_total.get(xs, 0) + (v or 0)
+        ss_total[ss] = ss_total.get(ss, 0) + (v or 0)
+    labels = sorted(xs_total, key=lambda k: (-xs_total[k], k))
+    names = sorted(ss_total, key=lambda k: (-ss_total[k], k))
+    keep, rest = names[:STACK_SERIES], names[STACK_SERIES:]
+    cells = {(xs, ss): v for xs, ss, v in rows}
+    series = [{"name": n, "values": [_num(cells.get((xs, n)) or 0) for xs in labels]} for n in keep]
+    if rest and cfg.get("agg", "count") in ("count", "sum"):
+        series.append({"name": "سایر", "values": [_num(sum(cells.get((xs, n)) or 0 for n in rest)) for xs in labels]})
+    return {"labels": labels, "series": series, "percent": cfg["percent"]}
+
+
+def _scatter(conn, rel, where, params, cfg) -> dict:
+    """نمونه‌ای پایدار (ترتیب md5 ردیف) تا نمودار با هر بار خواندن جابه‌جا نشود."""
+    x, y = sql.Identifier(cfg["x"]), sql.Identifier(cfg["y"])
+    clause = sql.SQL(" AND ").join([*where, sql.SQL("{} IS NOT NULL").format(x), sql.SQL("{} IS NOT NULL").format(y)])
+    total = conn.execute(sql.SQL("SELECT count(*) FROM {} WHERE {}").format(rel, clause), params).fetchone()[0]
+    rows = conn.execute(sql.SQL("SELECT {x}::float8, {y}::float8 FROM {rel} WHERE {clause} "
+                                "ORDER BY md5(ctid::text) LIMIT %s").format(x=x, y=y, rel=rel, clause=clause),
+                        [*params, SCATTER_POINTS]).fetchall()
+    return {"points": [[_num(a), _num(b)] for a, b in rows], "total": total, "sampled": total > len(rows)}
+
+
+def _sankey(conn, rel, where, params, cfg, agg) -> dict:
+    """پیوندهای مبدأ به مقصد با بیشترین مقدار؛ مقدار صفر یا منفی در Sankey معنا ندارد و حذف می‌شود."""
+    a, b = sql.Identifier(cfg["field"]), sql.Identifier(cfg["target"])
+    clause = sql.SQL(" AND ").join([*where, sql.SQL("{} IS NOT NULL").format(a), sql.SQL("{} IS NOT NULL").format(b)])
+    rows = conn.execute(sql.SQL(
+        "SELECT {a}::text, {b}::text, {agg}::float8 AS v FROM {rel} WHERE {clause} GROUP BY 1, 2 "
+        "HAVING {agg} > 0 ORDER BY v DESC NULLS LAST, 1, 2 LIMIT %s").format(a=a, b=b, agg=agg, rel=rel, clause=clause),
+        [*params, cfg["limit"]]).fetchall()
+    return {"links": [{"source": r[0], "target": r[1], "value": _num(r[2])} for r in rows]}
+
+
+def _radar(conn, rel, where, params, cfg) -> dict:
+    """میانگین هر شاخص برای چند گروه پرتعدادتر؛ بیشینه‌ی محورها روی همه گروه‌ها حساب می‌شود تا مقیاس ثابت بماند."""
+    f = sql.Identifier(cfg["field"])
+    inds = [sql.Identifier(i) for i in cfg["indicators"]]
+    avgs = sql.SQL(", ").join(sql.SQL("avg({}::float8)").format(i) for i in inds)
+    clause = sql.SQL(" AND ").join([*where, sql.SQL("{} IS NOT NULL").format(f)])
+    rows = conn.execute(sql.SQL("SELECT {f}::text, {avgs} FROM {rel} WHERE {clause} GROUP BY 1 ORDER BY count(*) DESC, 1 LIMIT %s")
+                        .format(f=f, avgs=avgs, rel=rel, clause=clause), [*params, cfg["limit"]]).fetchall()
+    names = [sql.Identifier(f"a{k}") for k in range(len(inds))]
+    labelled = sql.SQL(", ").join(sql.SQL("avg({}::float8) AS {}").format(i, n) for i, n in zip(inds, names, strict=True))
+    mx = conn.execute(sql.SQL("SELECT {maxes} FROM (SELECT {labelled} FROM {rel} WHERE {clause} GROUP BY {f}) s").format(
+        maxes=sql.SQL(", ").join(sql.SQL("max({})").format(n) for n in names), labelled=labelled, rel=rel,
+        clause=clause, f=f), params).fetchone()
+    return {"indicators": cfg["indicators"], "max": [_num(v) or 0 for v in mx],
+            "series": [{"name": r[0], "values": [_num(v) for v in r[1:]]} for r in rows]}
+
+
+def _profile(conn, rel, layer, cfg) -> dict:
+    """مقطع ارتفاعی یک خط دارای Z: فاصله تجمعی به متر (روی کره) و ارتفاع هر رأس؛ حداکثر ۴۰۰ نقطه."""
+    from math import asin, cos, radians, sin, sqrt
+
+    g = sql.Identifier(layer.geom_column)
+    rows = conn.execute(sql.SQL(
+        "SELECT ST_X(p.geom), ST_Y(p.geom), ST_Z(p.geom) FROM (SELECT ST_Transform({g}::geometry, 4326) AS geom FROM {rel} "
+        "WHERE {f}::text = %s AND {g} IS NOT NULL LIMIT 1) l, LATERAL ST_DumpPoints(l.geom) p "
+        "WHERE GeometryType(l.geom) LIKE '%%LINESTRING'").format(g=g, rel=rel, f=sql.Identifier(cfg["field"])),
+        (cfg["fid"],)).fetchall()
+    if not rows:
+        raise engine.EngineError("خطی با این شناسه پیدا نشد (یا عارضه خط نیست).")
+    if any(r[2] is None for r in rows):
+        raise engine.EngineError("این خط ارتفاع (Z) ندارد؛ جدول باید هندسه‌ی LineStringZ داشته باشد.")
+    dist, total, prev = [], 0.0, None
+    for lon, lat, _ in rows:
+        if prev:
+            dlat, dlon = radians(lat - prev[1]), radians(lon - prev[0])
+            h = sin(dlat / 2) ** 2 + cos(radians(prev[1])) * cos(radians(lat)) * sin(dlon / 2) ** 2
+            total += 2 * 6371008.8 * asin(sqrt(h))
+        dist.append(total)
+        prev = (lon, lat)
+    z = [r[2] for r in rows]
+    gain = sum(max(0.0, b - a) for a, b in zip(z, z[1:], strict=False))
+    loss = sum(max(0.0, a - b) for a, b in zip(z, z[1:], strict=False))
+    step = max(1, -(-len(rows) // PROFILE_POINTS))
+    keep = sorted({*range(0, len(rows), step), len(rows) - 1})
+    return {"dist": [round(dist[i], 1) for i in keep], "z": [round(z[i], 2) for i in keep], "length_m": round(total, 1),
+            "gain": round(gain, 1), "loss": round(loss, 1), "points": len(rows)}

@@ -116,7 +116,8 @@ def duplicate(webmap: WebMap, user) -> WebMap:
     _check_map_quota(db)
     with transaction.atomic():
         copy = WebMap.objects.create(database=db, created_by=user, title=f"{webmap.title} (کپی)"[:120],
-                                     description=webmap.description, basemap=webmap.basemap, view=webmap.view)
+                                     description=webmap.description, basemap=webmap.basemap, view=webmap.view,
+                                     charts_layout=webmap.charts_layout)
         ids = {}
         for layer in webmap.layers.all():
             old = layer.pk
@@ -169,7 +170,8 @@ def copy_to(webmap: WebMap, target_db, user) -> tuple[WebMap, list[str]]:
     skipped, ids = [], {}
     with transaction.atomic():
         copy = WebMap.objects.create(database=target_db, created_by=user, title=webmap.title,
-                                     description=webmap.description, basemap=webmap.basemap, view=webmap.view)
+                                     description=webmap.description, basemap=webmap.basemap, view=webmap.view,
+                                     charts_layout=webmap.charts_layout)
         for layer in webmap.layers.all():
             t = tables.get((layer.schema, layer.table))
             if t is None or len(ids) >= target_db.plan.map_layers:

@@ -57,14 +57,26 @@
   <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="tool"><input type="hidden" name="tool" value="{{ tool.key }}">
     <div class="bf-row">
     {% if tool.key != 'isochrone' %}
-    <div class="field"><label>{% if tool.key == 'count' %}لایه چندضلعی{% else %}لایه{% endif %}</label>
+    <div class="field"><label>{% if tool.key == 'change' %}نسخه‌ی قدیم (لایه چندضلعی){% elif tool.key == 'count' or tool.key == 'overlap' %}لایه چندضلعی{% if tool.key == 'overlap' %} (مثلاً محله){% endif %}{% else %}لایه{% endif %}</label>
       <select name="layer" required>{% for t in spatial %}<option value="{{ t.schema }}.{{ t.name }}">{{ t.name }} ({{ t.geometry.0.type|lower }})</option>{% endfor %}</select></div>
     {% endif %}
-    {% if tool.key == 'nearest' or tool.key == 'count' %}
-    <div class="field"><label>{% if tool.key == 'count' %}لایه نقطه‌ای که شمرده شود{% else %}لایه هدف (نزدیک‌ترینِ آن){% endif %}</label>
+    {% if tool.key == 'nearest' or tool.key == 'count' or tool.key == 'overlap' or tool.key == 'change' %}
+    <div class="field"><label>{% if tool.key == 'count' %}لایه نقطه‌ای که شمرده شود{% elif tool.key == 'overlap' %}لایه چندضلعی دسته‌دار (مثلاً کاربری زمین){% elif tool.key == 'change' %}نسخه‌ی جدید (لایه چندضلعی){% else %}لایه هدف (نزدیک‌ترینِ آن){% endif %}</label>
       <select name="other" required>{% for t in spatial %}<option value="{{ t.schema }}.{{ t.name }}">{{ t.name }}</option>{% endfor %}</select></div>
     {% endif %}
     {% if tool.key == 'nearest' %}<div class="field"><label>ستون نام در لایه هدف (اختیاری)</label><input type="text" name="label" class="ltr" placeholder="name"></div>{% endif %}
+    {% if tool.key == 'count' %}
+    <div class="field"><label>ستون عددی لایه نقطه‌ای برای جمع یا میانگین (اختیاری)</label><input type="text" name="value" class="ltr" placeholder="price"></div>
+    <div class="field"><label>محاسبه ستون</label><select name="agg"><option value="sum">جمع</option><option value="avg">میانگین</option><option value="min">کمینه</option><option value="max">بیشینه</option></select></div>
+    {% endif %}
+    {% if tool.key == 'overlap' %}
+    <div class="field"><label>ستون نام چندضلعی‌ها (لایه اول)</label><input type="text" name="zone" class="ltr" required placeholder="name"></div>
+    <div class="field"><label>ستون دسته (لایه دوم)</label><input type="text" name="category" class="ltr" required placeholder="landuse"></div>
+    {% endif %}
+    {% if tool.key == 'change' %}
+    <div class="field"><label>ستون دسته در نسخه‌ی قدیم</label><input type="text" name="category" class="ltr" required placeholder="landuse"></div>
+    <div class="field"><label>ستون دسته در نسخه‌ی جدید</label><input type="text" name="category2" class="ltr" required placeholder="landuse"></div>
+    {% endif %}
     {% if tool.key == 'buffer' %}<div class="field"><label>فاصله (متر)</label><input type="text" name="distance" value="500" inputmode="numeric"></div>{% endif %}
     {% if tool.key == 'hexbin' %}<div class="field"><label>اندازه هر خانه (متر)</label><input type="text" name="size" value="500" inputmode="numeric"></div>{% endif %}
     {% if tool.key == 'isochrone' %}
@@ -107,6 +119,10 @@
         <span class="small muted">{{ e.rows|fanum }} عارضه</span>
         <a class="btn ghost sm" href="{% url 'databases:explore_table' db.pk 'public' e.table %}?tab=map"><span class="ltr">{{ e.table }}</span> ← نقشه</a>
         {% if e.together %}<a class="btn ghost sm" href="{{ e.together }}" title="نتیجه و لایه‌های ورودی روی یک نقشه">کنار ورودی‌ها</a>{% endif %}
+        {% if e.chart %}<form method="post" action="{% url 'maps:add_table' db.pk %}" style="display:inline">{% csrf_token %}
+          <input type="hidden" name="schema" value="public"><input type="hidden" name="table" value="{{ e.table }}"><input type="hidden" name="map" value="new">
+          {% for k, v in e.chart.items %}<input type="hidden" name="chart_{{ k }}" value="{{ v }}">{% endfor %}
+          <button class="btn ghost sm" type="submit" title="نتیجه را در نقشه تازه باز می‌کند و نمودار پیشنهادی را آماده می‌کند">نقشه و نمودار</button></form>{% endif %}
       {% elif j.status == 'done' and e.answer %}<span class="small muted">بدون لایه مکانی</span>
       {% elif j.status == 'done' %}<span class="small muted">{{ j.message|truncatechars:60 }}</span>{% endif %}
     </div>

@@ -140,10 +140,23 @@
                 <option value="pie">دایره‌ای (سهم هر دسته)</option>
                 <option value="hist">هیستوگرام (توزیع ستون عددی)</option>
                 <option value="time">سری زمانی (بر اساس تاریخ)</option>
+                <option value="stacked">ستونی انباشته (دو ستون دسته؛ مثلاً سهم کاربری در هر محله)</option>
+                <option value="scatter">پراکنش (دو ستون عددی)</option>
+                <option value="radar">رادار (چند شاخص برای چند گروه یا محله)</option>
+                <option value="sankey">جریان Sankey (از دسته‌ی قدیم به جدید)</option>
+                <option value="profile">پروفیل ارتفاعی (یک خط دارای Z)</option>
                 <option value="kpi">کارت عددی (یک عدد کلی)</option></select></div>
               <div class="field"><label for="ch-layer">لایه</label><select id="ch-layer"></select></div>
               <div class="field"><label for="ch-title">عنوان <span class="muted small">(اختیاری)</span></label><input id="ch-title" type="text" maxlength="120"></div>
               <div class="field" data-ch="field"><label for="ch-field" id="ch-field-l">ستون</label><select id="ch-field"></select></div>
+              <div class="field" data-ch="target"><label for="ch-target">ستون مقصد (دسته‌ی جدید)</label><select id="ch-target"></select></div>
+              <div class="field" data-ch="inds"><label for="ch-inds">شاخص‌ها (۳ تا ۸ ستون عددی؛ با Ctrl یا ⌘ چندتا انتخاب کنید)</label><select id="ch-inds" multiple size="6"></select></div>
+              <div class="field" data-ch="fid"><label for="ch-fid">مقدار شناسه‌ی خط <span class="muted small">(مثلاً 12)</span></label><input id="ch-fid" type="text" class="ltr" maxlength="200"></div>
+              <div class="field" data-ch="series"><label for="ch-series">ستون سری (رنگ هر بخش)</label><select id="ch-series"></select></div>
+              <div class="bf-row" data-ch="xy">
+                <div class="field"><label for="ch-x">ستون محور افقی</label><select id="ch-x"></select></div>
+                <div class="field"><label for="ch-y">ستون محور عمودی</label><select id="ch-y"></select></div>
+              </div>
               <div class="bf-row" data-ch="agg">
                 <div class="field"><label for="ch-agg">محاسبه</label><select id="ch-agg">
                   <option value="count">تعداد عارضه</option><option value="sum">جمع یک ستون</option><option value="avg">میانگین یک ستون</option>
@@ -151,12 +164,15 @@
                 <div class="field" data-ch="value"><label for="ch-value">ستون عددی</label><select id="ch-value"></select></div>
               </div>
               <div class="bf-row" data-ch="limit">
-                <div class="field"><label for="ch-limit">حداکثر دسته</label><input id="ch-limit" type="number" min="3" max="20" value="10"></div>
-                <div class="field"><label for="ch-order">ترتیب</label><select id="ch-order"><option value="value">بیشترین اول</option><option value="label">الفبایی</option></select></div>
+                <div class="field"><label for="ch-limit">حداکثر دسته</label><input id="ch-limit" type="number" min="2" max="60" value="10"></div>
+                <div class="field" data-ch="order"><label for="ch-order">ترتیب</label><select id="ch-order"><option value="value">بیشترین اول</option><option value="label">الفبایی</option></select></div>
               </div>
               <div class="field" data-ch="bins"><label for="ch-bins">تعداد بازه</label><input id="ch-bins" type="number" min="3" max="30" value="10"></div>
               <label class="chk" data-ch="classes"><input id="ch-classes" type="checkbox" checked> هم‌مرز با طبقه‌بندی رنگی لایه
                 <small class="muted">اگر لایه روی همین ستون طبقه‌بندی عددی دارد، بازه‌ها و رنگ‌ها همان‌هایند.</small></label>
+              <label class="chk" data-ch="cumulative"><input id="ch-cum" type="checkbox"> درصد تجمعی (منحنی پوشش)
+                <small class="muted">هر نقطه نشان می‌دهد چند درصد عارضه‌ها تا آن مقدار هستند؛ مثلاً «۸۰٪ مدرسه‌ها تا ۵۰۰ متری مترو».</small></label>
+              <label class="chk" data-ch="percent"><input id="ch-percent" type="checkbox" checked> سهم درصدی (هر ردیف ۱۰۰٪)</label>
               <div class="field" data-ch="unit"><label for="ch-unit">بازه زمانی</label><select id="ch-unit"><option value="day">روز</option><option value="month" selected>ماه</option><option value="year">سال</option></select></div>
               <p class="small ch-err" id="ch-err" role="alert" hidden></p>
               <div class="wm-actions"><button class="btn sm" type="submit" id="ch-ok">ثبت نمودار</button><button class="btn ghost sm" type="button" id="ch-cancel">انصراف</button></div>
@@ -191,6 +207,7 @@
           <div class="st-scroll">
             <div class="field"><label for="wm-desc">توضیح کوتاه</label><textarea id="wm-desc" rows="3" maxlength="1000">{{ webmap.description }}</textarea></div>
             <div class="field"><label for="wm-base">نقشه پایه</label><select id="wm-base">{% if iran_basemap %}<option value="iran">نقشه پایه ایران (فارسی)</option>{% endif %}<option value="osm">OpenStreetMap (تصویری)</option><option value="none">بدون نقشه پایه</option></select></div>
+            <div class="field"><label for="wm-clayout">چیدمان نمودارها در نقشه عمومی</label><select id="wm-clayout"><option value="panel">پنل کشویی (با دکمه «نمودارها»)</option><option value="dashboard">داشبورد کنار نقشه (خودکار باز می‌شود)</option></select></div>
             <label class="check small"><input type="checkbox" id="wm-public" {% if webmap.is_public %}checked{% endif %}><span>عمومی: هر کسی با لینک نقشه را می‌بیند</span></label>
             <div class="field"><span class="small"><b>نمای شروع</b></span>
               <div class="wm-actions">

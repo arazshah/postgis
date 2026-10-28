@@ -17,7 +17,7 @@ from maps import charts, services
 from maps.models import MapChart, WebMap
 
 PG_HOST = os.environ.get("TEST_PG_HOST", "")
-TYPES = {"kind": "text", "sales": "int4", "opened": "date", "id": "int4"}
+TYPES = {"kind": "text", "sales": "int4", "opened": "date", "id": "int4", "tier": "text", "rooms": "int4"}
 
 
 class CleanTests(SimpleTestCase):
@@ -44,6 +44,37 @@ class CleanTests(SimpleTestCase):
         self.assertEqual(charts.clean("time", {"field": "opened", "unit": "x"}, TYPES)["unit"], "month")
         self.assertEqual(charts.clean("hist", {"field": "sales", "bins": 1}, TYPES)["bins"], 3)
 
+    def test_stacked_and_scatter_and_cumulative_config(self):
+        cfg = charts.clean("stacked", {"field": "kind", "series": "tier", "limit": 99, "percent": False}, TYPES)
+        self.assertEqual(cfg, {"agg": "count", "field": "kind", "series": "tier", "limit": 20, "percent": False})
+        for bad in ({"field": "kind"}, {"field": "kind", "series": "kind"}, {"field": "kind", "series": "nope"}):
+            with self.assertRaises(charts.ChartError):
+                charts.clean("stacked", bad, TYPES)
+        self.assertEqual(charts.clean("scatter", {"x": "sales", "y": "rooms", "field": "kind"}, TYPES), {"x": "sales", "y": "rooms"})
+        for bad in ({"x": "sales", "y": "kind"}, {"x": "sales", "y": "sales"}, {"x": "sales"}):
+            with self.assertRaises(charts.ChartError):
+                charts.clean("scatter", bad, TYPES)
+        self.assertTrue(charts.clean("hist", {"field": "sales", "cumulative": True}, TYPES)["cumulative"])
+        self.assertFalse(charts.clean("hist", {"field": "sales", "cumulative": "yes"}, TYPES)["cumulative"])
+        self.assertEqual(charts.title_for("scatter", cfg_xy := {"x": "sales", "y": "rooms"}), "rooms در برابر sales")
+        self.assertEqual(cfg_xy["x"], "sales")
+
+    def test_radar_sankey_profile_config(self):
+        cfg = charts.clean("radar", {"field": "kind", "indicators": "sales,rooms,id", "limit": 99}, TYPES)
+        self.assertEqual(cfg, {"field": "kind", "indicators": ["sales", "rooms", "id"], "limit": charts.RADAR_ENTITIES})
+        for bad in ({"field": "kind", "indicators": ["sales", "rooms"]}, {"field": "kind", "indicators": ["sales", "rooms", "kind"]},
+                    {"indicators": ["sales", "rooms", "id"]}):
+            with self.assertRaises(charts.ChartError):
+                charts.clean("radar", bad, TYPES)
+        cfg = charts.clean("sankey", {"field": "kind", "target": "tier", "limit": 999}, TYPES)
+        self.assertEqual((cfg["target"], cfg["limit"], cfg["agg"]), ("tier", charts.SANKEY_LINKS, "count"))
+        for bad in ({"field": "kind"}, {"field": "kind", "target": "kind"}):
+            with self.assertRaises(charts.ChartError):
+                charts.clean("sankey", bad, TYPES)
+        self.assertEqual(charts.clean("profile", {"field": "id", "fid": " 7 "}, TYPES), {"field": "id", "fid": "7"})
+        with self.assertRaises(charts.ChartError):
+            charts.clean("profile", {"field": "id"}, TYPES)
+
     def test_kpi_has_no_field(self):
         self.assertEqual(charts.clean("kpi", {"field": "kind"}, TYPES), {"agg": "count"})
 
@@ -68,11 +99,11 @@ class ChartsIntegrationTests(TestCase):
         self.addCleanup(self._drop)
         with self._pg() as c:
             c.execute("CREATE TABLE shops(id serial PRIMARY KEY, kind text, sales int, opened date,"
-                      " geom geometry(Point, 4326))")
+                      " tier text, rooms int, geom geometry(Point, 4326))")
             # ۳۰ ردیف: نوع a تا f به‌نوبت، فروش ۱ تا ۳۰، تاریخ در سه ماه، طول از ۵۱٫۰۱ تا ۵۱٫۳۰
-            c.execute("INSERT INTO shops(kind, sales, opened, geom) SELECT chr(96 + 1 + (g - 1) % 6), g,"
-                      " DATE '2025-01-15' + (g - 1) * 3, ST_SetSRID(ST_MakePoint(51 + g * 0.01, 35.7), 4326)"
-                      " FROM generate_series(1, 30) g")
+            c.execute("INSERT INTO shops(kind, sales, opened, tier, rooms, geom) SELECT chr(96 + 1 + (g - 1) % 6), g,"
+                      " DATE '2025-01-15' + (g - 1) * 3, CASE WHEN g % 3 = 0 THEN 'x' ELSE 'y' END, g % 5,"
+                      " ST_SetSRID(ST_MakePoint(51 + g * 0.01, 35.7), 4326) FROM generate_series(1, 30) g")
             c.execute("INSERT INTO shops(kind, sales, opened, geom) VALUES (NULL, NULL, NULL,"
                       " ST_SetSRID(ST_MakePoint(51.5, 35.7), 4326))")
         self.client.force_login(self.user)
@@ -174,6 +205,110 @@ class ChartsIntegrationTests(TestCase):
         got = charts.data(self.layer, "time", {"field": "opened", "unit": "year", "agg": "sum", "value": "sales"})
         self.assertEqual((got["labels"], got["values"]), (["2025-01-01"], [465]))
 
+    def test_stacked(self):
+        got = charts.data(self.layer, "stacked", {"field": "kind", "series": "tier"})
+        self.assertEqual(len(got["labels"]), 6)
+        by = {s["name"]: s["values"] for s in got["series"]}
+        self.assertEqual(set(by), {"x", "y"})
+        self.assertEqual(sum(map(sum, by.values())), 30)  # ردیف بدون kind شمرده نمی‌شود
+        self.assertTrue(got["percent"])
+        # هر دسته ۵ عارضه دارد و مجموع x و y همان ۵ است
+        a = got["labels"].index("a")
+        self.assertEqual(by["x"][a] + by["y"][a], 5)
+        got = charts.data(self.layer, "stacked", {"field": "kind", "series": "tier", "limit": 3, "agg": "sum", "value": "sales"})
+        self.assertEqual(len(got["labels"]), 3)
+        self.assertEqual(got["labels"][0], "f")  # بیشترین جمع فروش
+        box = [51.0, 35.0, 51.105, 36.0]
+        got = charts.data(self.layer, "stacked", {"field": "kind", "series": "tier"}, box)
+        self.assertEqual(sum(map(sum, (s["values"] for s in got["series"]))), 10)
+
+    def test_stacked_merges_extra_series_into_other(self):
+        got = charts.data(self.layer, "stacked", {"field": "tier", "series": "kind", "limit": 3})
+        names = [s["name"] for s in got["series"]]
+        self.assertLessEqual(len(names), 6)  # فقط ۶ دسته؛ سقف ۸ را رد نمی‌کند
+        with self._pg() as c:
+            c.execute("UPDATE shops SET kind = 'k' || id WHERE kind IS NOT NULL")
+        got = charts.data(self.layer, "stacked", {"field": "tier", "series": "kind"})
+        names = [s["name"] for s in got["series"]]
+        self.assertEqual((len(names), names[-1]), (charts.STACK_SERIES + 1, "سایر"))
+        total = sum(sum(s["values"]) for s in got["series"])
+        self.assertEqual(total, 30)
+        got = charts.data(self.layer, "stacked", {"field": "tier", "series": "kind", "agg": "avg", "value": "sales"})
+        self.assertEqual(len(got["series"]), charts.STACK_SERIES)  # میانگین «سایر» ندارد
+
+    def test_scatter_is_stable_and_sampled(self):
+        got = charts.data(self.layer, "scatter", {"x": "sales", "y": "rooms"})
+        self.assertEqual((len(got["points"]), got["total"], got["sampled"]), (30, 30, False))
+        self.assertEqual(charts.data(self.layer, "scatter", {"x": "sales", "y": "rooms"}), got)
+        with self._pg() as c:
+            c.execute("INSERT INTO shops(sales, rooms, geom) SELECT g, g % 7, ST_SetSRID(ST_MakePoint(51.5, 35.7), 4326)"
+                      " FROM generate_series(1, 2500) g")
+        got = charts.data(self.layer, "scatter", {"x": "sales", "y": "rooms"})
+        self.assertEqual((len(got["points"]), got["total"], got["sampled"]), (charts.SCATTER_POINTS, 2530, True))
+        self.assertEqual(charts.data(self.layer, "scatter", {"x": "sales", "y": "rooms"}), got)  # نمونه ثابت می‌ماند
+
+    def test_radar(self):
+        got = charts.data(self.layer, "radar", {"field": "kind", "indicators": ["sales", "rooms", "id"], "limit": 3})
+        self.assertEqual(got["indicators"], ["sales", "rooms", "id"])
+        self.assertEqual(len(got["series"]), 3)
+        by = {x["name"]: x["values"] for x in got["series"]}
+        self.assertEqual(by["a"][0], 13.0)  # میانگین فروش g = 1، 7، 13، 19، 25
+        # بیشینه‌ی محور روی همه‌ی گروه‌ها حساب می‌شود، نه فقط ۳ گروه نمایش‌داده‌شده
+        self.assertGreaterEqual(got["max"][0], max(v[0] for v in by.values()))
+        got6 = charts.data(self.layer, "radar", {"field": "kind", "indicators": ["sales", "rooms", "id"], "limit": 6})
+        self.assertEqual(got6["max"][0], max(x["values"][0] for x in got6["series"]))
+
+    def test_sankey(self):
+        got = charts.data(self.layer, "sankey", {"field": "kind", "target": "tier", "limit": 60})
+        self.assertEqual(sum(link["value"] for link in got["links"]), 30)  # بدون NULL
+        self.assertEqual({link["source"] for link in got["links"]}, set("abcdef"))
+        self.assertEqual({link["target"] for link in got["links"]}, {"x", "y"})
+        top = charts.data(self.layer, "sankey", {"field": "kind", "target": "tier", "limit": 5})["links"]
+        self.assertEqual(len(top), 5)
+        self.assertEqual([x["value"] for x in top], sorted((x["value"] for x in top), reverse=True))
+        got = charts.data(self.layer, "sankey", {"field": "kind", "target": "tier", "agg": "sum", "value": "sales"},
+                          [51.0, 35.0, 51.105, 36.0])
+        self.assertEqual(sum(link["value"] for link in got["links"]), sum(range(1, 11)))
+
+    def test_profile_needs_a_z_line(self):
+        with self._pg() as c:
+            c.execute("CREATE TABLE tracks(id serial PRIMARY KEY, geom geometry(LineStringZ, 4326))")
+            c.execute("INSERT INTO tracks(geom) VALUES (ST_GeomFromText('LINESTRING Z(51 35 1000, 51 35.001 1050, 51 35.002 1020)', 4326))")
+            c.execute("CREATE TABLE flat(id serial PRIMARY KEY, geom geometry(LineString, 4326))")
+            c.execute("INSERT INTO flat(geom) VALUES (ST_GeomFromText('LINESTRING(51 35, 51 35.001)', 4326))")
+        track = services.add_layer(self.webmap, "public", "tracks")
+        got = charts.data(track, "profile", {"field": "id", "fid": "1"})
+        self.assertEqual(got["z"], [1000.0, 1050.0, 1020.0])
+        self.assertEqual((got["gain"], got["loss"], got["points"]), (50.0, 30.0, 3))
+        self.assertAlmostEqual(got["length_m"], 222.4, delta=1)
+        self.assertEqual(got["dist"][0], 0)
+        with self.assertRaisesMessage(Exception, "پیدا نشد"):
+            charts.data(track, "profile", {"field": "id", "fid": "99"})
+        flat = services.add_layer(self.webmap, "public", "flat")
+        with self.assertRaisesMessage(Exception, "Z"):
+            charts.data(flat, "profile", {"field": "id", "fid": "1"})
+        self.assertEqual(charts.data(self.layer, "kpi", {})["count"], 31)  # لایه‌های دیگر دست‌نخورده
+
+    def test_target_field_travels_in_tiles_and_layout_setting(self):
+        self.layer.style = {**self.layer.style, "popup": ["sales"]}
+        self.layer.save()
+        self.assertEqual(self._save(charts=[self._item("sankey", field="kind", target="tier")]).status_code, 200)
+        self.layer.refresh_from_db()
+        self.assertEqual(self.layer.columns, ["sales", "kind", "tier"])
+        # چیدمان: مقدار نامعتبر نادیده گرفته می‌شود و ذخیره‌ی بی‌چیدمان آن را عوض نمی‌کند
+        self._save(charts_layout="dashboard", is_public=True)
+        self.webmap.refresh_from_db()
+        self.assertEqual(self.webmap.charts_layout, "dashboard")
+        self._save(charts_layout="evil", is_public=True)
+        self._save(title="x", is_public=True)
+        self.webmap.refresh_from_db()
+        self.assertEqual(self.webmap.charts_layout, "dashboard")
+        page = Client().get(reverse("maps:map", args=[self.webmap.slug]))
+        self.assertContains(page, 'class="gp-charts dash"')
+        self.assertEqual(services.duplicate(self.webmap, self.user).charts_layout, "dashboard")
+        self._save(charts_layout="panel", is_public=True)
+        self.assertNotContains(Client().get(reverse("maps:map", args=[self.webmap.slug])), "gp-charts dash")
+
     def test_data_rejects_bad_config(self):
         with self.assertRaises(charts.ChartError):
             charts.data(self.layer, "bar", {"field": "nope"})
@@ -229,6 +364,33 @@ class ChartsIntegrationTests(TestCase):
         self.layer.refresh_from_db()
         self.assertEqual(self.layer.columns, ["sales", "kind"])
         self.assertGreater(self.layer.updated_at, before)  # کلید کش کاشی عوض شد
+
+    def test_series_field_travels_in_tiles_and_save_roundtrip(self):
+        self.layer.style = {**self.layer.style, "popup": ["sales"]}
+        self.layer.save()
+        r = self._save(charts=[self._item("stacked", field="kind", series="tier", percent=False),
+                               self._item("scatter", x="sales", y="rooms")])
+        self.assertEqual(r.status_code, 200)
+        self.layer.refresh_from_db()
+        self.assertEqual(self.layer.columns, ["sales", "kind", "tier"])
+        first, second = list(self.webmap.charts.all())
+        self.assertEqual((first.kind, first.config["percent"], second.config), ("stacked", False, {"x": "sales", "y": "rooms"}))
+
+    def test_add_table_with_chart_hints_opens_composer_with_preset(self):
+        from urllib.parse import parse_qs, urlsplit
+        self.db.plan.maps = 5
+        self.db.plan.save()
+        r = self.client.post(reverse("maps:add_table", args=[self.db.pk]), {
+            "schema": "public", "table": "shops", "map": "new", "chart_kind": "stacked", "chart_field": "kind",
+            "chart_series": "tier", "chart_evil": "x", "chart_percent": "1"})
+        self.assertEqual(r.status_code, 302)
+        parts = urlsplit(r["Location"])
+        self.assertRegex(parts.path, r"^/dashboard/\d+/maps/\d+/$")
+        q = {k: v[0] for k, v in parse_qs(parts.query).items()}
+        self.assertEqual(q, {"chart": "stacked", "table": "public.shops", "field": "kind", "series": "tier", "percent": "1"})
+        r = self.client.post(reverse("maps:add_table", args=[self.db.pk]), {
+            "schema": "public", "table": "shops", "map": "new", "chart_kind": "nope"})
+        self.assertNotIn("?", r["Location"])
 
     def test_preview_endpoint(self):
         url = reverse("maps:chart_preview", args=[self.db.pk, self.webmap.pk])

@@ -71,3 +71,10 @@
 .gp-charts>header button:hover{background:#DDE8DA}
 .gp-charts .gc-host{padding:10px;overflow:auto;overscroll-behavior:contain}
 @media (max-width:640px){.gp-charts{inset-inline:8px;width:auto;top:auto;bottom:8px;height:58vh}}
+/* چیدمان «داشبورد»: پنل نمودارها کنار نقشه جا می‌گیرد و نقشه کوچک می‌شود (فقط صفحه‌ی بزرگ) */
+@media (min-width:901px){
+  .gp-charts.dash{top:0;bottom:0;inset-inline-end:0;width:min(700px,52vw);border-radius:0;border-width:0;border-inline-start:1px solid #C5D2C2;box-shadow:none;background:#EEF2EC}
+  .gp-charts.dash .gc-host{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));align-content:start;gap:12px;padding:12px}
+  body.dash-open #map{inset-inline-end:min(700px,52vw)}
+  body.dash-open .gp-chartbtn{display:none}
+}

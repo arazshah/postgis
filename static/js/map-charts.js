@@ -1,4 +1,4 @@
-// نمودارهای نقشه (ECharts): کارت عددی، میله‌ای، دایره‌ای، هیستوگرام و سری زمانی
+// نمودارهای نقشه (ECharts): کارت عددی، میله‌ای، دایره‌ای، هیستوگرام (با درصد تجمعی)، سری زمانی، ستونی انباشته، پراکنش، رادار، جریان (Sankey) و پروفیل ارتفاعی
 // هم در نقشه عمومی و هم در طراح؛ کلیک روی دسته یا طبقه، عارضه‌های آن را روی نقشه برجسته می‌کند.
 (function () {
   "use strict";
@@ -25,8 +25,24 @@
       if (i < data.labels.length) return ["==", str, data.labels[i]];
       return ["all", ["has", f], ["!", ["in", str, ["literal", data.labels]]]];  // «سایر»
     }
+    if (chart.kind === "radar") return data.series[i] ? ["==", str, data.series[i].name] : null;
+    if (chart.kind === "sankey") {
+      const l = data.links[i];
+      return l ? ["all", ["==", str, l.source], ["==", ["to-string", ["get", chart.config.target]], l.target]] : null;
+    }
+    if (chart.kind === "stacked") {
+      const [si, di] = String(i).split(":").map(Number), name = data.series[si] && data.series[si].name;
+      const series = ["to-string", ["get", chart.config.series]], x = ["==", str, data.labels[di]];
+      if (name === undefined) return null;
+      if (name === "سایر" && si === data.series.length - 1 && data.series.length > 1) {
+        return ["all", x, ["has", chart.config.series], ["!", ["in", series, ["literal", data.series.slice(0, -1).map((s) => s.name)]]]];
+      }
+      return ["all", x, ["==", series, name]];
+    }
     if (chart.kind === "hist") {
       const num = ["to-number", ["get", f]], last = i === data.counts.length - 1;
+      // منحنی تجمعی: همه‌ی عارضه‌های تا این لبه («۸۰٪ تا ۵۰۰ متری»)
+      if (chart.config.cumulative) return ["all", ["has", f], ["<=", num, data.edges[i + 1]]];
       // طبقه‌های سیمبولوژی بازند (کمتر از اولین مرز، و از آخرین مرز به بالا) حتی اگر نمودار فقط محدوده دیده‌شده باشد
       const lo = data.classes && i === 0 ? null : [">=", num, data.edges[i]];
       const hi = data.classes && last ? null : [last ? "<=" : "<", num, data.edges[i + 1]];
@@ -34,7 +50,7 @@
     }
     return null;
   }
-  const clickable = (chart) => chart.kind === "bar" || chart.kind === "pie" || chart.kind === "hist";
+  const clickable = (chart) => ["bar", "pie", "hist", "stacked", "radar", "sankey"].includes(chart.kind);
 
   // ---- ستون‌ها و رنگ‌ها: از سیمبولوژی لایه اگر روی همین ستون باشد
   function colors(chart, data, layer, cfg) {
@@ -42,6 +58,22 @@
     if (chart.kind === "hist") {
       if (data.classes && st.palette) return pick(cfg.palettes[st.palette] || cfg.palettes.YlOrRd, data.counts.length);
       return data.counts.map(() => base);
+    }
+    if (chart.kind === "radar") {
+      const cats = same && st.mode === "categorized" ? new Map((st.categories || []).map((c) => [String(c.value), c.color])) : null;
+      const cycle = cfg.categoryColors || [base];
+      return data.series.map((x, i) => (cats && cats.get(x.name)) || cycle[i % cycle.length]);
+    }
+    if (chart.kind === "sankey") {
+      const cycle = cfg.categoryColors || [base], out = {};
+      data.links.forEach((l) => [l.source, l.target].forEach((n) => { if (!(n in out)) out[n] = cycle[Object.keys(out).length % cycle.length]; }));
+      return out;
+    }
+    if (chart.kind === "stacked") {
+      const cats = st.mode === "categorized" && st.field === chart.config.series
+        ? new Map((st.categories || []).map((c) => [String(c.value), c.color])) : null;
+      const cycle = cfg.categoryColors || [base];
+      return data.series.map((x, i) => x.name === "سایر" && i === data.series.length - 1 && i > 0 ? NOVAL : (cats && cats.get(x.name)) || cycle[i % cycle.length]);
     }
     if (chart.kind === "bar" || chart.kind === "pie") {
       const cats = same && st.mode === "categorized" ? new Map((st.categories || []).map((c) => [String(c.value), c.color])) : null;
@@ -53,7 +85,7 @@
     return [base];
   }
 
-  const slug = (s) => String(s || "chart").replace(/[\\/:*?"<>|\s]+/g, "-").slice(0, 60);
+  const slug = (s) => String(s || "chart").replace(/[\u200c\u200d]/g, "").replace(/[\\/:*?"<>|\s]+/g, "-").slice(0, 60) || "chart";
   function download(name, blob) {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -66,7 +98,21 @@
   const csvCell = (v) => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
 
   function csvRows(chart, data) {
-    if (chart.kind === "hist") return [["از", "تا", "تعداد"], ...data.counts.map((c, i) => [data.edges[i], data.edges[i + 1], c])];
+    if (chart.kind === "hist") {
+      const total = data.counts.reduce((a, b) => a + b, 0) || 1;
+      let run = 0;
+      return [["از", "تا", "تعداد", "درصد تجمعی"], ...data.counts.map((c, i) => {
+        run += c;
+        return [data.edges[i], data.edges[i + 1], c, Math.round(run / total * 1000) / 10];
+      })];
+    }
+    if (chart.kind === "stacked") {
+      return [[chart.config.field, ...data.series.map((x) => x.name)], ...data.labels.map((l, j) => [l, ...data.series.map((x) => x.values[j])])];
+    }
+    if (chart.kind === "scatter") return [[chart.config.x, chart.config.y], ...data.points];
+    if (chart.kind === "radar") return [[chart.config.field, ...data.indicators], ...data.series.map((x) => [x.name, ...x.values])];
+    if (chart.kind === "sankey") return [["مبدأ", "مقصد", "مقدار"], ...data.links.map((l) => [l.source, l.target, l.value])];
+    if (chart.kind === "profile") return [["فاصله (متر)", "ارتفاع (متر)"], ...data.dist.map((d, i) => [d, data.z[i]])];
     if (chart.kind === "time") return [["تاریخ", "مقدار"], ...data.labels.map((l, i) => [l, data.values[i]])];
     if (chart.kind === "kpi") return [["مقدار", "تعداد عارضه"], [data.value, data.count]];
     const rows = [[chart.config.field, "مقدار"], ...data.labels.map((l, i) => [l, data.values[i]])];
@@ -106,6 +152,83 @@
           data: items.map((x, i) => Object.assign(x, {itemStyle: {color: cols[i], opacity: dim(i), borderColor: "#fff", borderWidth: 2}}))}],
       });
     }
+    if (chart.kind === "stacked") {
+      const n = data.labels.length, pct = data.percent;
+      const totals = data.labels.map((_, j) => data.series.reduce((a, x) => a + (x.values[j] || 0), 0));
+      return Object.assign(base, {
+        grid: Object.assign({}, hgrid, {bottom: 40}),
+        legend: {bottom: 0, type: "plain", textStyle: {fontFamily: FONT, color: INK}, itemWidth: 12, itemHeight: 12},
+        tooltip: Object.assign({trigger: "axis", axisPointer: {type: "shadow"}, formatter: (a) => `${esc(a[0].axisValue)}<br>` + a.map((x) =>
+          `${x.marker} ${esc(x.seriesName)}: ${fmt(x.data.raw)}${pct ? ` (${FA(Math.round(x.value * 10) / 10)}٪)` : ""}`).join("<br>")}, tip),
+        xAxis: {type: "value", inverse: true, max: pct ? 100 : undefined, axisLabel: pct ? Object.assign({}, axisLabel, {formatter: (v) => FA(v) + "٪"}) : axisLabel, splitLine: split},
+        yAxis: {type: "category", inverse: true, position: "right", data: data.labels, axisTick: {show: false},
+          axisLabel: {fontFamily: FONT, color: INK, width: 88, overflow: "truncate", align: "left", margin: 10}},
+        series: data.series.map((x, si) => ({type: "bar", stack: "t", name: x.name, barMaxWidth: 20, itemStyle: {color: cols[si]},
+          data: x.values.map((v, j) => ({value: pct ? (totals[j] ? v / totals[j] * 100 : 0) : v, raw: v,
+            itemStyle: {color: cols[si], opacity: dim(`${si}:${j}`), borderColor: "#fff", borderWidth: n > 12 ? 0 : 1}}))})),
+      });
+    }
+    if (chart.kind === "radar") {
+      return Object.assign(base, {
+        tooltip: Object.assign({trigger: "item", formatter: (p) => `<b>${esc(p.name)}</b><br>` + p.value.map((v, i) =>
+          `${esc(data.indicators[i])}: ${fmt(v)}`).join("<br>")}, tip),
+        legend: {bottom: 0, type: "plain", textStyle: {fontFamily: FONT, color: INK}, itemWidth: 12, itemHeight: 12, data: data.series.map((x) => x.name)},
+        radar: {indicator: data.indicators.map((n, i) => ({name: n, max: data.max[i] > 0 ? data.max[i] * 1.05 : 1})), radius: "58%", center: ["50%", "46%"],
+          axisName: {fontFamily: FONT, color: INK, fontSize: 11}, splitLine: {lineStyle: {color: GRID}}, splitArea: {show: false},
+          axisLine: {lineStyle: {color: GRID}}},
+        series: [{type: "radar", symbolSize: 5, data: data.series.map((x, i) => ({name: x.name, value: x.values.map((v) => v === null ? 0 : v),
+          lineStyle: {color: cols[i], width: 2, opacity: dim(i)}, itemStyle: {color: cols[i], opacity: dim(i)},
+          areaStyle: {color: cols[i], opacity: 0.12 * dim(i)}}))}],
+      });
+    }
+    if (chart.kind === "sankey") {
+      const nodes = new Map();
+      data.links.forEach((l) => { nodes.set("a:" + l.source, l.source); nodes.set("b:" + l.target, l.target); });
+      return Object.assign(base, {
+        tooltip: Object.assign({trigger: "item", formatter: (p) => p.dataType === "edge"
+          ? `${esc(p.data.source.slice(2))} ← ${esc(p.data.target.slice(2))}<br>${fmt(p.value)}` : `${esc(p.name.slice(2))}: ${fmt(p.value)}`}, tip),
+        series: [{type: "sankey", left: 8, right: 84, top: 8, bottom: 8, nodeWidth: 14, nodeGap: 10, draggable: false,
+          emphasis: {focus: "adjacency"}, lineStyle: {color: "gradient", curveness: 0.5, opacity: 0.45},
+          label: {fontFamily: FONT, color: INK, fontSize: 11, formatter: (p) => p.name.slice(2)},
+          data: [...nodes].map(([k, v]) => ({name: k, itemStyle: {color: cols[v]}})),
+          links: data.links.map((l, i) => ({source: "a:" + l.source, target: "b:" + l.target, value: l.value,
+            lineStyle: {opacity: sel === null || sel === i ? 0.45 : 0.08}}))}],
+      });
+    }
+    if (chart.kind === "profile") {
+      const km = data.dist[data.dist.length - 1] >= 3000, dist = (v) => km ? fmt(Math.round(v / 100) / 10) + " km" : fmt(Math.round(v)) + " m";
+      return Object.assign(base, {
+        grid: Object.assign({}, grid, {bottom: 16, right: 28}),
+        tooltip: Object.assign({trigger: "axis", formatter: (a) => `${dist(a[0].value[0])}<br>ارتفاع ${fmt(a[0].value[1])} متر`}, tip),
+        xAxis: {type: "value", min: 0, max: data.dist[data.dist.length - 1] || 1, axisLabel: Object.assign({}, axisLabel, {formatter: dist, hideOverlap: true}), splitLine: split},
+        yAxis: {type: "value", scale: true, axisLabel: Object.assign({}, axisLabel, {formatter: (v) => fmt(v)}), splitLine: split},
+        series: [{type: "line", showSymbol: data.dist.length < 60, data: data.dist.map((d, i) => [d, data.z[i]]),
+          lineStyle: {color: cols[0], width: 2.5}, itemStyle: {color: cols[0]}, areaStyle: {color: cols[0], opacity: 0.15}}],
+      });
+    }
+    if (chart.kind === "scatter") {
+      return Object.assign(base, {
+        grid: {left: 8, right: 16, top: 24, bottom: 28, containLabel: true},
+        tooltip: Object.assign({trigger: "item", formatter: (p) => `${esc(chart.config.x)}: ${fmt(p.value[0])}<br>${esc(chart.config.y)}: ${fmt(p.value[1])}`}, tip),
+        xAxis: {type: "value", name: chart.config.x, nameLocation: "middle", nameGap: 26, scale: true, axisLabel, splitLine: split, nameTextStyle: {fontFamily: FONT, color: MUTED}},
+        yAxis: {type: "value", name: chart.config.y, scale: true, axisLabel, splitLine: split, nameTextStyle: {fontFamily: FONT, color: MUTED, align: "left"}},
+        series: [{type: "scatter", symbolSize: 7, data: data.points, itemStyle: {color: cols[0], opacity: 0.55}}],
+      });
+    }
+    if (chart.kind === "hist" && chart.config.cumulative) {
+      const total = data.counts.reduce((a, b) => a + b, 0) || 1;
+      let run = 0;
+      const cum = data.counts.map((c) => { run += c; return Math.round(run / total * 1000) / 10; });
+      return Object.assign(base, {
+        grid: Object.assign({}, grid, {bottom: 16}),
+        tooltip: Object.assign({trigger: "axis", formatter: (a) => `تا ${fmt(data.edges[a[0].dataIndex + 1])}<br>${FA(a[0].value)}٪ عارضه‌ها`}, tip),
+        xAxis: {type: "category", data: data.counts.map((_, i) => fmt(data.edges[i + 1])), boundaryGap: false,
+          axisLabel: {fontFamily: FONT, color: MUTED, hideOverlap: true, fontSize: 11}},
+        yAxis: {type: "value", min: 0, max: 100, axisLabel: Object.assign({}, axisLabel, {formatter: (v) => FA(v) + "٪"}), splitLine: split},
+        series: [{type: "line", smooth: 0.15, data: cum.map((v, i) => ({value: v, symbolSize: sel === i ? 13 : 6})), showSymbol: true,
+          lineStyle: {color: cols[0], width: 2.5}, itemStyle: {color: sel === null ? cols[0] : "#E0A526"}, areaStyle: {color: cols[0], opacity: 0.12}}],
+      });
+    }
     if (chart.kind === "hist") {
       return Object.assign(base, {
         grid: Object.assign({}, grid, {bottom: 16}),
@@ -128,7 +251,10 @@
   }
 
   const heightOf = (chart, data) => chart.kind === "bar" && data ? Math.max(130, 36 + (data.labels.length + (data.other != null ? 1 : 0)) * 28)
-    : chart.kind === "pie" ? 270 : 220;
+    : chart.kind === "stacked" && data ? Math.max(170, 90 + data.labels.length * 30)
+      : chart.kind === "sankey" && data ? Math.max(220, 40 + 28 * Math.max(new Set(data.links.map((l) => l.source)).size, new Set(data.links.map((l) => l.target)).size))
+        : chart.kind === "radar" ? 320
+      : chart.kind === "pie" ? 270 : chart.kind === "scatter" ? 280 : 220;
 
   // ECharts عرض متن را هنگام رسم می‌سنجد؛ تا فونت بارگذاری نشده برچسب‌ها روی هم می‌افتند
   const fontsReady = (document.fonts && document.fonts.load ? Promise.all([
@@ -176,7 +302,9 @@
       const {chart, data, body} = card;
       card.note.textContent = "";
       if (!data) return;
-      const empty = chart.kind === "kpi" ? false : chart.kind === "hist" ? !data.counts.length : !data.labels.length;
+      const empty = chart.kind === "kpi" ? false : chart.kind === "hist" ? !data.counts.length
+        : chart.kind === "scatter" ? !data.points.length : chart.kind === "radar" ? !data.series.length
+          : chart.kind === "sankey" ? !data.links.length : chart.kind === "profile" ? !data.z.length : !data.labels.length;
       if (empty) { body.innerHTML = '<p class="gc-empty">داده‌ای برای نمایش نیست.</p>'; card.inst && card.inst.dispose(); card.inst = null; return; }
       if (chart.kind === "kpi") {
         const what = chart.config.agg === "count" ? "عارضه" : `${AGG[chart.config.agg]} ${chart.config.value}`;
@@ -189,7 +317,10 @@
       if (!card.inst || card.inst.isDisposed()) {
         body.innerHTML = "";
         card.inst = echarts.init(body, null, {renderer: "svg"});
-        card.inst.on("click", (p) => { if (p.dataIndex !== undefined) select(card, p.dataIndex); });
+        card.inst.on("click", (p) => {
+          if (card.chart.kind === "sankey" && p.dataType !== "edge") return;
+          if (p.dataIndex !== undefined) select(card, card.chart.kind === "stacked" ? `${p.seriesIndex}:${p.dataIndex}` : p.dataIndex);
+        });
         fresh = true;
       }
       const sel = active && active.key === chart.key ? active.i : null;
@@ -198,6 +329,8 @@
       card.inst.setOption(option(chart, data, colors(chart, data, layerOf(chart), cfg), sel), !fresh && card.kind !== chart.kind);
       card.kind = chart.kind;
       if (clickable(chart)) card.note.textContent = sel === null ? "برای برجسته شدن روی نقشه، روی یک ردیف بزنید." : "عارضه‌های انتخاب‌شده روی نقشه برجسته‌اند.";
+      else if (chart.kind === "profile") card.note.textContent = `طول ${fmt(Math.round(data.length_m / 100) / 10)} کیلومتر · صعود ${fmt(data.gain)} متر · نزول ${fmt(data.loss)} متر`;
+      else if (chart.kind === "scatter" && data.sampled) card.note.textContent = `نمونه ${fmt(data.points.length)} نقطه از ${fmt(data.total)}`;
     }
 
     // پاسخ کندتر از درخواست تازه‌تر (جابه‌جایی سریع نقشه) دور ریخته می‌شود
@@ -211,7 +344,8 @@
         if (active && active.key === card.chart.key && card.data) {
           // داده تازه شد؛ برجسته‌سازی با همان شاخص اگر هنوز وجود دارد
           const n = card.chart.kind === "hist" ? data.counts.length : (data.labels || []).length + (data.other != null ? 1 : 0);
-          if (active.i >= n) { active = null; gm.highlight(null); if (opts.onSelect) opts.onSelect(null); }
+          // شاخص ستونی انباشته «سری:محور» است؛ رادار و Sankey هم با داده تازه ممکن است جابه‌جا شوند
+          if (["stacked", "radar", "sankey"].includes(card.chart.kind) || active.i >= n) { active = null; gm.highlight(null); if (opts.onSelect) opts.onSelect(null); }
         }
         draw(card);
       } catch (err) {
@@ -229,8 +363,19 @@
     function tools(card, act) {
       const {chart} = card;
       if (act === "png" && card.inst) {
-        const url = card.inst.getDataURL({type: "png", pixelRatio: 2, backgroundColor: "#fff"});
-        fetch(url).then((r) => r.blob()).then((b) => download(slug(chart.title || chart.autoTitle) + ".png", b));
+        // رندر SVG همیشه SVG می‌دهد؛ برای PNG واقعی روی بوم می‌کشیم (فونت سایت داخل تصویر SVG بارگذاری نمی‌شود و فونت سیستم می‌آید)
+        const w = card.inst.getWidth(), h = card.inst.getHeight(), k = 2, img = new Image();
+        img.onload = () => {
+          const c = document.createElement("canvas");
+          c.width = w * k;
+          c.height = h * k;
+          const g = c.getContext("2d");
+          g.fillStyle = "#fff";
+          g.fillRect(0, 0, c.width, c.height);
+          g.drawImage(img, 0, 0, c.width, c.height);
+          c.toBlob((b) => b && download(slug(chart.title || chart.autoTitle) + ".png", b), "image/png");
+        };
+        img.src = card.inst.getDataURL({type: "svg", backgroundColor: "#fff"});
       }
       if (act === "csv" && card.data) {
         const text = csvRows(chart, card.data).map((r) => r.map(csvCell).join(",")).join("\n");

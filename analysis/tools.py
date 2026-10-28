@@ -31,6 +31,8 @@ TOOLS = [
     Tool("buffer", "حریم (بافر)", "دور هر عارضه حریمی به فاصله دلخواه می‌کشد؛ مثلاً حریم ۵۰۰ متری ایستگاه‌ها.", "buffer"),
     Tool("nearest", "نزدیک‌ترین عارضه", "برای هر عارضه، نزدیک‌ترین عارضه لایه دیگر و فاصله‌اش به متر.", "nearest"),
     Tool("count", "شمارش در چندضلعی", "تعداد نقطه‌های یک لایه داخل هر چندضلعی؛ مثلاً مدرسه‌های هر محله.", "count"),
+    Tool("overlap", "سهم همپوشانی", "سهم هر دسته (مثلاً کاربری زمین) از مساحت هر چندضلعی (مثلاً محله) با برش دو لایه چندضلعی.", "overlap"),
+    Tool("change", "تغییر بین دو نسخه", "دو نسخه‌ی یک لایه چندضلعی (مثلاً کاربری ۱۴۰۰ و ۱۴۰۵) را برش می‌دهد و مساحت هر «از ← به» را می‌دهد.", "change"),
     Tool("hexbin", "نقشه تراکم شش‌ضلعی", "شبکه شش‌ضلعی روی نقطه‌ها و تعداد هر خانه؛ برای نقشه حرارتی.", "hexbin"),
     Tool("isochrone", "حوزه دسترسی", "محدوده‌ای که از یک نقطه با پیمودن فاصله مشخص روی شبکه معابر می‌رسید.", "isochrone"),
 ]
@@ -85,6 +87,17 @@ def _geom_of(t: TableRef, want: tuple[str, ...] | None = None, ex: Explorer | No
     if want and not any(w in gtype for w in want) and gtype not in ("GEOMETRY", ""):
         raise ToolError(f"جدول {t.name} از نوع {gtype} است؛ این ابزار {'/'.join(want)} می‌خواهد.")
     return g["column"], int(g.get("srid") or 0), gtype
+
+
+NUMERIC = {"int2", "int4", "int8", "float4", "float8", "numeric"}
+
+
+def _in_srid(alias: str, col: str, srid: int, target: int):
+    """ستون مکانی در SRID لایه دیگر، برای شرط ST_Intersects (نمایه مکانی لایه اول)."""
+    ident = sql.SQL("{}.{}").format(sql.Identifier(alias), sql.Identifier(col))
+    if srid != target and srid != 0 and target != 0:
+        return sql.SQL("ST_Transform({}, {})").format(ident, sql.Literal(target))
+    return ident
 
 
 def _cols(ex, t):
@@ -157,14 +170,65 @@ def _prepare(db, key: str, params: dict):
         p, q = table("layer"), table("other")
         cp, sp, _ = _geom_of(p, ("POLYGON",), ex)
         cq, sq, _ = _geom_of(q)
-        gq_in_p = sql.SQL("ST_Transform(q.{}, {})").format(sql.Identifier(cq), sql.Literal(sp)) \
-            if sp != sq and sp not in (0,) and sq not in (0,) else sql.SQL("q.{}").format(sql.Identifier(cq))
+        gq_in_p = _in_srid("q", cq, sq, sp)
         attrs = _attrs(ex, p, "p")
+        extra = sql.SQL("")
+        value = (params.get("value") or "").strip()
+        if value:  # جمع یا میانگین یک ستون عددی لایه نقطه‌ای در هر چندضلعی
+            agg = params.get("agg") if params.get("agg") in ("sum", "avg", "min", "max") else "sum"
+            col_q = next((c for c in ex.columns(q) if c["name"] == value and not c["spatial"]), None)
+            if col_q is None or col_q["base"] not in NUMERIC:
+                raise ToolError("ستون مقدار باید یک ستون عددی در لایه نقطه‌ای باشد.")
+            extra = sql.SQL(", {a}(q.{v}::float8) AS {n}").format(
+                a=sql.SQL(agg), v=sql.Identifier(value), n=sql.Identifier(f"{agg}_{value}"[:63]))
         body = sql.SQL(
-            "SELECT {attrs}(SELECT count(*) FROM {Q} q WHERE ST_Intersects(p.{cp}, {gq})) AS point_count, "
-            "{gp} AS geom FROM {P} p WHERE p.{cp} IS NOT NULL").format(
+            "SELECT {attrs}c.point_count{extra_out}, {gp} AS geom FROM {P} p CROSS JOIN LATERAL "
+            "(SELECT count(*) AS point_count{extra} FROM {Q} q WHERE ST_Intersects(p.{cp}, {gq})) c "
+            "WHERE p.{cp} IS NOT NULL").format(
             attrs=sql.SQL(", ").join(attrs) + sql.SQL(", ") if attrs else sql.SQL(""), Q=sql.Identifier(q.schema, q.name),
-            cp=sql.Identifier(cp), gq=gq_in_p, gp=_geom4326("p", cp, sp), P=sql.Identifier(p.schema, p.name))
+            cp=sql.Identifier(cp), gq=gq_in_p, gp=_geom4326("p", cp, sp), P=sql.Identifier(p.schema, p.name),
+            extra=extra, extra_out=sql.SQL(", c.{}").format(sql.Identifier(f"{agg}_{value}"[:63])) if value else sql.SQL(""))
+    elif key == "overlap":
+        p, q = table("layer"), table("other")
+        cp, sp, _ = _geom_of(p, ("POLYGON",), ex)
+        cq, sq, _ = _geom_of(q, ("POLYGON",), ex)
+        cat, zone = (params.get("category") or "").strip(), (params.get("zone") or "").strip()
+        if cat not in {c["name"] for c in ex.columns(q) if not c["spatial"]}:
+            raise ToolError("ستون دسته (مثلاً کاربری) را از لایه دوم انتخاب کنید.")
+        if zone not in {c["name"] for c in ex.columns(p) if not c["spatial"]}:
+            raise ToolError("ستون نام یا شناسه چندضلعی‌ها (مثلاً نام محله) را از لایه اول انتخاب کنید.")
+        pz, qz = _geom4326("p", cp, sp), _geom4326("q", cq, sq)
+        body = sql.SQL(
+            "WITH j AS (SELECT p.ctid::text AS pid, p.{zone}::text AS zone, q.{cat}::text AS category, "
+            "ST_Area(ST_MakeValid({pz})::geography) AS zone_area, i.g FROM {P} p JOIN {Q} q ON ST_Intersects(p.{cp}, {gq}) "
+            "CROSS JOIN LATERAL (SELECT ST_CollectionExtract(ST_Intersection(ST_MakeValid({pz}), ST_MakeValid({qz})), 3) AS g) i "
+            "WHERE p.{cp} IS NOT NULL AND q.{cq} IS NOT NULL AND q.{cat} IS NOT NULL AND NOT ST_IsEmpty(i.g)) "
+            "SELECT zone, category, round(sum(ST_Area(g::geography))::numeric, 1) AS area_m2, "
+            "round((100 * sum(ST_Area(g::geography)) / NULLIF(max(zone_area), 0))::numeric, 2) AS share_pct, "
+            "ST_Multi(ST_Union(g))::geometry(MultiPolygon, 4326) AS geom FROM j GROUP BY pid, zone, category").format(
+            zone=sql.Identifier(zone), cat=sql.Identifier(cat), pz=pz, qz=qz, P=sql.Identifier(p.schema, p.name),
+            Q=sql.Identifier(q.schema, q.name), cp=sql.Identifier(cp), cq=sql.Identifier(cq),
+            gq=_in_srid("q", cq, sq, sp))
+    elif key == "change":
+        p, q = table("layer"), table("other")
+        cp, sp, _ = _geom_of(p, ("POLYGON",), ex)
+        cq, sq, _ = _geom_of(q, ("POLYGON",), ex)
+        cat, cat2 = (params.get("category") or "").strip(), (params.get("category2") or "").strip()
+        if cat not in {c["name"] for c in ex.columns(p) if not c["spatial"]}:
+            raise ToolError("ستون دسته‌ی نسخه‌ی قدیم (لایه اول) را انتخاب کنید.")
+        if cat2 not in {c["name"] for c in ex.columns(q) if not c["spatial"]}:
+            raise ToolError("ستون دسته‌ی نسخه‌ی جدید (لایه دوم) را انتخاب کنید.")
+        pz, qz = _geom4326("p", cp, sp), _geom4326("q", cq, sq)
+        body = sql.SQL(
+            "WITH j AS (SELECT p.{cat}::text AS from_category, q.{cat2}::text AS to_category, i.g FROM {P} p "
+            "JOIN {Q} q ON ST_Intersects(p.{cp}, {gq}) CROSS JOIN LATERAL (SELECT ST_CollectionExtract("
+            "ST_Intersection(ST_MakeValid({pz}), ST_MakeValid({qz})), 3) AS g) i WHERE p.{cp} IS NOT NULL AND q.{cq} IS NOT NULL "
+            "AND p.{cat} IS NOT NULL AND q.{cat2} IS NOT NULL AND NOT ST_IsEmpty(i.g)) "
+            "SELECT from_category, to_category, round(sum(ST_Area(g::geography))::numeric, 1) AS area_m2, "
+            "ST_Multi(ST_Union(g))::geometry(MultiPolygon, 4326) AS geom FROM j GROUP BY 1, 2").format(
+            cat=sql.Identifier(cat), cat2=sql.Identifier(cat2), P=sql.Identifier(p.schema, p.name),
+            Q=sql.Identifier(q.schema, q.name), cp=sql.Identifier(cp), cq=sql.Identifier(cq), pz=pz, qz=qz,
+            gq=_in_srid("q", cq, sq, sp))
     elif key == "hexbin":
         t = table("layer")
         col, srid, _ = _geom_of(t)
@@ -212,12 +276,17 @@ def summarize(db, key: str, params: dict) -> str:
             parts.append(f"{label} {params[k]} {unit}")
     if key == "isochrone" and params.get("lon"):
         parts.append(f"نقطه {params.get('lon')}, {params.get('lat')}")
+    if params.get("value"):
+        parts.append(f"{params.get('agg') or 'sum'} {params['value']}")
+    if params.get("category"):
+        parts.append(f"دسته {params['category']}" + (f" ← {params['category2']}" if params.get("category2") else ""))
     if params.get("dissolve") == "on":
         parts.append("یکپارچه")
     return " · ".join(parts)[:300]
 
 
-PUBLIC_PARAMS = ("layer", "other", "label", "distance", "size", "lon", "lat", "dissolve", "output", "replace")
+PUBLIC_PARAMS = ("layer", "other", "label", "distance", "size", "lon", "lat", "dissolve", "output", "replace", "value", "agg",
+                 "category", "zone", "category2")
 
 
 def run_job(job) -> dict:
