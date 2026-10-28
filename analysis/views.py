@@ -62,7 +62,8 @@ def _entries(db):
     for q in Question.objects.filter(database=db).select_related("job")[:HISTORY_LIMIT]:
         steps = [{**s, "label": OP_LABELS.get(s.get("op"), s.get("op"))} for s in q.steps or []]
         out.append({"kind": "ask", "id": f"q{q.pk}", "pk": q.pk, "title": q.text, "glyph": "؟", "detail": q.goal,
-                    "ops": q.operations, "steps": steps, "result": q.result_kind, "notes": q.notes, "answer": q.answer,
+                    "ops": q.operations, "steps": steps, "result": q.result_kind, "notes": q.notes,
+                    "plan_text": q.plan_text, "summary": q.summary, "preview": q.preview, "followable": q.result_kind == "layer", "answer": q.answer,
                     "table": q.output_table, "rows": q.rows, "job": q.job,
                     "created": q.created_at, "together": _together(db, q.output_table, q.layers)})
     out.sort(key=lambda e: e["created"], reverse=True)
@@ -125,12 +126,30 @@ def page(request, pk):
                 return here
             try:
                 ask.request(db, request.user, request.POST.get("question", ""), request.POST.getlist("layers"),
-                            request.POST.get("output", ""), share_values=request.POST.get("share_values") == "on")
+                            request.POST.get("output", ""), share_values=request.POST.get("share_values") == "on",
+                            confirm=request.POST.get("confirm") == "on", parent_pk=request.POST.get("parent"))
             except (ask.AskError, ExplorerError) as exc:
                 messages.error(request, str(exc))
             else:
                 messages.success(request, "پرسش در صف قرار گرفت؛ معمولاً کمتر از یک دقیقه طول می‌کشد.")
             return here
+        if action in ("ask_run", "ask_cancel"):
+            pk_q = request.POST.get("q", "")
+            q = Question.objects.filter(database=db, pk=int(pk_q), result_kind=Question.Result.PLAN).first() \
+                if pk_q.isdigit() else None
+            if q is None:
+                messages.error(request, "این برنامه دیگر در انتظار تأیید نیست.")
+            elif action == "ask_cancel":
+                q.delete()
+                messages.success(request, "پرسش لغو شد.")
+            elif _busy(db):
+                messages.error(request, "یک تحلیل در حال اجراست؛ صبر کنید تمام شود.")
+            else:
+                q.job = Job.objects.create(kind=Job.Kind.ASK, database=db, user=request.user, status=Job.Status.QUEUED)
+                q.result_kind = ""
+                q.save(update_fields=["job", "result_kind"])
+                messages.success(request, "برنامه تأیید شد و در صف اجرا قرار گرفت.")
+            return redirect(f"{request.path}#history")
         if action == "tool":
             if db.status != db.Status.ACTIVE:
                 messages.error(request, "پایگاه داده فقط‌خواندنی یا غیرفعال است.")
@@ -159,13 +178,21 @@ def page(request, pk):
     spatial = [t for t in tables if t.geometry]
     history = _entries(db)
     # «ویرایش و پرسش دوباره»: فرم پرسش با متن، لایه‌ها و نام جدول یک پرسش قبلی پر می‌شود
-    again = None
+    again = follow = None
     if request.GET.get("again", "").isdigit():
         again = Question.objects.filter(database=db, pk=int(request.GET["again"])).first()
+    if request.GET.get("follow", "").isdigit():
+        follow = Question.objects.filter(database=db, pk=int(request.GET["follow"]),
+                                         result_kind=Question.Result.LAYER).first()
+    # لایه‌های از پیش‌انتخاب‌شده: برای «ادامه» خروجی پرسش قبلی (که جدول مکانی خود پایگاه است) و ورودی‌های آن
+    prefill_layers = list(dict.fromkeys(
+        ([f"public.{follow.output_table}"] + list(follow.layers)) if follow else (again.layers if again else [])))[:ask.MAX_LAYERS]
+    parent_pk = follow.pk if follow else (again.parent_id if again else None)
     return render(request, "analysis/page.html", {
         "db": db, "tables": tables, "spatial": spatial, "section": "analysis", "cfg": cfg, "history": history,
         "active": any(e["job"] and e["job"].active for e in history), "tools": tools.TOOLS,
         "open_tool": request.GET.get("tool") if request.GET.get("tool") in tools.TOOL_MAP else tools.TOOLS[0].key, "has_routing": any(t.schema == "routing" and t.name == "ways"
                                                                     for t in tables),
         "max_layers": ask.MAX_LAYERS, "max_auto": ask.MAX_AUTO_LAYERS, "layer_limit": ask.LAYER_LIMIT, "again": again,
+        "follow": follow, "prefill_layers": prefill_layers, "parent_pk": parent_pk,
     })

@@ -33,6 +33,7 @@ class LlmConfig(models.Model):
 
 class Question(models.Model):
     class Result(models.TextChoices):
+        PLAN = "plan", "برنامه در انتظار تأیید"
         LAYER = "layer", "لایه ساخته شد"
         TABLE = "table", "جدول داده ساخته شد"
         EMPTY = "empty", "هیچ عارضه‌ای پیدا نشد"
@@ -51,6 +52,12 @@ class Question(models.Model):
     answer = models.TextField("پاسخ متنی", blank=True)
     result_kind = models.CharField("نوع نتیجه", max_length=10, choices=Result.choices, blank=True)
     steps = models.JSONField("مراحل اجرا", default=list, blank=True)
+    confirm = models.BooleanField("نمایش برنامه پیش از اجرا", default=False)
+    plan = models.JSONField("برنامهٔ تأییدشده", null=True, blank=True)
+    plan_text = models.JSONField("شرح فارسی برنامه", default=list, blank=True)
+    summary = models.TextField("خلاصهٔ نتیجه", blank=True)
+    preview = models.TextField("پیش‌نمایش نقشه (SVG)", blank=True)
+    parent = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="followups")
     notes = models.JSONField("یادداشت‌های اجرا", default=list, blank=True)
     attempts = models.PositiveSmallIntegerField("تعداد تلاش مدل", default=1)
     share_values = models.BooleanField("ارسال مقادیر دسته‌ای ستون‌ها به مدل", default=True)

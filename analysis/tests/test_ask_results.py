@@ -332,3 +332,173 @@ class BenchmarkTests(SimpleTestCase):
         rows = benchmark.run(SeqClient(plan), qs[:1])
         self.assertTrue(rows[0]["ok"], rows[0])  # ۵۷ مدرسهٔ متوسطه اول
         self.assertEqual(benchmark.summary(rows)["accuracy"], 100)
+
+
+class PlanTextTests(SimpleTestCase):
+    def _op(self, op, inputs, params=None, output="o"):
+        return NS(op=op, inputs=inputs, params=params or {}, output=output)
+
+    def test_common_ops_in_persian(self):
+        d = ask._describe_op
+        self.assertIn("«deal» = «اجاره»", d(self._op("filter_attribute", {"vector": "houses"},
+                                                     {"where": {"field": "deal", "op": "eq", "value": "اجاره"}})))
+        self.assertIn("500 متری schools", d(self._op("filter_by_distance", {"vector": "houses", "reference": "schools"},
+                                                     {"max_distance_m": 500})))
+        self.assertIn("حداکثر 300 متر", d(self._op("spatial_nearest", {"source": "a", "target": "b"},
+                                                    {"max_distance": 300})))
+        self.assertIn("به تفکیک «level»", d(self._op("aggregate_table", {"vector": "s"}, {"group_by": ["level"]})))
+        self.assertIn("10 مورد بیشترِ «students»", d(self._op("top_n", {"vector": "s"},
+                                                              {"limit": 10, "score_field": "students"})))
+        self.assertIn("EPSG:32639", d(self._op("crs_transform", {"vector": "s"}, {"target_crs": "EPSG:32639"})))
+
+    def test_unknown_op_and_or_conditions_and_assumptions(self):
+        self.assertIn("weird روی x", ask._describe_op(self._op("weird", {"vector": "x"})))
+        self.assertIn(" یا ", ask._where_text({"or": [{"field": "a", "op": "eq", "value": 1},
+                                                      {"field": "b", "op": "gt", "value": 2}]}))
+        spec = NS(operations=[self._op("buffer", {"vector": "p"}, {"distance": 300})],
+                  metadata={"assumptions": ["فاصله به متر است"]})
+        lines = ask.describe_plan(spec)
+        self.assertEqual(len(lines), 2)
+        self.assertIn("فرض مدل", lines[1])
+
+
+class SummaryAndPreviewTests(SimpleTestCase):
+    def test_layer_summary(self):
+        props = [{"id": i, "deal": "اجاره" if i % 3 else "فروش", "price": 100 + i, "_nearest_distance": 100.0 + i}
+                 for i in range(12)]
+        spec = NS(operations=[NS(inputs={"vector": "houses"})])
+        text = ask.result_summary("layer", props, {"houses": _hs(48)}, spec)
+        self.assertIn("۱۲ عارضه پیدا شد از ۴۸ عارضهٔ «houses» (۲۵٪)", text)
+        self.assertIn("فاصله تا نزدیک‌ترین", text)
+        self.assertIn("«price»: کمینه ۱۰۰", text)
+        self.assertNotIn("«id»", text)  # شناسه آمار ندارد
+        self.assertIn("«اجاره» ۸", text)
+
+    def test_table_summary_has_totals(self):
+        rows = [{"level": "الف", "students_sum": 100}, {"level": "ب", "students_sum": 50}]
+        text = ask.result_summary("table", rows, {}, NS(operations=[]))
+        self.assertIn("جدول با ۲ ردیف", text)
+        self.assertIn("جمع ۱۵۰", text)
+
+    def test_preview_svg_is_valid_for_every_geometry_kind(self):
+        import xml.etree.ElementTree as ET
+
+        def f(g):
+            return {"type": "Feature", "geometry": g, "properties": {}}
+
+        for feats in (
+            [f({"type": "Point", "coordinates": [51.4, 35.7]})],  # تک‌نقطه: دامنهٔ صفر
+            [f({"type": "Point", "coordinates": [51.4 + i / 100, 35.7 + i / 200]}) for i in range(900)],
+            [f({"type": "LineString", "coordinates": [[51, 35], [51.1, 35.2], [51.3, 35.1]]})],
+            [f({"type": "Polygon", "coordinates": [[[51, 35], [51.2, 35], [51.2, 35.2], [51, 35]],
+                                                   [[51.05, 35.05], [51.1, 35.05], [51.1, 35.1], [51.05, 35.05]]]})],
+            [f({"type": "MultiPolygon", "coordinates": [[[[500000, 3900000], [500100, 3900000], [500100, 3900100],
+                                                            [500000, 3900000]]]]})],  # مختصات متری
+        ):
+            svg = ask.preview_svg(feats)
+            root = ET.fromstring(svg)
+            self.assertTrue(root.tag.endswith("svg"))
+            self.assertNotIn("nan", svg.lower())
+        self.assertEqual(ask.preview_svg([f({"type": "Point", "coordinates": []})]), "")
+
+    def test_preview_caps_point_count(self):
+        pts = [{"geometry": {"type": "Point", "coordinates": [51 + i / 1000, 35]}} for i in range(5000)]
+        self.assertLessEqual(ask.preview_svg(pts).count("<circle"), ask.PREVIEW_LIMIT)
+
+
+class FakeExplorer:
+    """جایگزین Explorer برای آزمون run() بدون پایگاه داده."""
+    layers = {}
+
+    def __init__(self, db):
+        pass
+
+    def tables(self):
+        from databases.explorer import TableRef
+        return [TableRef("public", n, i, "r", len(fc["features"]), 0, [{"column": "geom", "type": "POINT"}])
+                for i, (n, fc) in enumerate(self.layers.items())]
+
+    def geojson(self, table, geom_column=None, limit=0):
+        import json
+        return json.dumps(self.layers[table.name])
+
+
+class FakeJob:
+    def __init__(self, q):
+        self.question, self.database, self.progress_log = q, NS(role_name="r"), []
+
+    def set_progress(self, pct, stage=""):
+        self.progress_log.append(stage)
+
+
+def _fake_q(**kw):
+    q = NS(text="خانه‌های اجاره‌ای", layers=["public.houses"], output_table="rent_cases", share_values=True,
+           confirm=False, plan=None, plan_text=[], notes=[], user=None, parent=None, summary="", preview="",
+           goal="", operations=[], steps=[], result_kind="", answer="", attempts=1, rows=0)
+    q.save = lambda update_fields=None: None
+    for k, v in kw.items():
+        setattr(q, k, v)
+    return q
+
+
+class ConfirmFlowTests(SimpleTestCase):
+    """مرحلهٔ ۱: ساخت برنامه و توقف؛ مرحلهٔ ۲: اجرای همان برنامهٔ تأییدشده بدون تماس دوباره با مدل."""
+
+    def setUp(self):
+        try:
+            import s3geo  # noqa: F401
+        except ImportError:
+            self.skipTest("s3geo نصب نیست")
+        from unittest import mock
+        FakeExplorer.layers = {"houses": _hs(30)}
+        self.imported = []
+        self.patches = [mock.patch.object(ask, "Explorer", FakeExplorer),
+                        mock.patch("databases.gdal.import_layer",
+                                   lambda db, path, layer, enc: self.imported.append((layer, path.read_text("utf-8"))))]
+        for p in self.patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_plan_then_run(self):
+        q = _fake_q(confirm=True)
+        client = SeqClient(_plan(_filter("اجاره")))
+        msg = ask.run(FakeJob(q), client=client)
+        self.assertEqual(q.result_kind, "plan")
+        self.assertIn("تأیید", msg)
+        self.assertEqual(len(client.calls), 1)
+        self.assertEqual(self.imported, [])  # هنوز چیزی ذخیره نشده
+        self.assertIn("«deal» = «اجاره»", q.plan_text[0])
+        self.assertIn("rent_cases", q.plan_text[-1])
+        # تأیید: اجرا با همان برنامه، بدون تماس تازه با مدل
+        q.result_kind = ""
+        msg = ask.run(FakeJob(q), client=client)
+        self.assertEqual(len(client.calls), 1)
+        self.assertEqual(q.result_kind, "layer")
+        self.assertEqual(q.rows, 20)
+        self.assertIn("rent_cases", msg)
+        self.assertIn("۲۰ عارضه پیدا شد از ۳۰ عارضهٔ «houses»", q.summary)
+        self.assertTrue(q.preview.startswith("<svg"))
+        self.assertEqual(self.imported[0][0]["table"], "rent_cases")
+
+    def test_plan_with_unknown_value_is_fixed_before_showing(self):
+        q = _fake_q(confirm=True)
+        client = SeqClient(_plan(_filter("rent")), _plan(_filter("اجاره")))
+        ask.run(FakeJob(q), client=client)
+        self.assertEqual(len(client.calls), 2)
+        self.assertIn("اجاره", q.plan_text[0])
+        self.assertFalse(any(n.startswith("هشدار") for n in q.notes))
+
+    def test_unfixable_plan_is_shown_with_a_warning(self):
+        q = _fake_q(confirm=True)
+        ask.run(FakeJob(q), client=SeqClient(_plan(_filter("rent"))))
+        self.assertEqual(q.result_kind, "plan")
+        self.assertTrue(any(n.startswith("هشدار برنامه") for n in q.notes))
+
+    def test_without_confirm_runs_directly_and_follow_up_gets_context(self):
+        q = _fake_q(parent=NS(text="خانه‌های اجاره‌ای", output_table="rent_cases"))
+        client = SeqClient(_plan(_filter("اجاره")))
+        ask.run(FakeJob(q), client=client)
+        self.assertEqual(q.result_kind, "layer")
+        system = client.calls[0][0]["content"]
+        self.assertIn("ادامهٔ پرسش قبلی", system)
+        self.assertIn("rent_cases", system)

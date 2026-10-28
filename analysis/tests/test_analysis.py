@@ -327,6 +327,54 @@ class AnalysisTests(TestCase):
         self.assertIn("by_level", msg)
 
     @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
+    def test_confirm_flow_and_follow_up_through_the_page(self):
+        """پرسش با تأیید: برنامه می‌آید، با «اجرا» اجرا می‌شود؛ سپس «ادامه» نتیجه را لایهٔ ورودی پرسش بعدی می‌کند."""
+        from s3geo import StaticLLMClient
+
+        LlmConfig.objects.create(user=self.user, api_key_encrypted="")
+        url = reverse("analysis:page", args=[self.db.pk])
+        plan = {"goal": "متوسطه اول", "entities": [{"ref": "schools", "kind": "layer"}],
+                "operations": [{"op": "filter_attribute", "inputs": {"vector": "schools"}, "output": "r",
+                                "params": {"where": {"field": "level", "op": "eq", "value": "متوسطه اول"}}}]}
+        client = StaticLLMClient(json.dumps(plan, ensure_ascii=False))
+        q = ask.request(self.db, self.user, "مدرسه‌های متوسطه اول را جدا کن", ["public.schools"], "first_lvl",
+                        confirm=True)
+        ask.run(q.job, client=client)
+        Job.objects.filter(pk=q.job.pk).update(status="done")
+        q.refresh_from_db()
+        self.assertEqual(q.result_kind, "plan")
+        self.assertEqual(self._sql("SELECT to_regclass('public.first_lvl')")[0][0], None)
+        page = self.client.get(url)
+        self.assertContains(page, "برنامهٔ پیشنهادی")
+        self.assertContains(page, "درست است؛ اجرا کن")
+        # تأیید از صفحه: کار تازه در صف و برنامه ثابت
+        self.client.post(url, {"action": "ask_run", "q": q.pk})
+        q.refresh_from_db()
+        self.assertEqual(q.result_kind, "")
+        self.assertEqual(q.job.status, "queued")
+        self.client.post(url, {"action": "ask_run", "q": q.pk})  # تأیید دوباره اثری ندارد
+        ask.run(q.job, client=client)
+        Job.objects.filter(pk=q.job.pk).update(status="done")
+        q.refresh_from_db()
+        self.assertEqual(q.result_kind, "layer")
+        self.assertGreater(q.rows, 0)
+        self.assertTrue(q.preview.startswith("<svg"))
+        page = self.client.get(url)
+        self.assertContains(page, "ادامه با این نتیجه")
+        # ادامه: لایهٔ نتیجه از پیش انتخاب و پرسش جدید به پرسش قبلی وصل می‌شود
+        page = self.client.get(url + f"?follow={q.pk}")
+        self.assertContains(page, 'value="public.first_lvl" checked')
+        q2 = ask.request(self.db, self.user, "از این‌ها فقط بیش از ۴۰۰ دانش‌آموز", ["public.first_lvl"], "",
+                         parent_pk=q.pk)
+        self.assertEqual(q2.parent_id, q.pk)
+        self.assertTrue(any("ادامهٔ پرسش قبلی" in n for n in q2.notes))
+        # لغو برنامهٔ در انتظار
+        Job.objects.filter(pk=q2.job.pk).update(status="done")
+        Question.objects.filter(pk=q2.pk).update(result_kind="plan")
+        self.client.post(url, {"action": "ask_cancel", "q": q2.pk})
+        self.assertFalse(Question.objects.filter(pk=q2.pk).exists())
+
+    @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
     def test_summary_last_still_saves_layer_and_answer(self):
         """برنامهٔ مدل به summarize_vector ختم می‌شود: لایهٔ مرحلهٔ قبل باید ذخیره شود و خلاصه کنارش بیاید."""
         from s3geo import StaticLLMClient

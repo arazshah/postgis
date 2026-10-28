@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import tempfile
 from dataclasses import asdict, dataclass, replace
@@ -54,7 +55,8 @@ def _auto_layers(text: str, spatial: dict) -> list[str]:
     raise AskError(f"بیش از {MAX_AUTO_LAYERS} لایه مکانی دارید؛ لایه‌های مورد نظر را انتخاب کنید.")
 
 
-def request(db, user, text: str, layer_keys: list[str], output: str, share_values: bool = True) -> Question:
+def request(db, user, text: str, layer_keys: list[str], output: str, share_values: bool = True,
+            confirm: bool = False, parent_pk=None) -> Question:
     text = (text or "").strip()
     if len(text) < 8:
         raise AskError("پرسش را کامل‌تر بنویسید.")
@@ -84,9 +86,12 @@ def request(db, user, text: str, layer_keys: list[str], output: str, share_value
         raise AskError("یک پرسش در حال پردازش است؛ صبر کنید تمام شود.")
     if Question.objects.filter(user=user, created_at__gte=timezone.now() - timedelta(days=1)).count() >= DAILY_LIMIT:
         raise AskError(f"حداکثر {DAILY_LIMIT} پرسش در روز.")
+    parent = Question.objects.filter(database=db, pk=int(parent_pk)).first() if str(parent_pk or "").isdigit() else None
+    if parent:
+        notes.append(f"ادامهٔ پرسش قبلی: «{parent.text[:70]}»")
     job = Job.objects.create(kind=Job.Kind.ASK, database=db, user=user, status=Job.Status.QUEUED)
     return Question.objects.create(database=db, user=user, text=text[:2000], layers=layer_keys, output_table=output,
-                                   share_values=share_values, notes=notes, job=job)
+                                   share_values=share_values, confirm=confirm, parent=parent, notes=notes, job=job)
 
 
 def _client(cfg: LlmConfig):
@@ -597,43 +602,72 @@ def _llm_error(exc: Exception) -> str:
     return f"مدل زبانی برنامه تحلیل را نساخت: {msg[:400]}"
 
 
-def analyze(text: str, layers: dict, client, share_values: bool = True, progress=None) -> Outcome:
-    """پرسش فارسی → برنامه s3geo → اجرا؛ با یک اصلاح پیش از اجرا (ستون/مقدار نادرست) و یک اصلاح پس از اجرا
-    (نتیجهٔ خالی یا خطا). خطای خود مدل زبانی (کلید، اتصال) در تلاش اول AskError است."""
-    import s3geo
-    from s3geo import (
-        DagExecutor,
-        DeterministicPlanner,
-        LLMQuerySpecGenerator,
-        PlannerConfig,
-        RegistryCapabilityResolver,
-        derive_input_data_extent,
-        describe_input_layers,
-    )
+def _setup(layers: dict, share_values: bool, context_note: str = ""):
+    from s3geo import derive_input_data_extent, describe_input_layers
 
-    progress = progress or (lambda pct, msg: None)
-    extent = derive_input_data_extent(layers)
-    described = describe_input_layers(layers)
-    generator = LLMQuerySpecGenerator(client, max_repair_attempts=1)
     hints = _hints()
     if share_values:
         hints = f"{hints} {_value_hints(layers)}".strip()
+    if context_note:
+        hints = f"{hints} {context_note}".strip()
+    return (derive_input_data_extent(layers), describe_input_layers(layers), hints)
+
+
+def _generate(client, text: str, layers: dict, setup, feedback: str = ""):
+    from s3geo import LLMQuerySpecGenerator
+
+    extent, described, hints = setup
+    generator = LLMQuerySpecGenerator(client, max_repair_attempts=1)
+    try:
+        spec = generator.generate(text + feedback, context={}, system_hints=hints, input_data_extent=extent,
+                                  input_layers=described)
+    except Exception as exc:  # noqa: BLE001  خطای مدل زبانی (کلید، اینترنت، پاسخ نامعتبر)
+        raise AskError(_llm_error(exc)) from exc
+    return _patch_spec(spec)
+
+
+def plan_only(text: str, layers: dict, client, share_values: bool = True, context_note: str = ""):
+    """فقط برنامه را می‌سازد (بدون اجرا) تا کاربر پیش از اجرا ببیند؛ یک اصلاح خودکار با داده. (spec, مشکل‌های مانده)"""
+    setup = _setup(layers, share_values, context_note)
+    spec = _generate(client, text, layers, setup)
+    problems = _check_plan(spec, layers)
+    if problems:
+        try:
+            fixed = _generate(client, text, layers, setup, _retry_note(Outcome("failed", spec, None, layers), problems))
+        except AskError:
+            return spec, problems
+        spec, problems = fixed, _check_plan(fixed, layers)
+    return spec, problems
+
+
+def analyze(text: str, layers: dict, client, share_values: bool = True, progress=None, spec=None,
+            context_note: str = "") -> Outcome:
+    """پرسش فارسی → برنامه s3geo → اجرا؛ با یک اصلاح پیش از اجرا (ستون/مقدار نادرست) و یک اصلاح پس از اجرا
+    (نتیجهٔ خالی یا خطا). `spec` برنامهٔ تأییدشدهٔ کاربر است و در تلاش اول بدون تغییر اجرا می‌شود.
+    خطای خود مدل زبانی (کلید، اتصال) در تلاش اول AskError است."""
+    import s3geo
+    from s3geo import DagExecutor, DeterministicPlanner, PlannerConfig, RegistryCapabilityResolver
+
+    progress = progress or (lambda pct, msg: None)
+    setup = _setup(layers, share_values, context_note)
     executor = DagExecutor(RegistryCapabilityResolver(s3geo.registry(tolerant=True)))
     best: Outcome | None = None
     feedback = ""
     pre_retry = post_retry = False
+    confirmed = spec
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        progress(25 if attempt == 1 else 60, "مدل زبانی برنامه تحلیل را می‌نویسد" if attempt == 1
-                 else "مدل زبانی برنامه را اصلاح می‌کند")
-        try:
-            spec = generator.generate(text + feedback, context={}, system_hints=hints, input_data_extent=extent,
-                                      input_layers=described)
-        except Exception as exc:  # noqa: BLE001  خطای مدل زبانی (کلید، اینترنت، پاسخ نامعتبر)
-            if best is None:
-                raise AskError(_llm_error(exc)) from exc
-            break
-        spec = _patch_spec(spec)
-        problems = _check_plan(spec, layers)
+        if confirmed is not None and attempt == 1:
+            spec, problems = confirmed, []
+        else:
+            progress(25 if attempt == 1 else 60, "مدل زبانی برنامه تحلیل را می‌نویسد" if attempt == 1
+                     else "مدل زبانی برنامه را اصلاح می‌کند")
+            try:
+                spec = _generate(client, text, layers, setup, feedback)
+            except AskError:
+                if best is None:
+                    raise
+                break
+            problems = _check_plan(spec, layers)
         if problems and not pre_retry and attempt < MAX_ATTEMPTS:
             pre_retry = True
             feedback = _retry_note(Outcome("failed", spec, None, layers), problems)
@@ -708,6 +742,192 @@ def write_table(conn, name: str, rows: list[dict]) -> int:
     return len(rows)
 
 
+# ---------------------------------------------------------------------- شرح فارسی برنامه
+_CMP = {"eq": "=", "ne": "≠", "gt": ">", "gte": "≥", "lt": "<", "lte": "≤", "in": "یکی از", "not_in": "هیچ‌کدام از",
+        "contains": "شامل", "startswith": "شروع با", "endswith": "پایان با"}
+
+
+def _val(v) -> str:
+    return "، ".join(map(str, v)) if isinstance(v, list) else str(v)
+
+
+def _where_text(where) -> str:
+    conds = [f"«{f}» {_CMP.get(o, o)} «{_val(v)}»" for f, o, v in _conditions(where)]
+    joiner = " یا " if isinstance(where, dict) and "or" in where else " و "
+    return joiner.join(conds)
+
+
+def _describe_op(op) -> str:
+    p, i = op.params or {}, op.inputs or {}
+
+    def src(*keys):
+        return next((str(i[k]) for k in keys if k in i), "؟")
+
+    num = lambda *keys: next((p[k] for k in keys if p.get(k) is not None), None)  # noqa: E731
+    dist = num("max_distance_m", "max_distance", "distance")
+    name = op.op
+    if name == "filter_attribute" or name == "sort_limit":
+        parts = []
+        if p.get("where"):
+            parts.append(f"فقط عارضه‌هایی که {_where_text(p['where'])}")
+        if p.get("sort_by"):
+            parts.append(f"مرتب‌سازی بر اساس «{p['sort_by']}»" + (" (نزولی)" if p.get("sort_order") == "desc" else ""))
+        if p.get("limit"):
+            parts.append(f"نگه‌داشتن {p['limit']} مورد اول")
+        return f"{src('vector')}: " + "؛ ".join(parts or ["بدون شرط"])
+    if name == "crs_transform":
+        return f"تبدیل {src('vector')} به سیستم مختصات متری ({p.get('target_crs', '؟')}) برای محاسبهٔ دقیق فاصله و مساحت"
+    if name == "filter_by_distance":
+        return f"نگه‌داشتن عارضه‌های {src('vector')} که در فاصلهٔ {dist} متری {src('reference')} هستند"
+    if name in ("spatial_nearest", "nearest_neighbor"):
+        cap = f" (حداکثر {dist} متر)" if dist is not None else ""
+        return f"برای هر عارضهٔ {src('source')}، نزدیک‌ترین عارضهٔ {src('target')} و فاصله‌اش به متر{cap}"
+    if name == "spatial_join":
+        return f"اتصال مکانی {src('source')} به {src('target')} (رابطهٔ «{p.get('predicate', 'intersects')}»)"
+    if name == "filter_points_in_polygon":
+        return f"نگه‌داشتن نقطه‌های {src('vector')} که داخل {src('polygon')} هستند"
+    if name == "buffer":
+        return f"ساخت حریم {p.get('distance', '؟')} متری دور {src('vector')}"
+    if name == "aggregate_points":
+        return f"شمارش نقطه‌های {src('points')} داخل هر چندضلعی {src('polygons')}"
+    if name == "aggregate_table":
+        grp = _val(p.get("group_by") or "")
+        return f"جمع‌بندی {src('vector')}" + (f" به تفکیک «{grp}»" if grp else "")
+    if name == "top_n":
+        return f"{p.get('limit', '؟')} مورد {'بیشترِ' if p.get('descending', True) else 'کمترِ'} «{p.get('score_field', '؟')}» از {src('vector')}"
+    if name in ("summarize_vector", "attribute_statistics"):
+        return f"آمار توصیفی {src('vector')}"
+    if name == "centroids":
+        return f"نقطهٔ مرکزی هر عارضهٔ {src('vector')}"
+    if name == "dissolve":
+        return f"ادغام عارضه‌های {src('vector')}"
+    if name == "area_perimeter":
+        return f"محاسبهٔ طول و مساحت {src('vector')}"
+    return f"{name} روی {'، '.join(map(str, i.values())) or '؟'}"
+
+
+def describe_plan(spec) -> list[str]:
+    lines = [_describe_op(op) for op in spec.operations]
+    lines += [f"فرض مدل: {a}" for a in (spec.metadata or {}).get("assumptions", []) if isinstance(a, str)]
+    return lines
+
+
+# ---------------------------------------------------------------------- خلاصهٔ فارسی نتیجه
+_SKIP_COL = re.compile(r"(^|_)(id|gid|fid|index|rank|code)$|^_", re.I)
+
+
+def _fnum(x) -> str:
+    text = f"{x:,}" if isinstance(x, int) else f"{x:,.2f}".rstrip("0").rstrip(".")
+    return text.translate(str.maketrans("0123456789,.", "۰۱۲۳۴۵۶۷۸۹٬٫"))
+
+
+def _is_num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def result_summary(kind: str, props: list[dict], layers: dict, spec) -> str:
+    """خلاصهٔ فارسی نتیجه بدون هزینهٔ مدل: تعداد، سهم از ورودی، آمار ستون‌های عددی و پراکنش ستون‌های دسته‌ای."""
+    n = len(props)
+    first = next(iter((spec.operations[0].inputs or {}).values()), None) if spec.operations else None
+    total = len((layers.get(first) or {}).get("features") or []) if isinstance(first, str) else 0
+    if kind == "table":
+        lines = [f"جدول با {_fnum(n)} ردیف ساخته شد."]
+    else:
+        lines = [f"{_fnum(n)} عارضه پیدا شد" + (f" از {_fnum(total)} عارضهٔ «{first}» ({_fnum(round(100 * n / total))}٪)."
+                                                if total >= n > 0 and total else ".")]
+    cols = list(dict.fromkeys(k for p in props for k in p))
+    dist = [p["_nearest_distance"] for p in props if _is_num(p.get("_nearest_distance"))] if kind != "table" else []
+    if dist:
+        lines.append(f"فاصله تا نزدیک‌ترین: میانگین {_fnum(sum(dist) / len(dist))} متر "
+                     f"(از {_fnum(min(dist))} تا {_fnum(max(dist))}).")
+    shown = 0
+    for c in cols:
+        vals = [p.get(c) for p in props if p.get(c) is not None]
+        if _SKIP_COL.search(c) or not vals or shown >= 3:
+            continue
+        if all(_is_num(v) for v in vals) and len(set(vals)) > 1:
+            lines.append(f"«{c}»: کمینه {_fnum(min(vals))}، میانگین {_fnum(sum(vals) / len(vals))}، "
+                         f"بیشینه {_fnum(max(vals))}" + (f"، جمع {_fnum(sum(vals))}" if kind == "table" else "") + ".")
+            shown += 1
+    for c in cols:
+        vals = [p.get(c) for p in props if isinstance(p.get(c), str)]
+        counts: dict[str, int] = {}
+        for v in vals:
+            counts[v] = counts.get(v, 0) + 1
+        if 2 <= len(counts) <= 6 and len(vals) == n and n > len(counts) and not _SKIP_COL.search(c):
+            top = sorted(counts, key=lambda k: -counts[k])
+            lines.append(f"«{c}»: " + "، ".join(f"«{k}» {_fnum(counts[k])}" for k in top) + ".")
+            break
+    return "\n".join(lines)[:700]
+
+
+# ---------------------------------------------------------------------- پیش‌نمایش نقشه (SVG بدون وابستگی)
+PREVIEW_LIMIT = 400
+
+
+def _rings(geom) -> list[tuple[str, list]]:
+    """(نوع، مختصات) هر قطعهٔ ساده: pt | line | poly(حلقه‌ها)."""
+    t, c = (geom or {}).get("type"), (geom or {}).get("coordinates")
+    if not c:
+        return []
+    if t == "Point":
+        return [("pt", [c])]
+    if t == "MultiPoint":
+        return [("pt", [x]) for x in c]
+    if t == "LineString":
+        return [("line", c)]
+    if t == "MultiLineString":
+        return [("line", x) for x in c]
+    if t == "Polygon":
+        return [("poly", c)]
+    if t == "MultiPolygon":
+        return [("poly", x) for x in c]
+    return []
+
+
+def preview_svg(feats: list, width: int = 320, height: int = 200) -> str:
+    step = max(1, -(-len(feats) // PREVIEW_LIMIT))
+    parts = [pr for f in feats[::step] for pr in _rings((f or {}).get("geometry"))]
+    xs, ys = [], []
+    for kind, c in parts:
+        for ring in (c if kind == "poly" else [c]):
+            for pt in ring:
+                xs.append(pt[0])
+                ys.append(pt[1])
+    if not xs:
+        return ""
+    planar = max(abs(x) for x in xs) > 180
+    kx = 1.0 if planar else math.cos(math.radians((min(ys) + max(ys)) / 2)) or 1.0
+    x0, x1, y0, y1 = min(xs) * kx, max(xs) * kx, min(ys), max(ys)
+    pad = 10
+    dx, dy = x1 - x0, y1 - y0
+    scale = min((width - 2 * pad) / dx if dx else float("inf"), (height - 2 * pad) / dy if dy else float("inf"))
+    if scale == float("inf"):
+        scale = 1.0
+    ox = (width - (x1 - x0) * scale) / 2
+    oy = (height - (y1 - y0) * scale) / 2
+
+    def xy(pt):
+        return f"{ox + (pt[0] * kx - x0) * scale:.1f},{height - (oy + (pt[1] - y0) * scale):.1f}"
+
+    def thin(ring, cap=80):
+        k = max(1, len(ring) // cap)
+        return ring[::k] if len(ring) > cap else ring
+
+    out = []
+    for kind, c in parts:
+        if kind == "pt":
+            cx, cy = xy(c[0]).split(",")
+            out.append(f'<circle class="pv-pt" cx="{cx}" cy="{cy}" r="3"/>')
+        elif kind == "line":
+            out.append(f'<polyline class="pv-ln" points="{" ".join(xy(p) for p in thin(c))}"/>')
+        else:
+            d = " ".join("M" + " L".join(xy(p) for p in thin(r)) + "Z" for r in c)
+            out.append(f'<path class="pv-pg" fill-rule="evenodd" d="{d}"/>')
+    return (f'<svg class="pv" viewBox="0 0 {width} {height}" role="img" aria-label="پیش‌نمایش نتیجه روی نقشه" '
+            f'xmlns="http://www.w3.org/2000/svg">{"".join(out)}</svg>')
+
+
 def run(job: Job, client=None) -> str:
     from databases import gdal
 
@@ -716,8 +936,7 @@ def run(job: Job, client=None) -> str:
     job.set_progress(8, "خواندن لایه‌ها")
     ex = Explorer(db)
     tables = {f"{t.schema}.{t.name}": t for t in ex.tables()}
-    layers, notes = {}, list(q.notes or [])
-    notes = [n for n in notes if not n.startswith(("برش", "تلاش"))]
+    layers, notes = {}, [n for n in (q.notes or []) if not n.startswith(("برش", "تلاش", "هشدار برنامه"))]
     for key in q.layers:
         t = tables.get(key)
         if t is None:
@@ -733,9 +952,38 @@ def run(job: Job, client=None) -> str:
         if cfg is None:
             raise AskError("کلید مدل زبانی پیدا نشد.")
         client = _client(cfg)
-    fields = ["goal", "operations", "steps", "result_kind", "answer", "notes", "attempts"]
+    parent = getattr(q, "parent", None)
+    context_note = (f"این پرسش ادامهٔ پرسش قبلی «{parent.text[:200]}» است و لایهٔ {parent.output_table} "
+                    "خروجی همان پرسش قبلی است." if parent else "")
+    fields = ["goal", "operations", "steps", "result_kind", "answer", "notes", "attempts", "summary", "preview",
+              "plan", "plan_text"]
+    q.summary = q.preview = ""
+
+    if q.confirm and not q.plan:
+        # مرحلهٔ اول: فقط برنامه ساخته و به کاربر نشان داده می‌شود؛ اجرا بعد از تأیید
+        job.set_progress(30, "مدل زبانی برنامه تحلیل را می‌نویسد")
+        try:
+            spec, problems = plan_only(q.text, layers, client, q.share_values, context_note)
+        except AskError:
+            q.result_kind = Question.Result.FAILED
+            q.save(update_fields=["result_kind"])
+            raise
+        q.goal, q.operations = spec.goal, [o.op for o in spec.operations]
+        q.plan = asdict(spec)
+        q.plan_text = describe_plan(spec) + [f"نتیجه در جدول «{q.output_table}» ذخیره می‌شود."]
+        if problems:
+            notes.append("هشدار برنامه: " + problems[0][:200])
+        q.notes, q.result_kind = notes, Question.Result.PLAN
+        q.save(update_fields=fields)
+        return f"{spec.goal} — برنامه آماده است؛ بررسی و تأیید کنید"
+
+    confirmed = None
+    if q.plan:
+        from orchestrator.planning.llm_spec_generator import query_spec_from_dict
+        confirmed = query_spec_from_dict(q.plan, raw_query_fallback=q.text)
     try:
-        out = analyze(q.text, layers, client, q.share_values, job.set_progress)
+        out = analyze(q.text, layers, client, q.share_values, job.set_progress, spec=confirmed,
+                      context_note=context_note)
     except AskError:
         q.result_kind = Question.Result.FAILED
         q.save(update_fields=["result_kind"])
@@ -770,15 +1018,16 @@ def run(job: Job, client=None) -> str:
             conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
             n = write_table(conn, q.output_table, out.rows)
         q.result_kind = Question.Result.TABLE
-        q.rows = n
-        q.answer = ""
+        q.rows, q.answer = n, ""
+        q.summary = result_summary("table", out.rows, layers, spec)
         q.save(update_fields=fields + ["rows"])
         return f"{spec.goal} — جدول {q.output_table} با {n:,} ردیف ساخته شد"
-    feats = out.feats
     q.result_kind = Question.Result.LAYER
     q.answer = _answer_text(out.result, spec) if out.step != spec.operations[-1].output else ""
     feats = [{"type": "Feature", "geometry": f.get("geometry"), "properties": _clean(f.get("properties"))}
-             for f in feats]
+             for f in out.feats]
+    q.summary = result_summary("layer", [f["properties"] for f in feats], layers, spec)
+    q.preview = preview_svg(feats)
     srid = 4326
     if _max_abs_x(feats) > 180:
         from s3geo import derive_input_data_extent
