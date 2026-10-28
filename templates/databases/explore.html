@@ -1,4 +1,4 @@
-{% extends "databases/_explore_base.html" %}{% load fa %}
+{% extends "databases/_explore_base.html" %}{% load fa ws %}
 {% block ex %}
 {% if tables %}
 <form class="panel" method="get" action="{% url 'maps:quick' db.pk %}" id="compare">
@@ -41,9 +41,10 @@
 {% endif %}
 {% else %}
 <div class="empty">
+  {% icon "table" 28 %}
   <h2>این پایگاه داده هنوز جدولی ندارد</h2>
   <p class="muted">لایه‌های خود را از QGIS یا با ogr2ogr وارد کنید؛ بعد اینجا می‌توانید داده‌ها و نقشه‌شان را ببینید.</p>
-  <a class="btn" href="{% url 'core:doc' 'import' %}">آموزش وارد کردن Shapefile</a>
+  <a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a> <a class="btn ghost" href="{% url 'core:doc' 'import' %}">آموزش وارد کردن Shapefile</a>
 </div>
 {% endif %}
 {% endblock %}

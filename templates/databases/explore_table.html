@@ -1,32 +1,31 @@
-{% extends "databases/_explore_base.html" %}{% load fa static %}
+{% extends "databases/_explore_base.html" %}{% load fa static ws %}
 {% block head %}{% if tab == 'map' %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% if edit_cfg.capable %}<link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">{% endif %}{% endif %}{% endblock %}
 {% block ex %}
 <div class="ex-title">
-  <div>
-    <h2 class="ltr" style="margin:0">{% if t.schema != 'public' %}{{ t.schema }}.{% endif %}{{ t.name }}</h2>
-    <p class="small muted" style="margin:4px 0 0">{{ t.kind_label }} · حدود {{ t.rows_estimate|fanum }} سطر{% if t.size_bytes %} · {{ t.size_bytes|fasize }}{% endif %}
-      {% for g in t.geometry %} · <span class="ltr">{{ g.type }} / SRID {{ g.srid }}</span>{% endfor %}</p>
+  <div class="ex-ti">
+    <h2 class="ltr">{% if t.schema != 'public' %}{{ t.schema }}.{% endif %}{{ t.name }}</h2>
+    <div class="ex-meta"><span class="pill teal">{{ t.kind_label }}</span><span class="pill">حدود {{ t.rows_estimate|fanum }} سطر</span>{% if t.size_bytes %}<span class="pill">{{ t.size_bytes|fasize }}</span>{% endif %}
+      {% for g in t.geometry %}<span class="pill ltr">{{ g.type }} · SRID {{ g.srid }}</span>{% endfor %}</div>
   </div>
   <div class="ex-actions">
     {% if edit_cfg %}
-      {% if edit_cfg.capable %}<button type="button" class="btn sm edit-enter" id="edit-enter" hidden>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4Z"/><path d="m13 7 4 4"/></svg>
-        ویرایش جدول</button>
-      {% else %}<span class="chip lock" title="{{ edit_cfg.reason }}">فقط‌خواندنی</span>{% endif %}
-      <a class="btn ghost sm" href="{% url 'core:help_page' 'edittable' %}" target="_blank" rel="noopener" title="ویدیوی آموزشی ویرایش جدول">آموزش تصویری</a>
+      {% if edit_cfg.capable %}<button type="button" class="btn sm edit-enter" id="edit-enter" hidden>{% icon "edit" 16 %}ویرایش جدول</button>
+      {% else %}<span class="pill" title="{{ edit_cfg.reason }}">{% icon "lock" 14 %}فقط‌خواندنی</span>{% endif %}
     {% endif %}
-    <a class="btn ghost sm" href="{% url 'databases:explore_csv' db.pk t.schema t.name %}">دانلود CSV</a>
-    {% if t.geometry %}<a class="btn ghost sm" href="{% url 'databases:explore_geojson' db.pk t.schema t.name %}?download=1">دانلود GeoJSON</a>{% endif %}
-    <details class="dl-more">
-      <summary class="btn ghost sm">قالب‌های دیگر</summary>
-      <div class="dl-menu">
-        {% if t.geometry %}<a href="{% url 'databases:explore_export' db.pk t.schema t.name 'gpkg' %}">GeoPackage</a>
-        <a href="{% url 'databases:explore_export' db.pk t.schema t.name 'shp' %}">Shapefile (zip)</a>
-        <a href="{% url 'databases:explore_export' db.pk t.schema t.name 'kml' %}">KML (گوگل ارث)</a>
-        <a href="{% url 'databases:explore_export' db.pk t.schema t.name 'dxf' %}">DXF (اتوکد)</a>{% endif %}
-        <a href="{% url 'databases:explore_export' db.pk t.schema t.name 'xlsx' %}">اکسل{% if t.geometry %} (هندسه به WKT){% endif %}</a>
+    <div class="pop-wrap">
+      <button class="btn ghost sm" type="button" data-pop="ex-export" aria-haspopup="menu" aria-expanded="false">{% icon "download" 16 %}خروجی{% icon "chev" 14 %}</button>
+      <div class="pop-m" id="ex-export" role="menu" hidden>
+        <h6>دانلود جدول</h6>
+        <a role="menuitem" href="{% url 'databases:explore_csv' db.pk t.schema t.name %}">{% icon "table" 18 %}<span>CSV</span></a>
+        {% if t.geometry %}<a role="menuitem" href="{% url 'databases:explore_geojson' db.pk t.schema t.name %}?download=1">{% icon "globe" 18 %}<span>GeoJSON</span></a>
+        <a role="menuitem" href="{% url 'databases:explore_export' db.pk t.schema t.name 'gpkg' %}">{% icon "cube" 18 %}<span>GeoPackage</span></a>
+        <a role="menuitem" href="{% url 'databases:explore_export' db.pk t.schema t.name 'shp' %}">{% icon "cube" 18 %}<span>Shapefile (zip)</span></a>
+        <a role="menuitem" href="{% url 'databases:explore_export' db.pk t.schema t.name 'kml' %}">{% icon "pin" 18 %}<span>KML (گوگل ارث)</span></a>
+        <a role="menuitem" href="{% url 'databases:explore_export' db.pk t.schema t.name 'dxf' %}">{% icon "frame" 18 %}<span>DXF (اتوکد)</span></a>{% endif %}
+        <a role="menuitem" href="{% url 'databases:explore_export' db.pk t.schema t.name 'xlsx' %}">{% icon "table" 18 %}<span>اکسل{% if t.geometry %} (هندسه به WKT){% endif %}</span></a>
       </div>
-    </details>
+    </div>
+    {% if edit_cfg %}<a class="ib" href="{% url 'core:help_page' 'edittable' %}" target="_blank" rel="noopener" title="ویدیوی آموزشی ویرایش جدول" aria-label="آموزش تصویری ویرایش جدول">{% icon "help" 20 %}</a>{% endif %}
   </div>
 </div>
 
@@ -36,7 +35,7 @@
   <span class="dock-state"><span class="edit-dot" aria-hidden="true"></span><b>حالت ویرایش</b><span class="small muted" id="edit-idle"></span></span>
   <span class="edit-count" id="edit-count" aria-live="polite">بدون تغییر</span>
   <div class="dock-acts">
-    {% if tab == 'data' %}<button type="button" class="btn ghost sm" id="edit-add-row">+ سطر تازه</button>
+    {% if tab == 'data' %}<button type="button" class="btn ghost sm" id="edit-add-row">{% icon "plus" 16 %}سطر تازه</button>
     <button type="button" class="btn ghost sm danger-ghost" id="edit-del-sel" hidden>حذف انتخاب‌شده‌ها</button>{% endif %}
     <button type="button" class="btn ghost sm" id="edit-undo-last" hidden></button>
     <button type="button" class="btn ghost sm" id="edit-discard" hidden>دور ریختن تغییرها</button>
