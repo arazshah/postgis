@@ -1,22 +1,20 @@
-{% extends "databases/_ws.html" %}{% load fa %}
+{% extends "databases/_ws.html" %}{% load fa ws %}
 {% block title %}بکاپ‌های {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 <div class="wrap page">
   <div class="page-head">
-    <h1>بکاپ و بازگردانی</h1>
+    <div><h1>بکاپ و بازگردانی</h1>
+      <p class="muted page-sub">هر شب حدود ساعت ۳ بامداد یک بکاپ کامل از <span class="ltr">{{ db.db_name }}</span> گرفته و {{ keep_days|fanum }} روز نگه داشته می‌شود. بکاپ دستی ۷ روز می‌ماند. فایل بکاپ در قالب استاندارد <span class="ltr">pg_dump</span> است و با <span class="ltr">pg_restore</span> یا pgAdmin روی هر PostgreSQL دیگری هم بازمی‌گردد.</p></div>
     {% if db.is_live %}
-    <form method="post" action="{% url 'databases:backup_new' db.pk %}" style="margin-inline-start:auto">{% csrf_token %}
-      <button class="btn sm" type="submit" {% if busy %}disabled{% endif %}>گرفتن بکاپ همین حالا</button>
-    </form>
+    <div class="page-acts"><form method="post" action="{% url 'databases:backup_new' db.pk %}">{% csrf_token %}
+      <button class="btn" type="submit" {% if busy %}disabled{% endif %}>{% icon "clock" 18 %}گرفتن بکاپ همین حالا</button></form></div>
     {% endif %}
   </div>
 
-  <p class="lead muted" style="max-width:70ch">هر شب حدود ساعت ۳ بامداد یک بکاپ کامل از <span class="ltr">{{ db.db_name }}</span> گرفته و {{ keep_days|fanum }} روز نگه داشته می‌شود. بکاپ دستی ۷ روز می‌ماند. فایل بکاپ در قالب استاندارد <span class="ltr">pg_dump</span> است و با <span class="ltr">pg_restore</span> یا pgAdmin روی هر PostgreSQL دیگری هم بازمی‌گردد.</p>
-
   {% if busy %}<div class="msg info" role="status">یک کار در جریان است. چند دقیقه بعد این صفحه را تازه کنید.</div>{% endif %}
 
-  <section class="panel">
-    <h2 style="font-size:1.2rem">تاریخچه</h2>
+  <section class="card">
+    <div class="ch"><h2>تاریخچه</h2></div>
     {% if jobs %}
     <div class="table-wrap"><table class="data-table">
       <thead><tr><th>زمان</th><th>نوع</th><th>وضعیت</th><th>حجم</th><th>توضیح</th><th></th></tr></thead>
@@ -28,18 +26,18 @@
           <td><span class="badge {% if j.status == 'done' %}active{% elif j.status == 'failed' %}error{% elif j.status == 'expired' %}expired{% else %}pending{% endif %}">{{ j.get_status_display }}</span></td>
           <td>{% if j.size_bytes %}{{ j.size_bytes|fasize }}{% endif %}</td>
           <td class="small">{% if j.status == 'failed' %}کار ناموفق بود؛ مدیر سایت باخبر شد.{% elif j.kind == 'restore' and j.source %}از بکاپ {{ j.source.created_at|jdatetime_full }}{% if j.status == 'done' %}. {{ j.message }}{% endif %}{% elif j.expires_at and j.status == 'done' %}تا {{ j.expires_at|jdate }} نگه داشته می‌شود{% endif %}</td>
-          <td>{% if j.downloadable %}<a class="btn ghost sm" href="{% url 'databases:backup_download' db.pk j.pk %}">دانلود</a>{% endif %}</td>
+          <td class="row-acts">{% if j.downloadable %}<a class="btn ghost sm" href="{% url 'databases:backup_download' db.pk j.pk %}">{% icon "download" 16 %}دانلود</a>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
     </table></div>
     {% else %}
-    <p class="muted">هنوز بکاپی گرفته نشده. اولین بکاپ خودکار امشب گرفته می‌شود؛ یا همین حالا یک بکاپ دستی بگیرید.</p>
+    <div class="empty">{% icon "clock" 28 %}<h2>هنوز بکاپی گرفته نشده</h2><p class="muted">اولین بکاپ خودکار امشب گرفته می‌شود؛ یا همین حالا یک بکاپ دستی بگیرید.</p></div>
     {% endif %}
   </section>
 
   {% if available and db.is_live %}
-  <section class="panel" style="margin-top:var(--s5)">
+  <section class="card">
     <details class="danger-zone">
       <summary>بازگردانی پایگاه داده به یک بکاپ</summary>
       <p class="small" style="margin-top:12px">همه داده‌های فعلی با محتوای بکاپ جایگزین می‌شوند. قبل از بازگردانی، خودکار یک «بکاپ ایمنی» از وضع فعلی گرفته می‌شود تا اگر پشیمان شدید برگردید. اتصال‌های باز (QGIS، GeoServer) چند ثانیه قطع می‌شوند.</p>

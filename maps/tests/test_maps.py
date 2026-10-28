@@ -95,7 +95,7 @@ class MapsIntegrationTests(TestCase):
         self.assertNotContains(page, ">notes")
         # استودیوی تمام‌صفحه: ریل چهار تب، بدون فوتر سایت؛ صفحه‌های دیگر فوتر دارند
         self.assertContains(page, 'id="studio"')
-        self.assertContains(page, 'class="is-studio"')
+        self.assertContains(page, 'is-studio')
         for tab in ("layers", "charts", "slides", "map"):
             self.assertContains(page, f'data-tab="{tab}"')
         # اشتراک و ابزارهای خروجی مودال‌اند، نه تب ریل
@@ -105,7 +105,7 @@ class MapsIntegrationTests(TestCase):
         self.assertContains(page, reverse("maps:publish_ows", args=[self.db.pk, m.pk]))
         self.assertContains(page, reverse("maps:qgis", args=[self.db.pk, m.pk]))
         self.assertNotContains(page, 'class="footer"')
-        self.assertContains(self.client.get(reverse("maps:index", args=[self.db.pk])), 'class="footer"')
+        self.assertContains(self.client.get(reverse("maps:index", args=[self.db.pk])), 'class="app-foot"')
 
     def test_add_and_remove_layer(self):
         self._create("public.schools")

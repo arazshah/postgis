@@ -1,8 +1,8 @@
-{% extends "base.html" %}{% load fa humanize %}
+{% extends "base.html" %}{% load fa humanize ws %}
 {% block title %}صورتحساب‌ها — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page">
-  <div class="page-head"><h1>صورتحساب‌های من</h1><a class="btn sm" href="{% url 'billing:plans' %}">خرید پلن</a></div>
+  <div class="page-head"><div><h1>صورتحساب‌های من</h1><p class="muted page-sub">فاکتورهای پلن‌ها و اعتبارهای شما.</p></div><div class="page-acts"><a class="btn" href="{% url 'billing:plans' %}">{% icon "card" 18 %}خرید پلن</a></div></div>
   {% if invoices %}
   <div class="table-scroll">
   <table class="data-table">
@@ -15,7 +15,7 @@
   </table>
   </div>
   {% else %}
-  <div class="empty"><h2>هنوز صورتحسابی ندارید</h2><a class="btn" href="{% url 'billing:plans' %}">مشاهده پلن‌ها</a></div>
+  <div class="empty">{% icon "card" 28 %}<h2>هنوز صورتحسابی ندارید</h2><a class="btn" href="{% url 'billing:plans' %}">مشاهده پلن‌ها</a></div>
   {% endif %}
 </div>
 {% endblock %}

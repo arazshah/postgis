@@ -1,13 +1,13 @@
-{% extends "databases/_ws.html" %}{% load fa %}
+{% extends "databases/_ws.html" %}{% load fa ws %}
 {% block title %}مصرف {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 <div class="wrap page">
-  <h1>مصرف و کارایی</h1>
+  <div class="page-head"><div><h1>مصرف و کارایی</h1><p class="muted page-sub">حجم، درخواست‌ها، جدول‌های بزرگ و کوئری‌های پرهزینه‌ی این پایگاه داده.</p></div></div>
   {% if error %}<div class="msg warning">{{ error }}</div>{% endif %}
 
   <div class="grid-2">
-    <section class="panel">
-      <h2 class="u-h">حجم پایگاه داده</h2>
+    <section class="card">
+      <div class="ch"><h2>حجم پایگاه داده</h2></div>
       <p class="u-big">{{ db.size_bytes|fasize }} <span class="muted small">از {{ db.plan.quota_display|fanum }}</span></p>
       <div class="meter {{ db.usage_level }}"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
       {% if size_chart %}
@@ -18,8 +18,8 @@
       <p class="small muted">حجم روزانه، ۳۰ روز اخیر{% if size_chart.cap_y is not None %}؛ خط‌چین: سقف پلن{% endif %}.</p>
       {% else %}<p class="small muted">نمودار بعد از اولین اندازه‌گیری روزانه نمایش داده می‌شود.</p>{% endif %}
     </section>
-    <section class="panel">
-      <h2 class="u-h">درخواست‌های نقشه و API</h2>
+    <section class="card">
+      <div class="ch"><h2>درخواست‌های نقشه و API</h2></div>
       {% with today=requests|last %}<p class="u-big">{{ today.n|fanum }} <span class="muted small">امروز، از سقف {{ db.plan.publish_daily_requests|fanum }}</span></p>{% endwith %}
       <svg class="u-chart" viewBox="0 0 {{ req_chart.w }} {{ req_chart.h }}" role="img" aria-label="درخواست‌های روزانه ۱۴ روز اخیر">
         {% for b in req_chart.bars %}<rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" rx="2"><title>{{ b.day|jdate }}: {{ b.v|fanum }}</title></rect>{% endfor %}
@@ -31,14 +31,14 @@
 
   {% if stats %}
   {% if stats.suggestions %}
-  <section class="panel" style="margin-top:var(--s5)">
-    <h2 class="u-h">پیشنهادها</h2>
+  <section class="card">
+    <div class="ch"><h2>پیشنهادها</h2></div>
     <ul class="u-sugg">{% for s in stats.suggestions %}<li class="{{ s.kind }}"><b class="ltr">{{ s.table }}</b> — {{ s.text }}</li>{% endfor %}</ul>
   </section>
   {% endif %}
 
-  <section class="panel" style="margin-top:var(--s5)">
-    <h2 class="u-h">بزرگ‌ترین جدول‌ها</h2>
+  <section class="card">
+    <div class="ch"><h2>بزرگ‌ترین جدول‌ها</h2></div>
     <div class="table-wrap"><table class="tbl">
       <thead><tr><th>جدول</th><th>حجم کل</th><th>داده</th><th>نمایه‌ها</th><th>سطر</th><th>خواندن کامل</th><th>با نمایه</th></tr></thead>
       <tbody>{% for t in stats.tables %}<tr><td><span class="ltr">{% if t.schema != 'public' %}{{ t.schema }}.{% endif %}{{ t.name }}</span></td>
@@ -47,17 +47,17 @@
     </table></div>
   </section>
 
-  <div class="grid-2" style="margin-top:var(--s5)">
-    <section class="panel">
-      <h2 class="u-h">اتصال‌های باز</h2>
+  <div class="grid-2">
+    <section class="card">
+      <div class="ch"><h2>اتصال‌های باز</h2></div>
       {% if stats.connections %}
       <table class="tbl"><thead><tr><th>کاربر</th><th>برنامه</th><th>وضعیت</th><th>تعداد</th></tr></thead>
         <tbody>{% for c in stats.connections %}<tr><td><span class="ltr small">{{ c.user }}</span></td><td><span class="ltr small">{{ c.app }}</span></td><td class="small">{{ c.state }}</td><td>{{ c.count|fanum }}</td></tr>{% endfor %}</tbody></table>
       {% else %}<p class="muted small">الان اتصالی باز نیست.</p>{% endif %}
       <p class="small muted">سقف اتصال هم‌زمان پلن: {{ db.plan.max_connections|fanum }}. {% if db.pooled %}برای وب‌سایت‌ها از اتصال PgBouncer (صفحه اطلاعات اتصال) استفاده کنید.{% endif %}</p>
     </section>
-    <section class="panel">
-      <h2 class="u-h">کوئری‌های در حال اجرا</h2>
+    <section class="card">
+      <div class="ch"><h2>کوئری‌های در حال اجرا</h2></div>
       {% for r in stats.running %}
       <div class="u-run"><div class="small muted"><span class="ltr">{{ r.user }}</span> · {{ r.seconds|fanum }} ثانیه</div>
         <pre class="ltr">{{ r.query }}</pre>
@@ -66,8 +66,8 @@
     </section>
   </div>
 
-  <section class="panel" style="margin-top:var(--s5)">
-    <h2 class="u-h">کوئری‌های پرهزینه</h2>
+  <section class="card">
+    <div class="ch"><h2>کوئری‌های پرهزینه</h2></div>
     {% if stats.slow is None %}<p class="muted small">{{ stats.slow_note }}</p>
     {% elif stats.slow %}
     <div class="table-wrap"><table class="tbl"><thead><tr><th>کوئری</th><th>دفعات</th><th>میانگین (میلی‌ثانیه)</th><th>کل (ثانیه)</th></tr></thead>
