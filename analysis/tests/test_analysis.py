@@ -274,7 +274,7 @@ class AnalysisTests(TestCase):
 
         LlmConfig.objects.create(user=self.user, api_key_encrypted="")
         with self.assertRaisesMessage(ask.AskError, "لایه"):
-            ask.request(self.db, self.user, "حریم ۵۰۰ متری ایستگاه‌ها", [], "zones")
+            ask.request(self.db, self.user, "حریم ۵۰۰ متری ایستگاه‌ها", ["public.nope"], "zones")
         q = ask.request(self.db, self.user, "دور هر ایستگاه مترو حریم ۵۰۰ متری بکش", ["public.metro_stations", "public.nope"],
                         "metro_zones")
         self.assertEqual(q.layers, ["public.metro_stations"])
@@ -301,6 +301,81 @@ class AnalysisTests(TestCase):
         with self.assertRaisesMessage(ask.AskError, "مدل زبانی"):
             ask.run(q2.job, client=StaticLLMClient("not json"))
         self.assertEqual(Question.objects.count(), 2)
+
+    @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
+    def test_layers_and_output_name_are_automatic(self):
+        LlmConfig.objects.create(user=self.user, api_key_encrypted="")
+        q = ask.request(self.db, self.user, "مدرسه‌های متوسطه اول را جدا کن و لایه را به نام my_result_1 بساز", [], "")
+        self.assertEqual(q.output_table, "my_result_1")
+        spatial = [r[0] for r in self._sql(
+            "SELECT f_table_name FROM geometry_columns WHERE f_table_schema = 'public' ORDER BY 1")]
+        self.assertEqual(sorted(q.layers), [f"public.{t}" for t in spatial])  # همهٔ لایه‌های مکانی (districts هم هست)
+        self.assertIn("public.schools", q.layers)
+        self.assertTrue(any("خودکار" in n for n in q.notes))
+
+    @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
+    def test_group_summary_becomes_a_real_table(self):
+        from s3geo import StaticLLMClient
+
+        LlmConfig.objects.create(user=self.user, api_key_encrypted="")
+        q = ask.request(self.db, self.user, "تعداد و مجموع دانش‌آموزان هر مقطع", ["public.schools"], "by_level")
+        plan = {"goal": "مقطع", "entities": [{"ref": "schools", "kind": "layer"}],
+                "operations": [{"op": "aggregate_table", "inputs": {"vector": "schools"}, "output": "t",
+                                "params": {"group_by": ["level"], "aggregations": {"students": ["sum"]}}}]}
+        msg = ask.run(q.job, client=StaticLLMClient(json.dumps(plan, ensure_ascii=False)))
+        q.refresh_from_db()
+        self.assertEqual(q.result_kind, "table")
+        self.assertEqual(q.rows, 3)
+        self.assertEqual(self._sql("SELECT count(*) FROM by_level")[0][0], 3)
+        self.assertIn("by_level", msg)
+
+    @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
+    def test_confirm_flow_and_follow_up_through_the_page(self):
+        """پرسش با تأیید: برنامه می‌آید، با «اجرا» اجرا می‌شود؛ سپس «ادامه» نتیجه را لایهٔ ورودی پرسش بعدی می‌کند."""
+        from s3geo import StaticLLMClient
+
+        LlmConfig.objects.create(user=self.user, api_key_encrypted="")
+        url = reverse("analysis:page", args=[self.db.pk])
+        plan = {"goal": "متوسطه اول", "entities": [{"ref": "schools", "kind": "layer"}],
+                "operations": [{"op": "filter_attribute", "inputs": {"vector": "schools"}, "output": "r",
+                                "params": {"where": {"field": "level", "op": "eq", "value": "متوسطه اول"}}}]}
+        client = StaticLLMClient(json.dumps(plan, ensure_ascii=False))
+        q = ask.request(self.db, self.user, "مدرسه‌های متوسطه اول را جدا کن", ["public.schools"], "first_lvl",
+                        confirm=True)
+        ask.run(q.job, client=client)
+        Job.objects.filter(pk=q.job.pk).update(status="done")
+        q.refresh_from_db()
+        self.assertEqual(q.result_kind, "plan")
+        self.assertEqual(self._sql("SELECT to_regclass('public.first_lvl')")[0][0], None)
+        page = self.client.get(url)
+        self.assertContains(page, "برنامهٔ پیشنهادی")
+        self.assertContains(page, "درست است؛ اجرا کن")
+        # تأیید از صفحه: کار تازه در صف و برنامه ثابت
+        self.client.post(url, {"action": "ask_run", "q": q.pk})
+        q.refresh_from_db()
+        self.assertEqual(q.result_kind, "")
+        self.assertEqual(q.job.status, "queued")
+        self.client.post(url, {"action": "ask_run", "q": q.pk})  # تأیید دوباره اثری ندارد
+        ask.run(q.job, client=client)
+        Job.objects.filter(pk=q.job.pk).update(status="done")
+        q.refresh_from_db()
+        self.assertEqual(q.result_kind, "layer")
+        self.assertGreater(q.rows, 0)
+        self.assertTrue(q.preview.startswith("<svg"))
+        page = self.client.get(url)
+        self.assertContains(page, "ادامه با این نتیجه")
+        # ادامه: لایهٔ نتیجه از پیش انتخاب و پرسش جدید به پرسش قبلی وصل می‌شود
+        page = self.client.get(url + f"?follow={q.pk}")
+        self.assertContains(page, 'value="public.first_lvl" checked')
+        q2 = ask.request(self.db, self.user, "از این‌ها فقط بیش از ۴۰۰ دانش‌آموز", ["public.first_lvl"], "",
+                         parent_pk=q.pk)
+        self.assertEqual(q2.parent_id, q.pk)
+        self.assertTrue(any("ادامهٔ پرسش قبلی" in n for n in q2.notes))
+        # لغو برنامهٔ در انتظار
+        Job.objects.filter(pk=q2.job.pk).update(status="done")
+        Question.objects.filter(pk=q2.pk).update(result_kind="plan")
+        self.client.post(url, {"action": "ask_cancel", "q": q2.pk})
+        self.assertFalse(Question.objects.filter(pk=q2.pk).exists())
 
     @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
     def test_summary_last_still_saves_layer_and_answer(self):
@@ -338,3 +413,28 @@ class AnalysisTests(TestCase):
         self.assertNotIn("vector_summary", q.answer)
         self.assertNotIn("نتیجه مکانی نداشت", msg)
         self.assertEqual(self._sql("SELECT to_regclass('public.never_created')")[0][0], None)
+
+    @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
+    def test_empty_filter_reports_reason_and_creates_no_table(self):
+        """فیلتر با مقداری که در داده نیست: «۰ عارضه» با شرط و مقادیر واقعی ستون، نه پاسخ خالی یا لایهٔ میانی."""
+        from s3geo import StaticLLMClient
+
+        LlmConfig.objects.create(user=self.user, api_key_encrypted="")
+        q = ask.request(self.db, self.user, "ایستگاه‌هایی که نامشان ناموجود است", ["public.metro_stations"], "nothing")
+        plan = {"goal": "ایستگاه ناموجود",
+                "entities": [{"ref": "metro_stations", "kind": "layer"}],
+                "operations": [
+                    {"op": "crs_transform", "inputs": {"vector": "metro_stations"},
+                     "params": {"source_crs": "EPSG:4326", "target_crs": "EPSG:32639"}, "output": "m_utm"},
+                    {"op": "filter_attribute", "inputs": {"vector": "m_utm"},
+                     "params": {"where": {"field": "name", "op": "eq", "value": "__nope__"}}, "output": "picked"}]}
+        msg = ask.run(q.job, client=StaticLLMClient(json.dumps(plan, ensure_ascii=False)))
+        q.refresh_from_db()
+        self.assertEqual(q.result_kind, "empty")
+        self.assertEqual(q.rows, 0)
+        self.assertIn("هیچ عارضه‌ای پیدا نشد", msg)
+        self.assertIn("«__nope__»", q.answer)
+        self.assertIn("مقادیر موجود ستون «name»", q.answer)
+        self.assertEqual([s["op"] for s in q.steps], ["input", "crs_transform", "filter_attribute"])
+        self.assertEqual(q.steps[-1]["count"], 0)
+        self.assertEqual(self._sql("SELECT to_regclass('public.nothing')")[0][0], None)
