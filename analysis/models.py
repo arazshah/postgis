@@ -32,6 +32,12 @@ class LlmConfig(models.Model):
 
 
 class Question(models.Model):
+    class Result(models.TextChoices):
+        LAYER = "layer", "لایه ساخته شد"
+        EMPTY = "empty", "هیچ عارضه‌ای پیدا نشد"
+        ANSWER = "answer", "پاسخ متنی"
+        FAILED = "failed", "ناموفق"
+
     database = models.ForeignKey("databases.UserDatabase", on_delete=models.CASCADE, related_name="questions")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
     text = models.TextField("پرسش")
@@ -42,6 +48,9 @@ class Question(models.Model):
     operations = models.JSONField(default=list, blank=True)
     rows = models.IntegerField(default=0)
     answer = models.TextField("پاسخ متنی", blank=True)
+    result_kind = models.CharField("نوع نتیجه", max_length=10, choices=Result.choices, blank=True)
+    steps = models.JSONField("مراحل اجرا", default=list, blank=True)
+    share_values = models.BooleanField("ارسال مقادیر دسته‌ای ستون‌ها به مدل", default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

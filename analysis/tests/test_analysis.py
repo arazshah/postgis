@@ -338,3 +338,28 @@ class AnalysisTests(TestCase):
         self.assertNotIn("vector_summary", q.answer)
         self.assertNotIn("نتیجه مکانی نداشت", msg)
         self.assertEqual(self._sql("SELECT to_regclass('public.never_created')")[0][0], None)
+
+    @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
+    def test_empty_filter_reports_reason_and_creates_no_table(self):
+        """فیلتر با مقداری که در داده نیست: «۰ عارضه» با شرط و مقادیر واقعی ستون، نه پاسخ خالی یا لایهٔ میانی."""
+        from s3geo import StaticLLMClient
+
+        LlmConfig.objects.create(user=self.user, api_key_encrypted="")
+        q = ask.request(self.db, self.user, "ایستگاه‌هایی که نامشان ناموجود است", ["public.metro_stations"], "nothing")
+        plan = {"goal": "ایستگاه ناموجود",
+                "entities": [{"ref": "metro_stations", "kind": "layer"}],
+                "operations": [
+                    {"op": "crs_transform", "inputs": {"vector": "metro_stations"},
+                     "params": {"source_crs": "EPSG:4326", "target_crs": "EPSG:32639"}, "output": "m_utm"},
+                    {"op": "filter_attribute", "inputs": {"vector": "m_utm"},
+                     "params": {"where": {"field": "name", "op": "eq", "value": "__nope__"}}, "output": "picked"}]}
+        msg = ask.run(q.job, client=StaticLLMClient(json.dumps(plan, ensure_ascii=False)))
+        q.refresh_from_db()
+        self.assertEqual(q.result_kind, "empty")
+        self.assertEqual(q.rows, 0)
+        self.assertIn("هیچ عارضه‌ای پیدا نشد", msg)
+        self.assertIn("«__nope__»", q.answer)
+        self.assertIn("مقادیر موجود ستون «name»", q.answer)
+        self.assertEqual([s["op"] for s in q.steps], ["input", "crs_transform", "filter_attribute"])
+        self.assertEqual(q.steps[-1]["count"], 0)
+        self.assertEqual(self._sql("SELECT to_regclass('public.nothing')")[0][0], None)

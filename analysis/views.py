@@ -25,6 +25,14 @@ CHART_HINTS = {
     "hexbin": {"kind": "hist", "field": "count"},
     "change": {"kind": "sankey", "field": "from_category", "target": "to_category", "value": "area_m2", "agg": "sum"},
 }
+# نام فارسی مرحله‌های رایج برنامهٔ s3geo در گزارش مرحله‌به‌مرحلهٔ پرسش
+OP_LABELS = {
+    "input": "ورودی", "crs_transform": "تبدیل مختصات", "filter_attribute": "فیلتر ستونی", "sort_limit": "مرتب‌سازی",
+    "spatial_nearest": "نزدیک‌ترین", "nearest_neighbor": "نزدیک‌ترین", "filter_by_distance": "فیلتر فاصله",
+    "spatial_join": "اتصال مکانی", "filter_points_in_polygon": "نقطه در چندضلعی", "buffer": "حریم",
+    "summarize_vector": "خلاصه", "attribute_statistics": "آمار ستونی", "top_n": "برترین‌ها", "dissolve": "ادغام",
+    "area_perimeter": "طول و مساحت", "calculate_field": "محاسبه ستون", "distance_to": "فاصله",
+}
 GLYPHS = {"buffer": "◎", "nearest": "⌖", "count": "#", "overlap": "▦", "change": "⇄", "hexbin": "⬡", "isochrone": "◔"}
 
 
@@ -52,8 +60,10 @@ def _entries(db):
                     "created": r.created_at, "chart": CHART_HINTS.get(r.tool),
                     "together": _together(db, r.output_table, [r.params.get("layer"), r.params.get("other")])})
     for q in Question.objects.filter(database=db).select_related("job")[:HISTORY_LIMIT]:
-        out.append({"kind": "ask", "id": f"q{q.pk}", "title": q.text, "glyph": "؟", "detail": q.goal,
-                    "ops": q.operations, "answer": q.answer, "table": q.output_table, "rows": q.rows, "job": q.job,
+        steps = [{**s, "label": OP_LABELS.get(s.get("op"), s.get("op"))} for s in q.steps or []]
+        out.append({"kind": "ask", "id": f"q{q.pk}", "pk": q.pk, "title": q.text, "glyph": "؟", "detail": q.goal,
+                    "ops": q.operations, "steps": steps, "result": q.result_kind, "answer": q.answer,
+                    "table": q.output_table, "rows": q.rows, "job": q.job,
                     "created": q.created_at, "together": _together(db, q.output_table, q.layers)})
     out.sort(key=lambda e: e["created"], reverse=True)
     return out[:HISTORY_LIMIT]
@@ -115,7 +125,7 @@ def page(request, pk):
                 return here
             try:
                 ask.request(db, request.user, request.POST.get("question", ""), request.POST.getlist("layers"),
-                            request.POST.get("output", ""))
+                            request.POST.get("output", ""), share_values=request.POST.get("share_values") == "on")
             except (ask.AskError, ExplorerError) as exc:
                 messages.error(request, str(exc))
             else:
@@ -148,10 +158,14 @@ def page(request, pk):
         tables = []
     spatial = [t for t in tables if t.geometry]
     history = _entries(db)
+    # «ویرایش و پرسش دوباره»: فرم پرسش با متن، لایه‌ها و نام جدول یک پرسش قبلی پر می‌شود
+    again = None
+    if request.GET.get("again", "").isdigit():
+        again = Question.objects.filter(database=db, pk=int(request.GET["again"])).first()
     return render(request, "analysis/page.html", {
         "db": db, "tables": tables, "spatial": spatial, "section": "analysis", "cfg": cfg, "history": history,
         "active": any(e["job"] and e["job"].active for e in history), "tools": tools.TOOLS,
         "open_tool": request.GET.get("tool") if request.GET.get("tool") in tools.TOOL_MAP else tools.TOOLS[0].key, "has_routing": any(t.schema == "routing" and t.name == "ways"
                                                                     for t in tables),
-        "max_layers": ask.MAX_LAYERS,
+        "max_layers": ask.MAX_LAYERS, "again": again,
     })

@@ -104,3 +104,92 @@ class HintsTests(SimpleTestCase):
         for op in set(re.findall(r"\b(dissolve|crs_transform|area_perimeter|top_n|calculate_field|summarize_vector|"
                                  r"attribute_statistics)\b", ask._hints())):
             self.assertIn(op, OP_CATALOG)
+
+
+def _pt(**props):
+    return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [51.4, 35.7]}, "properties": props}
+
+
+HOUSES = {"type": "FeatureCollection", "features": [_pt(id=i, deal=("اجاره" if i % 3 else "فروش"), title=f"خانه {i}")
+                                                    for i in range(12)]}
+EMPTY = NS(features=[], metadata={"output_feature_count": 0})
+
+
+class EmptyResultTests(SimpleTestCase):
+    def test_empty_last_vector_step_does_not_fall_back_to_intermediate_layer(self):
+        # «خانه‌های ۵۰۰ متری مدرسه»: تبدیل مختصات همهٔ خانه‌ها را دارد ولی فیلتر فاصله خالی است؛ نباید همه ذخیره شوند
+        result = NS(outputs={"h": NS(features=HOUSES["features"]), "near": EMPTY})
+        self.assertEqual(ask._spatial_output(result, _spec("h", "near")), ("near", []))
+
+    def test_why_empty_shows_condition_and_real_values(self):
+        spec = NS(operations=[NS(op="filter_attribute", inputs={"vector": "houses"}, output="rent",
+                                 params={"where": {"field": "deal", "op": "eq", "value": "rent"}})])
+        text = "\n".join(ask._why_empty(NS(outputs={"rent": EMPTY}), spec, {"houses": HOUSES}))
+        self.assertIn("«rent»", text)
+        self.assertIn("«اجاره» (۸)", text)
+        self.assertIn("«فروش» (۴)", text)
+
+    def test_why_empty_missing_column_and_shortcut_where(self):
+        spec = NS(operations=[NS(op="filter_attribute", inputs={"vector": "houses"}, output="rent",
+                                 params={"where": {"usage": "rent"}})])
+        text = "\n".join(ask._why_empty(NS(outputs={"rent": EMPTY}), spec, {"houses": HOUSES}))
+        self.assertIn("ستون «usage» در داده نیست", text)
+        self.assertIn("deal", text)
+
+    def test_why_empty_point_on_line_suggests_distance(self):
+        line = {"type": "FeatureCollection", "features": [_line("اصلی", 1)]}
+        spec = NS(operations=[NS(op="spatial_join", inputs={"source": "houses", "target": "streets"}, output="j",
+                                 params={"predicate": "intersects"})])
+        text = "\n".join(ask._why_empty(NS(outputs={"j": EMPTY}), spec, {"houses": HOUSES, "streets": line}))
+        self.assertIn("فاصله", text)
+
+    def test_steps_show_counts_and_failed_step(self):
+        spec = NS(operations=[NS(op="crs_transform", inputs={"vector": "houses"}, output="h", params={}),
+                              NS(op="filter_attribute", inputs={"vector": "h"}, output="f", params={}),
+                              NS(op="summarize_vector", inputs={"vector": "f"}, output="s", params={})])
+        result = NS(success=False, outputs={"h": NS(features=HOUSES["features"])})
+        steps = ask._steps(result, spec, {"houses": HOUSES, "unused": HOUSES})
+        self.assertEqual([(s["op"], s["count"], s["status"]) for s in steps],
+                         [("input", 12, "done"), ("crs_transform", 12, "done"), ("filter_attribute", None, "failed"),
+                          ("summarize_vector", None, "skipped")])
+
+
+class SpecPatchTests(SimpleTestCase):
+    def test_max_distance_drops_unmatched(self):
+        from dataclasses import dataclass, field
+
+        @dataclass(frozen=True)
+        class Op:
+            op: str
+            params: dict = field(default_factory=dict)
+
+        @dataclass(frozen=True)
+        class Spec:
+            operations: list
+
+        spec = ask._patch_spec(Spec([Op("spatial_nearest", {"k": 1, "max_distance": 500}),
+                                     Op("spatial_nearest", {"k": 1}),
+                                     Op("filter_by_distance", {"max_distance_m": 30, "drop_unmatched": False})]))
+        self.assertTrue(spec.operations[0].params["drop_unmatched"])
+        self.assertNotIn("drop_unmatched", spec.operations[1].params)
+        self.assertFalse(spec.operations[2].params["drop_unmatched"])  # انتخاب صریح مدل دست نمی‌خورد
+
+
+class ValueHintTests(SimpleTestCase):
+    def test_categories_are_listed_but_unique_names_are_not(self):
+        h = ask._value_hints({"houses": HOUSES})
+        self.assertIn("houses.deal", h)
+        self.assertIn("«اجاره»", h)
+        self.assertNotIn("خانه 3", h)
+
+    def test_no_text_columns(self):
+        self.assertEqual(ask._value_hints({"x": {"features": [_pt(n=1)]}}), "")
+
+
+class FriendlyErrorTests(SimpleTestCase):
+    def test_none_comparison(self):
+        msg = ask._friendly_error("Node filtered_houses failed: '<=' not supported between instances of 'NoneType' "
+                                  "and 'int'")
+        self.assertIn("filtered_houses", msg)
+        self.assertIn("مقدار خالی", msg)
+        self.assertIn("جزئیات فنی", msg)

@@ -4,7 +4,7 @@
 
 <section class="panel ask-panel" aria-labelledby="ask-h">
   <h3 id="ask-h">پرسش فارسی از داده</h3>
-  <p class="small muted">سؤالتان را به فارسی بنویسید؛ s3geo برنامه تحلیل را می‌سازد، روی همین سرور اجرا می‌کند و نتیجه را جدول جدید ذخیره می‌کند. به مدل زبانی فقط نام لایه‌ها، ستون‌ها، تعداد و محدوده آن‌ها فرستاده می‌شود، نه خود داده‌ها.</p>
+  <p class="small muted">سؤالتان را به فارسی بنویسید؛ s3geo برنامه تحلیل را می‌سازد، روی همین سرور اجرا می‌کند و نتیجه را جدول جدید ذخیره می‌کند. به مدل زبانی فقط نام لایه‌ها، ستون‌ها، تعداد و محدوده آن‌ها (و اگر بخواهید، مقادیر دسته‌ای ستون‌ها مثل «اجاره» و «فروش») فرستاده می‌شود، نه خود عارضه‌ها.</p>
   {% if not cfg %}
   <div class="msg info">برای پرسش فارسی، کلید API یک سرویس مدل زبانی سازگار با OpenAI (مثل AvalAI یا OpenAI) لازم است. هزینه استفاده از مدل با حساب خود شماست.</div>
   {% if SITE.llm_partner_enabled and SITE.llm_partner_url %}
@@ -35,11 +35,12 @@
 
   {% if cfg %}
   <form method="post" class="stack-form" style="margin-top:var(--s4)">{% csrf_token %}<input type="hidden" name="action" value="ask">
-    <div class="field"><label for="a-q">پرسش</label><textarea id="a-q" name="question" rows="3" required placeholder="مثلاً: مدرسه‌هایی را پیدا کن که در ۵۰۰ متری آن‌ها هیچ پارکی نیست"></textarea></div>
+    <div class="field"><label for="a-q">پرسش</label><textarea id="a-q" name="question" rows="3" required placeholder="مثلاً: مدرسه‌هایی را پیدا کن که در ۵۰۰ متری آن‌ها هیچ پارکی نیست">{{ again.text|default:"" }}</textarea></div>
     <fieldset class="bf-group"><legend>لایه‌ها (حداکثر {{ max_layers|fanum }})</legend>
-      <div class="cols">{% for t in spatial %}<label class="check small"><input type="checkbox" name="layers" value="{{ t.schema }}.{{ t.name }}"><span class="ltr">{% if t.schema != 'public' %}{{ t.schema }}.{% endif %}{{ t.name }}</span></label>{% empty %}<p class="muted small">لایه مکانی ندارید.</p>{% endfor %}</div>
+      <div class="cols">{% for t in spatial %}{% with k=t.schema|add:"."|add:t.name %}<label class="check small"><input type="checkbox" name="layers" value="{{ k }}" {% if again and k in again.layers %}checked{% endif %}><span class="ltr">{% if t.schema != 'public' %}{{ t.schema }}.{% endif %}{{ t.name }}</span></label>{% endwith %}{% empty %}<p class="muted small">لایه مکانی ندارید.</p>{% endfor %}</div>
     </fieldset>
-    <div class="field"><label for="a-out">نام جدول نتیجه</label><input id="a-out" type="text" name="output" class="ltr" required pattern="[a-z_][a-z0-9_]*" placeholder="schools_without_park"></div>
+    <div class="field"><label for="a-out">نام جدول نتیجه</label><input id="a-out" type="text" name="output" class="ltr" required pattern="[a-z_][a-z0-9_]*" placeholder="schools_without_park" value="{{ again.output_table|default:'' }}"></div>
+    <label class="check small"><input type="checkbox" name="share_values" {% if not again or again.share_values %}checked{% endif %}><span>مقادیر دسته‌ای ستون‌ها (مثل «اجاره»، «فروش»، «primary») هم برای مدل فرستاده شود؛ فیلترها خیلی دقیق‌تر می‌شوند</span></label>
     <button class="btn" type="submit" {% if active %}disabled title="یک تحلیل در حال اجراست"{% endif %}>بپرس</button>
     <span class="small muted">هر لایه تا {{ 5000|fanum }} عارضه خوانده می‌شود.</span>
   </form>
@@ -111,8 +112,16 @@
         <span class="st">{{ j.get_status_display }}</span>
         {% if e.detail %}<span>{{ e.detail }}</span>{% endif %}
       </div>
-      {% if e.ops %}<div class="hist-ops">{{ e.ops|join:" → " }}</div>{% endif %}
-      {% if e.answer and j.status == 'done' %}<div class="hist-answer"><b>{% if e.rows %}خلاصه تحلیل{% else %}پاسخ{% endif %}</b><pre>{{ e.answer }}</pre></div>{% endif %}
+      {% if e.steps %}<ol class="hist-steps" aria-label="مراحل اجرا">{% for s in e.steps %}<li class="{{ s.status }}{% if s.count == 0 %} zero{% endif %}" title="{{ s.op }} → {{ s.name }}"><span>{% if s.op == 'input' %}<span class="ltr">{{ s.name }}</span>{% else %}{{ s.label }}{% endif %}</span>{% if s.count is not None %}<b>{{ s.count|fanum }}</b>{% elif s.status == 'failed' %}<b>✕</b>{% elif s.status == 'skipped' %}<b>—</b>{% endif %}</li>{% endfor %}</ol>
+      {% elif e.ops %}<div class="hist-ops">{{ e.ops|join:" → " }}</div>{% endif %}
+      {% if e.kind == 'ask' and j.status == 'done' %}
+      <div class="hist-answer {{ e.result }}">
+        {% if e.rows %}<b>نتیجه: {{ e.rows|fanum }} عارضه پیدا شد و در جدول <span class="ltr">{{ e.table }}</span> ذخیره شد.</b>
+        {% elif e.result == 'empty' %}<b>نتیجه: هیچ عارضه‌ای با این شرایط پیدا نشد؛ جدول <span class="ltr">{{ e.table }}</span> ساخته نشد.</b>
+        {% elif e.answer %}<b>پاسخ (این تحلیل لایهٔ مکانی نساخت)</b>
+        {% else %}<b>تحلیل اجرا شد اما خروجی قابل نمایشی نداد.</b> <span class="small muted">پرسش را دقیق‌تر بنویسید؛ مثلاً بگویید «لایهٔ … بساز».</span>{% endif %}
+        {% if e.answer %}<pre>{{ e.answer }}</pre>{% endif %}
+      </div>{% endif %}
     </div>
     <div class="hist-side">
       {% if j.status == 'done' and e.rows %}
@@ -123,8 +132,10 @@
           <input type="hidden" name="schema" value="public"><input type="hidden" name="table" value="{{ e.table }}"><input type="hidden" name="map" value="new">
           {% for k, v in e.chart.items %}<input type="hidden" name="chart_{{ k }}" value="{{ v }}">{% endfor %}
           <button class="btn ghost sm" type="submit" title="نتیجه را در نقشه تازه باز می‌کند و نمودار پیشنهادی را آماده می‌کند">نقشه و نمودار</button></form>{% endif %}
+      {% elif j.status == 'done' and e.result == 'empty' %}<span class="small muted">۰ عارضه</span>
       {% elif j.status == 'done' and e.answer %}<span class="small muted">بدون لایه مکانی</span>
       {% elif j.status == 'done' %}<span class="small muted">{{ j.message|truncatechars:60 }}</span>{% endif %}
+      {% if e.kind == 'ask' and j.status != 'queued' and j.status != 'running' %}<a class="btn ghost sm" href="?again={{ e.pk }}#ask-h" title="فرم پرسش با همین متن و لایه‌ها پر می‌شود">ویرایش و پرسش دوباره</a>{% endif %}
     </div>
     {% if j.status == 'queued' or j.status == 'running' %}
     <div class="hist-prog">
