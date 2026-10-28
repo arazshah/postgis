@@ -251,7 +251,9 @@ body.app .messages .msg .msg-x{margin-inline-start:auto;flex:none}
 
 /* ---------- نقشه‌های چندلایه (فهرست) ---------- */
 .wm-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
-.wm-card{padding:0;overflow:hidden;gap:0}
+.wm-card{padding:0;gap:0;position:relative}
+.wm-card:has(.pop-m:not([hidden])){z-index:5}
+.wm-th{border-radius:var(--r-card) var(--r-card) 0 0}
 .wm-card:hover{border-color:var(--teal);box-shadow:var(--shadow-sm)}
 .wm-th{display:flex;align-items:flex-end;justify-content:space-between;height:120px;padding:10px 12px;color:#fff;text-decoration:none;position:relative}
 .wm-th-ico{position:absolute;inset:0;display:grid;place-items:center;opacity:.35}
