@@ -171,6 +171,27 @@ class AnalysisTests(TestCase):
             tools.run(self.db, "overlap", {"layer": "public.ads", "other": "public.landuse", "zone": "note",
                                            "category": "kind", "output": "bad_z"})
 
+    def test_change_between_two_versions(self):
+        self._sql_exec(
+            "CREATE TABLE lu_old(id serial PRIMARY KEY, kind text, geom geometry(Polygon, 4326));"
+            "INSERT INTO lu_old(kind, geom) VALUES ('کشاورزی', ST_MakeEnvelope(0, 0, 2, 2, 4326)),"
+            " ('مسکونی', ST_MakeEnvelope(2, 0, 4, 2, 4326));"
+            "CREATE TABLE lu_new(id serial PRIMARY KEY, kind text, geom geometry(Polygon, 4326));"
+            "INSERT INTO lu_new(kind, geom) VALUES ('مسکونی', ST_MakeEnvelope(0, 0, 1, 2, 4326)),"
+            " ('کشاورزی', ST_MakeEnvelope(1, 0, 2, 2, 4326)), ('مسکونی', ST_MakeEnvelope(2, 0, 4, 2, 4326))")
+        r = tools.run(self.db, "change", {"layer": "public.lu_old", "other": "public.lu_new", "category": "kind",
+                                          "category2": "kind", "output": "lu_change"})
+        area = {(a, b): float(x) for a, b, x in self._sql("SELECT from_category, to_category, area_m2 FROM lu_change")}
+        self.assertEqual(r["rows"], 3)
+        self.assertEqual(set(area), {("کشاورزی", "کشاورزی"), ("کشاورزی", "مسکونی"), ("مسکونی", "مسکونی")})
+        # نیمی از کشاورزی مسکونی شد و مسکونی قدیم دست‌نخورده ماند (مساحت‌ها تقریباً ۱:۱:۲)
+        self.assertAlmostEqual(area[("کشاورزی", "کشاورزی")] / area[("کشاورزی", "مسکونی")], 1, delta=0.01)
+        self.assertAlmostEqual(area[("مسکونی", "مسکونی")] / area[("کشاورزی", "کشاورزی")], 2, delta=0.02)
+        self.assertEqual(self._sql("SELECT type, srid FROM geometry_columns WHERE f_table_name = 'lu_change'"), [("MULTIPOLYGON", 4326)])
+        with self.assertRaisesMessage(tools.ToolError, "نسخه"):
+            tools.run(self.db, "change", {"layer": "public.lu_old", "other": "public.lu_new", "category": "kind",
+                                          "category2": "nope", "output": "lu_bad"})
+
     def test_page_and_access(self):
         url = reverse("analysis:page", args=[self.db.pk])
         r = self.client.get(url)

@@ -59,6 +59,22 @@ class CleanTests(SimpleTestCase):
         self.assertEqual(charts.title_for("scatter", cfg_xy := {"x": "sales", "y": "rooms"}), "rooms در برابر sales")
         self.assertEqual(cfg_xy["x"], "sales")
 
+    def test_radar_sankey_profile_config(self):
+        cfg = charts.clean("radar", {"field": "kind", "indicators": "sales,rooms,id", "limit": 99}, TYPES)
+        self.assertEqual(cfg, {"field": "kind", "indicators": ["sales", "rooms", "id"], "limit": charts.RADAR_ENTITIES})
+        for bad in ({"field": "kind", "indicators": ["sales", "rooms"]}, {"field": "kind", "indicators": ["sales", "rooms", "kind"]},
+                    {"indicators": ["sales", "rooms", "id"]}):
+            with self.assertRaises(charts.ChartError):
+                charts.clean("radar", bad, TYPES)
+        cfg = charts.clean("sankey", {"field": "kind", "target": "tier", "limit": 999}, TYPES)
+        self.assertEqual((cfg["target"], cfg["limit"], cfg["agg"]), ("tier", charts.SANKEY_LINKS, "count"))
+        for bad in ({"field": "kind"}, {"field": "kind", "target": "kind"}):
+            with self.assertRaises(charts.ChartError):
+                charts.clean("sankey", bad, TYPES)
+        self.assertEqual(charts.clean("profile", {"field": "id", "fid": " 7 "}, TYPES), {"field": "id", "fid": "7"})
+        with self.assertRaises(charts.ChartError):
+            charts.clean("profile", {"field": "id"}, TYPES)
+
     def test_kpi_has_no_field(self):
         self.assertEqual(charts.clean("kpi", {"field": "kind"}, TYPES), {"agg": "count"})
 
@@ -230,6 +246,68 @@ class ChartsIntegrationTests(TestCase):
         got = charts.data(self.layer, "scatter", {"x": "sales", "y": "rooms"})
         self.assertEqual((len(got["points"]), got["total"], got["sampled"]), (charts.SCATTER_POINTS, 2530, True))
         self.assertEqual(charts.data(self.layer, "scatter", {"x": "sales", "y": "rooms"}), got)  # نمونه ثابت می‌ماند
+
+    def test_radar(self):
+        got = charts.data(self.layer, "radar", {"field": "kind", "indicators": ["sales", "rooms", "id"], "limit": 3})
+        self.assertEqual(got["indicators"], ["sales", "rooms", "id"])
+        self.assertEqual(len(got["series"]), 3)
+        by = {x["name"]: x["values"] for x in got["series"]}
+        self.assertEqual(by["a"][0], 13.0)  # میانگین فروش g = 1، 7، 13، 19، 25
+        # بیشینه‌ی محور روی همه‌ی گروه‌ها حساب می‌شود، نه فقط ۳ گروه نمایش‌داده‌شده
+        self.assertGreaterEqual(got["max"][0], max(v[0] for v in by.values()))
+        got6 = charts.data(self.layer, "radar", {"field": "kind", "indicators": ["sales", "rooms", "id"], "limit": 6})
+        self.assertEqual(got6["max"][0], max(x["values"][0] for x in got6["series"]))
+
+    def test_sankey(self):
+        got = charts.data(self.layer, "sankey", {"field": "kind", "target": "tier", "limit": 60})
+        self.assertEqual(sum(link["value"] for link in got["links"]), 30)  # بدون NULL
+        self.assertEqual({link["source"] for link in got["links"]}, set("abcdef"))
+        self.assertEqual({link["target"] for link in got["links"]}, {"x", "y"})
+        top = charts.data(self.layer, "sankey", {"field": "kind", "target": "tier", "limit": 5})["links"]
+        self.assertEqual(len(top), 5)
+        self.assertEqual([x["value"] for x in top], sorted((x["value"] for x in top), reverse=True))
+        got = charts.data(self.layer, "sankey", {"field": "kind", "target": "tier", "agg": "sum", "value": "sales"},
+                          [51.0, 35.0, 51.105, 36.0])
+        self.assertEqual(sum(link["value"] for link in got["links"]), sum(range(1, 11)))
+
+    def test_profile_needs_a_z_line(self):
+        with self._pg() as c:
+            c.execute("CREATE TABLE tracks(id serial PRIMARY KEY, geom geometry(LineStringZ, 4326))")
+            c.execute("INSERT INTO tracks(geom) VALUES (ST_GeomFromText('LINESTRING Z(51 35 1000, 51 35.001 1050, 51 35.002 1020)', 4326))")
+            c.execute("CREATE TABLE flat(id serial PRIMARY KEY, geom geometry(LineString, 4326))")
+            c.execute("INSERT INTO flat(geom) VALUES (ST_GeomFromText('LINESTRING(51 35, 51 35.001)', 4326))")
+        track = services.add_layer(self.webmap, "public", "tracks")
+        got = charts.data(track, "profile", {"field": "id", "fid": "1"})
+        self.assertEqual(got["z"], [1000.0, 1050.0, 1020.0])
+        self.assertEqual((got["gain"], got["loss"], got["points"]), (50.0, 30.0, 3))
+        self.assertAlmostEqual(got["length_m"], 222.4, delta=1)
+        self.assertEqual(got["dist"][0], 0)
+        with self.assertRaisesMessage(Exception, "پیدا نشد"):
+            charts.data(track, "profile", {"field": "id", "fid": "99"})
+        flat = services.add_layer(self.webmap, "public", "flat")
+        with self.assertRaisesMessage(Exception, "Z"):
+            charts.data(flat, "profile", {"field": "id", "fid": "1"})
+        self.assertEqual(charts.data(self.layer, "kpi", {})["count"], 31)  # لایه‌های دیگر دست‌نخورده
+
+    def test_target_field_travels_in_tiles_and_layout_setting(self):
+        self.layer.style = {**self.layer.style, "popup": ["sales"]}
+        self.layer.save()
+        self.assertEqual(self._save(charts=[self._item("sankey", field="kind", target="tier")]).status_code, 200)
+        self.layer.refresh_from_db()
+        self.assertEqual(self.layer.columns, ["sales", "kind", "tier"])
+        # چیدمان: مقدار نامعتبر نادیده گرفته می‌شود و ذخیره‌ی بی‌چیدمان آن را عوض نمی‌کند
+        self._save(charts_layout="dashboard", is_public=True)
+        self.webmap.refresh_from_db()
+        self.assertEqual(self.webmap.charts_layout, "dashboard")
+        self._save(charts_layout="evil", is_public=True)
+        self._save(title="x", is_public=True)
+        self.webmap.refresh_from_db()
+        self.assertEqual(self.webmap.charts_layout, "dashboard")
+        page = Client().get(reverse("maps:map", args=[self.webmap.slug]))
+        self.assertContains(page, 'class="gp-charts dash"')
+        self.assertEqual(services.duplicate(self.webmap, self.user).charts_layout, "dashboard")
+        self._save(charts_layout="panel", is_public=True)
+        self.assertNotContains(Client().get(reverse("maps:map", args=[self.webmap.slug])), "gp-charts dash")
 
     def test_data_rejects_bad_config(self):
         with self.assertRaises(charts.ChartError):

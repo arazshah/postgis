@@ -554,13 +554,22 @@
     options($("ch-series"), fields.map(([n]) => [n, n]).filter(([n]) => n !== $("ch-field").value), keep && keep.series);
     options($("ch-x"), numeric, keep && keep.x);
     options($("ch-y"), numeric, keep && keep.y);
+    options($("ch-target"), fields.map(([n]) => [n, n]).filter(([n]) => n !== $("ch-field").value), keep && keep.target);
+    options($("ch-inds"), numeric);
+    const want_inds = new Set((keep && keep.indicators) || []);
+    Array.from($("ch-inds").options).forEach((o) => { o.selected = want_inds.has(o.value); });
     if (kind === "scatter" && !(keep && keep.y) && numeric.length > 1) $("ch-y").value = numeric[1][0];
-    $("ch-field-l").textContent = kind === "hist" ? "ستون عددی" : kind === "time" ? "ستون تاریخ" : kind === "stacked" ? "ستون محور (هر ردیف)" : "ستون دسته";
+    $("ch-field-l").textContent = kind === "hist" ? "ستون عددی" : kind === "time" ? "ستون تاریخ" : kind === "stacked" ? "ستون محور (هر ردیف)"
+      : kind === "radar" ? "ستون گروه (هر محله یا دسته)" : kind === "sankey" ? "ستون مبدأ (دسته‌ی قدیم)" : kind === "profile" ? "ستون شناسه‌ی خط" : "ستون دسته";
     const agg = $("ch-agg").value;
+    const plain = !["hist", "scatter", "radar", "profile"].includes(kind);
     chShow("field", kind !== "kpi" && kind !== "scatter");
-    chShow("agg", kind !== "hist" && kind !== "scatter");
-    chShow("value", kind !== "hist" && kind !== "scatter" && agg !== "count");
-    chShow("limit", kind === "bar" || kind === "pie" || kind === "stacked");
+    chShow("agg", plain);
+    chShow("value", plain && agg !== "count");
+    chShow("limit", ["bar", "pie", "stacked", "sankey", "radar"].includes(kind));
+    chShow("target", kind === "sankey");
+    chShow("inds", kind === "radar");
+    chShow("fid", kind === "profile");
     chShow("order", kind === "bar" || kind === "pie");
     chShow("series", kind === "stacked");
     chShow("xy", kind === "scatter");
@@ -584,6 +593,7 @@
     $("ch-bins").value = c.bins || 10;
     $("ch-classes").checked = c.classes !== false;
     $("ch-cum").checked = !!c.cumulative;
+    $("ch-fid").value = c.fid || "";
     $("ch-percent").checked = c.percent !== false;
     $("ch-unit").value = c.unit || "month";
     syncChartForm(c);
@@ -606,7 +616,8 @@
       field: $("ch-field").value, agg: $("ch-agg").value, value: $("ch-value").value, limit: Number($("ch-limit").value),
       order: $("ch-order").value, bins: Number($("ch-bins").value), classes: $("ch-classes").checked, unit: $("ch-unit").value,
       series: $("ch-series").value, x: $("ch-x").value, y: $("ch-y").value, percent: $("ch-percent").checked,
-      cumulative: $("ch-cum").checked}};
+      cumulative: $("ch-cum").checked, target: $("ch-target").value, fid: $("ch-fid").value,
+      indicators: Array.from($("ch-inds").selectedOptions).map((o) => o.value)}};
     $("ch-ok").disabled = true;
     chErr.hidden = true;
     try {  // سرور تنظیمات را بررسی و پاک‌سازی می‌کند؛ اگر داده نداشت همین‌جا خطا می‌دهد
@@ -627,6 +638,8 @@
   });
 
   // ------------------------------------------------------------------ تنظیمات نقشه، اشتراک و ذخیره
+  $("wm-clayout").value = cfg.chartsLayout || "panel";
+  $("wm-clayout").addEventListener("change", () => setDirty(true));
   $("wm-base").value = cfg.basemapKind || "osm";
   if (!$("wm-base").value) $("wm-base").value = "osm";
   $("wm-base").addEventListener("change", (e) => { gm.setBasemap(e.target.value); setDirty(true); });
@@ -657,7 +670,7 @@
   async function save() {
     const body = {
       title: $("wm-title").value, description: $("wm-desc").value, is_public: $("wm-public").checked,
-      basemap: $("wm-base").value, view: meta.view,
+      basemap: $("wm-base").value, view: meta.view, charts_layout: $("wm-clayout").value,
       layers: layers.map((l) => ({id: l.id, title: l.title === l.table.split(".").pop() ? "" : l.title,
         visible: l.visible, style: l.style})),
       slides: slides.map((x) => ({title: x.title, body: x.body, view: x.view,
@@ -696,7 +709,8 @@
       setTab("charts");
       openChartForm(null, {layer: l.key, kind: qp.get("chart"), config: {field: qp.get("field") || "", series: qp.get("series") || "",
         value: qp.get("value") || "", agg: qp.get("agg") || "count", x: qp.get("x") || "", y: qp.get("y") || "",
-        percent: qp.get("percent") !== "0", cumulative: qp.get("cumulative") === "1"}});
+        percent: qp.get("percent") !== "0", cumulative: qp.get("cumulative") === "1", target: qp.get("target") || "",
+        indicators: (qp.get("indicators") || "").split(",").filter(Boolean), fid: qp.get("fid") || ""}});
     }
     history.replaceState(null, "", location.pathname);
   }

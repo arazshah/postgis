@@ -57,11 +57,11 @@
   <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="tool"><input type="hidden" name="tool" value="{{ tool.key }}">
     <div class="bf-row">
     {% if tool.key != 'isochrone' %}
-    <div class="field"><label>{% if tool.key == 'count' or tool.key == 'overlap' %}لایه چندضلعی{% if tool.key == 'overlap' %} (مثلاً محله){% endif %}{% else %}لایه{% endif %}</label>
+    <div class="field"><label>{% if tool.key == 'change' %}نسخه‌ی قدیم (لایه چندضلعی){% elif tool.key == 'count' or tool.key == 'overlap' %}لایه چندضلعی{% if tool.key == 'overlap' %} (مثلاً محله){% endif %}{% else %}لایه{% endif %}</label>
       <select name="layer" required>{% for t in spatial %}<option value="{{ t.schema }}.{{ t.name }}">{{ t.name }} ({{ t.geometry.0.type|lower }})</option>{% endfor %}</select></div>
     {% endif %}
-    {% if tool.key == 'nearest' or tool.key == 'count' or tool.key == 'overlap' %}
-    <div class="field"><label>{% if tool.key == 'count' %}لایه نقطه‌ای که شمرده شود{% elif tool.key == 'overlap' %}لایه چندضلعی دسته‌دار (مثلاً کاربری زمین){% else %}لایه هدف (نزدیک‌ترینِ آن){% endif %}</label>
+    {% if tool.key == 'nearest' or tool.key == 'count' or tool.key == 'overlap' or tool.key == 'change' %}
+    <div class="field"><label>{% if tool.key == 'count' %}لایه نقطه‌ای که شمرده شود{% elif tool.key == 'overlap' %}لایه چندضلعی دسته‌دار (مثلاً کاربری زمین){% elif tool.key == 'change' %}نسخه‌ی جدید (لایه چندضلعی){% else %}لایه هدف (نزدیک‌ترینِ آن){% endif %}</label>
       <select name="other" required>{% for t in spatial %}<option value="{{ t.schema }}.{{ t.name }}">{{ t.name }}</option>{% endfor %}</select></div>
     {% endif %}
     {% if tool.key == 'nearest' %}<div class="field"><label>ستون نام در لایه هدف (اختیاری)</label><input type="text" name="label" class="ltr" placeholder="name"></div>{% endif %}
@@ -72,6 +72,10 @@
     {% if tool.key == 'overlap' %}
     <div class="field"><label>ستون نام چندضلعی‌ها (لایه اول)</label><input type="text" name="zone" class="ltr" required placeholder="name"></div>
     <div class="field"><label>ستون دسته (لایه دوم)</label><input type="text" name="category" class="ltr" required placeholder="landuse"></div>
+    {% endif %}
+    {% if tool.key == 'change' %}
+    <div class="field"><label>ستون دسته در نسخه‌ی قدیم</label><input type="text" name="category" class="ltr" required placeholder="landuse"></div>
+    <div class="field"><label>ستون دسته در نسخه‌ی جدید</label><input type="text" name="category2" class="ltr" required placeholder="landuse"></div>
     {% endif %}
     {% if tool.key == 'buffer' %}<div class="field"><label>فاصله (متر)</label><input type="text" name="distance" value="500" inputmode="numeric"></div>{% endif %}
     {% if tool.key == 'hexbin' %}<div class="field"><label>اندازه هر خانه (متر)</label><input type="text" name="size" value="500" inputmode="numeric"></div>{% endif %}

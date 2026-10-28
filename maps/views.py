@@ -31,7 +31,7 @@ from .services import MapError
 log = logging.getLogger(__name__)
 TILE_TTL = 60
 MAX_SLIDES = 30
-CHART_HINTS = ("field", "series", "value", "agg", "x", "y", "percent", "cumulative")
+CHART_HINTS = ("field", "series", "value", "agg", "x", "y", "percent", "cumulative", "target", "indicators", "fid")
 
 
 def _json(data, status=200):
@@ -91,7 +91,7 @@ def map_config(request, webmap: WebMap, embed=False, fields=False) -> dict:
                    for x in webmap.slides.all()],
         "charts": [_chart_conf(x) for x in webmap.charts.all()], "chartsUrl": f"/maps/{webmap.slug}/c/",
         "categoryColors": CATEGORY_COLORS,
-        "chartCap": webmap.database.plan.map_charts,
+        "chartCap": webmap.database.plan.map_charts, "chartsLayout": webmap.charts_layout,
     }
 
 
@@ -213,6 +213,8 @@ def _save(webmap: WebMap, data: dict):
     webmap.is_public = bool(data.get("is_public"))
     webmap.basemap = data.get("basemap") if data.get("basemap") in styles.BASEMAPS else "osm"
     webmap.view = _clean_view(data.get("view"))
+    if data.get("charts_layout") in ("panel", "dashboard"):
+        webmap.charts_layout = data["charts_layout"]
     layers = {x.pk: x for x in webmap.layers.all()}
     order = []
     for item in data.get("layers") or []:

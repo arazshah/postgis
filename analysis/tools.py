@@ -32,6 +32,7 @@ TOOLS = [
     Tool("nearest", "نزدیک‌ترین عارضه", "برای هر عارضه، نزدیک‌ترین عارضه لایه دیگر و فاصله‌اش به متر.", "nearest"),
     Tool("count", "شمارش در چندضلعی", "تعداد نقطه‌های یک لایه داخل هر چندضلعی؛ مثلاً مدرسه‌های هر محله.", "count"),
     Tool("overlap", "سهم همپوشانی", "سهم هر دسته (مثلاً کاربری زمین) از مساحت هر چندضلعی (مثلاً محله) با برش دو لایه چندضلعی.", "overlap"),
+    Tool("change", "تغییر بین دو نسخه", "دو نسخه‌ی یک لایه چندضلعی (مثلاً کاربری ۱۴۰۰ و ۱۴۰۵) را برش می‌دهد و مساحت هر «از ← به» را می‌دهد.", "change"),
     Tool("hexbin", "نقشه تراکم شش‌ضلعی", "شبکه شش‌ضلعی روی نقطه‌ها و تعداد هر خانه؛ برای نقشه حرارتی.", "hexbin"),
     Tool("isochrone", "حوزه دسترسی", "محدوده‌ای که از یک نقطه با پیمودن فاصله مشخص روی شبکه معابر می‌رسید.", "isochrone"),
 ]
@@ -208,6 +209,26 @@ def _prepare(db, key: str, params: dict):
             zone=sql.Identifier(zone), cat=sql.Identifier(cat), pz=pz, qz=qz, P=sql.Identifier(p.schema, p.name),
             Q=sql.Identifier(q.schema, q.name), cp=sql.Identifier(cp), cq=sql.Identifier(cq),
             gq=_in_srid("q", cq, sq, sp))
+    elif key == "change":
+        p, q = table("layer"), table("other")
+        cp, sp, _ = _geom_of(p, ("POLYGON",), ex)
+        cq, sq, _ = _geom_of(q, ("POLYGON",), ex)
+        cat, cat2 = (params.get("category") or "").strip(), (params.get("category2") or "").strip()
+        if cat not in {c["name"] for c in ex.columns(p) if not c["spatial"]}:
+            raise ToolError("ستون دسته‌ی نسخه‌ی قدیم (لایه اول) را انتخاب کنید.")
+        if cat2 not in {c["name"] for c in ex.columns(q) if not c["spatial"]}:
+            raise ToolError("ستون دسته‌ی نسخه‌ی جدید (لایه دوم) را انتخاب کنید.")
+        pz, qz = _geom4326("p", cp, sp), _geom4326("q", cq, sq)
+        body = sql.SQL(
+            "WITH j AS (SELECT p.{cat}::text AS from_category, q.{cat2}::text AS to_category, i.g FROM {P} p "
+            "JOIN {Q} q ON ST_Intersects(p.{cp}, {gq}) CROSS JOIN LATERAL (SELECT ST_CollectionExtract("
+            "ST_Intersection(ST_MakeValid({pz}), ST_MakeValid({qz})), 3) AS g) i WHERE p.{cp} IS NOT NULL AND q.{cq} IS NOT NULL "
+            "AND p.{cat} IS NOT NULL AND q.{cat2} IS NOT NULL AND NOT ST_IsEmpty(i.g)) "
+            "SELECT from_category, to_category, round(sum(ST_Area(g::geography))::numeric, 1) AS area_m2, "
+            "ST_Multi(ST_Union(g))::geometry(MultiPolygon, 4326) AS geom FROM j GROUP BY 1, 2").format(
+            cat=sql.Identifier(cat), cat2=sql.Identifier(cat2), P=sql.Identifier(p.schema, p.name),
+            Q=sql.Identifier(q.schema, q.name), cp=sql.Identifier(cp), cq=sql.Identifier(cq), pz=pz, qz=qz,
+            gq=_in_srid("q", cq, sq, sp))
     elif key == "hexbin":
         t = table("layer")
         col, srid, _ = _geom_of(t)
@@ -258,14 +279,14 @@ def summarize(db, key: str, params: dict) -> str:
     if params.get("value"):
         parts.append(f"{params.get('agg') or 'sum'} {params['value']}")
     if params.get("category"):
-        parts.append(f"دسته {params['category']}")
+        parts.append(f"دسته {params['category']}" + (f" ← {params['category2']}" if params.get("category2") else ""))
     if params.get("dissolve") == "on":
         parts.append("یکپارچه")
     return " · ".join(parts)[:300]
 
 
 PUBLIC_PARAMS = ("layer", "other", "label", "distance", "size", "lon", "lat", "dissolve", "output", "replace", "value", "agg",
-                 "category", "zone")
+                 "category", "zone", "category2")
 
 
 def run_job(job) -> dict:

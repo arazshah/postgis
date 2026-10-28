@@ -19,6 +19,8 @@ class WebMap(models.Model):
     description = models.TextField("توضیح", blank=True)
     is_public = models.BooleanField("عمومی (بدون کلید)", default=False)
     basemap = models.CharField("نقشه پایه", max_length=10, default="iran")
+    charts_layout = models.CharField("چیدمان نمودارها", max_length=10, default="panel",
+                                     choices=[("panel", "پنل کشویی"), ("dashboard", "داشبورد کنار نقشه")])
     view = models.JSONField("نمای شروع", default=dict, blank=True,
                             help_text="خالی یعنی محدوده همه لایه‌ها؛ وگرنه {center: [طول, عرض], zoom}.")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
@@ -84,7 +86,7 @@ class MapLayer(models.Model):
         extra = [st.get(k) for k in ("field", "label") if st.get(k)]
         # نمودار با کلیک روی دسته یا طبقه، عارضه‌ها را روی نقشه برجسته می‌کند؛ ستونش باید در کاشی باشد
         if self.pk:
-            extra += [c.config[k] for c in self.charts.all() for k in ("field", "series") if c.config.get(k)]
+            extra += [c.config[k] for c in self.charts.all() for k in ("field", "series", "target") if c.config.get(k)]
         return list(dict.fromkeys(popup + extra))
 
 

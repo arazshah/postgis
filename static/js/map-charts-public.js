@@ -13,8 +13,11 @@
     return d.data;
   }
 
+  const dash = cfg.chartsLayout === "dashboard" && window.matchMedia("(min-width:901px)").matches;
   function setOpen(on) {
     panel.hidden = !on;
+    document.body.classList.toggle("dash-open", dash && on);
+    if (dash && window.gpMap) setTimeout(() => window.gpMap.map.resize(), 30);
     toggle.setAttribute("aria-expanded", on ? "true" : "false");
     if (!on) { if (ui) ui.clear(); return; }
     if (!ui) {
@@ -23,6 +26,7 @@
     }
   }
   toggle.addEventListener("click", () => setOpen(panel.hidden));
+  if (dash) setOpen(true);  // داشبورد خودکار باز است
   document.getElementById("chart-close").addEventListener("click", () => setOpen(false));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) setOpen(false); });
 })();

@@ -23,8 +23,9 @@ CHART_HINTS = {
     "count": {"kind": "hist", "field": "point_count"},
     "overlap": {"kind": "stacked", "field": "zone", "series": "category", "value": "area_m2", "agg": "sum", "percent": "1"},
     "hexbin": {"kind": "hist", "field": "count"},
+    "change": {"kind": "sankey", "field": "from_category", "target": "to_category", "value": "area_m2", "agg": "sum"},
 }
-GLYPHS = {"buffer": "◎", "nearest": "⌖", "count": "#", "overlap": "▦", "hexbin": "⬡", "isochrone": "◔"}
+GLYPHS = {"buffer": "◎", "nearest": "⌖", "count": "#", "overlap": "▦", "change": "⇄", "hexbin": "⬡", "isochrone": "◔"}
 
 
 def _busy(db) -> bool:

@@ -44,7 +44,7 @@ body{background:#EEF2EC}
 {% endif %}
 {% if config.charts %}
 <button type="button" class="gp-chartbtn" id="chart-toggle" aria-expanded="false" aria-controls="chart-panel">نمودارها</button>
-<aside class="gp-charts" id="chart-panel" aria-label="نمودارهای نقشه" hidden>
+<aside class="gp-charts{% if config.chartsLayout == 'dashboard' %} dash{% endif %}" id="chart-panel" aria-label="نمودارهای نقشه" hidden>
   <header><h2>نمودارها</h2>
     <label><input type="checkbox" id="chart-visible"> فقط محدوده دیده‌شده</label>
     <button type="button" id="chart-close" aria-label="بستن نمودارها">✕</button></header>
