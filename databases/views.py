@@ -419,9 +419,11 @@ def explore_sql(request, pk):
     db, ex = _explorer_db(request, pk)
     if ex is None:
         return redirect("databases:detail", pk=db.pk)
+    from . import nl2sql
+
     query = request.POST.get("query", "") if request.method == "POST" else request.GET.get("q", "")
     allow_write = request.POST.get("allow_write") == "on" and db.can_edit
-    result = error = None
+    result = error = created = None
     if request.method == "POST":
         try:
             result = ex.run_sql(query, allow_write=allow_write)
@@ -432,9 +434,77 @@ def explore_sql(request, pk):
     except ExplorerError as exc:
         messages.error(request, str(exc))
         tables = []
+    made = nl2sql.created_table(query) if result else None
+    if made:
+        created = next((t for t in tables if (t.schema, t.name) == made), None)
+    # پرسش فارسی‌ای که این SQL از آن ساخته شد، تا بعد از اجرا هم دیده شود
+    nl = {"text": request.POST.get("nl_text", "")[:nl2sql.MAX_TEXT],
+          "note": request.POST.get("nl_note", "")[:800]} if request.method == "POST" else {"text": "", "note": ""}
     return render(request, "databases/explore_sql.html", {
         "db": db, "tables": tables, "query": query, "allow_write": allow_write, "result": result,
-        "error": error, "section": "sql", "max_rows": SQL_MAX_ROWS})
+        "error": error, "section": "sql", "max_rows": SQL_MAX_ROWS, "created": created, "nl": nl,
+        "llm_cfg": nl2sql.user_config(request.user), "nl_examples": _nl_examples(tables),
+        "mode": "nl" if request.GET.get("mode") == "nl" else ("nl" if nl["text"] and not query else "sql")})
+
+
+def _nl_examples(tables) -> list[str]:
+    """نمونه پرسش فارسی بر اساس جدول‌های همین پایگاه."""
+    polys = [t for t in tables if t.geometry and "POLYGON" in (t.geometry[0]["type"] or "").upper()]
+    points = [t for t in tables if t.geometry and "POINT" in (t.geometry[0]["type"] or "").upper()]
+    out = []
+    if tables:
+        out.append(f"در جدول {tables[0].name} چند ردیف هست؟")
+    if polys and points:
+        out.append(f"نقاط {points[0].name} که داخل {polys[0].name} هستند را در یک لایه جدید ذخیره کن")
+    if polys:
+        out.append(f"مساحت هر عارضه {polys[0].name} را به متر مربع حساب کن و از بزرگ به کوچک مرتب کن")
+    if points:
+        out.append(f"تعداد نقاط {points[0].name} را به تفکیک یک ستون متنی بشمار")
+    return out[:4]
+
+
+@site_user_required
+@require_POST
+def explore_sql_ask(request, pk):
+    """متن فارسی ← یک دستور SQL (JSON). اجرا با همان کنسول و همان محافظ‌هاست."""
+    from . import nl2sql
+
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        return JsonResponse({"ok": False, "error": "مرورگر فقط برای پایگاه داده فعال در دسترس است."}, status=400)
+    try:
+        draft = nl2sql.generate(db, request.user, request.POST.get("text", ""),
+                                share_values=request.POST.get("share_values") == "on")
+    except nl2sql.NLError as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    data = draft.as_dict()
+    data["can_write"] = db.can_edit
+    # فقط پرس‌وجوی خواندنیِ سالم بی‌درنگ اجرا می‌شود؛ هر تغییری را کاربر خودش تأیید می‌کند
+    data["auto_run"] = draft.valid and not draft.writes
+    return JsonResponse({"ok": True, **data})
+
+
+@site_user_required
+@require_POST
+def explore_sql_key(request, pk):
+    from . import nl2sql
+
+    db = _user_db(request, pk, "viewer")
+    here = reverse("databases:explore_sql", args=[db.pk]) + "?mode=nl"
+    if request.POST.get("action") == "delete":
+        cfg = nl2sql.user_config(request.user)
+        if cfg:
+            cfg.delete()
+            messages.success(request, "کلید مدل زبانی حذف شد.")
+        return redirect(here)
+    try:
+        nl2sql.save_config(request.user, request.POST.get("base_url", ""), request.POST.get("model", ""),
+                           request.POST.get("api_key", ""))
+    except nl2sql.NLError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, "کلید مدل زبانی ذخیره شد؛ حالا درخواست خود را به فارسی بنویسید.")
+    return redirect(here)
 
 
 # ---------------------------------------------------------------------- خروجی چندقالبی
