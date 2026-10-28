@@ -1,11 +1,12 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "base.html" %}{% load fa ws %}
 {% block title %}کد تأیید — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page">
   <div class="auth">
+    <span class="auth-ico">{% icon "check" 26 %}</span>
     <h1>{% if new_user %}ساخت حساب{% else %}ورود{% endif %}</h1>
     <p class="muted">کد تأیید به <b class="ltr mono">{{ phone }}</b> پیامک شد. <a href="{% url 'accounts:login' %}">شماره را تغییر دهید</a></p>
-    <form method="post" class="panel" novalidate>
+    <form method="post" class="card" novalidate>
       {% csrf_token %}
       {% include "partials/form_errors.html" %}
       {% include "partials/field.html" with field=form.code %}

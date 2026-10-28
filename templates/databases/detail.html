@@ -1,9 +1,9 @@
-{% extends "databases/_ws.html" %}{% load fa %}
+{% extends "databases/_ws.html" %}{% load fa ws %}
 {% block title %}{{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 {% firstof once_password "YOUR_PASSWORD" as pw %}
 <div class="wrap page">
-  <div class="page-head"><h1>نمای کلی و اتصال</h1></div>
+  <div class="page-head"><div><h1>{% icon "home" 22 %} نمای کلی و اتصال</h1><p class="muted page-sub">اطلاعات اتصال، مصرف حجم و اعتبار پایگاه.</p></div></div>
 
   {% if db.status == 'readonly' %}<div class="msg warning">حجم این پایگاه داده پر شده و فعلاً فقط‌خواندنی است. خواندن داده‌ها و اتصال QGIS و GeoServer کار می‌کند. برای آزاد کردن فضا <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید و بگویید کدام جدول‌ها حذف شوند؛ وقتی حجم به زیر ۹۵٪ برسد، خودکار دوباره قابل نوشتن می‌شود.</div>{% endif %}
   {% if db.status == 'expired' %}<div class="msg error">اعتبار این پایگاه داده تمام شده و اتصال غیرفعال است. با تمدید رایگان، دوباره فعال می‌شود.</div>{% endif %}
@@ -20,7 +20,7 @@
   {% endif %}
 
   <div class="duo">
-    <section class="panel" aria-labelledby="conn-title">
+    <section class="card" aria-labelledby="conn-title">
         <h2 id="conn-title">اطلاعات اتصال</h2>
         <table class="kv">
           <tr><th>میزبان (Host)</th><td><span id="v-host">{{ db.host }}</span> <button class="copy" data-copy="{{ db.host }}">کپی</button></td></tr>
@@ -31,7 +31,7 @@
           <tr><th>SSL Mode</th><td>{{ db.sslmode }}</td></tr>
         </table>
       </section>
-    <section class="panel">
+    <section class="card">
         <h3>مصرف و اعتبار</h3>
         <div class="meter {{ db.usage_level }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ db.usage_percent|pct_width }}" aria-label="مصرف حجم"><i style="width:{{ db.usage_percent|pct_width }}%"></i></div>
         <div class="meter-label"><span>{{ db.size_bytes|fasize }} از {{ db.plan.quota_display|fanum }}</span><span>{{ db.usage_percent|fanum }}٪</span></div>
@@ -59,7 +59,7 @@
   </div>
 
   {% if db.pooled %}
-  <section class="panel" aria-labelledby="pool-title">
+  <section class="card" aria-labelledby="pool-title">
         <h2 id="pool-title">اتصال برای وب‌سایت و برنامه‌ها (PgBouncer)</h2>
         <p class="small">برای سایت، API یا اپلیکیشنی که اتصال‌های زیاد و کوتاه می‌سازد، از این آدرس استفاده کنید؛ صدها درخواست هم‌زمان با چند اتصال واقعی به سرور جواب داده می‌شوند و از سقف اتصال پلن عبور نمی‌کنید. نام کاربری و رمز همان قبلی است.</p>
         <div class="secret"><code id="pool-uri" class="ltr">{{ db.pooled_uri }}</code><button class="copy" data-copy-target="#pool-uri">کپی</button></div>
@@ -67,7 +67,7 @@
       </section>
   {% endif %}
 
-  <section class="panel" aria-labelledby="howto-title">
+  <section class="card" aria-labelledby="howto-title">
         <h2 id="howto-title">اتصال از نرم‌افزار شما</h2>
         <div class="tabs" role="tablist" aria-label="روش اتصال">
           <button role="tab" id="t-qgis" aria-controls="p-qgis" aria-selected="true">QGIS</button>
@@ -135,7 +135,7 @@ print(gpd.read_postgis("SELECT * FROM parcels LIMIT 5", engine, geom_col="geomet
       </section>
 
   <div class="duo">
-    <section class="panel">
+    <section class="card">
         <h3>افزونه‌های نصب‌شده</h3>
         <div class="chips">{% for e in db.extensions.all %}<span class="chip">{{ e.title }}</span>{% empty %}<span class="muted small">هیچ افزونه‌ای نصب نشده</span>{% endfor %}</div>
         {% if db.is_live and ext_form.fields.extension.queryset.exists %}
@@ -146,7 +146,7 @@ print(gpd.read_postgis("SELECT * FROM parcels LIMIT 5", engine, geom_col="geomet
         {% endif %}
       </section>
     {% if db.is_live %}
-      <section class="panel">
+      <section class="card">
         <h3>رمز جدید</h3>
         <p class="small muted">اگر رمز را فراموش کرده‌اید، یک رمز جدید بسازید. اتصال‌های فعلی قطع نمی‌شوند ولی اتصال بعدی رمز جدید را می‌خواهد.</p>
         <form method="post" action="{% url 'databases:reset_password' db.pk %}">{% csrf_token %}
@@ -163,12 +163,12 @@ print(gpd.read_postgis("SELECT * FROM parcels LIMIT 5", engine, geom_col="geomet
 
   <div class="after">
     {% if logs %}
-      <section class="panel">
+      <section class="card">
         <h3>رویدادهای اخیر</h3>
         <ul class="log">{% for l in logs %}<li class="{% if not l.success %}fail{% endif %}"><span>{{ l.message|truncatechars:60 }}</span><span class="muted">{{ l.created_at|jdate }}</span></li>{% endfor %}</ul>
       </section>
     {% endif %}
-    <section class="panel danger-panel">
+    <section class="card danger-panel">
         <details class="danger-zone">
           <summary>حذف پایگاه داده</summary>
           <p class="small" style="margin-top:12px">همه جدول‌ها و داده‌ها برای همیشه پاک می‌شوند و قابل بازگشت نیستند.</p>

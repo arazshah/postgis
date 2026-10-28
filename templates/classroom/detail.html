@@ -1,14 +1,14 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "base.html" %}{% load fa ws %}
 {% block title %}{{ c.title }} — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page">
-  <p class="small"><a href="{% url 'classroom:teach' %}">کلاس‌های من</a></p>
+  <a class="back-link" href="{% url 'classroom:teach' %}">{% icon "back" 16 %}کلاس‌های من</a>
   <div class="page-head">
-    <h1>{{ c.title }}</h1>
+    <div><h1>{{ c.title }}</h1></div>
     <span class="badge {% if c.status == 'active' %}active{% else %}expired{% endif %}">{{ c.get_status_display }}</span>
   </div>
   <div class="grid-2">
-    <section class="panel">
+    <section class="card">
       <h2 class="u-h">ثبت‌نام دانشجوها</h2>
       <p class="small">این لینک را در گروه کلاس بگذارید، یا کد را روی تخته بنویسید تا دانشجو در <span class="ltr">postgis.ir/class/join/</span> وارد کند:</p>
       <div class="secret"><code id="j-url" class="ltr">{{ join_url }}</code><button class="copy" data-copy-target="#j-url">کپی</button></div>
@@ -18,7 +18,7 @@
       <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="toggle"><button class="btn ghost sm" type="submit">{% if c.is_open %}بستن ثبت‌نام{% else %}باز کردن ثبت‌نام{% endif %}</button></form>
       {% endif %}
     </section>
-    <section class="panel">
+    <section class="card">
       <h2 class="u-h">بررسی کار دانشجوها</h2>
       <p class="small">شما به پایگاه داده هر دانشجو دسترسی «مشاهده‌گر» دارید: جدول‌ها، نقشه‌ها و SQL خواندنی، بدون امکان تغییر. فایل CSV فهرست، نام کاربری پایگاه داده هر نفر را هم دارد.</p>
       <a class="btn ghost sm" href="?format=csv">دانلود فهرست (CSV)</a>
@@ -29,7 +29,7 @@
     </section>
   </div>
 
-  <section class="panel" style="margin-top:var(--s5)">
+  <section class="card" style="margin-top:var(--s5)">
     <h2 class="u-h">نقشه‌های کلاس</h2>
     <p class="small">یکی از نقشه‌های چندلایه خودتان را با کلاس به اشتراک بگذارید. دانشجوها آن را در صفحه کلاس می‌بینند (حتی اگر نقشه خصوصی باشد)، ارائه‌اش را اجرا می‌کنند و با یک کلیک در پایگاه داده خودشان کپی می‌کنند. لایه‌ها در کپی به جدول‌های هم‌نام دانشجو وصل می‌شوند؛ برای کلاس با «داده تمرینی»، نقشه را روی همان جدول‌ها بسازید.</p>
     {% if shared %}
@@ -58,7 +58,7 @@
     {% endif %}
   </section>
 
-  <section class="panel" style="margin-top:var(--s5)">
+  <section class="card" style="margin-top:var(--s5)">
     <h2 class="u-h">دانشجوها ({{ rows|length|fanum }} از {{ c.capacity|fanum }})</h2>
     <div class="table-wrap"><table class="tbl">
       <thead><tr><th>نام</th><th>شماره دانشجویی</th><th>پایگاه داده</th><th>حجم</th><th>وضعیت</th><th></th></tr></thead>

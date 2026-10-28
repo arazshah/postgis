@@ -1,10 +1,10 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "base.html" %}{% load fa ws %}
 {% block title %}کلاس‌های من — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page">
-  <h1>کلاس‌های من</h1>
+  <div class="page-head"><div><h1>{% icon "users" 22 %} کلاس‌های من</h1></div></div>
   <div class="grid-2">
-    <section class="panel">
+    <section class="card">
       <h2 class="u-h">قراردادها</h2>
       {% for k in contracts %}
       <div class="contract">
@@ -15,7 +15,7 @@
       {% empty %}<p class="muted small">قرارداد جاری ندارید؛ کلاس‌های قبلی پایین هستند.</p>{% endfor %}
     </section>
     {% if contracts %}
-    <section class="panel">
+    <section class="card">
       <h2 class="u-h">کلاس جدید</h2>
       {% if error %}<div class="msg error">{{ error }}</div>{% endif %}
       <form method="post" class="stack-form" id="cform">{% csrf_token %}
@@ -33,7 +33,7 @@
   </div>
 
   {% if classes %}
-  <section class="panel" style="margin-top:var(--s5)">
+  <section class="card" style="margin-top:var(--s5)">
     <h2 class="u-h">کلاس‌ها</h2>
     <table class="tbl"><thead><tr><th>کلاس</th><th>کد</th><th>دانشجو</th><th>پایان ترم</th><th>وضعیت</th></tr></thead>
       <tbody>{% for c in classes %}<tr><td><a href="{% url 'classroom:detail' c.pk %}">{{ c.title }}</a></td><td><span class="ltr" style="font-family:var(--f-mono)">{{ c.code }}</span></td>

@@ -1,12 +1,12 @@
-{% extends "databases/_ws.html" %}{% load fa %}
+{% extends "databases/_ws.html" %}{% load fa ws %}
 {% block title %}{{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 <div class="wrap page">
   <div class="page-head">
-    <h1 class="ltr" style="font-family:var(--f-mono)">{{ db.db_name }}</h1>
-    {% if db.is_live %}<a class="btn sm" href="{% url 'databases:explore' db.pk %}" style="margin-inline-start:auto">مشاهده جدول‌ها و داده‌ها</a>{% endif %}
+    <div><h1 class="ltr mono">{{ db.db_name }}</h1><p class="muted page-sub">پایگاه اشتراکی</p></div>
+    <div class="page-acts">{% if db.is_live %}<a class="btn sm" href="{% url 'databases:explore' db.pk %}">{% icon "table" 16 %}مشاهده جدول‌ها و داده‌ها</a>{% endif %}</div>
   </div>
-  <section class="panel">
+  <section class="card">
     <p>این پایگاه داده را <span class="ltr">{{ db.owner.phone }}</span> با شما به اشتراک گذاشته است. نقش شما: <b>{% if db.can_edit %}ویرایشگر{% else %}مشاهده‌گر{% endif %}</b>.</p>
     <ul class="small">
       <li>جدول‌ها، نقشه‌ها و نقشه‌های خصوصی منتشرشده را می‌بینید و SQL خواندنی اجرا می‌کنید.</li>

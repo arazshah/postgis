@@ -1,8 +1,8 @@
-{% extends "databases/_ws.html" %}{% load fa %}
+{% extends "databases/_ws.html" %}{% load fa ws %}
 {% block title %}برداشت میدانی {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 <div class="wrap page">
-  <div class="page-head"><h1>برداشت میدانی</h1></div>
+  <div class="page-head"><div><h1>{% icon "pin" 22 %} برداشت میدانی</h1></div></div>
   <p class="lead muted" style="max-width:72ch">برای نقشه‌برداران: نقطه، خط و چندضلعی را با GPS گوشی یا گیرنده دقیق برداشت کنید، حتی بدون اینترنت. داده مستقیم در جدول‌های PostGIS خودتان ذخیره می‌شود و همه‌ی امکانات سایت (تحلیل، نقشه، انتشار، QGIS و API) رویش کار می‌کند.</p>
 
   <div class="pub-stats">
@@ -14,7 +14,7 @@
   {% if projects %}
   <div class="wm-cards">
     {% for p in projects %}
-    <article class="panel wm-card">
+    <article class="card wm-card">
       <div class="pub-head"><h2 style="font-size:1.1rem;margin:0">{{ p.name }}</h2><span class="badge active ltr">EPSG:{{ p.srid }}</span></div>
       <p class="small muted ltr" style="margin:0">{{ p.slug }}</p>
       <div class="wm-actions">
@@ -27,7 +27,7 @@
   {% endif %}
 
   {% if db.can_edit %}
-  <section class="panel" style="margin-top:var(--s5)">
+  <section class="card" style="margin-top:var(--s5)">
     <h2 style="font-size:1.2rem">پروژه تازه</h2>
     <form method="post" action="{% url 'survey:create' db.pk %}" class="wm-new">{% csrf_token %}
       <div class="field"><label for="sv-name">نام پروژه</label><input id="sv-name" type="text" name="name" maxlength="120" required placeholder="مثلاً: برداشت قطعه ۱۲ کرج"></div>

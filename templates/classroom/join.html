@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "base.html" %}{% load fa ws %}
 {% block title %}ثبت‌نام در {{ c.title }} — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page narrow">
@@ -12,7 +12,7 @@
       <div class="secret"><code id="pw">{{ password }}</code><button class="copy" data-copy-target="#pw">کپی</button></div>
     </section>
     {% endif %}
-    <section class="panel" style="margin-top:var(--s4)">
+    <section class="card" style="margin-top:var(--s4)">
       <p>شما با نام <b>{{ mine.full_name }}</b> در این کلاس ثبت‌نام کرده‌اید.</p>
       {% if mine.database %}
       <table class="kv">
@@ -30,7 +30,7 @@
       {% else %}<div class="msg error">ساخت پایگاه داده شما کامل نشد؛ به پشتیبانی تیکت بزنید.</div>{% endif %}
     </section>
     {% if shared %}
-    <section class="panel" style="margin-top:var(--s4)">
+    <section class="card" style="margin-top:var(--s4)">
       <h2 class="u-h">نقشه‌های کلاس</h2>
       <ul class="cls-maps">{% for s in shared %}
         <li>
@@ -53,7 +53,7 @@
   {% else %}
     <p class="muted">با ثبت‌نام، یک پایگاه داده PostGIS {% if c.template != 'empty' %}با داده تمرینی {% endif %}برای شما ساخته می‌شود که تا پایان ترم ({{ c.ends_at|jdate }}) فعال است. این پایگاه داده جدا از پایگاه داده‌های شخصی شماست و از سهمیه‌تان کم نمی‌کند.</p>
     {% if error %}<div class="msg error" role="alert">{{ error }}</div>{% endif %}
-    <form method="post" class="panel">{% csrf_token %}
+    <form method="post" class="card">{% csrf_token %}
       <div class="field"><label for="j-name">نام و نام خانوادگی</label><input id="j-name" type="text" name="full_name" required maxlength="120"></div>
       <div class="field"><label for="j-no">شماره دانشجویی (اختیاری)</label><input id="j-no" type="text" name="student_no" maxlength="30" class="ltr"></div>
       <button class="btn" type="submit">ثبت‌نام و ساخت پایگاه داده</button>

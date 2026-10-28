@@ -1,4 +1,4 @@
-{% extends "databases/_ws.html" %}{% load static fa %}
+{% extends "databases/_ws.html" %}{% load static fa ws %}
 {% block title %}طراحی نقشه {{ layer.table }} — {{ SITE_NAME }}{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
@@ -7,15 +7,15 @@
 {% endblock %}
 {% block ws %}
 <div class="wrap page">
-  <p class="small"><a href="{% url 'publish:manage' db.pk %}">← انتشار نقشه و API</a></p>
+  <a class="back-link" href="{% url 'publish:manage' db.pk %}">{% icon "back" 16 %}انتشار نقشه و API</a>
   <div class="page-head">
-    <h1>طراحی نقشه <span class="ltr" style="font-family:var(--f-mono);font-size:.8em">{{ layer.table }}</span></h1>
-    <a class="btn ghost sm" href="{{ public_url }}" target="_blank" rel="noopener" style="margin-inline-start:auto">باز کردن نقشه</a>
+    <div><h1>طراحی نقشه <span class="ltr mono">{{ layer.table }}</span></h1></div>
+    <a class="btn ghost sm" href="{{ public_url }}" target="_blank" rel="noopener" >باز کردن نقشه</a>
   </div>
   {% if not layer.is_public %}<div class="msg warning">این لایه خصوصی است؛ نقشه فقط برای شما نمایش داده می‌شود. برای اشتراک، در صفحه انتشار آن را «عمومی» کنید.</div>{% endif %}
 
   <div class="builder">
-    <form method="post" class="panel builder-form" id="bform">{% csrf_token %}
+    <form method="post" class="card builder-form" id="bform">{% csrf_token %}
       <input type="hidden" name="style" id="style-json">
       <div class="field"><label for="b-title">عنوان نقشه</label><input id="b-title" type="text" name="title" value="{{ layer.title }}" placeholder="{{ layer.table }}" maxlength="120"></div>
       <div class="field"><label for="b-desc">توضیح کوتاه</label><textarea id="b-desc" name="description" rows="2" maxlength="1000">{{ layer.description }}</textarea></div>
@@ -72,7 +72,7 @@
     </div>
   </div>
 
-  <section class="panel" style="margin-top:var(--s5)">
+  <section class="card" style="margin-top:var(--s5)">
     <h2 style="font-size:1.2rem">اشتراک‌گذاری</h2>
     <dl class="pub-urls">
       <dt>لینک نقشه</dt><dd><code id="u-map">{{ public_url }}</code><button class="copy" data-copy-target="#u-map">کپی</button></dd>

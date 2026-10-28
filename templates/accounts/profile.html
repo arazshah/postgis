@@ -1,10 +1,10 @@
-{% extends "base.html" %}{% load fa %}
+{% extends "base.html" %}{% load fa ws %}
 {% block title %}حساب کاربری — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page narrow">
-  <h1>حساب کاربری</h1>
-  <p class="muted">موبایل <span class="ltr mono">{{ user.phone }}</span> · عضو از {{ user.date_joined|jdate }}</p>
-  <form method="post" class="panel">
+  <div class="page-head"><div><h1>{% icon "users" 22 %} حساب کاربری</h1>
+  <p class="muted page-sub">موبایل <span class="ltr mono">{{ user.phone }}</span> · عضو از {{ user.date_joined|jdate }}</p></div></div>
+  <form method="post" class="card">
     {% csrf_token %}
     {% for field in form %}{% include "partials/field.html" %}{% endfor %}
     <p class="small muted">ایمیل اختیاری است؛ اگر وارد کنید، هشدارهای حجم و انقضا به ایمیل هم ارسال می‌شود.</p>
