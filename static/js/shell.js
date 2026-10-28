@@ -55,6 +55,23 @@
   "use strict";
   const list = document.querySelectorAll("body.app .messages .msg");
   list.forEach((li) => {
+    // پیام خطای بلند: جمله‌ی اول دیده می‌شود و متن فنی در «جزئیات فنی» جمع می‌ماند
+    const text = li.textContent.trim(), cut = text.indexOf(":");
+    if (text.length > 120 && cut > 8 && cut < 110 && !li.querySelector("a")) {
+      li.textContent = "";
+      const wrap = document.createElement("div");
+      wrap.className = "msg-t";
+      const head = document.createElement("span");
+      head.textContent = text.slice(0, cut + 1).replace(/:$/, ".");
+      const det = document.createElement("details");
+      const sum = document.createElement("summary");
+      sum.textContent = "جزئیات فنی";
+      const body = document.createElement("code");
+      body.textContent = text.slice(cut + 1).trim();
+      det.append(sum, body);
+      wrap.append(head, det);
+      li.appendChild(wrap);
+    }
     const b = document.createElement("button");
     b.type = "button"; b.className = "ib sm msg-x"; b.setAttribute("aria-label", "بستن پیام");
     b.innerHTML = '<svg class="i sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></svg>';

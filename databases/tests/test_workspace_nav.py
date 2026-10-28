@@ -145,3 +145,45 @@ class FrontendScriptTests(SimpleTestCase):
     def test_studios_reserve_a_slot_for_the_assistant(self):
         for rel in ("templates/maps/composer.html", "templates/survey/studio.html"):
             self.assertIn('data-gpa-slot="studio"', (ROOT / rel).read_text(encoding="utf-8"), rel)
+
+
+class IconAndShellTests(SimpleTestCase):
+    def test_icon_tag_renders_shared_set_and_legacy_fallback(self):
+        from django.template import Context, Template
+
+        out = Template('{% load ws %}{% icon "search" 16 "sm" %}').render(Context())
+        self.assertIn('<svg class="i sm"', out)
+        self.assertIn('width="16"', out)
+        self.assertIn("<circle", out)  # از core/icons.py
+        legacy = Template('{% load ws %}{% icon "school" 18 %}').render(Context())
+        self.assertIn("<path", legacy)  # آیکون قدیمی داشبورد هنوز کار می‌کند
+        self.assertNotIn("<path d=\"\"", Template('{% load ws %}{% icon "plus" %}').render(Context()))
+
+    def test_every_workspace_icon_exists_in_shared_set(self):
+        from core.icons import ICONS
+
+        for _title, items in ws.GROUPS:
+            for *_rest, icon, _need in items:
+                self.assertIn(icon, ICONS, icon)
+        for _key, _title, items in ws.DASH_GROUPS:
+            for *_rest, icon in items:
+                self.assertIn(icon, ICONS, icon)
+
+
+@override_settings(STORAGES=STORAGES, MAX_DATABASES_PER_USER=10)
+class AppShellTests(BaseCase):
+    def test_app_top_for_users_and_marketing_header_for_visitors(self):
+        (db,) = [services.create_database(self.user, "tehran", "Abcdefgh123", ["postgis"])]
+        anon = self.client.get(reverse("core:home"))
+        self.assertContains(anon, 'class="topbar"')
+        self.assertNotContains(anon, "app-top")
+        self.client.force_login(self.user)
+        r = self.client.get(reverse("databases:dashboard"))
+        self.assertContains(r, "app-top")
+        self.assertContains(r, 'data-pop="pop-acct"')
+        self.assertContains(r, 'class="app-foot"')
+        self.assertNotContains(r, 'class="foot-grid"')
+        ws_page = self.client.get(reverse("databases:backups", args=[db.pk]))
+        self.assertContains(ws_page, "ws-tabs")
+        self.assertContains(ws_page, f'href="{reverse("databases:explore", args=[db.pk])}"')
+        self.assertContains(ws_page, "app-dbchip")

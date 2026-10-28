@@ -55,6 +55,14 @@
 - **منو و مودال:** `Ui.dialog/confirm/prompt` (ui.js)؛ مودال بزرگ کارگاهی `StudioUI.modal` با `size: "xl"`؛ منو `StudioUI.menu`.
 - **سازنده‌های بزرگ** (چند مرحله + پیش‌نمایش): الگوی `static/js/map-composer.js` (سازنده‌ی نمودار).
 
+## الگوهای قالب‌های سرورپسند (بدون JS اختصاصی)
+- **منوی بازشو / ⋯:** `<div class="pop-wrap"><button class="ib" data-pop="id" aria-haspopup="menu" aria-expanded="false">{% icon "more" 16 %}</button><div class="pop-m" id="id" role="menu" hidden>…</div></div>`؛ آیتم‌ها `<a role="menuitem">` یا `<form><button role="menuitem">` (فرم حذف با `data-confirm` مودال تأیید می‌گیرد؛ آیتم خطرناک `class="danger"`). مدیریت باز و بسته شدن، Esc و کلیدهای جهت‌دار در `static/js/shell.js` است.
+- **دیالوگ فرم:** `<dialog class="dlg" id="x">` با `.dlg-h` (آیکون + عنوان + `data-dialog-close`)، `.dlg-b`، `.dlg-f`؛ بازکننده `data-dialog-open="x"`. روی گوشی از پایین بالا می‌آید.
+- **انتخاب چندتایی بصری:** `<label class="pick-chip"><input type="checkbox"><span>…</span></label>` داخل `.chips`.
+- **کارت فهرست** (مثل نقشه‌ها): `.card` با بخش تصویر/رنگ، عنوان، منوی ⋯ و یک دکمه‌ی اصلی؛ کارت «افزودن» با حاشیه‌ی خط‌چین.
+- **سربرگ صفحه:** `.page-head` ← `div`(h1 + `p.page-sub`) و `div.page-acts`.
+- **نوار تب گوشی** برای صفحه‌های پایگاه خودکار است (`{% ws_tabs db %}` در `_ws.html`).
+
 ## فهرست بررسی هر تغییر رابط
 - [ ] ایموجی یا نماد متنی نیست؛ آیکون از مجموعه است.
 - [ ] رنگ و اندازه از توکن است.

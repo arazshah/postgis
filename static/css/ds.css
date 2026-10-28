@@ -299,3 +299,20 @@ body.app .chip.geo{background:var(--teal-soft);color:var(--teal)}
 .ex-schema{font-size:11.5px;font-weight:800;color:var(--ink-3);padding:8px 14px 2px}
 .ex-bar .ex-current{display:none}
 .ex-bar{margin-bottom:10px}
+
+/* ---------- صفحه‌های عمومی: سربرگ و کنترل‌های هم‌خانواده با برنامه ---------- */
+.btn{border-radius:var(--r-ctl);border-width:1px}
+.topbar .wrap{min-height:60px}
+.nav a:not(.btn){padding:5px 12px;border-radius:var(--r-ctl);text-decoration:none}
+.nav a:not(.btn):hover,.nav a:not(.btn)[aria-current=page]{background:var(--teal-soft);color:var(--teal-dark);text-decoration:none}
+.field input[type=text],.field input[type=email],.field input[type=password],.field input[type=tel],.field input[type=search],.field input[type=number],
+.field input:not([type]),.field select,.field textarea{border-width:1px;border-radius:var(--r-ctl)}
+.panel{border-radius:var(--r-card)}
+.msg{border-radius:12px}
+body.app .dash-head h1{font:800 22px/1.5 var(--f-display);margin:0}
+body.app .dash-sub{font-size:13px;margin:4px 0 0}
+body.app main#main>.wrap.page{padding-top:20px;padding-bottom:40px}
+body.app .msg .msg-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+body.app .msg details summary{cursor:pointer;font-size:12px;color:var(--ink-3);list-style:none}
+body.app .msg details summary::-webkit-details-marker{display:none}
+body.app .msg details code{display:block;direction:ltr;text-align:left;font-size:11.5px;color:var(--ink-2);margin-top:4px;white-space:pre-wrap;overflow-wrap:anywhere}
