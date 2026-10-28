@@ -1,4 +1,5 @@
 """برداشت نتیجهٔ پرسش فارسی: آخرین مرحلهٔ مکانی، پاسخ متنی و راهنمای مدل (بدون نیاز به پایگاه داده)."""
+import json
 import os
 import unittest
 from types import SimpleNamespace as NS
@@ -528,3 +529,105 @@ class WriteTableCommitTests(SimpleTestCase):
         finally:
             check.execute(f"DROP TABLE IF EXISTS {name}")
             check.close()
+
+
+def _messy():
+    """دادهٔ واقعی‌نما: ستون‌های خالی، عدد به‌صورت متن، ارقام فارسی و جداکنندهٔ هزارگان."""
+    rows = [dict(id=1, price=100, ptxt="150", date="1403-01-05", deal="اجاره"),
+            dict(id=2, price=None, ptxt=None, date=None, deal=None),
+            dict(id=3, price=300, ptxt="1,200", date="1404-02-01", deal="فروش"),
+            dict(id=4, price=250, ptxt="۹۰", date="1402-12-01", deal="فروش")]
+    return {"houses": {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [51.4 + i / 1000, 35.7]}, "properties": r}
+        for i, r in enumerate(rows)]}}
+
+
+class NumberParsingTests(SimpleTestCase):
+    def test_to_num(self):
+        for raw, want in [(5, 5), (2.5, 2.5), ("150", 150), ("1,200", 1200), ("۹۰", 90), ("١٢٫٥", 12.5),
+                          ("۱٬۲۰۰", 1200), (" 7 ", 7), ("-3", -3)]:
+            self.assertEqual(ask._to_num(raw), want, raw)
+        for raw in ("abc", "", "1403-01-05", "12a", True, None, "0912x"):
+            self.assertIsNone(ask._to_num(raw), raw)
+
+    def test_field_kind(self):
+        layers = _messy()
+        self.assertEqual(ask._field_kind(layers, "price"), ("num", 1))
+        self.assertEqual(ask._field_kind(layers, "ptxt"), ("numstr", 1))
+        self.assertEqual(ask._field_kind(layers, "date"), ("str", 1))
+        self.assertEqual(ask._field_kind(layers, "nope"), (None, 0))
+
+
+class HardenedComparisonTests(SimpleTestCase):
+    """هر مقایسهٔ ترتیبی روی ستونِ دارای سطر خالی یا ناهمنوع باید اجرا شود (پیش‌تر: TypeError)."""
+
+    CASES = [  # (توضیح، شرط، تعداد درست)
+        ("عددی با خالی و مقدار عددی", {"field": "price", "op": "gt", "value": 200}, 2),
+        ("عددی با خالی و مقدار متنی", {"field": "price", "op": "gt", "value": "200"}, 2),
+        ("متنی (تاریخ) با خالی — خطای کاربر", {"field": "date", "op": "gt", "value": "1403-01-01"}, 2),
+        ("عدد به‌صورت متن با مقدار عددی", {"field": "ptxt", "op": "gt", "value": 100}, 2),
+        ("عدد به‌صورت متن با مقدار متنی", {"field": "ptxt", "op": "gt", "value": "100"}, 2),
+        ("between با خالی", {"field": "price", "op": "between", "value": [100, 260]}, 2),
+        ("lte", {"field": "price", "op": "lte", "value": 250}, 2),
+        ("کوتاه‌نوشت", {"price": {"gt": 200}}, 2),
+        ("and با شرط ترتیبی و برابری", {"and": [{"field": "price", "op": "gt", "value": 50},
+                                                {"field": "deal", "op": "eq", "value": "فروش"}]}, 2),
+        ("برابری ستون عددی با مقدار متنی", {"field": "price", "op": "eq", "value": "300"}, 1),
+        ("ستون متنی با مقدار عددی", {"field": "date", "op": "gt", "value": 1403}, 2),
+        ("in با اعداد متنی", {"field": "price", "op": "in", "value": ["100", "300"]}, 2),
+    ]
+
+    def setUp(self):
+        try:
+            import s3geo  # noqa: F401
+        except ImportError:
+            self.skipTest("s3geo نصب نیست")
+
+    def test_every_case_runs_with_the_right_count(self):
+        for label, where, want in self.CASES:
+            out = ask.analyze("پرسش", _messy(), SeqClient(_plan(
+                {"op": "filter_attribute", "inputs": {"vector": "houses"}, "output": "r", "params": {"where": where}})))
+            self.assertEqual((out.kind, len(out.feats)), ("layer", want), f"{label}: {out.kind} {out.error}")
+            self.assertEqual(out.attempts, 1, label)  # بدون تلاش دوباره با مدل
+
+    def test_notes_tell_the_user_what_was_done(self):
+        out = ask.analyze("پرسش", _messy(), SeqClient(_plan(
+            {"op": "filter_attribute", "inputs": {"vector": "houses"}, "output": "r",
+             "params": {"where": {"field": "ptxt", "op": "gt", "value": 100}}})))
+        text = " ".join(out.notes)
+        self.assertIn("«ptxt» متنی بود", text)
+        self.assertIn("1 عارضه", text)  # یک سطر خالی کنار گذاشته شد
+        self.assertTrue(all(n.startswith("مقایسه") for n in out.notes))
+
+    def test_or_condition_keeps_rows_the_other_branch_accepts(self):
+        # زیر or نباید سطر خالی را به‌زور حذف کرد: «فروشی یا قیمت > ۲۰۰»
+        where = {"or": [{"field": "deal", "op": "eq", "value": "اجاره"}, {"field": "price", "op": "gt", "value": 200}]}
+        runnable, _ = ask._harden_plan(_real_spec(where), _messy())
+        self.assertNotIn("is_null", json.dumps(runnable.operations[0].params["where"]))
+
+    def test_original_plan_is_not_modified_and_empty_reasons_ignore_guards(self):
+        where = {"field": "price", "op": "gt", "value": 99999}
+        spec = _real_spec(where)
+        runnable, _ = ask._harden_plan(spec, _messy())
+        self.assertEqual(spec.operations[0].params["where"], where)
+        self.assertIn("is_null", json.dumps(runnable.operations[0].params["where"]))
+        out = ask.analyze("پرسش", _messy(), SeqClient(_plan(
+            {"op": "filter_attribute", "inputs": {"vector": "houses"}, "output": "r", "params": {"where": where}})))
+        self.assertEqual(out.kind, "empty")
+        why = "\n".join(ask._why_empty(out.result, out.spec, _messy()))
+        self.assertNotIn("is_null", why)
+
+
+def _real_spec(where):
+    from orchestrator.planning.llm_spec_generator import query_spec_from_dict
+    return query_spec_from_dict(_plan({"op": "filter_attribute", "inputs": {"vector": "houses"}, "output": "r",
+                                       "params": {"where": where}}), raw_query_fallback="q")
+
+
+class FriendlyComparisonErrorTests(SimpleTestCase):
+    def test_message_is_generic_not_about_distance(self):
+        msg = ask._friendly_error("Node filtered_houses failed: '>' not supported between instances of 'NoneType' "
+                                  "and 'str'")
+        self.assertIn("filtered_houses", msg)
+        self.assertIn("مقدار خالی", msg)
+        self.assertNotIn("فاصله", msg)

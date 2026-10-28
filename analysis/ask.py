@@ -409,7 +409,7 @@ def _why_empty(result, spec, layers) -> list[str]:
             continue
         source = _ref_features(refs[0], result, layers)
         lines = [f"مرحلهٔ «{op.op}» ورودی {_fa(len(source))} عارضه‌ای را گرفت و هیچ عارضه‌ای از آن عبور نکرد."]
-        conds = _conditions((op.params or {}).get("where"))
+        conds = [c for c in _conditions((op.params or {}).get("where")) if not (c[1] == "is_null" and c[2] is False)]
         example = ""
         for field, oper, value in conds:
             props = [(f.get("properties") or {}) for f in source if isinstance(f, dict)]
@@ -445,9 +445,9 @@ def _why_empty(result, spec, layers) -> list[str]:
 
 
 ERROR_HINTS = [
-    ("not supported between instances of 'NoneType'",
-     "بعضی عارضه‌ها در این مرحله مقدار خالی داشتند و مقایسه نشدند (معمولاً فاصلهٔ عارضه‌هایی که در محدودهٔ جست‌وجو "
-     "هیچ هدفی نداشتند)."),
+    ("not supported between instances",
+     "در یک مرحلهٔ مقایسه، بعضی عارضه‌ها مقدار خالی داشتند یا نوع ستون با عدد یا متن شرط نمی‌خورد "
+     "(مثلاً عدد به‌صورت متن ذخیره شده است)."),
     ("Unsupported operation", "این عملیات در نسخهٔ s3geo نصب‌شده روی سرور وجود ندارد."),
     ("KeyError", "مدل زبانی به ستونی اشاره کرد که در داده نیست."),
     ("CRS", "سیستم مختصات دو لایه با هم نمی‌خواند؛ در پرسش بگویید فاصله‌ها به متر حساب شود."),
@@ -536,6 +536,152 @@ def _check_plan(spec, layers: dict) -> list[str]:
     return problems
 
 
+# ---------------------------------------------------------------------- مقاوم‌سازی شرط‌های مقایسه‌ای
+# s3geo در مقایسهٔ ترتیبی (> >= < <= between) با مقدار خالی یا ناهمنوع (متن با عدد) می‌شکند، و در دادهٔ واقعی
+# هر ستون معمولاً چند سطر خالی دارد. پیش از اجرا: ردیف‌های خالی در همان شرط کنار گذاشته می‌شوند (guard) و نوع
+# مقدار شرط با نوع ستون یکی می‌شود؛ هر تغییر در یادداشت‌های نتیجه به کاربر گفته می‌شود.
+ORDER_OPS = {"gt", "gte", "lt", "lte", "between"}
+TYPED_OPS = ORDER_OPS | {"eq", "ne", "in", "not_in"}
+_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩٬٫", "01234567890123456789,.")
+
+
+def _to_num(v):
+    """عدد از عدد یا متن عددی (ارقام فارسی/عربی، جداکنندهٔ هزارگان)؛ وگرنه None."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return v
+    if not isinstance(v, str):
+        return None
+    t = v.translate(_DIGITS).replace(",", "").replace(" ", "").strip()
+    if not t or not re.fullmatch(r"[+-]?(\d+\.?\d*|\.\d+)", t):
+        return None
+    f = float(t)
+    return int(f) if f.is_integer() and "." not in t else f
+
+
+def _field_kind(layers: dict, field: str):
+    """(نوع ستون، تعداد خالی‌ها) از لایه‌های ورودی: num | numstr (عدد به‌صورت متن) | str | mixed | None (ستون نیست)."""
+    has = {"num": False, "numstr": False, "str": False, "other": False}
+    nulls, found = 0, False
+    for fc in layers.values():
+        for f in (fc or {}).get("features") or []:
+            props = (f or {}).get("properties") or {}
+            if field not in props:
+                continue
+            found = True
+            v = props[field]
+            if v is None:
+                nulls += 1
+            elif isinstance(v, bool):
+                has["other"] = True
+            elif isinstance(v, (int, float)):
+                has["num"] = True
+            elif isinstance(v, str):
+                has["numstr" if _to_num(v) is not None else "str"] = True
+            else:
+                has["other"] = True
+    if not found:
+        return None, 0
+    if has["other"] or (has["str"] and (has["num"] or has["numstr"])):
+        return "mixed", nulls
+    if has["numstr"]:
+        return "numstr", nulls
+    if has["num"]:
+        return "num", nulls
+    return ("str" if has["str"] else "mixed"), nulls
+
+
+def _map_where(where, fn):
+    """fn(ستون، عملگر، مقدار) → مقدار تازه، روی همهٔ شکل‌های where (field/op/value، کوتاه‌نوشت، and/or/not)."""
+    if isinstance(where, list):
+        return [_map_where(w, fn) for w in where]
+    if not isinstance(where, dict):
+        return where
+    if "field" in where:
+        op = str(where.get("op") or where.get("operator") or "eq").lower()
+        return {**where, "value": fn(str(where["field"]), op, where.get("value"))}
+    out = {}
+    for k, v in where.items():
+        if k in ("and", "or", "not", "all", "any"):
+            out[k] = _map_where(v, fn)
+        elif isinstance(v, dict):
+            out[k] = {o: fn(str(k), str(o).lower(), x) for o, x in v.items()}
+        else:
+            out[k] = fn(str(k), "eq", v)
+    return out
+
+
+def _required_order_fields(where) -> list[str]:
+    """ستون‌هایی که یک شرط مقایسه‌ای حتماً (بالاترین سطح یا زیر and) روی آن‌ها هست."""
+    if not isinstance(where, dict):
+        return []
+    if "field" in where:
+        return [str(where["field"])] if str(where.get("op") or where.get("operator") or "eq").lower() in ORDER_OPS else []
+    if "and" in where:
+        return [f for item in (where["and"] if isinstance(where["and"], list) else []) for f in _required_order_fields(item)]
+    if any(k in where for k in ("or", "not", "all", "any")):
+        return []
+    return [str(k) for k, v in where.items() if isinstance(v, dict) and any(str(o).lower() in ORDER_OPS for o in v)]
+
+
+def _harden_plan(spec, layers: dict):
+    """(برنامهٔ مقاوم برای اجرا، یادداشت‌ها). برنامهٔ اصلی دست نمی‌خورد."""
+    notes: list[str] = []
+    kinds: dict[str, tuple] = {}
+
+    def kind(field):
+        if field not in kinds:
+            kinds[field] = _field_kind(layers, field)
+        return kinds[field][0]
+
+    def fix(field, op, value):
+        if op not in TYPED_OPS:
+            return value
+        k = kind(field)
+        items = value if isinstance(value, list) else [value]
+        out = []
+        for x in items:
+            if k == "num" and isinstance(x, str) and _to_num(x) is not None:
+                x = _to_num(x)
+            elif k == "numstr" and op in ORDER_OPS and _to_num(x) is not None:
+                x = _to_num(x)
+            elif k == "str" and isinstance(x, (int, float)) and not isinstance(x, bool):
+                x = str(x)
+            out.append(x)
+        return out if isinstance(value, list) else out[0]
+
+    ops = []
+    for op in spec.operations:
+        where = (op.params or {}).get("where")
+        if op.op != "filter_attribute" or not isinstance(where, dict):
+            ops.append(op)
+            continue
+        new_where = _map_where(where, fix)
+        guards = list(dict.fromkeys(_required_order_fields(where)))
+        for f in guards:
+            if kind(f) == "numstr":
+                converted = 0
+                for fc in layers.values():
+                    for ft in (fc or {}).get("features") or []:
+                        pr = (ft or {}).get("properties") or {}
+                        if pr.get(f) is not None and isinstance(pr[f], str):
+                            pr[f] = _to_num(pr[f])
+                            converted += 1
+                if converted:
+                    notes.append(f"مقایسه: ستون «{f}» متنی بود ولی همهٔ مقدارهایش عدد است؛ برای مقایسهٔ عددی به عدد تبدیل شد.")
+                    kinds[f] = ("num", kinds[f][1])
+            nulls = kinds.get(f, (None, 0))[1] if f in kinds else _field_kind(layers, f)[1]
+            if nulls:
+                notes.append(f"مقایسه: {nulls:,} عارضه چون ستون «{f}» در آن‌ها خالی بود در این مقایسه نیامد.")
+        if guards:
+            new_where = {"and": [{"field": f, "op": "is_null", "value": False} for f in guards] + [new_where]}
+        if new_where != where:
+            op = replace(op, params={**(op.params or {}), "where": new_where})
+        ops.append(op)
+    return replace(spec, operations=ops), list(dict.fromkeys(notes))
+
+
 # ---------------------------------------------------------------------- اجرا با تلاش دوباره
 @dataclass
 class Outcome:
@@ -548,6 +694,7 @@ class Outcome:
     rows: list = dc_field(default_factory=list)
     error: str = ""
     attempts: int = 1
+    notes: list = dc_field(default_factory=list)
 
 
 RANK = {"layer": 4, "table": 4, "answer": 3, "empty": 2, "failed": 1}
@@ -675,13 +822,15 @@ def analyze(text: str, layers: dict, client, share_values: bool = True, progress
                 best = Outcome("failed", spec, None, layers, error="برنامهٔ مدل با داده نمی‌خواند: " + problems[0][:300])
             continue
         progress(55, "اجرای مراحل تحلیل")
+        hnotes: list[str] = []
         try:
-            plan = DeterministicPlanner(PlannerConfig(strict_params=True)).build(spec)
+            runnable, hnotes = _harden_plan(spec, layers)
+            plan = DeterministicPlanner(PlannerConfig(strict_params=True)).build(runnable)
             result = executor.execute(plan, initial_inputs=layers)
         except Exception as exc:  # noqa: BLE001  برنامه ساخته شد اما قابل اجرا نبود
             result = _FailedResult(str(exc))
         outcome = _classify(result, spec, layers)
-        outcome.attempts = attempt
+        outcome.attempts, outcome.notes = attempt, hnotes
         if best is None or RANK[outcome.kind] >= RANK[best.kind] or best.result is None:
             best = outcome
         if outcome.kind in ("failed", "empty") and not post_retry and attempt < MAX_ATTEMPTS:
@@ -996,6 +1145,7 @@ def run(job: Job, client=None) -> str:
     q.steps = _steps(out.result, spec, layers) if out.result is not None else []
     if out.attempts > 1:
         notes.append(f"تلاش {out.attempts}: برنامهٔ مدل یک بار با توجه به داده اصلاح شد.")
+    notes.extend(out.notes)
     q.notes = notes
     if out.kind == "failed":
         q.result_kind = Question.Result.FAILED
