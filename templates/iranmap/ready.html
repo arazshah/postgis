@@ -1,6 +1,6 @@
 {% extends "databases/_explore_base.html" %}{% load fa static %}
 {% block ex %}
-<h2 style="margin-top:0">داده آماده ایران</h2>
+<div class="page-head"><div><h1>داده آماده ایران</h1></div></div>
 <p class="muted">معابر، مکان‌های مهم، ساختمان‌ها، کاربری زمین و مرزهای اداری هر استان، شهرستان یا شهر را با یک کلیک در پایگاه داده خودتان داشته باشید؛ همراه با شبکه آماده مسیریابی.</p>
 {% if error %}<div class="msg error" role="alert">{{ error }}</div>{% endif %}
 {% for j in recent %}{% if j.active %}

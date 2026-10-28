@@ -1,8 +1,8 @@
-{% extends "databases/_explore_base.html" %}{% load fa %}
+{% extends "databases/_explore_base.html" %}{% load fa ws %}
 {% block head %}{% if job.active %}<meta http-equiv="refresh" content="4">{% endif %}{% endblock %}
 {% block ex %}
-<p class="small"><a href="{% url 'databases:import' db.pk %}">← ورود فایل</a></p>
-<h2 style="margin-top:0">{{ job.params.original }}</h2>
+<a class="back-link" href="{% url 'databases:import' db.pk %}">{% icon "back" 16 %}ورود فایل</a>
+<div class="page-head"><div><h1 class="ltr">{{ job.params.original }}</h1></div></div>
 
 {% if job.status == 'draft' %}
   <p class="muted">{{ layers|length|fanum }} لایه پیدا شد{% if job.params.driver %} ({{ job.params.driver }}){% endif %}. تنظیمات را بررسی کنید و «ورود به پایگاه داده» را بزنید.</p>

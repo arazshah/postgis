@@ -1,6 +1,6 @@
-{% extends "databases/_explore_base.html" %}{% load fa %}
+{% extends "databases/_explore_base.html" %}{% load fa ws %}
 {% block ex %}
-<h2 style="margin-top:0">سلامت داده</h2>
+<div class="page-head"><div><h1>{% icon "pulse" 22 %} سلامت داده</h1><p class="muted page-sub">بررسی کیفیت هندسه، نمایه‌ها و ساختار جدول‌ها.</p></div></div>
 <p class="muted">مشکلات رایجی که اتصال QGIS، انتشار نقشه یا سرعت کوئری را خراب می‌کنند. هر کدام با یک کلیک اصلاح می‌شود.</p>
 {% if issues %}
 {% if db.status == 'active' %}
