@@ -1,5 +1,6 @@
 """فیلترهای قالب فارسی: تاریخ شمسی، اعداد فارسی، حجم."""
 import datetime
+import json
 
 import jdatetime
 from django import template
@@ -15,6 +16,12 @@ def fanum(value):
     if value is None:
         return ""
     return str(value).translate(_FA_DIGITS)
+
+
+@register.filter
+def json_attr(value):
+    """JSON فشرده برای data-attribute؛ نقل‌قول‌ها را خود قالب escape می‌کند."""
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
 @register.filter

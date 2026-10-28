@@ -19,7 +19,7 @@
       <p class="small muted ltr" style="margin:0">{{ p.slug }}</p>
       <div class="wm-actions">
         <a class="btn sm" href="{% url 'survey:studio' db.pk p.pk %}">باز کردن</a>
-        {% if db.is_mine %}<form method="post" action="{% url 'survey:archive' db.pk p.pk %}" class="inline-form" onsubmit="return confirm('پروژه «{{ p.name|escapejs }}» بایگانی شود؟ جدول‌های آن در پایگاه داده می‌مانند.')">{% csrf_token %}<button class="btn ghost sm wm-del" type="submit">بایگانی</button></form>{% endif %}
+        {% if db.is_mine %}<form method="post" action="{% url 'survey:archive' db.pk p.pk %}" class="inline-form" data-confirm="پروژه «{{ p.name }}» بایگانی شود؟ جدول‌های آن در پایگاه داده می‌مانند." data-confirm-title="بایگانی پروژه" data-confirm-text="بایگانی کن" data-confirm-kind="warn">{% csrf_token %}<button class="btn ghost sm wm-del" type="submit">بایگانی</button></form>{% endif %}
       </div>
     </article>
     {% endfor %}

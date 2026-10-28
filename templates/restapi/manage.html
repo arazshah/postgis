@@ -73,7 +73,7 @@ const data = await r.json();</code></pre>
       <tbody>{% for f in forms %}<tr><td>{{ f.title }}<div class="small muted">{{ f.get_access_display }}{% if not f.is_open %} · بسته{% endif %}</div></td><td><span class="ltr">{{ f.api_table.path }}</span></td><td>{{ f.submissions|fanum }}</td>
         <td><code class="ltr small" id="fl-{{ f.pk }}">{{ base }}/f/{{ f.slug }}/</code> <button class="copy" data-copy-target="#fl-{{ f.pk }}">کپی</button></td>
         <td style="white-space:nowrap"><form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="form" value="{{ f.pk }}"><input type="hidden" name="action" value="form_toggle"><button class="btn ghost sm" type="submit">{% if f.is_open %}بستن{% else %}باز کردن{% endif %}</button></form>
-          <form method="post" style="display:inline" data-confirm="فرم حذف شود؟ داده‌های ثبت‌شده می‌مانند.">{% csrf_token %}<input type="hidden" name="form" value="{{ f.pk }}"><input type="hidden" name="action" value="form_delete"><button class="btn ghost sm" type="submit">حذف</button></form></td></tr>{% endfor %}</tbody></table>
+          <form method="post" style="display:inline" data-confirm="فرم حذف شود؟ داده‌های ثبت‌شده می‌مانند." data-confirm-title="حذف فرم" data-confirm-text="حذف فرم">{% csrf_token %}<input type="hidden" name="form" value="{{ f.pk }}"><input type="hidden" name="action" value="form_delete"><button class="btn ghost sm" type="submit">حذف</button></form></td></tr>{% endfor %}</tbody></table>
     {% endif %}
   </section>
 </div>

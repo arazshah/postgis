@@ -1,8 +1,11 @@
 import csv
+import json
+import time
 
 from django.conf import settings
 from django.contrib import messages
 from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
+from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -10,11 +13,12 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
 
-from . import csvgeo, services
+from . import csvgeo, editor, services
 from .crypto import generate_password
+from .editor import EDIT_TTL, EditError, Editor
 from .explorer import EXPORT_LIMIT, MAP_LIMIT, SQL_MAX_ROWS, Explorer, ExplorerError
 from .forms import AddExtensionForm, CreateDatabaseForm, DeleteConfirmForm, PasswordResetForm
-from .models import UserDatabase
+from .models import EditBatch, UserDatabase
 from .provisioner import ProvisionError
 
 SESSION_PW_KEY = "gp_once_password_{}"
@@ -310,6 +314,9 @@ def explore_table(request, pk, schema, table):
             raise ExplorerError("جدول پیدا نشد.")
         tab = request.GET.get("tab", "data")
         ctx = {"db": db, "tables": tables, "t": t, "tab": tab, "section": "tables"}
+        editing = db.can_edit and db.status == db.Status.ACTIVE
+        if editing:
+            ctx["edit_cfg"] = _edit_config(request, db, ex, t)
         if tab == "columns":
             ctx["columns"] = ex.columns(t)
         elif tab == "map":
@@ -324,7 +331,8 @@ def explore_table(request, pk, schema, table):
                 page = int(request.GET.get("page", "1"))
             except ValueError:
                 page = 1
-            ctx["data"] = ex.rows(t, page)
+            ctx["data"] = ex.rows(t, page, with_keys=bool(editing and ctx["edit_cfg"]["capable"]))
+            ctx["data"]["pairs"] = list(zip(ctx["data"]["rows"], ctx["data"]["keys"] or [None] * len(ctx["data"]["rows"]), strict=True))
     except ExplorerError as exc:
         messages.error(request, str(exc))
         return redirect("databases:explore", pk=db.pk)
@@ -369,7 +377,8 @@ def explore_geojson(request, pk, schema, table):
     try:
         t = ex.find(schema, table)
         download = request.GET.get("download") == "1"
-        data = ex.geojson(t, request.GET.get("column"), limit=EXPORT_LIMIT if download else MAP_LIMIT)
+        keys = request.GET.get("keys") == "1" and db.can_edit
+        data = ex.geojson(t, request.GET.get("column"), limit=EXPORT_LIMIT if download else MAP_LIMIT, with_keys=keys)
     except ExplorerError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
     resp = HttpResponse(data, content_type="application/geo+json")
@@ -831,3 +840,142 @@ def _bars(values, days, cap=None, width=600, height=140):
         bars.append({"x": round(i * (bw + gap), 1), "y": height - h, "w": round(bw, 1), "h": h, "v": v, "day": d})
     cap_y = round(height - cap / top * (height - 6), 1) if cap and cap <= top else None
     return {"bars": bars, "w": width, "h": height, "cap_y": cap_y}
+
+
+# ---------------------------------------------------------------------- ویرایش جدول (حالت ویرایش)
+def _edit_key(db) -> str:
+    return f"gp_edit_until_{db.pk}"
+
+
+def _edit_active(request, db) -> bool:
+    return request.session.get(_edit_key(db), 0) > time.time()
+
+
+def _edit_config(request, db, ex, t) -> dict:
+    """تنظیمات و فراداده‌ی ویرایش که جاوااسکریپت صفحه لازم دارد."""
+    cols = ex.columns(t)
+    cap = editor.edit_capability(t, cols)
+    writable = editor.editable_columns(cols)
+    args = [db.pk, t.schema, t.name]
+    last = (EditBatch.objects.filter(database=db, schema=t.schema, table=t.name, undone_at__isnull=True).first()
+            if cap["ok"] else None)
+    return {
+        "capable": cap["ok"], "reason": cap["reason"], "active": cap["ok"] and _edit_active(request, db),
+        "csrf": get_token(request), "ttl": EDIT_TTL, "key": f"gp-edit-{db.pk}-{t.schema}.{t.name}", "table": t.qualified,
+        "pk": [c["name"] for c in cols if c["pk"]],
+        "columns": [{"name": c["name"], "type": c["type"], "base": c["base"], "not_null": c["not_null"],
+                     "default": c["default"], "pk": c["pk"], "spatial": c["spatial"],
+                     "writable": c["name"] in writable, "identity": c["identity"], "generated": c["generated"]}
+                    for c in cols],
+        "geometry": t.geometry,
+        "urls": {k: reverse(f"databases:explore_edit_{k}", args=args) for k in ("mode", "row", "apply", "undo")},
+        "geojson": reverse("databases:explore_geojson", args=args) + "?keys=1",
+        "last": ({"id": last.pk, "inserted": last.inserted, "updated": last.updated, "deleted": last.deleted,
+                  "at": timezone.localtime(last.created_at).strftime("%H:%M")} if last else None),
+    }
+
+
+def _body(request) -> dict:
+    if len(request.body) > 8 * 1024 * 1024:
+        raise EditError("حجم تغییرها بیش از حد است.")
+    try:
+        data = json.loads(request.body or b"{}")
+    except ValueError as exc:
+        raise EditError("درخواست نامعتبر است.") from exc
+    if not isinstance(data, dict):
+        raise EditError("درخواست نامعتبر است.")
+    return data
+
+
+def _edit_guard(request, pk, schema, table, need_mode: bool = True):
+    """دسترسی ویرایشگر، پایگاه داده‌ی فعال، جدول قابل‌ویرایش و (در صورت نیاز) روشن‌بودن حالت ویرایش."""
+    db = _user_db(request, pk, "editor")
+    if not db.is_live or db.status != db.Status.ACTIVE:
+        raise EditError("پایگاه داده فعال نیست یا فقط‌خواندنی است؛ ویرایش ممکن نیست.")
+    ex = Explorer(db)
+    t = ex.find(schema, table)
+    if need_mode and not _edit_active(request, db):
+        raise EditError("حالت ویرایش خاموش یا منقضی شده است. دوباره آن را روشن کنید.")
+    return db, ex, t
+
+
+def _edit_json(view):
+    def wrapper(request, pk, schema, table):
+        try:
+            return view(request, pk, schema, table)
+        except EditError as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+        except ExplorerError as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    wrapper.__name__ = view.__name__
+    return site_user_required(wrapper)
+
+
+@_edit_json
+@require_POST
+def explore_edit_mode(request, pk, schema, table):
+    on = bool(_body(request).get("on"))
+    db, ex, t = _edit_guard(request, pk, schema, table, need_mode=False)
+    if on:
+        cap = editor.edit_capability(t, ex.columns(t))
+        if not cap["ok"]:
+            raise EditError(cap["reason"])
+        request.session[_edit_key(db)] = time.time() + EDIT_TTL
+        services.logevent("edit_mode_on", f"حالت ویرایش روشن شد: {t.qualified}", user=request.user, database=db)
+    else:
+        request.session.pop(_edit_key(db), None)
+    return JsonResponse({"ok": True, "on": on, "ttl": EDIT_TTL})
+
+
+@_edit_json
+def explore_edit_row(request, pk, schema, table):
+    db, ex, t = _edit_guard(request, pk, schema, table)
+    try:
+        key = json.loads(request.GET.get("pk", ""))
+    except ValueError as exc:
+        raise EditError("کلید سطر نامعتبر است.") from exc
+    return JsonResponse({"ok": True, **Editor(ex).row(t, key)})
+
+
+@_edit_json
+@require_POST
+def explore_edit_apply(request, pk, schema, table):
+    data = _body(request)
+    db, ex, t = _edit_guard(request, pk, schema, table)
+    dry = bool(data.get("dry_run"))
+    out = Editor(ex).apply(t, data.get("changes"), dry_run=dry, repair=bool(data.get("repair")))
+    request.session[_edit_key(db)] = time.time() + EDIT_TTL  # کار فعال، مهلت را تمدید می‌کند
+    resp = {"ok": out["ok"], "results": out["results"], "counts": out["counts"], "dry_run": dry}
+    if out["ok"] and not dry:
+        c = out["counts"]
+        batch = EditBatch.objects.create(database=db, user=request.user, schema=t.schema, table=t.name,
+                                         inserted=c["insert"], updated=c["update"], deleted=c["delete"],
+                                         undo=out["undo"])
+        for old in EditBatch.objects.filter(database=db).order_by("-created_at", "-pk")[editor.KEEP_BATCHES:]:
+            old.delete()
+        services.logevent("table_edit", f"{t.qualified}: {c['insert']} افزودن، {c['update']} ویرایش، {c['delete']} حذف",
+                          user=request.user, database=db)
+        resp["batch"] = batch.pk
+    elif not out["ok"]:
+        resp["error"] = "چند تغییر اعمال نشد؛ هیچ‌چیز ذخیره نشد. خطاها را بررسی کنید."
+    return JsonResponse(resp)
+
+
+@_edit_json
+@require_POST
+def explore_edit_undo(request, pk, schema, table):
+    data = _body(request)
+    db, ex, t = _edit_guard(request, pk, schema, table)
+    batch = EditBatch.objects.filter(database=db, schema=t.schema, table=t.name, undone_at__isnull=True).first()
+    if batch is None or batch.pk != data.get("batch"):
+        raise EditError("ذخیره‌ی تازه‌تری وجود دارد یا چیزی برای بازگرداندن نیست؛ صفحه را تازه کنید.")
+    out = Editor(ex).apply(t, batch.undo, internal=True)
+    if not out["ok"]:
+        return JsonResponse({"ok": False, "results": out["results"],
+                             "error": "بازگردانی ممکن نشد؛ بعد از آن ذخیره، ردیف‌ها دوباره تغییر کرده‌اند. چیزی برگردانده نشد."},
+                            status=409)
+    batch.undone_at = timezone.now()
+    batch.save(update_fields=["undone_at"])
+    services.logevent("table_edit_undo", f"ذخیره‌ی {batch.created_at:%H:%M} برگردانده شد: {t.qualified}",
+                      user=request.user, database=db)
+    return JsonResponse({"ok": True})

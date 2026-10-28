@@ -143,10 +143,7 @@
     tick();
   });
 
-  // تأیید فرم‌های خطرناک
-  document.querySelectorAll("form[data-confirm]").forEach((f) => {
-    f.addEventListener("submit", (e) => { if (!confirm(f.getAttribute("data-confirm"))) e.preventDefault(); });
-  });
+  // تأیید فرم‌های خطرناک (form[data-confirm]) در ui.js با مودال انجام می‌شود
 })();
 
 // نمونه‌کوئری‌های کنسول SQL

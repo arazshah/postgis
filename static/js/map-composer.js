@@ -231,7 +231,7 @@
     if (act && act.dataset.act === "zoom") return zoomTo(byKey(key));
     if (act && act.dataset.act === "remove") {
       const l = byKey(key);
-      if (!confirm(`لایه «${l.title}» از نقشه برداشته شود؟ جدول در پایگاه داده می‌ماند.`)) return;
+      if (!await Ui.confirm({title: "برداشتن لایه از نقشه", message: `لایه «${l.title}» از نقشه برداشته شود؟ جدول در پایگاه داده می‌ماند.`, kind: "warn", confirmText: "بردار"})) return;
       try {
         await post(urls.remove.replace("/0/", `/${l.id}/`), new FormData());
       } catch (err) { say(err.message, true); return; }
@@ -506,12 +506,12 @@
       $("ch-sel").hidden = !c;
       if (c) $("ch-sel-t").textContent = `روی نقشه برجسته است: «${c.title || c.autoTitle}»`;
     },
-    onAction: (act, chart) => {
+    onAction: async (act, chart) => {
       const i = charts.indexOf(chart);
       if (act === "edit") return openChartForm(chart);
       if (act === "up" && i > 0) [charts[i - 1], charts[i]] = [charts[i], charts[i - 1]];
       else if (act === "down" && i < charts.length - 1) [charts[i + 1], charts[i]] = [charts[i], charts[i + 1]];
-      else if (act === "remove") { if (!confirm("این نمودار حذف شود؟")) return; charts.splice(i, 1); }
+      else if (act === "remove") { if (!await Ui.confirm({title: "حذف نمودار", message: "این نمودار حذف شود؟", kind: "danger", confirmText: "حذف نمودار"})) return; charts.splice(i, 1); }
       else return;
       setDirty(true);
       renderCharts();
