@@ -114,16 +114,22 @@
     if (n.delete) parts.push(`${fa(n.delete)} حذف`);
     const c = $("edit-count");
     if (c) { c.textContent = total ? parts.join("، ") : "بدون تغییر"; c.classList.toggle("has", !!total); }
-    const rv = $("edit-review"), ds = $("edit-discard");
-    if (rv) rv.disabled = !total;
-    if (ds) ds.disabled = !total;
+    // فقط دکمه‌هایی که الان به کار می‌آیند دیده می‌شوند
+    const rv = $("edit-review"), ds = $("edit-discard"), un = $("edit-undo-last");
+    if (rv) { rv.hidden = !total; rv.textContent = total ? `بازبینی و ذخیره (${fa(total)})` : "بازبینی و ذخیره"; }
+    if (ds) ds.hidden = !total;
+    if (un) { un.hidden = !cfg.last || total > 0; un.textContent = "بازگردانی آخرین ذخیره"; }
     updateSel();
   }
 
   function setBarVisible(on) {
     document.body.classList.toggle("is-editing", on);
     const bar = $("edit-bar"), enter = $("edit-enter");
-    if (bar) bar.hidden = !on;
+    if (bar) {
+      clearTimeout(bar._t);
+      if (on) { bar.hidden = false; requestAnimationFrame(() => requestAnimationFrame(() => bar.classList.add("in"))); }
+      else { bar.classList.remove("in"); bar._t = setTimeout(() => { bar.hidden = true; }, 230); }
+    }
     if (enter) enter.hidden = on;
     document.querySelectorAll(".row-sel,.row-edit,.row-rm").forEach((b) => { b.tabIndex = on ? 0 : -1; });
   }
@@ -177,6 +183,7 @@
     setMode(false);
     setBarVisible(false);
     notify();
+    if (!auto) Ui.toast("حالت ویرایش خاموش شد.", "info");
     if (auto) {
       await Ui.alert({
         title: "حالت ویرایش بسته شد", kind: "info",
@@ -408,7 +415,7 @@
     const b = $("edit-del-sel");
     if (!b) return;
     const n = selectedRows().length;
-    b.disabled = !n;
+    b.hidden = !n;
     b.textContent = n ? `حذف ${fa(n)} سطر انتخاب‌شده` : "حذف انتخاب‌شده‌ها";
   }
 
@@ -614,10 +621,14 @@
     updateSel();
     Ui.toast(`${fa(rows.length)} سطر برای حذف علامت خورد. هنوز چیزی حذف نشده؛ در «بازبینی و ذخیره» تأیید می‌کنید.`, "info");
   });
-  if (cfg.last) {
-    const u = $("edit-undo-last");
-    if (u) { u.hidden = false; u.textContent = "بازگردانی آخرین ذخیره"; u.addEventListener("click", undoLast); }
-  }
+  on("edit-undo-last", undoLast);
+  // میان‌بر: Ctrl/⌘ + S همان «بازبینی و ذخیره» است (وقتی پنجره‌ی دیگری باز نیست)
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && state.on) {
+      e.preventDefault();
+      if (state.drafts.length && !document.querySelector(".ui-overlay")) review();
+    }
+  });
 
   // ------------------------------------------------------------------ نقشه (ویرایش هندسه با Leaflet-Geoman)
   function initMap(em) {

@@ -68,6 +68,16 @@ class NormalizeTests(SimpleTestCase):
             normalize([{"op": "update", "pk": {"id": "1"}, "v": V, "values": {}}], COLS)
 
 
+class EditDockCssTests(SimpleTestCase):
+    def test_hidden_attribute_is_not_overridden(self):
+        """display:flex/inline-flex روی کلاس‌ها ویژگی hidden را بی‌اثر می‌کرد و نوار ویرایش همیشه دیده می‌شد."""
+        from pathlib import Path
+
+        css = (Path(__file__).resolve().parents[2] / "static/css/app.css").read_text(encoding="utf-8")
+        self.assertIn(".edit-dock[hidden]{display:none}", css)
+        self.assertIn(".btn[hidden]{display:none}", css)
+
+
 def square(x, y, d=0.001):
     return {"type": "Polygon", "coordinates": [[[x, y], [x + d, y], [x + d, y + d], [x, y + d], [x, y]]]}
 

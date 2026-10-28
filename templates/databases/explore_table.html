@@ -32,18 +32,15 @@
 
 {% if edit_cfg and not edit_cfg.capable %}<p class="edit-why small"><b>ویرایش این جدول ممکن نیست:</b> {{ edit_cfg.reason }}</p>{% endif %}
 {% if edit_cfg.capable %}
-<div class="edit-bar" id="edit-bar" role="region" aria-label="نوار حالت ویرایش" hidden>
-  <div class="edit-bar-main">
-    <span class="edit-state"><span class="edit-dot" aria-hidden="true"></span><b>حالت ویرایش روشن است</b>
-      <span class="small muted" id="edit-idle"></span></span>
-    <span class="edit-count" id="edit-count" aria-live="polite">بدون تغییر</span>
-  </div>
-  <div class="edit-bar-acts">
+<div class="edit-dock" id="edit-bar" role="region" aria-label="نوار حالت ویرایش" hidden>
+  <span class="dock-state"><span class="edit-dot" aria-hidden="true"></span><b>حالت ویرایش</b><span class="small muted" id="edit-idle"></span></span>
+  <span class="edit-count" id="edit-count" aria-live="polite">بدون تغییر</span>
+  <div class="dock-acts">
     {% if tab == 'data' %}<button type="button" class="btn ghost sm" id="edit-add-row">+ سطر تازه</button>
-    <button type="button" class="btn ghost sm danger-ghost" id="edit-del-sel" disabled>حذف انتخاب‌شده‌ها</button>{% endif %}
+    <button type="button" class="btn ghost sm danger-ghost" id="edit-del-sel" hidden>حذف انتخاب‌شده‌ها</button>{% endif %}
     <button type="button" class="btn ghost sm" id="edit-undo-last" hidden></button>
-    <button type="button" class="btn ghost sm" id="edit-discard" disabled>دور ریختن تغییرها</button>
-    <button type="button" class="btn sm" id="edit-review" disabled>بازبینی و ذخیره</button>
+    <button type="button" class="btn ghost sm" id="edit-discard" hidden>دور ریختن تغییرها</button>
+    <button type="button" class="btn sm" id="edit-review" hidden title="میان‌بر: Ctrl+S">بازبینی و ذخیره</button>
     <a class="btn ghost sm" href="{% url 'core:help_page' 'edittable' %}" target="_blank" rel="noopener">آموزش</a>
     <button type="button" class="btn ghost sm" id="edit-exit">خروج از ویرایش</button>
   </div>
