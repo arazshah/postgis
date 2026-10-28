@@ -78,7 +78,7 @@ new ol.layer.Tile({source: new ol.source.TileWMS({
         <button class="btn sm" type="submit">جایگزینی</button>
       </form>
       {% endif %}
-      <form method="post" action="{% url 'publish:ows_delete' db.pk p.pk %}" style="margin-top:var(--s4)" onsubmit="return confirm('این پروژه و آدرس‌هایش حذف شود؟')">{% csrf_token %}
+      <form method="post" action="{% url 'publish:ows_delete' db.pk p.pk %}" style="margin-top:var(--s4)" data-confirm="این پروژه و آدرس‌های WMS/WFS آن حذف شود؟ برنامه‌هایی که از این آدرس‌ها استفاده می‌کنند دیگر کار نمی‌کنند." data-confirm-title="حذف پروژه‌ی منتشرشده" data-confirm-text="حذف پروژه">{% csrf_token %}
         <button class="btn danger sm" type="submit">حذف پروژه</button>
       </form>
     </section>

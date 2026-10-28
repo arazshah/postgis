@@ -23,7 +23,7 @@
       <p class="small">شما به پایگاه داده هر دانشجو دسترسی «مشاهده‌گر» دارید: جدول‌ها، نقشه‌ها و SQL خواندنی، بدون امکان تغییر. فایل CSV فهرست، نام کاربری پایگاه داده هر نفر را هم دارد.</p>
       <a class="btn ghost sm" href="?format=csv">دانلود فهرست (CSV)</a>
       {% if c.status == 'active' %}
-      <form method="post" style="display:inline" onsubmit="return confirm('کلاس بایگانی شود؟ از پایگاه داده همه دانشجوها بکاپ گرفته می‌شود و ثبت‌نام بسته می‌شود.')">{% csrf_token %}<input type="hidden" name="action" value="archive"><button class="btn ghost sm" type="submit">بایگانی زودتر از پایان ترم</button></form>
+      <form method="post" style="display:inline" data-confirm="کلاس بایگانی شود؟ از پایگاه داده همه دانشجوها بکاپ گرفته می‌شود و ثبت‌نام بسته می‌شود." data-confirm-title="بایگانی کلاس" data-confirm-text="بایگانی کن" data-confirm-kind="warn">{% csrf_token %}<input type="hidden" name="action" value="archive"><button class="btn ghost sm" type="submit">بایگانی زودتر از پایان ترم</button></form>
       <p class="small muted">در شب آخر ترم، بایگانی خودکار انجام می‌شود و بکاپ‌ها ۶ ماه نگه داشته می‌شوند.</p>
       {% endif %}
     </section>

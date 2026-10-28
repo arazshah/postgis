@@ -43,7 +43,7 @@
     <details class="danger-zone">
       <summary>بازگردانی پایگاه داده به یک بکاپ</summary>
       <p class="small" style="margin-top:12px">همه داده‌های فعلی با محتوای بکاپ جایگزین می‌شوند. قبل از بازگردانی، خودکار یک «بکاپ ایمنی» از وضع فعلی گرفته می‌شود تا اگر پشیمان شدید برگردید. اتصال‌های باز (QGIS، GeoServer) چند ثانیه قطع می‌شوند.</p>
-      <form method="post" data-restore-form data-confirm="پایگاه داده به این بکاپ برگردانده شود؟ داده‌های فعلی جایگزین می‌شوند.">{% csrf_token %}
+      <form method="post" data-restore-form data-confirm="پایگاه داده به این بکاپ برگردانده شود؟ همه‌ی داده‌های فعلی با محتوای بکاپ جایگزین می‌شوند (پیش از آن یک بکاپ ایمنی گرفته می‌شود)." data-confirm-title="بازگردانی بکاپ" data-confirm-text="بازگردانی کن">{% csrf_token %}
         <div class="field" style="margin-bottom:8px">
           <label for="restore-src" class="small">بکاپ</label>
           <select id="restore-src" name="job" required>

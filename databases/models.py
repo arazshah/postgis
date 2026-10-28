@@ -395,6 +395,32 @@ class ActivityLog(models.Model):
         return f"{self.action} – {self.created_at:%Y-%m-%d %H:%M}"
 
 
+class EditBatch(models.Model):
+    """یک ذخیره‌ی ویرایش جدول از مرورگر؛ برای «بازگردانی آخرین ذخیره» دستورهای معکوسش نگه داشته می‌شود."""
+
+    database = models.ForeignKey(UserDatabase, on_delete=models.CASCADE, related_name="edit_batches",
+                                 verbose_name="پایگاه داده")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                             verbose_name="کاربر")
+    schema = models.CharField("schema", max_length=63)
+    table = models.CharField("جدول", max_length=63)
+    inserted = models.PositiveIntegerField("سطر افزوده", default=0)
+    updated = models.PositiveIntegerField("سطر ویرایش‌شده", default=0)
+    deleted = models.PositiveIntegerField("سطر حذف‌شده", default=0)
+    undo = models.JSONField("دستورهای بازگردانی", default=list)
+    created_at = models.DateTimeField("زمان", auto_now_add=True)
+    undone_at = models.DateTimeField("زمان بازگردانی", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "ذخیره‌ی ویرایش"
+        verbose_name_plural = "ذخیره‌های ویرایش"
+        ordering = ["-created_at", "-pk"]
+        indexes = [models.Index(fields=["database", "schema", "table", "-created_at"])]
+
+    def __str__(self):
+        return f"{self.schema}.{self.table} – {self.created_at:%Y-%m-%d %H:%M}"
+
+
 class DbRole(models.Model):
     """کاربر اضافه PostgreSQL برای یک پایگاه داده (فقط‌خواندنی یا ویرایشگر داده)."""
 
