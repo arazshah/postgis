@@ -9,11 +9,13 @@ from __future__ import annotations
 import json
 import re
 import tempfile
-from dataclasses import replace
+from dataclasses import asdict, dataclass, replace
+from dataclasses import field as dc_field
 from datetime import timedelta
 from pathlib import Path
 
 from django.utils import timezone
+from psycopg import sql
 
 from databases.explorer import Explorer
 from databases.gdal import TABLE_RE
@@ -21,13 +23,35 @@ from jobs.models import Job
 
 from .models import LlmConfig, Question
 
-LAYER_LIMIT = 5000
+LAYER_LIMIT = 50000
 MAX_LAYERS = 4
+MAX_AUTO_LAYERS = 8
+MAX_ATTEMPTS = 3
+TABLE_ROW_LIMIT = 100000
 DAILY_LIMIT = 40
+NAME_RE = re.compile(r"(?:به|با)\s+نام\s+[«\"'`]?([A-Za-z_][A-Za-z0-9_]{2,62})")
 
 
 class AskError(Exception):
     pass
+
+
+def _auto_output(text: str) -> str:
+    """نام جدول از متن پرسش («… به نام rent_cases») یا نام خودکار بر اساس زمان."""
+    m = NAME_RE.search(text)
+    if m and TABLE_RE.match(m.group(1).lower()):
+        return m.group(1).lower()
+    return "ask_" + timezone.now().strftime("%m%d_%H%M%S")
+
+
+def _auto_layers(text: str, spatial: dict) -> list[str]:
+    """لایه‌هایی که کاربر انتخاب نکرده: همه (تا سقف)، یا آن‌هایی که نامشان در پرسش آمده."""
+    named = [k for k, t in spatial.items() if len(t.name) > 2 and t.name.lower() in text.lower()]
+    if named:
+        return named[:MAX_AUTO_LAYERS]
+    if len(spatial) <= MAX_AUTO_LAYERS:
+        return list(spatial)
+    raise AskError(f"بیش از {MAX_AUTO_LAYERS} لایه مکانی دارید؛ لایه‌های مورد نظر را انتخاب کنید.")
 
 
 def request(db, user, text: str, layer_keys: list[str], output: str, share_values: bool = True) -> Question:
@@ -36,14 +60,22 @@ def request(db, user, text: str, layer_keys: list[str], output: str, share_value
         raise AskError("پرسش را کامل‌تر بنویسید.")
     if not LlmConfig.objects.filter(user=user).exists():
         raise AskError("اول کلید مدل زبانی خود را وارد کنید.")
-    output = (output or "").strip().lower()
+    output = (output or "").strip().lower() or _auto_output(text)
     if not TABLE_RE.match(output):
         raise AskError("نام جدول نتیجه: حروف کوچک لاتین، رقم و _ (مثلاً schools_far_from_metro).")
     tables = {f"{t.schema}.{t.name}": t for t in Explorer(db).tables()}
-    layer_keys = [k for k in dict.fromkeys(layer_keys) if k in tables and tables[k].geometry]
+    spatial = {k: t for k, t in tables.items() if t.geometry}
+    notes = []
+    given = [k for k in dict.fromkeys(layer_keys or []) if k]
+    layer_keys = [k for k in given if k in spatial]
+    if given and not layer_keys:
+        raise AskError("لایهٔ انتخاب‌شده مکانی نیست یا وجود ندارد.")
     if not layer_keys:
-        raise AskError("دست‌کم یک لایه مکانی انتخاب کنید.")
-    if len(layer_keys) > MAX_LAYERS:
+        if not spatial:
+            raise AskError("لایه مکانی ندارید؛ اول داده‌ای وارد کنید.")
+        layer_keys = _auto_layers(text, spatial)
+        notes.append("لایه‌ها خودکار انتخاب شدند: " + "، ".join(k.removeprefix("public.") for k in layer_keys))
+    elif len(layer_keys) > MAX_LAYERS:
         raise AskError(f"حداکثر {MAX_LAYERS} لایه.")
     if f"public.{output}" in layer_keys:
         raise AskError("نام جدول نتیجه با یکی از لایه‌های ورودی یکی است.")
@@ -54,7 +86,7 @@ def request(db, user, text: str, layer_keys: list[str], output: str, share_value
         raise AskError(f"حداکثر {DAILY_LIMIT} پرسش در روز.")
     job = Job.objects.create(kind=Job.Kind.ASK, database=db, user=user, status=Job.Status.QUEUED)
     return Question.objects.create(database=db, user=user, text=text[:2000], layers=layer_keys, output_table=output,
-                                   share_values=share_values, job=job)
+                                   share_values=share_values, notes=notes, job=job)
 
 
 def _client(cfg: LlmConfig):
@@ -427,7 +459,147 @@ def _friendly_error(error) -> str:
                                 f"(جزئیات فنی: {detail.strip()[:250]})") if x)
 
 
-def run(job: Job, client=None) -> str:
+# ---------------------------------------------------------------------- اعتبارسنجی برنامه با داده
+MAX_ENUM = 50  # ستونی که حداکثر این تعداد مقدار متمایز دارد «دسته‌ای» است و مقدارهایش بررسی می‌شود
+PRESERVING_OPS = {"filter_attribute", "sort_limit", "crs_transform", "spatial_nearest", "nearest_neighbor",
+                  "filter_by_distance", "filter_points_in_polygon", "top_n", "buffer", "centroids", "spatial_join",
+                  "area_perimeter", "clip", "intersect", "deduplicate", "repair_geometries", "simplify", "explode"}
+VALUE_OPS = {"eq", "ne", "in", "not_in"}
+
+
+def _profile(layers: dict) -> dict:
+    """{لایه: {ستون: مقدارهای متمایز (یا None اگر زیاد/غیرمتنی)}} از خود داده."""
+    out = {}
+    for name, fc in layers.items():
+        cols: dict[str, set | None] = {}
+        for f in (fc or {}).get("features") or []:
+            for k, v in ((f or {}).get("properties") or {}).items():
+                if k not in cols:
+                    cols[k] = set()
+                seen = cols[k]
+                if seen is None or v is None:
+                    continue
+                if not isinstance(v, str):
+                    cols[k] = None
+                elif len(seen) > MAX_ENUM:
+                    cols[k] = None
+                else:
+                    seen.add(v.strip())
+        out[name] = {k: (None if v is None or len(v) > MAX_ENUM else v) for k, v in cols.items()}
+    return out
+
+
+def _merge_cols(a: dict, b: dict) -> dict:
+    out = dict(a)
+    for k, v in b.items():
+        out[k] = None if k in out and (out[k] is None or v is None) else (v if k not in out else out[k] | v)
+    return out
+
+
+def _check_plan(spec, layers: dict) -> list[str]:
+    """مشکل‌های برنامه نسبت به داده: ستون ناموجود و مقدار شرطِ ناموجود در ستون دسته‌ای (پیش از اجرا)."""
+    avail: dict[str, dict | None] = _profile(layers)
+    problems = []
+    for op in spec.operations:
+        refs = [r for r in (op.inputs or {}).values() if isinstance(r, str)]
+        cols: dict | None = {}
+        for r in refs:
+            c = avail.get(r)
+            cols = None if c is None or cols is None else _merge_cols(cols, c)
+        params = op.params or {}
+        if cols is not None and refs:
+            fields = [c[0] for c in _conditions(params.get("where"))]
+            fields += [params[k] for k in ("sort_by", "score_field") if isinstance(params.get(k), str)]
+            low = {k.lower(): k for k in cols}
+            for fld in dict.fromkeys(fields):
+                if fld in cols or fld.startswith("_"):
+                    continue
+                hint = f" Did you mean '{low[fld.lower()]}'?" if fld.lower() in low else ""
+                problems.append(f"operation {op.op} -> {op.output}: column '{fld}' does not exist in its input."
+                                f"{hint} Existing columns: {', '.join(sorted(k for k in cols if not k.startswith('_')))}.")
+            for fld, oper, value in _conditions(params.get("where")):
+                values = cols.get(fld)
+                if oper not in VALUE_OPS or not values:
+                    continue
+                wanted = value if isinstance(value, list) else [value]
+                bad = [v for v in wanted if isinstance(v, str) and v.strip() not in values]
+                if bad:
+                    problems.append(f"operation {op.op} -> {op.output}: value(s) {bad} do not exist in column '{fld}'. "
+                                    f"The column's exact values are: {sorted(values)}. Use one of these exactly.")
+        if op.output:
+            avail[op.output] = cols if op.op in PRESERVING_OPS else None
+    return problems
+
+
+# ---------------------------------------------------------------------- اجرا با تلاش دوباره
+@dataclass
+class Outcome:
+    kind: str  # layer | empty | table | answer | failed
+    spec: object = None
+    result: object = None
+    layers: dict = dc_field(default_factory=dict)
+    step: str | None = None
+    feats: list = dc_field(default_factory=list)
+    rows: list = dc_field(default_factory=list)
+    error: str = ""
+    attempts: int = 1
+
+
+RANK = {"layer": 4, "table": 4, "answer": 3, "empty": 2, "failed": 1}
+
+
+def _last_table(result, spec):
+    """اگر آخرین مرحله جدول بی‌هندسه است (مثل جمع به تفکیک گروه)، ردیف‌هایش."""
+    op = spec.operations[-1]
+    out = result.outputs.get(op.output)
+    feats = _features(out) if _is_vector(out) else []
+    if feats and not any(isinstance(f, dict) and f.get("geometry") for f in feats):
+        return op.output, [_clean((f or {}).get("properties")) for f in feats]
+    return None, []
+
+
+def _classify(result, spec, layers) -> Outcome:
+    if not result.success:
+        return Outcome("failed", spec, result, layers, error=_friendly_error(result.error))
+    step, rows = _last_table(result, spec)
+    if rows:
+        return Outcome("table", spec, result, layers, step=step, rows=rows)
+    step, feats = _spatial_output(result, spec)
+    if step is not None and not feats:
+        return Outcome("empty", spec, result, layers, step=step)
+    if feats:
+        return Outcome("layer", spec, result, layers, step=step, feats=feats)
+    return Outcome("answer", spec, result, layers)
+
+
+def _retry_note(outcome: Outcome, problems: list[str]) -> str:
+    ops = json.dumps([{k: v for k, v in asdict(o).items()} for o in outcome.spec.operations], ensure_ascii=False)[:2500]
+    if problems:
+        body = "Your previous plan does not match the data:\n- " + "\n- ".join(problems)
+    elif outcome.kind == "failed":
+        body = f"Your previous plan failed when executed: {outcome.error}"
+    else:
+        steps = "; ".join(f"{s['op']}({s['name']})={s['count']}" for s in _steps(outcome.result, outcome.spec, outcome.layers)
+                          if s["count"] is not None)
+        why = " ".join(_why_empty(outcome.result, outcome.spec, outcome.layers))
+        body = f"Your previous plan returned ZERO features. Feature counts per step: {steps}. {why}"
+    return (f"\n\n[CORRECTION - previous attempt]\nPrevious operations: {ops}\n{body}\n"
+            "Return a corrected, complete QuerySpec JSON. Use only real layer names, real column names and the exact "
+            "listed values. If the zero result is genuinely the right answer, keep the same plan.")
+
+
+def _llm_error(exc: Exception) -> str:
+    msg = str(exc)
+    if "401" in msg or "403" in msg:
+        return "کلید مدل زبانی پذیرفته نشد؛ کلید یا اعتبار حساب سرویس را بررسی کنید."
+    if "request failed" in msg:
+        return "اتصال به سرویس مدل زبانی برقرار نشد؛ آدرس سرویس را بررسی کنید."
+    return f"مدل زبانی برنامه تحلیل را نساخت: {msg[:400]}"
+
+
+def analyze(text: str, layers: dict, client, share_values: bool = True, progress=None) -> Outcome:
+    """پرسش فارسی → برنامه s3geo → اجرا؛ با یک اصلاح پیش از اجرا (ستون/مقدار نادرست) و یک اصلاح پس از اجرا
+    (نتیجهٔ خالی یا خطا). خطای خود مدل زبانی (کلید، اتصال) در تلاش اول AskError است."""
     import s3geo
     from s3geo import (
         DagExecutor,
@@ -439,6 +611,104 @@ def run(job: Job, client=None) -> str:
         describe_input_layers,
     )
 
+    progress = progress or (lambda pct, msg: None)
+    extent = derive_input_data_extent(layers)
+    described = describe_input_layers(layers)
+    generator = LLMQuerySpecGenerator(client, max_repair_attempts=1)
+    hints = _hints()
+    if share_values:
+        hints = f"{hints} {_value_hints(layers)}".strip()
+    executor = DagExecutor(RegistryCapabilityResolver(s3geo.registry(tolerant=True)))
+    best: Outcome | None = None
+    feedback = ""
+    pre_retry = post_retry = False
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        progress(25 if attempt == 1 else 60, "مدل زبانی برنامه تحلیل را می‌نویسد" if attempt == 1
+                 else "مدل زبانی برنامه را اصلاح می‌کند")
+        try:
+            spec = generator.generate(text + feedback, context={}, system_hints=hints, input_data_extent=extent,
+                                      input_layers=described)
+        except Exception as exc:  # noqa: BLE001  خطای مدل زبانی (کلید، اینترنت، پاسخ نامعتبر)
+            if best is None:
+                raise AskError(_llm_error(exc)) from exc
+            break
+        spec = _patch_spec(spec)
+        problems = _check_plan(spec, layers)
+        if problems and not pre_retry and attempt < MAX_ATTEMPTS:
+            pre_retry = True
+            feedback = _retry_note(Outcome("failed", spec, None, layers), problems)
+            if best is None:  # برای گزارش اگر تلاش بعدی هم به نتیجه نرسید
+                best = Outcome("failed", spec, None, layers, error="برنامهٔ مدل با داده نمی‌خواند: " + problems[0][:300])
+            continue
+        progress(55, "اجرای مراحل تحلیل")
+        try:
+            plan = DeterministicPlanner(PlannerConfig(strict_params=True)).build(spec)
+            result = executor.execute(plan, initial_inputs=layers)
+        except Exception as exc:  # noqa: BLE001  برنامه ساخته شد اما قابل اجرا نبود
+            result = _FailedResult(str(exc))
+        outcome = _classify(result, spec, layers)
+        outcome.attempts = attempt
+        if best is None or RANK[outcome.kind] >= RANK[best.kind] or best.result is None:
+            best = outcome
+        if outcome.kind in ("failed", "empty") and not post_retry and attempt < MAX_ATTEMPTS:
+            post_retry = True
+            feedback = _retry_note(outcome, [])
+            continue
+        break
+    best.attempts = attempt
+    return best
+
+
+@dataclass
+class _FailedResult:  # نتیجهٔ ساختگی وقتی ساخت یا اجرای برنامه استثنا داد
+    error: str
+    success: bool = False
+    outputs: dict = dc_field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------- نوشتن جدول بدون هندسه
+def _sql_type(values: list) -> str:
+    vals = [v for v in values if v is not None]
+    if vals and all(isinstance(v, bool) for v in vals):
+        return "boolean"
+    if vals and all(isinstance(v, int) and not isinstance(v, bool) for v in vals):
+        return "bigint"
+    if vals and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in vals):
+        return "double precision"
+    return "text"
+
+
+def write_table(conn, name: str, rows: list[dict]) -> int:
+    """جدول عمومی (بدون هندسه) با کلید اصلی gid؛ هر ستون با نوع مناسب (عدد، بولی یا متن)."""
+    rows = rows[:TABLE_ROW_LIMIT]
+    cols: list[str] = []
+    for r in rows:
+        for k in r:
+            if k not in cols:
+                cols.append(k)
+    safe, used = [], {"gid"}
+    for c in cols:
+        base = (str(c).strip() or "col")[:60]
+        n, i = base, 2
+        while n.lower() in used:
+            n, i = f"{base}_{i}", i + 1
+        used.add(n.lower())
+        safe.append(n)
+    types = [_sql_type([r.get(c) for r in rows]) for c in cols]
+    target = sql.Identifier("public", name)
+    conn.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(target))
+    conn.execute(sql.SQL("CREATE TABLE {} (gid serial PRIMARY KEY, {})").format(
+        target, sql.SQL(", ").join(sql.SQL("{} {}").format(sql.Identifier(n), sql.SQL(t)) for n, t in zip(safe, types, strict=True))))
+    ins = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
+        target, sql.SQL(", ").join(map(sql.Identifier, safe)), sql.SQL(", ").join(sql.Placeholder() for _ in safe))
+    data = [tuple((str(r[c]) if t == "text" and r.get(c) is not None else r.get(c)) for c, t in zip(cols, types, strict=True))
+            for r in rows]
+    with conn.cursor() as cur:
+        cur.executemany(ins, data)
+    return len(rows)
+
+
+def run(job: Job, client=None) -> str:
     from databases import gdal
 
     q = job.question
@@ -446,70 +716,73 @@ def run(job: Job, client=None) -> str:
     job.set_progress(8, "خواندن لایه‌ها")
     ex = Explorer(db)
     tables = {f"{t.schema}.{t.name}": t for t in ex.tables()}
-    layers = {}
+    layers, notes = {}, list(q.notes or [])
+    notes = [n for n in notes if not n.startswith(("برش", "تلاش"))]
     for key in q.layers:
         t = tables.get(key)
         if t is None:
             raise AskError(f"لایه {key} دیگر وجود ندارد.")
         name = t.name if t.schema == "public" else f"{t.schema}_{t.name}"
         layers[name] = json.loads(ex.geojson(t, limit=LAYER_LIMIT))
+        n = len(layers[name].get("features") or [])
+        if n >= LAYER_LIMIT and (t.rows_estimate or 0) > LAYER_LIMIT:
+            notes.append(f"برش: از لایهٔ {name} فقط {n:,} عارضه از حدود {t.rows_estimate:,} خوانده شد؛ نتیجه کامل نیست. "
+                         "لایه را کوچک‌تر کنید یا با ابزارهای آماده (بدون سقف) تحلیل کنید.")
     if client is None:
         cfg = LlmConfig.objects.filter(user=q.user).first()
         if cfg is None:
             raise AskError("کلید مدل زبانی پیدا نشد.")
         client = _client(cfg)
-    extent = derive_input_data_extent(layers)
-    job.set_progress(25, "مدل زبانی برنامه تحلیل را می‌نویسد")
-    generator = LLMQuerySpecGenerator(client, max_repair_attempts=1)
-    hints = _hints()
-    if q.share_values:
-        hints = f"{hints} {_value_hints(layers)}".strip()
+    fields = ["goal", "operations", "steps", "result_kind", "answer", "notes", "attempts"]
     try:
-        spec = generator.generate(q.text, context={}, system_hints=hints,
-                                  input_data_extent=extent, input_layers=describe_input_layers(layers))
-    except Exception as exc:  # noqa: BLE001  خطای مدل زبانی (کلید، اینترنت، پاسخ نامعتبر)
-        msg = str(exc)
-        if "401" in msg or "403" in msg:
-            msg = "کلید مدل زبانی پذیرفته نشد؛ کلید یا اعتبار حساب سرویس را بررسی کنید."
-        elif "request failed" in msg:
-            msg = "اتصال به سرویس مدل زبانی برقرار نشد؛ آدرس سرویس را بررسی کنید."
+        out = analyze(q.text, layers, client, q.share_values, job.set_progress)
+    except AskError:
         q.result_kind = Question.Result.FAILED
         q.save(update_fields=["result_kind"])
-        raise AskError(f"مدل زبانی برنامه تحلیل را نساخت: {msg[:400]}") from exc
-    job.set_progress(55, "اجرای مراحل تحلیل")
-    spec = _patch_spec(spec)
+        raise
+    spec = out.spec
     q.goal = spec.goal
     q.operations = [o.op for o in spec.operations]
-    plan = DeterministicPlanner(PlannerConfig(strict_params=True)).build(spec)
-    result = DagExecutor(RegistryCapabilityResolver(s3geo.registry(tolerant=True))).execute(plan, initial_inputs=layers)
-    q.steps = _steps(result, spec, layers)
-    fields = ["goal", "operations", "steps", "result_kind", "answer"]
-    if not result.success:
+    q.attempts = out.attempts
+    q.steps = _steps(out.result, spec, layers) if out.result is not None else []
+    if out.attempts > 1:
+        notes.append(f"تلاش {out.attempts}: برنامهٔ مدل یک بار با توجه به داده اصلاح شد.")
+    q.notes = notes
+    if out.kind == "failed":
         q.result_kind = Question.Result.FAILED
         q.save(update_fields=fields)
-        raise AskError(_friendly_error(result.error))
-    step, feats = _spatial_output(result, spec)
-    if step is not None and not feats:
+        raise AskError(out.error)
+    if out.kind == "empty":
         # لایهٔ نتیجه ساخته شد اما خالی است: جدول ساخته نمی‌شود و دلیلش گفته می‌شود
         q.result_kind = Question.Result.EMPTY
-        q.answer = "\n".join(_why_empty(result, spec, layers))[:MAX_ANSWER_CHARS]
+        q.answer = "\n".join(_why_empty(out.result, spec, layers))[:MAX_ANSWER_CHARS]
         q.save(update_fields=fields)
         return f"{spec.goal} — هیچ عارضه‌ای پیدا نشد؛ جدول {q.output_table} ساخته نشد"
-    if not feats:
-        # تحلیل درست اجرا شده اما لایه‌ای نساخته (عدد، آمار، متن…): این یک پاسخ است، نه خطا
+    if out.kind == "answer":
+        # تحلیل درست اجرا شده اما لایه یا جدولی نساخته (عدد، آمار، متن…): این یک پاسخ است، نه خطا
         q.result_kind = Question.Result.ANSWER
-        q.answer = _answer_text(result, spec)
+        q.answer = _answer_text(out.result, spec)
         q.save(update_fields=fields)
         return f"{spec.goal} — پاسخ متنی (بدون لایه مکانی)"
+    job.set_progress(82, "ذخیره نتیجه در جدول")
+    if out.kind == "table":
+        with ex.connect(read_only=False) as conn:
+            conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
+            n = write_table(conn, q.output_table, out.rows)
+        q.result_kind = Question.Result.TABLE
+        q.rows = n
+        q.answer = ""
+        q.save(update_fields=fields + ["rows"])
+        return f"{spec.goal} — جدول {q.output_table} با {n:,} ردیف ساخته شد"
+    feats = out.feats
     q.result_kind = Question.Result.LAYER
-    if step != spec.operations[-1].output:
-        q.answer = _answer_text(result, spec)  # خلاصهٔ مرحلهٔ آخر کنار لایه نمایش داده می‌شود
+    q.answer = _answer_text(out.result, spec) if out.step != spec.operations[-1].output else ""
     feats = [{"type": "Feature", "geometry": f.get("geometry"), "properties": _clean(f.get("properties"))}
              for f in feats]
-    job.set_progress(82, "ذخیره نتیجه در جدول")
     srid = 4326
     if _max_abs_x(feats) > 180:
-        srid = int(str(extent.suggested_crs or "EPSG:32639").split(":")[-1])
+        from s3geo import derive_input_data_extent
+        srid = int(str(derive_input_data_extent(layers).suggested_crs or "EPSG:32639").split(":")[-1])
     with tempfile.TemporaryDirectory() as d:
         path = Path(d) / "result.geojson"
         path.write_text(json.dumps({"type": "FeatureCollection", "features": feats}, ensure_ascii=False),

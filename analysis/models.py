@@ -8,7 +8,7 @@ from databases.crypto import decrypt, encrypt
 class LlmConfig(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="llm_config")
     base_url = models.URLField("آدرس سرویس سازگار با OpenAI", default="https://api.avalai.ir/v1")
-    model = models.CharField("مدل", max_length=100, default="gpt-4o-mini")
+    model = models.CharField("مدل", max_length=100, default="gpt-4o")
     api_key_encrypted = models.TextField(editable=False)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -34,6 +34,7 @@ class LlmConfig(models.Model):
 class Question(models.Model):
     class Result(models.TextChoices):
         LAYER = "layer", "لایه ساخته شد"
+        TABLE = "table", "جدول داده ساخته شد"
         EMPTY = "empty", "هیچ عارضه‌ای پیدا نشد"
         ANSWER = "answer", "پاسخ متنی"
         FAILED = "failed", "ناموفق"
@@ -50,6 +51,8 @@ class Question(models.Model):
     answer = models.TextField("پاسخ متنی", blank=True)
     result_kind = models.CharField("نوع نتیجه", max_length=10, choices=Result.choices, blank=True)
     steps = models.JSONField("مراحل اجرا", default=list, blank=True)
+    notes = models.JSONField("یادداشت‌های اجرا", default=list, blank=True)
+    attempts = models.PositiveSmallIntegerField("تعداد تلاش مدل", default=1)
     share_values = models.BooleanField("ارسال مقادیر دسته‌ای ستون‌ها به مدل", default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

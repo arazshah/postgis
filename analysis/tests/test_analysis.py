@@ -274,7 +274,7 @@ class AnalysisTests(TestCase):
 
         LlmConfig.objects.create(user=self.user, api_key_encrypted="")
         with self.assertRaisesMessage(ask.AskError, "لایه"):
-            ask.request(self.db, self.user, "حریم ۵۰۰ متری ایستگاه‌ها", [], "zones")
+            ask.request(self.db, self.user, "حریم ۵۰۰ متری ایستگاه‌ها", ["public.nope"], "zones")
         q = ask.request(self.db, self.user, "دور هر ایستگاه مترو حریم ۵۰۰ متری بکش", ["public.metro_stations", "public.nope"],
                         "metro_zones")
         self.assertEqual(q.layers, ["public.metro_stations"])
@@ -301,6 +301,30 @@ class AnalysisTests(TestCase):
         with self.assertRaisesMessage(ask.AskError, "مدل زبانی"):
             ask.run(q2.job, client=StaticLLMClient("not json"))
         self.assertEqual(Question.objects.count(), 2)
+
+    @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
+    def test_layers_and_output_name_are_automatic(self):
+        LlmConfig.objects.create(user=self.user, api_key_encrypted="")
+        q = ask.request(self.db, self.user, "مدرسه‌های متوسطه اول را جدا کن و لایه را به نام my_result_1 بساز", [], "")
+        self.assertEqual(q.output_table, "my_result_1")
+        self.assertEqual(sorted(q.layers), ["public.metro_stations", "public.parks", "public.schools"])
+        self.assertTrue(any("خودکار" in n for n in q.notes))
+
+    @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
+    def test_group_summary_becomes_a_real_table(self):
+        from s3geo import StaticLLMClient
+
+        LlmConfig.objects.create(user=self.user, api_key_encrypted="")
+        q = ask.request(self.db, self.user, "تعداد و مجموع دانش‌آموزان هر مقطع", ["public.schools"], "by_level")
+        plan = {"goal": "مقطع", "entities": [{"ref": "schools", "kind": "layer"}],
+                "operations": [{"op": "aggregate_table", "inputs": {"vector": "schools"}, "output": "t",
+                                "params": {"group_by": ["level"], "aggregations": {"students": ["sum"]}}}]}
+        msg = ask.run(q.job, client=StaticLLMClient(json.dumps(plan, ensure_ascii=False)))
+        q.refresh_from_db()
+        self.assertEqual(q.result_kind, "table")
+        self.assertEqual(q.rows, 3)
+        self.assertEqual(self._sql("SELECT count(*) FROM by_level")[0][0], 3)
+        self.assertIn("by_level", msg)
 
     @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")
     def test_summary_last_still_saves_layer_and_answer(self):

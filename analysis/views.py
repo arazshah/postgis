@@ -62,7 +62,7 @@ def _entries(db):
     for q in Question.objects.filter(database=db).select_related("job")[:HISTORY_LIMIT]:
         steps = [{**s, "label": OP_LABELS.get(s.get("op"), s.get("op"))} for s in q.steps or []]
         out.append({"kind": "ask", "id": f"q{q.pk}", "pk": q.pk, "title": q.text, "glyph": "؟", "detail": q.goal,
-                    "ops": q.operations, "steps": steps, "result": q.result_kind, "answer": q.answer,
+                    "ops": q.operations, "steps": steps, "result": q.result_kind, "notes": q.notes, "answer": q.answer,
                     "table": q.output_table, "rows": q.rows, "job": q.job,
                     "created": q.created_at, "together": _together(db, q.output_table, q.layers)})
     out.sort(key=lambda e: e["created"], reverse=True)
@@ -109,7 +109,7 @@ def page(request, pk):
                 return here
             cfg = cfg or LlmConfig(user=request.user)
             cfg.base_url = url
-            cfg.model = (request.POST.get("model") or "gpt-4o-mini").strip()[:100]
+            cfg.model = (request.POST.get("model") or "gpt-4o").strip()[:100]
             if key:
                 cfg.set_key(key)
             cfg.save()
@@ -167,5 +167,5 @@ def page(request, pk):
         "active": any(e["job"] and e["job"].active for e in history), "tools": tools.TOOLS,
         "open_tool": request.GET.get("tool") if request.GET.get("tool") in tools.TOOL_MAP else tools.TOOLS[0].key, "has_routing": any(t.schema == "routing" and t.name == "ways"
                                                                     for t in tables),
-        "max_layers": ask.MAX_LAYERS, "again": again,
+        "max_layers": ask.MAX_LAYERS, "max_auto": ask.MAX_AUTO_LAYERS, "layer_limit": ask.LAYER_LIMIT, "again": again,
     })

@@ -193,3 +193,142 @@ class FriendlyErrorTests(SimpleTestCase):
         self.assertIn("filtered_houses", msg)
         self.assertIn("مقدار خالی", msg)
         self.assertIn("جزئیات فنی", msg)
+
+
+class SeqClient:
+    """مدل زبانی ساختگی: هر بار پاسخ بعدی؛ پیام‌ها را برای بررسی نگه می‌دارد."""
+
+    def __init__(self, *plans):
+        self.plans, self.calls = list(plans), []
+
+    def complete(self, messages, **kw):
+        import json
+        self.calls.append(messages)
+        return json.dumps(self.plans[min(len(self.calls), len(self.plans)) - 1], ensure_ascii=False)
+
+
+def _plan(*ops):
+    return {"goal": "g", "entities": [], "outputs": [], "operations": list(ops)}
+
+
+def _filter(value, field="deal", src="houses", out="rent"):
+    return {"op": "filter_attribute", "inputs": {"vector": src}, "output": out,
+            "params": {"where": {"field": field, "op": "eq", "value": value}}}
+
+
+def _hs(n=12):
+    return {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [51.4 + i * 0.001, 35.7]},
+         "properties": {"id": i, "deal": "اجاره" if i % 3 else "فروش", "price": 100 + i}} for i in range(n)]}
+
+
+class AnalyzeTests(SimpleTestCase):
+    def setUp(self):
+        try:
+            import s3geo  # noqa: F401
+        except ImportError:
+            self.skipTest("s3geo نصب نیست")
+
+    def test_wrong_value_is_repaired_before_running(self):
+        client = SeqClient(_plan(_filter("rent")), _plan(_filter("اجاره")))
+        out = ask.analyze("خانه‌های اجاره‌ای", {"houses": _hs()}, client)
+        self.assertEqual(out.kind, "layer")
+        self.assertEqual(len(out.feats), 8)
+        self.assertEqual(out.attempts, 2)
+        self.assertIn("اجاره", client.calls[1][-1]["content"])  # مقادیر واقعی به مدل برگشت
+
+    def test_missing_column_is_repaired(self):
+        client = SeqClient(_plan(_filter("اجاره", field="usage")), _plan(_filter("اجاره")))
+        out = ask.analyze("خانه‌های اجاره‌ای", {"houses": _hs()}, client)
+        self.assertEqual((out.kind, out.attempts), ("layer", 2))
+        self.assertIn("usage", client.calls[1][-1]["content"])
+
+    def test_empty_after_run_gets_one_retry_then_reports_empty(self):
+        # ستون‌های متنی کم‌تنوع بررسی می‌شوند؛ شرط عددی از بررسی قبل از اجرا رد می‌شود و فقط پس از اجرا خالی می‌شود
+        empty = _plan({"op": "filter_attribute", "inputs": {"vector": "houses"}, "output": "x",
+                       "params": {"where": {"field": "price", "op": "gt", "value": 99999}}})
+        client = SeqClient(empty)
+        out = ask.analyze("خانه‌های گران", {"houses": _hs()}, client)
+        self.assertEqual(out.kind, "empty")
+        self.assertEqual(len(client.calls), 2)
+        self.assertIn("ZERO", client.calls[1][-1]["content"])
+
+    def test_good_plan_costs_one_call(self):
+        client = SeqClient(_plan(_filter("اجاره")))
+        out = ask.analyze("خانه‌های اجاره‌ای", {"houses": _hs()}, client)
+        self.assertEqual((out.kind, out.attempts, len(client.calls)), ("layer", 1, 1))
+
+    def test_group_by_summary_is_a_table(self):
+        plan = _plan({"op": "aggregate_table", "inputs": {"vector": "houses"}, "output": "t",
+                      "params": {"group_by": ["deal"], "aggregations": {"price": ["sum"]}}})
+        out = ask.analyze("جمع قیمت به تفکیک نوع معامله", {"houses": _hs()}, SeqClient(plan))
+        self.assertEqual(out.kind, "table")
+        self.assertEqual(len(out.rows), 2)
+        self.assertEqual({r["deal"] for r in out.rows}, {"اجاره", "فروش"})
+
+    def test_llm_failure_on_first_attempt_is_an_error(self):
+        class Boom:
+            def complete(self, *a, **k):
+                raise RuntimeError("request failed: 401")
+
+        with self.assertRaisesMessage(ask.AskError, "کلید"):
+            ask.analyze("هر پرسشی", {"houses": _hs()}, Boom())
+
+
+class CheckPlanTests(SimpleTestCase):
+    def _spec(self, *ops):
+        return NS(operations=[NS(op=o["op"], inputs=o["inputs"], params=o["params"], output=o["output"]) for o in ops])
+
+    def test_columns_flow_through_preserving_ops(self):
+        hs = {"houses": _hs()}
+        crs = {"op": "crs_transform", "inputs": {"vector": "houses"}, "params": {}, "output": "h"}
+        ok = {"op": "filter_attribute", "inputs": {"vector": "h"}, "output": "r",
+              "params": {"where": {"field": "deal", "op": "eq", "value": "اجاره"}}}
+        self.assertEqual(ask._check_plan(self._spec(crs, ok), hs), [])
+        bad = {**ok, "params": {"where": {"field": "deal", "op": "in", "value": ["rent", "اجاره"]}}}
+        self.assertIn("'rent'", ask._check_plan(self._spec(crs, bad), hs)[0])
+
+    def test_underscore_columns_and_open_outputs_are_not_checked(self):
+        hs = {"houses": _hs()}
+        near = {"op": "spatial_nearest", "inputs": {"source": "houses", "target": "houses"}, "params": {}, "output": "n"}
+        dist = {"op": "filter_attribute", "inputs": {"vector": "n"}, "output": "r",
+                "params": {"where": {"field": "_nearest_distance", "op": "lte", "value": 5}}}
+        agg = {"op": "aggregate_table", "inputs": {"vector": "houses"}, "params": {}, "output": "a"}
+        later = {"op": "filter_attribute", "inputs": {"vector": "a"}, "output": "r2",
+                 "params": {"where": {"field": "anything_new", "op": "gt", "value": 1}}}
+        self.assertEqual(ask._check_plan(self._spec(near, dist, agg, later), hs), [])
+
+    def test_case_hint_and_high_cardinality_value_not_checked(self):
+        hs = {"houses": _hs(80)}
+        wrong_case = {"op": "filter_attribute", "inputs": {"vector": "houses"}, "output": "r",
+                      "params": {"where": {"field": "Deal", "op": "eq", "value": "اجاره"}}}
+        self.assertIn("Did you mean 'deal'", ask._check_plan(self._spec(wrong_case), hs)[0])
+        ids = {"houses": {"features": [{"geometry": None, "properties": {"name": f"n{i}"}} for i in range(80)]}}
+        by_name = {"op": "filter_attribute", "inputs": {"vector": "houses"}, "output": "r",
+                   "params": {"where": {"field": "name", "op": "eq", "value": "نامی که نیست"}}}
+        self.assertEqual(ask._check_plan(self._spec(by_name), ids), [])
+
+
+class AutoNamesTests(SimpleTestCase):
+    def test_output_name_from_question(self):
+        self.assertEqual(ask._auto_output("یک لایه جدید به نام rent_cases ایجاد کن"), "rent_cases")
+        self.assertEqual(ask._auto_output("لایه‌ای با نام «Rent_Cases» بساز"), "rent_cases")
+        self.assertTrue(ask._auto_output("بدون نام").startswith("ask_"))
+
+
+class BenchmarkTests(SimpleTestCase):
+    def test_questions_are_well_formed_and_runner_scores_with_scripted_model(self):
+        try:
+            import s3geo  # noqa: F401
+        except ImportError:
+            self.skipTest("s3geo نصب نیست")
+        from analysis import benchmark
+
+        qs = benchmark.load_questions()
+        self.assertGreaterEqual(len(qs), 15)
+        self.assertTrue(all({"q", "kind", "expected"} <= set(q) for q in qs))
+        plan = _plan({"op": "filter_attribute", "inputs": {"vector": "schools"}, "output": "r",
+                      "params": {"where": {"field": "level", "op": "eq", "value": "متوسطه اول"}}})
+        rows = benchmark.run(SeqClient(plan), qs[:1])
+        self.assertTrue(rows[0]["ok"], rows[0])  # ۵۷ مدرسهٔ متوسطه اول
+        self.assertEqual(benchmark.summary(rows)["accuracy"], 100)
