@@ -52,6 +52,11 @@ class ParseTests(SimpleTestCase):
         self.assertIn("WHERE", nl2sql._warnings("DELETE FROM a", "modify", None, set())[0])
         self.assertEqual(nl2sql._warnings("SELECT 1", "read", None, set()), [])
 
+    def test_fold_and_literals(self):
+        self.assertEqual(nl2sql.fold("منطقه 6 كرج ٧"), "منطقه ۶ کرج ۷")
+        lits = nl2sql.sql_literals("SELECT * FROM z WHERE name = 'منطقه 6' AND t ILIKE '%O''Brien%' AND d > '2024-01-01'")
+        self.assertEqual(lits, ["منطقه 6", "O'Brien"])
+
     def test_question_words_skip_common(self):
         words = nl2sql.question_words("نقاطی که داخل لایه پلیگونی با نام کرج هستند را استخراج کن")
         self.assertIn("کرج", words)
@@ -117,6 +122,41 @@ class ConsoleViewTests(BaseCase):
         self.assertEqual(r.status_code, 400)
         self.assertIn("کلید مدل زبانی", r.json()["error"])
 
+    def test_empty_result_offers_why_and_map_is_rendered(self):
+        url = reverse("databases:explore_sql", args=[self.db.pk])
+        cfg = LlmConfig(user=self.user)
+        cfg.set_key("sk-test-123456")
+        cfg.save()
+        empty = {"columns": ["id"], "rows": [], "truncated": False, "rowcount": 0, "status": "SELECT 0", "elapsed_ms": 3}
+        with mock.patch.object(Explorer, "run_sql", return_value=empty):
+            r = self.client.post(url, {"query": "SELECT id FROM zones WHERE name = 'x'"})
+        self.assertContains(r, "data-why-btn")
+        geo = {"columns": ["id", "geom"], "rows": [["1", "0101…"]], "truncated": False, "rowcount": 1,
+               "status": "SELECT 1", "elapsed_ms": 3, "geom_column": "geom",
+               "geojson": {"type": "FeatureCollection", "features": [
+                   {"type": "Feature", "geometry": {"type": "Point", "coordinates": [51.4, 35.7]}, "properties": {"id": "1"}}]}}
+        with mock.patch.object(Explorer, "run_sql", return_value=geo):
+            r = self.client.post(url, {"query": "SELECT id, geom FROM schools"})
+        self.assertContains(r, 'id="sql-map"')
+        self.assertContains(r, 'id="sql-geojson"')
+        self.assertContains(r, "sql-map.js")
+        self.assertNotContains(r, "data-why-btn")
+        # کوئری تغییر داده «چرا خالی است» ندارد
+        with mock.patch.object(Explorer, "run_sql", return_value=empty):
+            r = self.client.post(url, {"query": "DELETE FROM zones WHERE id = 0 RETURNING id"})
+        self.assertNotContains(r, "data-why-btn")
+
+    def test_why_endpoint(self):
+        url = reverse("databases:explore_sql_why", args=[self.db.pk])
+        out = {"reason": "نام منطقه با رقم فارسی ثبت شده است.", "sql": "SELECT 1", "explanation": "", "rows": 3}
+        with mock.patch.object(nl2sql, "diagnose_empty", return_value=out) as m:
+            d = self.client.post(url, {"query": "SELECT 1 WHERE false", "text": "x"}).json()
+        self.assertTrue(d["ok"])
+        self.assertEqual(d["rows"], 3)
+        self.assertEqual(m.call_args.args[2], "SELECT 1 WHERE false")
+        d = self.client.post(url, {"query": "DELETE FROM zones"})
+        self.assertEqual(d.status_code, 400)
+
     def test_viewer_of_other_db_gets_404(self):
         other = User.objects.create_user("09120000077")
         self.client.force_login(other)
@@ -140,7 +180,10 @@ class NL2SQLIntegrationTests(TestCase):
                              dbname=self.db.db_name, autocommit=True) as c:
             c.execute("CREATE TABLE zones(id serial PRIMARY KEY, name text, geom geometry(Polygon, 4326))")
             c.execute("INSERT INTO zones(name, geom) VALUES ('منطقه یک', ST_MakeEnvelope(51, 35, 51.5, 35.5, 4326)),"
-                      " ('منطقه دو', ST_MakeEnvelope(52, 35, 52.5, 35.5, 4326))")
+                      " ('منطقه دو', ST_MakeEnvelope(52, 35, 52.5, 35.5, 4326)),"
+                      " ('منطقه ۶', ST_MakeEnvelope(51, 35, 51.25, 35.5, 4326))")
+            c.execute("CREATE TABLE wells(id int, geom geometry(Point, 32639))")
+            c.execute("INSERT INTO wells VALUES (1, ST_SetSRID(ST_MakePoint(535000, 3950000), 32639))")
             c.execute("CREATE TABLE schools(id serial PRIMARY KEY, title text, geom geometry(Point, 4326))")
             c.execute("INSERT INTO schools(title, geom) SELECT 'مدرسه ' || g, ST_SetSRID(ST_MakePoint(51 + g * 0.1,"
                       " 35.2), 4326) FROM generate_series(1, 12) g")
@@ -180,3 +223,38 @@ class NL2SQLIntegrationTests(TestCase):
         d = nl2sql.generate(self.db, self.user, "یک جدول بساز", chat=lambda m: next(replies))
         self.assertFalse(d.valid)
         self.assertTrue(d.warnings)
+
+    def test_run_sql_returns_map_in_wgs84(self):
+        res = Explorer(self.db).run_sql("SELECT id, geom AS g FROM wells")
+        self.assertEqual(res["geom_column"], "g")
+        f = res["geojson"]["features"][0]
+        lon, lat = f["geometry"]["coordinates"]
+        self.assertAlmostEqual(lon, 51.39, places=1)
+        self.assertAlmostEqual(lat, 35.69, places=1)
+        self.assertEqual(f["properties"], {"id": "1"})
+        self.assertNotIn("geojson", Explorer(self.db).run_sql("SELECT count(*) FROM wells"))
+        # geography و نتیجه بدون ردیف
+        self.assertIn("geojson", Explorer(self.db).run_sql("SELECT geom::geography FROM zones"))
+        self.assertNotIn("geojson", Explorer(self.db).run_sql("SELECT geom FROM zones WHERE false"))
+
+    def test_diagnose_empty_finds_persian_digit_value(self):
+        q = "SELECT s.* FROM schools s JOIN zones z ON ST_Within(s.geom, z.geom) WHERE z.name = 'منطقه 6'"
+        self.assertEqual(Explorer(self.db).run_sql(q)["rows"], [])
+        seen = {}
+
+        def chat(messages):
+            seen["prompt"] = messages[0]["content"]
+            return json.dumps({"reason": "در داده رقم فارسی است.", "explanation": "رقم ۶ فارسی شد.",
+                               "sql": q.replace("'منطقه 6'", "'منطقه ۶'")})
+
+        d = nl2sql.diagnose_empty(self.db, self.user, q, "مدارس منطقه ۶", chat=chat)
+        self.assertIn("'منطقه ۶'", seen["prompt"])  # مقدار نزدیک واقعی پیدا شد
+        self.assertIn("schools: 12 rows", seen["prompt"])
+        self.assertEqual(d["rows"], 2)  # 51.1 و 51.2
+        self.assertIn("منطقه ۶", d["sql"])
+
+    def test_diagnose_drops_invalid_fix(self):
+        d = nl2sql.diagnose_empty(self.db, self.user, "SELECT * FROM zones WHERE false", "",
+                                  chat=lambda m: json.dumps({"reason": "شرط همیشه نادرست است.", "sql": "SELECT nope FROM zones"}))
+        self.assertEqual(d["sql"], "")
+        self.assertEqual(d["reason"], "شرط همیشه نادرست است.")

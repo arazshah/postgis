@@ -392,6 +392,16 @@ details.danger-zone summary{cursor:pointer;color:var(--red);font-weight:700}
 .nl-from [data-nl-from-note]{white-space:pre-line}
 .nl-from [data-nl-from-note]:empty{display:none}
 .sql-created{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);flex-wrap:wrap}
+.sql-map-wrap{margin-bottom:var(--s3)}
+.sql-map{height:380px;border:1px solid var(--line);border-radius:var(--r-card);background:var(--paper-2);margin-bottom:var(--s2)}
+@media (max-width:640px){.sql-map{height:280px}}
+.sql-why{margin-bottom:var(--s3)}
+.sql-why-h{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);flex-wrap:wrap}
+.sql-why-out{margin-top:var(--s2);line-height:1.9}
+.sql-why-out p{margin:0 0 var(--s2)}
+.sql-why-code{margin:0 0 var(--s2);padding:var(--s3);background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-sm);
+  font-family:var(--f-mono);font-size:.85rem;white-space:pre-wrap;word-break:break-word;text-align:left}
+.linkish{border:0;background:none;padding:0;font:inherit;color:var(--teal-dark);text-decoration:underline;cursor:pointer}
 .sr-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .ltr-mixed{unicode-bidi:plaintext}
 @media (max-width:900px){.ex-layout{grid-template-columns:1fr}.ex-side{position:static;max-height:none}}

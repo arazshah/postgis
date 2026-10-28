@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import json
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -27,6 +28,7 @@ PAGE_SIZE = 50
 MAP_LIMIT = 2000
 EXPORT_LIMIT = 100_000
 SQL_MAX_ROWS = 500
+SQL_MAP_BYTES = 4_000_000
 
 
 class ExplorerError(Exception):
@@ -452,6 +454,42 @@ class Explorer:
                 raise ExplorerError(f"خطا: {getattr(exc.diag, 'message_primary', None) or exc}") from exc
 
     # ------------------------------------------------------------------ کنسول SQL
+    @staticmethod
+    def _result_map(conn, description, data: list, cells: list) -> dict:
+        """اگر نتیجه ستون هندسه دارد، GeoJSON (WGS84) همان ردیف‌ها برای نقشه زیر نتیجه.
+
+        مقدار خام هندسه (EWKB هگز) دوباره به PostGIS داده می‌شود تا GeoJSON شود؛ کوئری کاربر دوباره اجرا نمی‌شود.
+        هر خطایی (نوع ناشناخته، SRID بی‌تبدیل) فقط نقشه را حذف می‌کند، نه نتیجه را."""
+        if not data:
+            return {}
+        try:
+            with conn.transaction():
+                oids = {r[0]: r[1] for r in conn.execute(
+                    "SELECT oid, typname FROM pg_type WHERE typname IN ('geometry', 'geography')").fetchall()}
+                idx = next((i for i, d in enumerate(description) if d.type_code in oids), None)
+                if idx is None:
+                    return {}
+                shapes = conn.execute(
+                    # text[] و نه geometry[]: جداکننده آرایه geometry در PostGIS «:» است، نه «,»
+                    "SELECT ST_AsGeoJSON(CASE WHEN ST_SRID(g) IN (0, 4326) THEN g ELSE ST_Transform(g, 4326) END, 6) "
+                    "FROM unnest(%s::text[]) WITH ORDINALITY u(h, n), LATERAL (SELECT h::geometry AS g) x ORDER BY n",
+                    ([None if r[idx] is None else str(r[idx]) for r in data],)).fetchall()
+        except (psycopg.Error, ValueError):
+            return {"map_note": "هندسه نتیجه برای نمایش روی نقشه قابل تبدیل نبود."}
+        names = [d.name for d in description]
+        features, size = [], 0
+        for (shape,), row in zip(shapes, cells, strict=True):
+            if not shape:
+                continue
+            size += len(shape)
+            if size > SQL_MAP_BYTES:
+                return {"map_note": "هندسه‌های نتیجه برای نمایش روی نقشه بیش از حد بزرگ‌اند؛ کمترشان کنید یا ST_Simplify بزنید."}
+            props = {n: v for i, (n, v) in enumerate(zip(names, row, strict=True)) if i != idx}
+            features.append({"type": "Feature", "geometry": json.loads(shape), "properties": props})
+        if not features:
+            return {}
+        return {"geojson": {"type": "FeatureCollection", "features": features}, "geom_column": names[idx]}
+
     def run_sql(self, query: str, allow_write: bool = False) -> dict:
         query = (query or "").strip().rstrip(";").strip()
         if not query:
@@ -470,7 +508,9 @@ class Explorer:
                     result["columns"] = [d.name for d in cur.description]
                     data = cur.fetchmany(SQL_MAX_ROWS + 1)
                     result["truncated"] = len(data) > SQL_MAX_ROWS
-                    result["rows"] = [[_cell(v) for v in r] for r in data[:SQL_MAX_ROWS]]
+                    data = data[:SQL_MAX_ROWS]
+                    result["rows"] = [[_cell(v) for v in r] for r in data]
+                    result.update(self._result_map(conn, cur.description, data, result["rows"]))
                 conn.commit()
             except psycopg.errors.ReadOnlySqlTransaction as exc:
                 conn.rollback()

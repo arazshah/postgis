@@ -83,6 +83,30 @@
     <a class="btn sm" href="{% url 'databases:explore_table' db.pk created.schema created.name %}{% if created.geometry %}?tab=map{% endif %}">{% icon "table" 16 %}مشاهده جدول</a>
   </div>
   {% endif %}
+  {% if result.geojson %}
+  <div class="sql-map-wrap">
+    <div id="sql-map" class="sql-map" data-tiles="{{ SITE.map_tile_url }}" data-attr="{{ SITE.map_tile_attribution }}" role="region" aria-label="نقشه نتیجه"></div>
+    <p class="small muted">{% icon "polygon" 16 %} {{ result.geojson.features|length|fanum }} عارضه از ستون <span class="ltr">{{ result.geom_column }}</span> روی نقشه؛ روی هر عارضه بزنید تا ویژگی‌هایش را ببینید.</p>
+  </div>
+  {{ result.geojson|json_script:"sql-geojson" }}
+  {% elif result.map_note %}<p class="small muted">{{ result.map_note }}</p>{% endif %}
+  {% if can_why %}
+  <div class="msg info sql-why" data-why data-url="{% url 'databases:explore_sql_why' db.pk %}" data-query="{{ query }}">
+    <div class="sql-why-h">
+      <span>{% icon "info" 16 %} این پرس‌وجو هیچ ردیفی برنگرداند.</span>
+      {% if llm_cfg %}<button type="button" class="btn ghost sm" data-why-btn>{% icon "search" 16 %}چرا خالی است؟</button>{% endif %}
+    </div>
+    {% if not llm_cfg %}<p class="small" style="margin:6px 0 0">با <button type="button" class="linkish" data-dialog-open="nl-key">تنظیم کلید مدل زبانی</button> می‌توانید دلیل خالی بودن و کوئری اصلاح‌شده را بپرسید.</p>{% endif %}
+    <div class="sql-why-out" data-why-out role="status" aria-live="polite" hidden>
+      <p data-why-reason></p>
+      <div data-why-fix hidden>
+        <p class="small" data-why-expl></p>
+        <pre class="sql-why-code ltr" dir="ltr" data-why-sql></pre>
+        <button type="button" class="btn ghost sm" data-why-use>{% icon "bolt" 16 %}جایگزینی و اجرا</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
   {% if result.columns %}
   <div class="table-scroll ltr-table">
   <table class="data-table">
@@ -107,4 +131,5 @@
   </form>
 </dialog>
 {% endblock %}
-{% block ws_scripts %}<script src="{% static 'js/sql-nl.js' %}" defer></script>{% endblock %}
+{% block head %}{% if result.geojson %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endif %}{% endblock %}
+{% block ws_scripts %}{% if result.geojson %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script><script src="{% static 'js/sql-map.js' %}" defer></script>{% endif %}<script src="{% static 'js/sql-nl.js' %}" defer></script>{% endblock %}

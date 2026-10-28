@@ -21,6 +21,7 @@ urlpatterns = [
     path("<int:pk>/explore/", views.explore, name="explore"),
     path("<int:pk>/explore/sql/", views.explore_sql, name="explore_sql"),
     path("<int:pk>/explore/sql/ask/", views.explore_sql_ask, name="explore_sql_ask"),
+    path("<int:pk>/explore/sql/why/", views.explore_sql_why, name="explore_sql_why"),
     path("<int:pk>/explore/sql/key/", views.explore_sql_key, name="explore_sql_key"),
     path("<int:pk>/explore/t/<str:schema>/<str:table>/", views.explore_table, name="explore_table"),
     path("<int:pk>/explore/t/<str:schema>/<str:table>/drop/", views.explore_drop, name="explore_drop"),

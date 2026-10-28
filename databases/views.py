@@ -444,6 +444,7 @@ def explore_sql(request, pk):
         "db": db, "tables": tables, "query": query, "allow_write": allow_write, "result": result,
         "error": error, "section": "sql", "max_rows": SQL_MAX_ROWS, "created": created, "nl": nl,
         "llm_cfg": nl2sql.user_config(request.user), "nl_examples": _nl_examples(tables),
+        "can_why": bool(result and result["columns"] and not result["rows"] and nl2sql.classify(query) == "read"),
         "mode": "nl" if request.GET.get("mode") == "nl" else ("nl" if nl["text"] and not query else "sql")})
 
 
@@ -481,6 +482,22 @@ def explore_sql_ask(request, pk):
     data["can_write"] = db.can_edit
     # فقط پرس‌وجوی خواندنیِ سالم بی‌درنگ اجرا می‌شود؛ هر تغییری را کاربر خودش تأیید می‌کند
     data["auto_run"] = draft.valid and not draft.writes
+    return JsonResponse({"ok": True, **data})
+
+
+@site_user_required
+@require_POST
+def explore_sql_why(request, pk):
+    """پرس‌وجوی خواندنی بی‌نتیجه: دلیل احتمالی و کوئری اصلاح‌شده (JSON)."""
+    from . import nl2sql
+
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        return JsonResponse({"ok": False, "error": "مرورگر فقط برای پایگاه داده فعال در دسترس است."}, status=400)
+    try:
+        data = nl2sql.diagnose_empty(db, request.user, request.POST.get("query", ""), request.POST.get("text", ""))
+    except nl2sql.NLError as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
     return JsonResponse({"ok": True, **data})
 
 
