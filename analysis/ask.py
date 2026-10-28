@@ -739,6 +739,7 @@ def write_table(conn, name: str, rows: list[dict]) -> int:
             for r in rows]
     with conn.cursor() as cur:
         cur.executemany(ins, data)
+    conn.commit()  # Explorer.connect فقط می‌بندد و commit نمی‌کند؛ بدون این، جدول بی‌صدا از بین می‌رفت
     return len(rows)
 
 

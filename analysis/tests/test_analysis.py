@@ -307,7 +307,10 @@ class AnalysisTests(TestCase):
         LlmConfig.objects.create(user=self.user, api_key_encrypted="")
         q = ask.request(self.db, self.user, "مدرسه‌های متوسطه اول را جدا کن و لایه را به نام my_result_1 بساز", [], "")
         self.assertEqual(q.output_table, "my_result_1")
-        self.assertEqual(sorted(q.layers), ["public.metro_stations", "public.parks", "public.schools"])
+        spatial = [r[0] for r in self._sql(
+            "SELECT f_table_name FROM geometry_columns WHERE f_table_schema = 'public' ORDER BY 1")]
+        self.assertEqual(sorted(q.layers), [f"public.{t}" for t in spatial])  # همهٔ لایه‌های مکانی (districts هم هست)
+        self.assertIn("public.schools", q.layers)
         self.assertTrue(any("خودکار" in n for n in q.notes))
 
     @unittest.skipUnless(HAS_S3GEO, "s3geo نصب نیست")

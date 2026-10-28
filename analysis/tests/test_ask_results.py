@@ -1,4 +1,6 @@
 """برداشت نتیجهٔ پرسش فارسی: آخرین مرحلهٔ مکانی، پاسخ متنی و راهنمای مدل (بدون نیاز به پایگاه داده)."""
+import os
+import unittest
 from types import SimpleNamespace as NS
 
 from django.test import SimpleTestCase
@@ -502,3 +504,27 @@ class ConfirmFlowTests(SimpleTestCase):
         system = client.calls[0][0]["content"]
         self.assertIn("ادامهٔ پرسش قبلی", system)
         self.assertIn("rent_cases", system)
+
+
+@unittest.skipUnless(os.environ.get("TEST_PG_HOST"), "TEST_PG_HOST missing")
+class WriteTableCommitTests(SimpleTestCase):
+    """Explorer.connect فقط اتصال را می‌بندد؛ جدول باید بدون commit بیرونی هم بماند."""
+
+    def test_table_survives_connection_close(self):
+        import psycopg
+
+        kw = dict(host=os.environ["TEST_PG_HOST"], port=int(os.environ.get("TEST_PG_PORT", "5432")),
+                  user=os.environ.get("TEST_PG_USER", "postgres"),
+                  password=os.environ.get("TEST_PG_PASSWORD", "postgres"), dbname="postgres")
+        name = "wt_commit_check"
+        conn = psycopg.connect(**kw)
+        try:
+            self.assertEqual(ask.write_table(conn, name, [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}]), 2)
+        finally:
+            conn.close()
+        check = psycopg.connect(**kw, autocommit=True)
+        try:
+            self.assertEqual(check.execute(f"SELECT count(*) FROM {name}").fetchone()[0], 2)
+        finally:
+            check.execute(f"DROP TABLE IF EXISTS {name}")
+            check.close()
