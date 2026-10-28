@@ -29,6 +29,7 @@ MAP_LIMIT = 2000
 EXPORT_LIMIT = 100_000
 SQL_MAX_ROWS = 500
 SQL_MAP_BYTES = 4_000_000
+GEOM_TEXT_MAX = 80
 
 
 class ExplorerError(Exception):
@@ -455,22 +456,40 @@ class Explorer:
 
     # ------------------------------------------------------------------ کنسول SQL
     @staticmethod
-    def _result_map(conn, description, data: list, cells: list) -> dict:
+    def _geo_columns(conn, description) -> list[int]:
+        oids = {r[0] for r in conn.execute(
+            "SELECT oid FROM pg_type WHERE typname IN ('geometry', 'geography')").fetchall()}
+        return [i for i, d in enumerate(description) if d.type_code in oids]
+
+    @staticmethod
+    def _geo_summaries(conn, geo_idx: list[int], data: list, cells: list) -> None:
+        """خانه‌های هندسه در جدول نتیجه به‌جای EWKB هگز، متن کوتاه WKT می‌شوند (مثل POINT(51.1 35.2))."""
+        for idx in geo_idx:
+            try:
+                with conn.transaction():
+                    rows = conn.execute(
+                        # text[] و نه geometry[]: جداکننده آرایه geometry در PostGIS «:» است، نه «,»
+                        "SELECT CASE WHEN length(t) > %s THEN left(t, %s) || '…' ELSE t END "
+                        "FROM (SELECT n, ST_AsText(h::geometry, 6) AS t FROM unnest(%s::text[]) WITH ORDINALITY u(h, n)) s "
+                        "ORDER BY n", (GEOM_TEXT_MAX, GEOM_TEXT_MAX,
+                                       [None if r[idx] is None else str(r[idx]) for r in data])).fetchall()
+            except psycopg.Error:
+                continue  # همان متن خام می‌ماند
+            for row, (text,) in zip(cells, rows, strict=True):
+                row[idx] = text or ""
+
+    @staticmethod
+    def _result_map(conn, description, data: list, cells: list, geo_idx: list[int]) -> dict:
         """اگر نتیجه ستون هندسه دارد، GeoJSON (WGS84) همان ردیف‌ها برای نقشه زیر نتیجه.
 
         مقدار خام هندسه (EWKB هگز) دوباره به PostGIS داده می‌شود تا GeoJSON شود؛ کوئری کاربر دوباره اجرا نمی‌شود.
         هر خطایی (نوع ناشناخته، SRID بی‌تبدیل) فقط نقشه را حذف می‌کند، نه نتیجه را."""
-        if not data:
+        if not data or not geo_idx:
             return {}
+        idx = geo_idx[0]
         try:
             with conn.transaction():
-                oids = {r[0]: r[1] for r in conn.execute(
-                    "SELECT oid, typname FROM pg_type WHERE typname IN ('geometry', 'geography')").fetchall()}
-                idx = next((i for i, d in enumerate(description) if d.type_code in oids), None)
-                if idx is None:
-                    return {}
                 shapes = conn.execute(
-                    # text[] و نه geometry[]: جداکننده آرایه geometry در PostGIS «:» است، نه «,»
                     "SELECT ST_AsGeoJSON(CASE WHEN ST_SRID(g) IN (0, 4326) THEN g ELSE ST_Transform(g, 4326) END, 6) "
                     "FROM unnest(%s::text[]) WITH ORDINALITY u(h, n), LATERAL (SELECT h::geometry AS g) x ORDER BY n",
                     ([None if r[idx] is None else str(r[idx]) for r in data],)).fetchall()
@@ -484,7 +503,7 @@ class Explorer:
             size += len(shape)
             if size > SQL_MAP_BYTES:
                 return {"map_note": "هندسه‌های نتیجه برای نمایش روی نقشه بیش از حد بزرگ‌اند؛ کمترشان کنید یا ST_Simplify بزنید."}
-            props = {n: v for i, (n, v) in enumerate(zip(names, row, strict=True)) if i != idx}
+            props = {n: v for i, (n, v) in enumerate(zip(names, row, strict=True)) if i not in geo_idx}
             features.append({"type": "Feature", "geometry": json.loads(shape), "properties": props})
         if not features:
             return {}
@@ -510,7 +529,14 @@ class Explorer:
                     result["truncated"] = len(data) > SQL_MAX_ROWS
                     data = data[:SQL_MAX_ROWS]
                     result["rows"] = [[_cell(v) for v in r] for r in data]
-                    result.update(self._result_map(conn, cur.description, data, result["rows"]))
+                    if data:
+                        try:
+                            with conn.transaction():
+                                geo_idx = self._geo_columns(conn, cur.description)
+                        except psycopg.Error:
+                            geo_idx = []
+                        result.update(self._result_map(conn, cur.description, data, result["rows"], geo_idx))
+                        self._geo_summaries(conn, geo_idx, data, result["rows"])
                 conn.commit()
             except psycopg.errors.ReadOnlySqlTransaction as exc:
                 conn.rollback()

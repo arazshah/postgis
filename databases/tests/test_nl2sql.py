@@ -232,9 +232,13 @@ class NL2SQLIntegrationTests(TestCase):
         self.assertAlmostEqual(lon, 51.39, places=1)
         self.assertAlmostEqual(lat, 35.69, places=1)
         self.assertEqual(f["properties"], {"id": "1"})
+        self.assertEqual(res["rows"], [["1", "POINT(535000 3950000)"]])  # خلاصه WKT به‌جای هگز
         self.assertNotIn("geojson", Explorer(self.db).run_sql("SELECT count(*) FROM wells"))
         # geography و نتیجه بدون ردیف
-        self.assertIn("geojson", Explorer(self.db).run_sql("SELECT geom::geography FROM zones"))
+        geog = Explorer(self.db).run_sql("SELECT geom::geography, geom AS g2 FROM zones")
+        self.assertIn("geojson", geog)
+        self.assertEqual(len(geog["geojson"]["features"]), 3)
+        self.assertTrue(all(r[0].startswith("POLYGON((") and r[1].startswith("POLYGON((") for r in geog["rows"]))
         self.assertNotIn("geojson", Explorer(self.db).run_sql("SELECT geom FROM zones WHERE false"))
 
     def test_diagnose_empty_finds_persian_digit_value(self):
