@@ -1,4 +1,4 @@
-// نمودارهای نقشه (ECharts): کارت عددی، میله‌ای، دایره‌ای، هیستوگرام و سری زمانی
+// نمودارهای نقشه (ECharts): کارت عددی، میله‌ای، دایره‌ای، هیستوگرام (با درصد تجمعی)، سری زمانی، ستونی انباشته و پراکنش
 // هم در نقشه عمومی و هم در طراح؛ کلیک روی دسته یا طبقه، عارضه‌های آن را روی نقشه برجسته می‌کند.
 (function () {
   "use strict";
@@ -25,8 +25,19 @@
       if (i < data.labels.length) return ["==", str, data.labels[i]];
       return ["all", ["has", f], ["!", ["in", str, ["literal", data.labels]]]];  // «سایر»
     }
+    if (chart.kind === "stacked") {
+      const [si, di] = String(i).split(":").map(Number), name = data.series[si] && data.series[si].name;
+      const series = ["to-string", ["get", chart.config.series]], x = ["==", str, data.labels[di]];
+      if (name === undefined) return null;
+      if (name === "سایر" && si === data.series.length - 1 && data.series.length > 1) {
+        return ["all", x, ["has", chart.config.series], ["!", ["in", series, ["literal", data.series.slice(0, -1).map((s) => s.name)]]]];
+      }
+      return ["all", x, ["==", series, name]];
+    }
     if (chart.kind === "hist") {
       const num = ["to-number", ["get", f]], last = i === data.counts.length - 1;
+      // منحنی تجمعی: همه‌ی عارضه‌های تا این لبه («۸۰٪ تا ۵۰۰ متری»)
+      if (chart.config.cumulative) return ["all", ["has", f], ["<=", num, data.edges[i + 1]]];
       // طبقه‌های سیمبولوژی بازند (کمتر از اولین مرز، و از آخرین مرز به بالا) حتی اگر نمودار فقط محدوده دیده‌شده باشد
       const lo = data.classes && i === 0 ? null : [">=", num, data.edges[i]];
       const hi = data.classes && last ? null : [last ? "<=" : "<", num, data.edges[i + 1]];
@@ -34,7 +45,7 @@
     }
     return null;
   }
-  const clickable = (chart) => chart.kind === "bar" || chart.kind === "pie" || chart.kind === "hist";
+  const clickable = (chart) => ["bar", "pie", "hist", "stacked"].includes(chart.kind);
 
   // ---- ستون‌ها و رنگ‌ها: از سیمبولوژی لایه اگر روی همین ستون باشد
   function colors(chart, data, layer, cfg) {
@@ -42,6 +53,12 @@
     if (chart.kind === "hist") {
       if (data.classes && st.palette) return pick(cfg.palettes[st.palette] || cfg.palettes.YlOrRd, data.counts.length);
       return data.counts.map(() => base);
+    }
+    if (chart.kind === "stacked") {
+      const cats = st.mode === "categorized" && st.field === chart.config.series
+        ? new Map((st.categories || []).map((c) => [String(c.value), c.color])) : null;
+      const cycle = cfg.categoryColors || [base];
+      return data.series.map((x, i) => x.name === "سایر" && i === data.series.length - 1 && i > 0 ? NOVAL : (cats && cats.get(x.name)) || cycle[i % cycle.length]);
     }
     if (chart.kind === "bar" || chart.kind === "pie") {
       const cats = same && st.mode === "categorized" ? new Map((st.categories || []).map((c) => [String(c.value), c.color])) : null;
@@ -66,7 +83,18 @@
   const csvCell = (v) => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
 
   function csvRows(chart, data) {
-    if (chart.kind === "hist") return [["از", "تا", "تعداد"], ...data.counts.map((c, i) => [data.edges[i], data.edges[i + 1], c])];
+    if (chart.kind === "hist") {
+      const total = data.counts.reduce((a, b) => a + b, 0) || 1;
+      let run = 0;
+      return [["از", "تا", "تعداد", "درصد تجمعی"], ...data.counts.map((c, i) => {
+        run += c;
+        return [data.edges[i], data.edges[i + 1], c, Math.round(run / total * 1000) / 10];
+      })];
+    }
+    if (chart.kind === "stacked") {
+      return [[chart.config.field, ...data.series.map((x) => x.name)], ...data.labels.map((l, j) => [l, ...data.series.map((x) => x.values[j])])];
+    }
+    if (chart.kind === "scatter") return [[chart.config.x, chart.config.y], ...data.points];
     if (chart.kind === "time") return [["تاریخ", "مقدار"], ...data.labels.map((l, i) => [l, data.values[i]])];
     if (chart.kind === "kpi") return [["مقدار", "تعداد عارضه"], [data.value, data.count]];
     const rows = [[chart.config.field, "مقدار"], ...data.labels.map((l, i) => [l, data.values[i]])];
@@ -106,6 +134,45 @@
           data: items.map((x, i) => Object.assign(x, {itemStyle: {color: cols[i], opacity: dim(i), borderColor: "#fff", borderWidth: 2}}))}],
       });
     }
+    if (chart.kind === "stacked") {
+      const n = data.labels.length, pct = data.percent;
+      const totals = data.labels.map((_, j) => data.series.reduce((a, x) => a + (x.values[j] || 0), 0));
+      return Object.assign(base, {
+        grid: Object.assign({}, hgrid, {bottom: 40}),
+        legend: {bottom: 0, type: "plain", textStyle: {fontFamily: FONT, color: INK}, itemWidth: 12, itemHeight: 12},
+        tooltip: Object.assign({trigger: "axis", axisPointer: {type: "shadow"}, formatter: (a) => `${esc(a[0].axisValue)}<br>` + a.map((x) =>
+          `${x.marker} ${esc(x.seriesName)}: ${fmt(x.data.raw)}${pct ? ` (${FA(Math.round(x.value * 10) / 10)}٪)` : ""}`).join("<br>")}, tip),
+        xAxis: {type: "value", inverse: true, max: pct ? 100 : undefined, axisLabel: pct ? Object.assign({}, axisLabel, {formatter: (v) => FA(v) + "٪"}) : axisLabel, splitLine: split},
+        yAxis: {type: "category", inverse: true, position: "right", data: data.labels, axisTick: {show: false},
+          axisLabel: {fontFamily: FONT, color: INK, width: 88, overflow: "truncate", align: "left", margin: 10}},
+        series: data.series.map((x, si) => ({type: "bar", stack: "t", name: x.name, barMaxWidth: 20, itemStyle: {color: cols[si]},
+          data: x.values.map((v, j) => ({value: pct ? (totals[j] ? v / totals[j] * 100 : 0) : v, raw: v,
+            itemStyle: {color: cols[si], opacity: dim(`${si}:${j}`), borderColor: "#fff", borderWidth: n > 12 ? 0 : 1}}))})),
+      });
+    }
+    if (chart.kind === "scatter") {
+      return Object.assign(base, {
+        grid: {left: 8, right: 16, top: 24, bottom: 28, containLabel: true},
+        tooltip: Object.assign({trigger: "item", formatter: (p) => `${esc(chart.config.x)}: ${fmt(p.value[0])}<br>${esc(chart.config.y)}: ${fmt(p.value[1])}`}, tip),
+        xAxis: {type: "value", name: chart.config.x, nameLocation: "middle", nameGap: 26, scale: true, axisLabel, splitLine: split, nameTextStyle: {fontFamily: FONT, color: MUTED}},
+        yAxis: {type: "value", name: chart.config.y, scale: true, axisLabel, splitLine: split, nameTextStyle: {fontFamily: FONT, color: MUTED, align: "left"}},
+        series: [{type: "scatter", symbolSize: 7, data: data.points, itemStyle: {color: cols[0], opacity: 0.55}}],
+      });
+    }
+    if (chart.kind === "hist" && chart.config.cumulative) {
+      const total = data.counts.reduce((a, b) => a + b, 0) || 1;
+      let run = 0;
+      const cum = data.counts.map((c) => { run += c; return Math.round(run / total * 1000) / 10; });
+      return Object.assign(base, {
+        grid: Object.assign({}, grid, {bottom: 16}),
+        tooltip: Object.assign({trigger: "axis", formatter: (a) => `تا ${fmt(data.edges[a[0].dataIndex + 1])}<br>${FA(a[0].value)}٪ عارضه‌ها`}, tip),
+        xAxis: {type: "category", data: data.counts.map((_, i) => fmt(data.edges[i + 1])), boundaryGap: false,
+          axisLabel: {fontFamily: FONT, color: MUTED, hideOverlap: true, fontSize: 11}},
+        yAxis: {type: "value", min: 0, max: 100, axisLabel: Object.assign({}, axisLabel, {formatter: (v) => FA(v) + "٪"}), splitLine: split},
+        series: [{type: "line", smooth: 0.15, data: cum.map((v, i) => ({value: v, symbolSize: sel === i ? 13 : 6})), showSymbol: true,
+          lineStyle: {color: cols[0], width: 2.5}, itemStyle: {color: sel === null ? cols[0] : "#E0A526"}, areaStyle: {color: cols[0], opacity: 0.12}}],
+      });
+    }
     if (chart.kind === "hist") {
       return Object.assign(base, {
         grid: Object.assign({}, grid, {bottom: 16}),
@@ -128,7 +195,8 @@
   }
 
   const heightOf = (chart, data) => chart.kind === "bar" && data ? Math.max(130, 36 + (data.labels.length + (data.other != null ? 1 : 0)) * 28)
-    : chart.kind === "pie" ? 270 : 220;
+    : chart.kind === "stacked" && data ? Math.max(170, 90 + data.labels.length * 30)
+      : chart.kind === "pie" ? 270 : chart.kind === "scatter" ? 280 : 220;
 
   // ECharts عرض متن را هنگام رسم می‌سنجد؛ تا فونت بارگذاری نشده برچسب‌ها روی هم می‌افتند
   const fontsReady = (document.fonts && document.fonts.load ? Promise.all([
@@ -176,7 +244,8 @@
       const {chart, data, body} = card;
       card.note.textContent = "";
       if (!data) return;
-      const empty = chart.kind === "kpi" ? false : chart.kind === "hist" ? !data.counts.length : !data.labels.length;
+      const empty = chart.kind === "kpi" ? false : chart.kind === "hist" ? !data.counts.length
+        : chart.kind === "scatter" ? !data.points.length : !data.labels.length;
       if (empty) { body.innerHTML = '<p class="gc-empty">داده‌ای برای نمایش نیست.</p>'; card.inst && card.inst.dispose(); card.inst = null; return; }
       if (chart.kind === "kpi") {
         const what = chart.config.agg === "count" ? "عارضه" : `${AGG[chart.config.agg]} ${chart.config.value}`;
@@ -189,7 +258,9 @@
       if (!card.inst || card.inst.isDisposed()) {
         body.innerHTML = "";
         card.inst = echarts.init(body, null, {renderer: "svg"});
-        card.inst.on("click", (p) => { if (p.dataIndex !== undefined) select(card, p.dataIndex); });
+        card.inst.on("click", (p) => {
+          if (p.dataIndex !== undefined) select(card, card.chart.kind === "stacked" ? `${p.seriesIndex}:${p.dataIndex}` : p.dataIndex);
+        });
         fresh = true;
       }
       const sel = active && active.key === chart.key ? active.i : null;
@@ -198,6 +269,7 @@
       card.inst.setOption(option(chart, data, colors(chart, data, layerOf(chart), cfg), sel), !fresh && card.kind !== chart.kind);
       card.kind = chart.kind;
       if (clickable(chart)) card.note.textContent = sel === null ? "برای برجسته شدن روی نقشه، روی یک ردیف بزنید." : "عارضه‌های انتخاب‌شده روی نقشه برجسته‌اند.";
+      else if (chart.kind === "scatter" && data.sampled) card.note.textContent = `نمونه ${fmt(data.points.length)} نقطه از ${fmt(data.total)}`;
     }
 
     // پاسخ کندتر از درخواست تازه‌تر (جابه‌جایی سریع نقشه) دور ریخته می‌شود
@@ -211,7 +283,8 @@
         if (active && active.key === card.chart.key && card.data) {
           // داده تازه شد؛ برجسته‌سازی با همان شاخص اگر هنوز وجود دارد
           const n = card.chart.kind === "hist" ? data.counts.length : (data.labels || []).length + (data.other != null ? 1 : 0);
-          if (active.i >= n) { active = null; gm.highlight(null); if (opts.onSelect) opts.onSelect(null); }
+          // شاخص ستونی انباشته «سری:محور» است؛ با داده تازه ممکن است جابه‌جا شده باشد
+          if (card.chart.kind === "stacked" || active.i >= n) { active = null; gm.highlight(null); if (opts.onSelect) opts.onSelect(null); }
         }
         draw(card);
       } catch (err) {

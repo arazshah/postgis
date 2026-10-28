@@ -549,27 +549,42 @@
     // هیستوگرام تازه: اگر لایه روی یک ستون عددی طبقه‌بندی شده، همان ستون پیش‌فرض است
     const pre = keep ? keep.field : kind === "hist" && st.mode === "graduated" ? st.field : "";
     options($("ch-field"), fields.filter(([, t]) => !want || want.has(t)).map(([n]) => [n, n]), pre);
-    options($("ch-value"), fields.filter(([, t]) => NUM.has(t)).map(([n]) => [n, n]), keep && keep.value);
+    const numeric = fields.filter(([, t]) => NUM.has(t)).map(([n]) => [n, n]);
+    options($("ch-value"), numeric, keep && keep.value);
+    options($("ch-series"), fields.map(([n]) => [n, n]).filter(([n]) => n !== $("ch-field").value), keep && keep.series);
+    options($("ch-x"), numeric, keep && keep.x);
+    options($("ch-y"), numeric, keep && keep.y);
+    if (kind === "scatter" && !(keep && keep.y) && numeric.length > 1) $("ch-y").value = numeric[1][0];
+    $("ch-field-l").textContent = kind === "hist" ? "ستون عددی" : kind === "time" ? "ستون تاریخ" : kind === "stacked" ? "ستون محور (هر ردیف)" : "ستون دسته";
     const agg = $("ch-agg").value;
-    chShow("field", kind !== "kpi");
-    chShow("agg", kind !== "hist");
-    chShow("value", kind !== "hist" && agg !== "count");
-    chShow("limit", kind === "bar" || kind === "pie");
+    chShow("field", kind !== "kpi" && kind !== "scatter");
+    chShow("agg", kind !== "hist" && kind !== "scatter");
+    chShow("value", kind !== "hist" && kind !== "scatter" && agg !== "count");
+    chShow("limit", kind === "bar" || kind === "pie" || kind === "stacked");
+    chShow("order", kind === "bar" || kind === "pie");
+    chShow("series", kind === "stacked");
+    chShow("xy", kind === "scatter");
+    chShow("percent", kind === "stacked");
+    chShow("cumulative", kind === "hist");
     chShow("bins", kind === "hist");
     chShow("classes", kind === "hist");
     chShow("unit", kind === "time");
   }
-  function openChartForm(chart) {
+  // preset: {layer, kind, config} برای فرم تازه‌ای که از جای دیگر (مثلاً نتیجه تحلیل) پر شده
+  function openChartForm(chart, preset) {
     editing = chart || "new";
-    const c = chart ? chart.config : {};
-    options($("ch-layer"), layers.map((l) => [l.key, l.title]), chart ? chart.layer : layers[0] && layers[0].key);
-    $("ch-kind").value = chart ? chart.kind : "bar";
+    const src = chart || preset;
+    const c = src ? src.config : {};
+    options($("ch-layer"), layers.map((l) => [l.key, l.title]), src ? src.layer : layers[0] && layers[0].key);
+    $("ch-kind").value = src ? src.kind : "bar";
     $("ch-title").value = chart ? chart.title : "";
     $("ch-agg").value = c.agg || "count";
     $("ch-limit").value = c.limit || 10;
     $("ch-order").value = c.order || "value";
     $("ch-bins").value = c.bins || 10;
     $("ch-classes").checked = c.classes !== false;
+    $("ch-cum").checked = !!c.cumulative;
+    $("ch-percent").checked = c.percent !== false;
     $("ch-unit").value = c.unit || "month";
     syncChartForm(c);
     chErr.hidden = true;
@@ -589,7 +604,9 @@
     e.preventDefault();
     const draft = {layer: $("ch-layer").value, kind: $("ch-kind").value, title: $("ch-title").value.trim(), config: {
       field: $("ch-field").value, agg: $("ch-agg").value, value: $("ch-value").value, limit: Number($("ch-limit").value),
-      order: $("ch-order").value, bins: Number($("ch-bins").value), classes: $("ch-classes").checked, unit: $("ch-unit").value}};
+      order: $("ch-order").value, bins: Number($("ch-bins").value), classes: $("ch-classes").checked, unit: $("ch-unit").value,
+      series: $("ch-series").value, x: $("ch-x").value, y: $("ch-y").value, percent: $("ch-percent").checked,
+      cumulative: $("ch-cum").checked}};
     $("ch-ok").disabled = true;
     chErr.hidden = true;
     try {  // سرور تنظیمات را بررسی و پاک‌سازی می‌کند؛ اگر داده نداشت همین‌جا خطا می‌دهد
@@ -670,5 +687,18 @@
   renderSlides();
   renderCharts();
   renderList();
+  // نتیجه تحلیل (?chart=…&table=…): فرم نمودار با پیشنهاد پر باز می‌شود
+  const qp = new URLSearchParams(location.search);
+  if (qp.get("chart")) {
+    const norm = (t) => String(t || "").replace(/^public\./, "");
+    const l = layers.find((x) => norm(x.table) === norm(qp.get("table"))) || layers[0];
+    if (l) {
+      setTab("charts");
+      openChartForm(null, {layer: l.key, kind: qp.get("chart"), config: {field: qp.get("field") || "", series: qp.get("series") || "",
+        value: qp.get("value") || "", agg: qp.get("agg") || "count", x: qp.get("x") || "", y: qp.get("y") || "",
+        percent: qp.get("percent") !== "0", cumulative: qp.get("cumulative") === "1"}});
+    }
+    history.replaceState(null, "", location.pathname);
+  }
   if (layers.length === 1) select(layers[0].key);
 })();

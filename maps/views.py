@@ -5,7 +5,7 @@ import hashlib
 import json
 import logging
 import math
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from django.contrib import messages
 from django.core.cache import cache
@@ -31,6 +31,7 @@ from .services import MapError
 log = logging.getLogger(__name__)
 TILE_TTL = 60
 MAX_SLIDES = 30
+CHART_HINTS = ("field", "series", "value", "agg", "x", "y", "percent", "cumulative")
 
 
 def _json(data, status=200):
@@ -161,7 +162,12 @@ def add_table(request, pk):
         messages.error(request, str(exc))
         return back
     messages.success(request, f"جدول «{table}» به نقشه «{webmap.title}» اضافه شد.")
-    return redirect("maps:composer", pk=db.pk, map_id=webmap.pk)
+    dest = reverse("maps:composer", args=[db.pk, webmap.pk])
+    # پیشنهاد نمودار (مثلاً از نتیجه تحلیل): طراح با فرم پر شده روی تب نمودارها باز می‌شود
+    if request.POST.get("chart_kind") in charts.KINDS:
+        hints = {k: request.POST.get(f"chart_{k}", "")[:63] for k in CHART_HINTS if request.POST.get(f"chart_{k}")}
+        dest += "?" + urlencode({"chart": request.POST["chart_kind"], "table": f"{schema}.{table}", **hints})
+    return redirect(dest)
 
 
 @site_user_required

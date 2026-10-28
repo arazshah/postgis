@@ -84,7 +84,7 @@ class MapLayer(models.Model):
         extra = [st.get(k) for k in ("field", "label") if st.get(k)]
         # نمودار با کلیک روی دسته یا طبقه، عارضه‌ها را روی نقشه برجسته می‌کند؛ ستونش باید در کاشی باشد
         if self.pk:
-            extra += [c.config["field"] for c in self.charts.all() if c.config.get("field")]
+            extra += [c.config[k] for c in self.charts.all() for k in ("field", "series") if c.config.get(k)]
         return list(dict.fromkeys(popup + extra))
 
 

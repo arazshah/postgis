@@ -17,7 +17,14 @@ from . import ask, tools
 from .models import LlmConfig, Question, ToolRun
 
 HISTORY_LIMIT = 15
-GLYPHS = {"buffer": "◎", "nearest": "⌖", "count": "#", "hexbin": "⬡", "isochrone": "◔"}
+# پیشنهاد نمودار برای نتیجه هر ابزار: «ساخت نقشه و نمودار» جدول نتیجه را به نقشه می‌برد و فرم نمودار را پر می‌کند
+CHART_HINTS = {
+    "nearest": {"kind": "hist", "field": "distance_m", "cumulative": "1"},
+    "count": {"kind": "hist", "field": "point_count"},
+    "overlap": {"kind": "stacked", "field": "zone", "series": "category", "value": "area_m2", "agg": "sum", "percent": "1"},
+    "hexbin": {"kind": "hist", "field": "count"},
+}
+GLYPHS = {"buffer": "◎", "nearest": "⌖", "count": "#", "overlap": "▦", "hexbin": "⬡", "isochrone": "◔"}
 
 
 def _busy(db) -> bool:
@@ -41,8 +48,8 @@ def _entries(db):
         t = tools.TOOL_MAP.get(r.tool)
         out.append({"kind": "tool", "id": f"t{r.pk}", "title": t.title if t else r.tool, "glyph": GLYPHS.get(r.tool, "◇"),
                     "detail": r.summary, "table": r.output_table, "rows": r.rows, "job": r.job,
-                    "created": r.created_at, "together": _together(db, r.output_table,
-                                                                    [r.params.get("layer"), r.params.get("other")])})
+                    "created": r.created_at, "chart": CHART_HINTS.get(r.tool),
+                    "together": _together(db, r.output_table, [r.params.get("layer"), r.params.get("other")])})
     for q in Question.objects.filter(database=db).select_related("job")[:HISTORY_LIMIT]:
         out.append({"kind": "ask", "id": f"q{q.pk}", "title": q.text, "glyph": "؟", "detail": q.goal,
                     "ops": q.operations, "answer": q.answer, "table": q.output_table, "rows": q.rows, "job": q.job,

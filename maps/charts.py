@@ -1,6 +1,7 @@
 """نمودار روی داده‌های یک لایه نقشه: پاک‌سازی تنظیمات و تجمیع در PostGIS (فقط نتیجه به مرورگر می‌رسد).
 
-انواع: کارت عددی (kpi)، میله‌ای (bar)، دایره‌ای (pie)، هیستوگرام (hist) و سری زمانی (time).
+انواع: کارت عددی (kpi)، میله‌ای (bar)، دایره‌ای (pie)، هیستوگرام (hist، با حالت درصد تجمعی)، سری زمانی (time)،
+ستونی انباشته (stacked: دو ستون دسته‌ای) و پراکنش (scatter: دو ستون عددی، نمونه‌گیری‌شده).
 اگر لایه روی همان ستون طبقه‌بندی عددی داشته باشد، هیستوگرام با همان مرزها بریده می‌شود و رنگ‌هایش از سیمبولوژی می‌آید.
 """
 from __future__ import annotations
@@ -10,13 +11,16 @@ from psycopg import sql
 
 from publish import engine
 
-KINDS = {"kpi": "کارت عددی", "bar": "میله‌ای", "pie": "دایره‌ای", "hist": "هیستوگرام", "time": "سری زمانی"}
+KINDS = {"kpi": "کارت عددی", "bar": "میله‌ای", "pie": "دایره‌ای", "hist": "هیستوگرام", "time": "سری زمانی",
+         "stacked": "ستونی انباشته", "scatter": "پراکنش"}
 AGGS = {"count": "تعداد", "sum": "جمع", "avg": "میانگین", "min": "کمینه", "max": "بیشینه"}
 UNITS = {"day": "روز", "month": "ماه", "year": "سال"}
 DATE_TYPES = {"date", "timestamp", "timestamptz"}
 MAX_CHARTS_LIMIT = 20
 PIE_MAX = 8
 TIME_POINTS = 500
+STACK_SERIES = 8  # بیشتر از این سری در «سایر» جمع می‌شود
+SCATTER_POINTS = 2000
 
 
 class ChartError(Exception):
@@ -36,7 +40,7 @@ def clean(kind: str, data, types: dict[str, str]) -> dict:
         raise ChartError("نوع نمودار نامعتبر است.")
     data = data if isinstance(data, dict) else {}
     cfg: dict = {}
-    if kind != "hist":
+    if kind not in ("hist", "scatter"):
         agg = data.get("agg") if data.get("agg") in AGGS else "count"
         cfg["agg"] = agg
         value = data.get("value") if isinstance(data.get("value"), str) else ""
@@ -47,17 +51,32 @@ def clean(kind: str, data, types: dict[str, str]) -> dict:
     field = data.get("field") if isinstance(data.get("field"), str) else ""
     if kind == "kpi":
         return cfg
+    if kind == "scatter":
+        x, y = (data.get(k) if isinstance(data.get(k), str) else "" for k in ("x", "y"))
+        if types.get(x) not in engine.NUMERIC_TYPES or types.get(y) not in engine.NUMERIC_TYPES:
+            raise ChartError("برای پراکنش دو ستون عددی انتخاب کنید.")
+        if x == y:
+            raise ChartError("دو ستون پراکنش باید متفاوت باشند.")
+        return {"x": x, "y": y}
     if field not in types:
         raise ChartError("ستون نمودار را انتخاب کنید.")
     cfg["field"] = field
     if kind in ("bar", "pie"):
         cfg["limit"] = _int(data.get("limit"), 10, 3, PIE_MAX if kind == "pie" else MAX_CHARTS_LIMIT)
         cfg["order"] = "label" if data.get("order") == "label" else "value"
+    elif kind == "stacked":
+        series = data.get("series") if isinstance(data.get("series"), str) else ""
+        if series not in types or series == field:
+            raise ChartError("برای ستونی انباشته دو ستون متفاوت (محور و سری) انتخاب کنید.")
+        cfg["series"] = series
+        cfg["limit"] = _int(data.get("limit"), 12, 3, MAX_CHARTS_LIMIT)
+        cfg["percent"] = data.get("percent") is not False
     elif kind == "hist":
         if types[field] not in engine.NUMERIC_TYPES:
             raise ChartError("برای هیستوگرام یک ستون عددی انتخاب کنید.")
         cfg["bins"] = _int(data.get("bins"), 10, 3, 30)
         cfg["classes"] = data.get("classes") is not False
+        cfg["cumulative"] = data.get("cumulative") is True
     else:
         if types[field] not in DATE_TYPES:
             raise ChartError("برای سری زمانی یک ستون تاریخ انتخاب کنید.")
@@ -72,7 +91,11 @@ def title_for(kind: str, cfg: dict) -> str:
     if kind == "kpi":
         return what
     if kind == "hist":
-        return f"توزیع {cfg['field']}"
+        return f"{'درصد تجمعی' if cfg.get('cumulative') else 'توزیع'} {cfg['field']}"
+    if kind == "scatter":
+        return f"{cfg['y']} در برابر {cfg['x']}"
+    if kind == "stacked":
+        return f"{what} بر اساس {cfg['field']} و {cfg['series']}"
     if kind == "time":
         return f"{what} به تفکیک {UNITS[cfg.get('unit', 'month')]}"
     return f"{what} بر اساس {cfg['field']}"
@@ -126,8 +149,12 @@ def _run(layer, kind: str, cfg: dict, bbox) -> dict:
         if kind == "kpi":
             row = run([], (sql.SQL("SELECT {}::float8, count(*)").format(agg), sql.SQL("")))[0]
             return {"value": _num(row[0]), "count": row[1]}
+        if kind == "scatter":
+            return _scatter(conn, rel, where, params, cfg)
         field = sql.Identifier(cfg["field"])
         notnull = [sql.SQL("{} IS NOT NULL").format(field)]
+        if kind == "stacked":
+            return _stacked(conn, rel, where, params, cfg, agg)
         if kind in ("bar", "pie"):
             order = sql.SQL("v DESC NULLS LAST, 1") if cfg["order"] == "value" else sql.SQL("1")
             rows = run(notnull, (sql.SQL("SELECT {}::text AS k, {}::float8 AS v").format(field, agg),
@@ -165,3 +192,38 @@ def _run(layer, kind: str, cfg: dict, bbox) -> dict:
                     more=(TIME_POINTS,))
         rows.reverse()
         return {"labels": [r[0].isoformat() for r in rows], "values": [_num(r[1]) for r in rows], "unit": cfg["unit"]}
+
+
+def _stacked(conn, rel, where, params, cfg, agg) -> dict:
+    """مقدار هر (محور × سری)؛ فقط «limit» محور با بیشترین مجموع، و سری‌های بعد از هشتم در «سایر» (تعداد و جمع)."""
+    x, s = sql.Identifier(cfg["field"]), sql.Identifier(cfg["series"])
+    clause = sql.SQL(" AND ").join([*where, sql.SQL("{} IS NOT NULL").format(x), sql.SQL("{} IS NOT NULL").format(s)])
+    rows = conn.execute(sql.SQL(
+        "WITH b AS (SELECT {x}::text AS xs, {s}::text AS ss, {agg}::float8 AS v FROM {rel} WHERE {clause} GROUP BY 1, 2), "
+        "t AS (SELECT xs FROM b GROUP BY xs ORDER BY sum(v) DESC NULLS LAST, xs LIMIT %s) "
+        "SELECT b.xs, b.ss, b.v FROM b JOIN t USING (xs)").format(x=x, s=s, agg=agg, rel=rel, clause=clause),
+        [*params, cfg["limit"]]).fetchall()
+    xs_total: dict[str, float] = {}
+    ss_total: dict[str, float] = {}
+    for xs, ss, v in rows:
+        xs_total[xs] = xs_total.get(xs, 0) + (v or 0)
+        ss_total[ss] = ss_total.get(ss, 0) + (v or 0)
+    labels = sorted(xs_total, key=lambda k: (-xs_total[k], k))
+    names = sorted(ss_total, key=lambda k: (-ss_total[k], k))
+    keep, rest = names[:STACK_SERIES], names[STACK_SERIES:]
+    cells = {(xs, ss): v for xs, ss, v in rows}
+    series = [{"name": n, "values": [_num(cells.get((xs, n)) or 0) for xs in labels]} for n in keep]
+    if rest and cfg.get("agg", "count") in ("count", "sum"):
+        series.append({"name": "سایر", "values": [_num(sum(cells.get((xs, n)) or 0 for n in rest)) for xs in labels]})
+    return {"labels": labels, "series": series, "percent": cfg["percent"]}
+
+
+def _scatter(conn, rel, where, params, cfg) -> dict:
+    """نمونه‌ای پایدار (ترتیب md5 ردیف) تا نمودار با هر بار خواندن جابه‌جا نشود."""
+    x, y = sql.Identifier(cfg["x"]), sql.Identifier(cfg["y"])
+    clause = sql.SQL(" AND ").join([*where, sql.SQL("{} IS NOT NULL").format(x), sql.SQL("{} IS NOT NULL").format(y)])
+    total = conn.execute(sql.SQL("SELECT count(*) FROM {} WHERE {}").format(rel, clause), params).fetchone()[0]
+    rows = conn.execute(sql.SQL("SELECT {x}::float8, {y}::float8 FROM {rel} WHERE {clause} "
+                                "ORDER BY md5(ctid::text) LIMIT %s").format(x=x, y=y, rel=rel, clause=clause),
+                        [*params, SCATTER_POINTS]).fetchall()
+    return {"points": [[_num(a), _num(b)] for a, b in rows], "total": total, "sampled": total > len(rows)}

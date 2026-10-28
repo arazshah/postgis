@@ -117,6 +117,60 @@ class AnalysisTests(TestCase):
         with self.assertRaisesMessage(tools.ToolError, "POLYGON"):
             tools.run(self.db, "count", {"layer": "public.schools", "other": "public.parks", "output": "bad"})
 
+    def _zones(self):
+        self._sql_exec(
+            "CREATE TABLE zones(id serial PRIMARY KEY, name text, geom geometry(Polygon, 4326));"
+            "INSERT INTO zones(name, geom) VALUES ('اول', ST_MakeEnvelope(0, 0, 2, 2, 4326)),"
+            " ('دوم', ST_MakeEnvelope(2, 0, 4, 2, 4326));"
+            "CREATE TABLE landuse(id serial PRIMARY KEY, kind text, geom geometry(Polygon, 4326));"
+            "INSERT INTO landuse(kind, geom) VALUES ('مسکونی', ST_MakeEnvelope(0, 0, 1, 2, 4326)),"
+            " ('تجاری', ST_MakeEnvelope(1, 0, 3, 2, 4326)), ('مسکونی', ST_MakeEnvelope(3, 0, 4, 2, 4326));"
+            "CREATE TABLE ads(id serial PRIMARY KEY, price int, note text, geom geometry(Point, 4326));"
+            "INSERT INTO ads(price, note, geom) VALUES (10, 'a', ST_SetSRID(ST_MakePoint(0.5, 0.5), 4326)),"
+            " (20, 'b', ST_SetSRID(ST_MakePoint(1.5, 1.5), 4326)), (5, 'c', ST_SetSRID(ST_MakePoint(2.5, 1), 4326))")
+
+    def test_count_with_value_aggregate(self):
+        self._zones()
+        tools.run(self.db, "count", {"layer": "public.zones", "other": "public.ads", "value": "price", "agg": "sum",
+                                     "output": "zone_ads"})
+        rows = self._sql("SELECT name, point_count, sum_price FROM zone_ads ORDER BY name")
+        self.assertEqual(rows, [("اول", 2, 30.0), ("دوم", 1, 5.0)])
+        tools.run(self.db, "count", {"layer": "public.zones", "other": "public.ads", "value": "price", "agg": "avg",
+                                     "output": "zone_avg"})
+        self.assertEqual(self._sql("SELECT avg_price FROM zone_avg WHERE name = 'اول'")[0][0], 15.0)
+        for bad in ({"value": "note"}, {"value": "missing"}):
+            with self.assertRaisesMessage(tools.ToolError, "عددی"):
+                tools.run(self.db, "count", {"layer": "public.zones", "other": "public.ads", "output": "bad_x", **bad})
+        # بدون ستون مقدار مثل قبل فقط شمارش
+        tools.run(self.db, "count", {"layer": "public.zones", "other": "public.ads", "output": "zone_only"})
+        cols = {r[0] for r in self._sql("SELECT column_name FROM information_schema.columns WHERE table_name='zone_only'")}
+        self.assertIn("point_count", cols)
+        self.assertFalse({c for c in cols if c.startswith(("sum_", "avg_"))})
+
+    def test_overlap_shares_per_zone(self):
+        self._zones()
+        r = tools.run(self.db, "overlap", {"layer": "public.zones", "other": "public.landuse", "zone": "name",
+                                           "category": "kind", "output": "zone_landuse"})
+        self.assertEqual(r["rows"], 4)  # دو محله × دو کاربری
+        rows = self._sql("SELECT zone, category, share_pct, area_m2 FROM zone_landuse ORDER BY zone, category")
+        self.assertEqual([(z, c) for z, c, *_ in rows],
+                         [("اول", "تجاری"), ("اول", "مسکونی"), ("دوم", "تجاری"), ("دوم", "مسکونی")])
+        for _, _, share, area in rows:
+            self.assertAlmostEqual(float(share), 50, delta=0.2)
+            self.assertGreater(float(area), 1e10)
+        sums = self._sql("SELECT zone, sum(share_pct) FROM zone_landuse GROUP BY zone")
+        for _, total in sums:
+            self.assertAlmostEqual(float(total), 100, delta=0.3)
+        geo = self._sql("SELECT type, srid FROM geometry_columns WHERE f_table_name = 'zone_landuse'")
+        self.assertEqual(geo, [("MULTIPOLYGON", 4326)])
+        for bad in ({"zone": "nope"}, {"category": "nope"}):
+            with self.assertRaises(tools.ToolError):
+                tools.run(self.db, "overlap", {"layer": "public.zones", "other": "public.landuse", "zone": "name",
+                                               "category": "kind", "output": "bad_y", **bad})
+        with self.assertRaisesMessage(tools.ToolError, "POLYGON"):
+            tools.run(self.db, "overlap", {"layer": "public.ads", "other": "public.landuse", "zone": "note",
+                                           "category": "kind", "output": "bad_z"})
+
     def test_page_and_access(self):
         url = reverse("analysis:page", args=[self.db.pk])
         r = self.client.get(url)
