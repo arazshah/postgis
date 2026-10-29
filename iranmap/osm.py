@@ -162,6 +162,7 @@ def refresh_areas() -> int:
             geom = f.get("geometry")
             if not name or not geom:
                 continue
+            name = clean_name(LEVELS[p["admin_level"]], name)
             if p.get("admin_level") == "8" and (p.get("place") or "") in _RURAL_PLACES:
                 continue
             xs, ys = _coords(geom)
@@ -174,6 +175,19 @@ def refresh_areas() -> int:
     Area.objects.bulk_create(rows)
     _assign_parents()
     return len(rows)
+
+
+_PREFIX = {"province": "استان", "county": "شهرستان"}
+
+
+def clean_name(level: str, name: str) -> str:
+    """OSM نام را اغلب با پیشوند می‌نویسد («استان تهران»)؛ پیشوند را برمی‌داریم تا برچسب «استان استان تهران» نشود.
+    برای شهر دست نمی‌زنیم، چون «شهر ری» نام خود شهر است."""
+    prefix = _PREFIX.get(level)
+    name = name.strip()
+    if prefix and name.startswith(prefix + " ") and len(name) > len(prefix) + 1:
+        return name[len(prefix) + 1:].strip()
+    return name
 
 
 def _int(v) -> int | None:
@@ -198,22 +212,75 @@ def _coords(geom: dict) -> tuple[list[float], list[float]]:
     return xs, ys
 
 
+def _polygons(geom: dict) -> list:
+    """هر چندضلعی: [حلقه بیرونی، سوراخ‌ها...]"""
+    if geom["type"] == "Polygon":
+        return [geom["coordinates"]]
+    if geom["type"] == "MultiPolygon":
+        return list(geom["coordinates"])
+    return []
+
+
+def _in_ring(x: float, y: float, ring) -> bool:
+    inside = False
+    j = len(ring) - 1
+    for i in range(len(ring)):
+        xi, yi, xj, yj = ring[i][0], ring[i][1], ring[j][0], ring[j][1]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def _contains(geom: dict, x: float, y: float) -> bool:
+    for poly in _polygons(geom):
+        if _in_ring(x, y, poly[0]) and not any(_in_ring(x, y, h) for h in poly[1:]):
+            return True
+    return False
+
+
+def _ring_area(ring) -> float:
+    return abs(sum(ring[i][0] * ring[i - 1][1] - ring[i - 1][0] * ring[i][1] for i in range(len(ring)))) / 2
+
+
+def representative_point(geom: dict) -> tuple[float, float] | None:
+    """نقطه‌ای که حتماً داخل ناحیه است (مرکز بزرگ‌ترین قطعه، یا نمونه‌برداری اگر مرکز بیرون افتاد)."""
+    polys = _polygons(geom)
+    if not polys:
+        return None
+    ring = max((p[0] for p in polys), key=_ring_area)
+    xs, ys = [c[0] for c in ring], [c[1] for c in ring]
+    cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
+    if _contains(geom, cx, cy):
+        return cx, cy
+    n = 24
+    for i in range(n):
+        for j in range(n):
+            x = min(xs) + (max(xs) - min(xs)) * (i + .5) / n
+            y = min(ys) + (max(ys) - min(ys)) * (j + .5) / n
+            if _contains(geom, x, y):
+                return x, y
+    return None
+
+
 def _assign_parents():
-    """استان هر شهرستان و شهر: کوچک‌ترین ناحیه سطح بالاتر که مرکز جعبه را دارد."""
+    """استان هر شهرستان و شهر: استانی که نقطه داخلی ناحیه در چندضلعی‌اش می‌افتد.
+    (جعبه محیطی کافی نیست: جعبه استان البرز مرکز شهرستان تهران را هم دربر می‌گیرد و کوچک‌تر از جعبه استان تهران است.)"""
     from .models import Area
 
     provinces = list(Area.objects.filter(level="province"))
-    counties = list(Area.objects.filter(level="county"))
 
-    def find(a, candidates):
-        cx, cy = (a.bbox[0] + a.bbox[2]) / 2, (a.bbox[1] + a.bbox[3]) / 2
-        hits = [c for c in candidates if c.bbox[0] <= cx <= c.bbox[2] and c.bbox[1] <= cy <= c.bbox[3]]
-        return min(hits, key=lambda c: (c.bbox[2] - c.bbox[0]) * (c.bbox[3] - c.bbox[1])) if hits else None
+    def box_area(a):
+        return (a.bbox[2] - a.bbox[0]) * (a.bbox[3] - a.bbox[1])
 
-    for a in counties + list(Area.objects.filter(level="city")):
-        p = find(a, provinces)
-        if p:
-            a.province = p.name
+    for a in Area.objects.exclude(level="province"):
+        pt = representative_point(a.geometry)
+        hits = [c for c in provinces if pt and _contains(c.geometry, *pt)]
+        if not hits:  # هندسه ناقص: روش قدیمی با مرکز جعبه
+            cx, cy = (a.bbox[0] + a.bbox[2]) / 2, (a.bbox[1] + a.bbox[3]) / 2
+            hits = [c for c in provinces if c.bbox[0] <= cx <= c.bbox[2] and c.bbox[1] <= cy <= c.bbox[3]]
+        if hits:
+            a.province = min(hits, key=box_area).name
             a.save(update_fields=["province"])
 
 

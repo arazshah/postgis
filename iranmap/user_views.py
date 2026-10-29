@@ -77,6 +77,23 @@ def _variants(q: str) -> set[str]:
 @site_user_required
 @require_GET
 def areas(request):
+    """سه حالت: ?level=province همه استان‌ها؛ ?province=<id> شهرستان‌ها و شهرهای آن استان؛ ?q= جست‌وجوی متنی."""
+    if request.GET.get("level") == "province":
+        rows = sorted(Area.objects.filter(level="province"), key=lambda a: a.name)
+        return JsonResponse({"results": [{"id": a.pk, "name": a.name, "label": a.label} for a in rows]},
+                            json_dumps_params={"ensure_ascii": False})
+    if request.GET.get("province"):
+        prov = Area.objects.filter(pk=request.GET["province"] if request.GET["province"].isdigit() else 0,
+                                   level="province").first()
+        if prov is None:
+            return JsonResponse({"results": []})
+        # فقط زیرمجموعه همین استان و بدون هندسه؛ فهرست کوچک و سریع
+        order = {"county": 0, "city": 1}
+        kids = sorted(Area.objects.filter(province=prov.name, level__in=["county", "city"]),
+                      key=lambda a: (order[a.level], a.name))
+        return JsonResponse({"results": [{"id": a.pk, "name": a.name, "level": a.level,
+                                          "routing": ready.routing_allowed(a)} for a in kids]},
+                            json_dumps_params={"ensure_ascii": False})
     q = (request.GET.get("q") or "").strip()
     qs = Area.objects.all()
     if q:

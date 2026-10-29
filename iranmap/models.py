@@ -25,10 +25,16 @@ class Area(models.Model):
 
     @property
     def label(self) -> str:
+        from .osm import clean_name
+
+        name = clean_name(self.level, self.name)  # فهرست‌های قدیمی هنوز پیشوند دارند
         if self.level == "province":
-            return f"استان {self.name}"
-        suffix = f" — استان {self.province}" if self.province else ""
-        return f"{self.get_level_display()} {self.name}{suffix}"
+            return f"استان {name}"
+        province = clean_name("province", self.province) if self.province else ""
+        suffix = f" — استان {province}" if province else ""
+        kind = self.get_level_display()
+        head = name if name.startswith(kind + " ") else f"{kind} {name}"  # «شهر ری» نباید «شهر شهر ری» شود
+        return f"{head}{suffix}"
 
     @property
     def area_deg2(self) -> float:

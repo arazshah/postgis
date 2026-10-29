@@ -78,14 +78,15 @@ class ReadyDataTests(TestCase):
 
     def test_areas_from_file(self):
         levels = dict(Area.objects.values_list("level", "name"))
-        self.assertEqual(levels, {"province": "استان نمونه", "county": "شهرستان نمونه", "city": "شهر نمونه"})
+        self.assertEqual(levels, {"province": "نمونه", "county": "نمونه", "city": "شهر نمونه"})  # پیشوند استان/شهرستان برداشته می‌شود
         city = Area.objects.get(level="city")
-        self.assertEqual(city.province, "استان نمونه")
+        self.assertEqual(city.province, "نمونه")
         self.assertTrue(ready.routing_allowed(city))
         self.assertFalse(ready.routing_allowed(Area.objects.get(level="province")))
-        r = self.client.get(reverse("iranmap:areas"), {"q": "شهر"})
+        r = self.client.get(reverse("iranmap:areas"), {"q": "نمونه"})
         labels = [a["label"] for a in r.json()["results"]]
-        self.assertIn("شهرستان شهرستان نمونه — استان استان نمونه", labels)
+        self.assertIn("شهرستان نمونه — استان نمونه", labels)
+        self.assertIn("شهر نمونه — استان نمونه", labels)
 
     def test_import_flow(self):
         city = Area.objects.get(level="city")
@@ -182,6 +183,65 @@ class AreaSearchTests(TestCase):
 
     def test_county_level_six_is_mapped(self):
         self.assertEqual(osm.LEVELS["6"], "county")
+
+
+def _sq(w, s, e, n):
+    return {"type": "Polygon", "coordinates": [[[w, s], [e, s], [e, n], [w, n], [w, s]]]}
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class HierarchyTests(TestCase):
+    """استان ← شهرستان/شهر با هندسه واقعی، و فهرست دو مرحله‌ای صفحه."""
+
+    def setUp(self):
+        # البرز مثلثی کوچک است که جعبه‌اش مرکز شهرستان تهران را دربر می‌گیرد، ولی خودش آن را ندارد
+        tri = {"type": "Polygon", "coordinates": [[[50.0, 36.0], [51.0, 36.0], [50.0, 35.0], [50.0, 36.0]]]}
+        self.alborz = Area.objects.create(name="استان البرز", level="province", bbox=[50, 35, 51, 36], geometry=tri)
+        self.tehran = Area.objects.create(name="استان تهران", level="province", bbox=[49, 34, 53, 37],
+                                          geometry=_sq(49, 34, 53, 37))
+        self.county = Area.objects.create(name="شهرستان تهران", level="county", bbox=[50.6, 35.2, 50.8, 35.4],
+                                          geometry=_sq(50.6, 35.2, 50.8, 35.4))
+        self.city = Area.objects.create(name="شهر ری", level="city", bbox=[50.65, 35.25, 50.7, 35.3],
+                                        geometry=_sq(50.65, 35.25, 50.7, 35.3))
+        osm._assign_parents()
+        self.user = User.objects.create_user("09120000084")
+        self.client.force_login(self.user)
+
+    def test_clean_name(self):
+        self.assertEqual(osm.clean_name("province", "استان تهران"), "تهران")
+        self.assertEqual(osm.clean_name("county", "شهرستان تهران"), "تهران")
+        self.assertEqual(osm.clean_name("city", "شهر ری"), "شهر ری")  # نام خود شهر است
+        self.assertEqual(osm.clean_name("province", "استان"), "استان")
+
+    def test_parent_uses_polygon_not_bbox(self):
+        self.county.refresh_from_db()
+        self.city.refresh_from_db()
+        self.assertEqual(self.county.province, "استان تهران")
+        self.assertEqual(self.city.province, "استان تهران")
+
+    def test_label_has_no_double_prefix(self):
+        self.county.refresh_from_db()
+        self.city.refresh_from_db()
+        self.assertEqual(self.county.label, "شهرستان تهران — استان تهران")
+        self.assertEqual(self.city.label, "شهر ری — استان تهران")
+        self.assertEqual(self.tehran.label, "استان تهران")
+
+    def test_provinces_endpoint(self):
+        r = self.client.get(reverse("iranmap:areas"), {"level": "province"}).json()["results"]
+        self.assertEqual([a["name"] for a in r], ["استان البرز", "استان تهران"])
+
+    def test_children_only_of_that_province(self):
+        r = self.client.get(reverse("iranmap:areas"), {"province": self.tehran.pk}).json()["results"]
+        self.assertEqual([(a["level"], a["name"]) for a in r], [("county", "شهرستان تهران"), ("city", "شهر ری")])
+        self.assertTrue(all(a["routing"] for a in r))
+        self.assertEqual(self.client.get(reverse("iranmap:areas"), {"province": self.alborz.pk}).json()["results"], [])
+        self.assertEqual(self.client.get(reverse("iranmap:areas"), {"province": "x"}).json()["results"], [])
+
+    def test_representative_point_inside_concave(self):
+        # شکل C: مرکز ثقل بیرون از ناحیه است
+        c = {"type": "Polygon", "coordinates": [[[0, 0], [10, 0], [10, 1], [1, 1], [1, 9], [10, 9], [10, 10], [0, 10], [0, 0]]]}
+        x, y = osm.representative_point(c)
+        self.assertTrue(osm._contains(c, x, y))
 
 
 class NoSourceTests(TestCase):

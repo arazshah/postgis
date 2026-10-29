@@ -16,11 +16,14 @@
 {% else %}
 <form method="post" class="panel ready-form" id="rform">{% csrf_token %}
   <div class="field">
-    <label for="area-q">محدوده</label>
-    <input id="area-q" type="search" autocomplete="off" placeholder="نام استان، شهرستان یا شهر را بنویسید؛ مثلاً اصفهان">
+    <label for="prov">استان</label>
+    <select id="prov" aria-label="استان"><option value="">در حال بارگذاری…</option></select>
+  </div>
+  <div class="field">
+    <label for="sub">شهرستان یا شهر</label>
+    <select id="sub" disabled aria-label="شهرستان یا شهر"><option value="">ابتدا استان را انتخاب کنید</option></select>
     <input type="hidden" name="area" id="area-id">
-    <ul class="area-results" id="area-results" role="listbox" aria-label="نتیجه جستجو"></ul>
-    <p class="small" id="area-picked" hidden>انتخاب شده: <b></b></p>
+    <p class="small muted" style="margin:6px 0 0">هر چه محدوده کوچک‌تر باشد، ورود سریع‌تر و حجم کمتر است. فقط همان محدوده و همان دسته‌هایی که تیک می‌زنید دریافت می‌شود.</p>
   </div>
   <fieldset class="bf-group"><legend>داده‌ها</legend>
     <div class="ready-sets">
@@ -69,45 +72,52 @@ JOIN routing.ways w ON w.gid = r.edge;</code></pre>
 {% if active %}<script src="{% static 'js/ready.js' %}" defer></script>{% endif %}
 <script>
 (() => {
-  const q = document.getElementById("area-q"); if (!q) return;
-  const list = document.getElementById("area-results"), id = document.getElementById("area-id");
-  const picked = document.getElementById("area-picked"), routing = document.getElementById("routing");
-  const why = document.getElementById("routing-why"), submit = document.getElementById("rsubmit");
-  const WHY_NONE = "ابتدا یک شهر یا شهرستان را از فهرست انتخاب کنید.";
-  const WHY_BIG = "برای استان یا محدوده بزرگ ساخته نمی‌شود؛ یک شهر یا شهرستان انتخاب کنید.";
+  const prov = document.getElementById("prov"); if (!prov) return;
+  const sub = document.getElementById("sub"), id = document.getElementById("area-id");
+  const routing = document.getElementById("routing"), why = document.getElementById("routing-why"), submit = document.getElementById("rsubmit");
+  const url = "{% url 'iranmap:areas' %}";
+  const WHY_NONE = "ابتدا استان و بعد یک شهرستان یا شهر را انتخاب کنید.";
+  const WHY_BIG = "برای کل استان یا محدوده بزرگ ساخته نمی‌شود؛ یک شهرستان یا شهر انتخاب کنید.";
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  const opt = (v, t, extra = "") => `<option value="${esc(v)}" ${extra}>${esc(t)}</option>`;
   function sync(ok, routingOk) {
     submit.disabled = !ok || submit.hasAttribute("data-locked");
     routing.disabled = !ok || !routingOk || routing.hasAttribute("data-off");
     if (routing.disabled) routing.checked = false;
     why.textContent = !ok ? WHY_NONE : (routingOk ? "" : WHY_BIG);
   }
-  const url = "{% url 'iranmap:areas' %}";
-  let timer;
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-  async function search() {
-    const r = await fetch(`${url}?q=${encodeURIComponent(q.value.trim())}`);
-    const d = await r.json();
-    list.innerHTML = d.results.map((a) => `<li role="option" tabindex="0" data-id="${a.id}" data-routing="${a.routing}">${esc(a.label)}</li>`).join("")
-      || '<li class="muted">چیزی پیدا نشد</li>';
+  async function get(qs) { const r = await fetch(`${url}?${qs}`); if (!r.ok) throw new Error(r.status); return (await r.json()).results; }
+  async function loadProvinces() {
+    try {
+      const rows = await get("level=province");
+      prov.innerHTML = opt("", "استان را انتخاب کنید") + rows.map((a) => opt(a.id, a.name)).join("");
+    } catch (e) { prov.innerHTML = opt("", "بارگذاری نشد؛ صفحه را دوباره باز کنید"); }
   }
-  function choose(li) {
-    if (!li.dataset.id) return;
-    id.value = li.dataset.id; picked.hidden = false; picked.querySelector("b").textContent = li.textContent;
-    list.innerHTML = ""; q.value = li.textContent;
-    sync(true, li.dataset.routing === "true");
-  }
-  q.addEventListener("input", () => { clearTimeout(timer); id.value = ""; picked.hidden = true; sync(false, false); timer = setTimeout(search, 200); });
-  q.addEventListener("keydown", async (e) => {
-    if (e.key !== "Enter") return;
-    e.preventDefault();  // Enter اولین نتیجه را انتخاب می‌کند، نه ارسال فرم بدون محدوده
-    clearTimeout(timer);
-    if (!list.querySelector("li[data-id]")) await search();
-    const first = list.querySelector("li[data-id]"); if (first) choose(first);
+  prov.addEventListener("change", async () => {
+    id.value = ""; sync(false, false);
+    if (!prov.value) { sub.disabled = true; sub.innerHTML = opt("", "ابتدا استان را انتخاب کنید"); return; }
+    sub.disabled = true; sub.innerHTML = opt("", "در حال بارگذاری…");
+    try {
+      const rows = await get(`province=${encodeURIComponent(prov.value)}`);
+      const name = prov.options[prov.selectedIndex].text;
+      const group = (title, lvl) => {
+        const items = rows.filter((a) => a.level === lvl);
+        return items.length ? `<optgroup label="${title}">${items.map((a) => opt(a.id, a.name, `data-routing="${a.routing}"`)).join("")}</optgroup>` : "";
+      };
+      // کل استان هم هست (برای داده‌ها، نه مسیریابی)؛ همان شناسه استان
+      sub.innerHTML = opt("", "شهرستان یا شهر را انتخاب کنید") + opt(prov.value, `کل استان ${name} (بدون مسیریابی)`, 'data-routing="false"')
+        + group("شهرستان‌ها", "county") + group("شهرها", "city");
+      sub.disabled = false;
+    } catch (e) { sub.innerHTML = opt("", "بارگذاری نشد؛ دوباره امتحان کنید"); }
   });
-  document.getElementById("rform").addEventListener("submit", (e) => { if (!id.value) { e.preventDefault(); q.focus(); } });
-  q.addEventListener("focus", () => { if (!list.children.length) search(); });
-  list.addEventListener("click", (e) => { const li = e.target.closest("li"); if (li) choose(li); });
-  list.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); choose(e.target); } });
+  sub.addEventListener("change", () => {
+    id.value = sub.value;
+    const o = sub.options[sub.selectedIndex];
+    sync(!!sub.value, !!sub.value && o.dataset.routing === "true");
+  });
+  document.getElementById("rform").addEventListener("submit", (e) => { if (!id.value) { e.preventDefault(); (prov.value ? sub : prov).focus(); } });
+  sync(false, false);
+  loadProvinces();
 })();
 </script>
 {% endblock %}
