@@ -27,12 +27,21 @@ def routing_allowed(area: Area) -> bool:
 
 
 def pgrouting_available(db: UserDatabase) -> bool:
+    """هر بار باز شدن صفحه نباید به سرور دیتابیس وصل شود؛ نتیجه موفق چند دقیقه نگه داشته می‌شود."""
+    from django.core.cache import cache
+
     from databases.provisioner import Provisioner
 
+    key = f"iranmap:pgr:{db.server_id}"
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
     try:
-        return Provisioner.for_server(db.server).extension_available("pgrouting")
-    except Exception:  # noqa: BLE001  سرور در دسترس نیست
+        ok = Provisioner.for_server(db.server).extension_available("pgrouting")
+    except Exception:  # noqa: BLE001  سرور در دسترس نیست؛ نتیجه شکست نگه داشته نمی‌شود
         return False
+    cache.set(key, ok, 300)
+    return ok
 
 
 def request_import(db: UserDatabase, user, area: Area, datasets: list[str], routing: bool) -> Job:

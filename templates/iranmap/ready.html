@@ -1,4 +1,4 @@
-{% extends "databases/_explore_base.html" %}{% load fa static %}
+{% extends "databases/_explore_base.html" %}{% load fa static ws %}
 {% block ex %}
 <div class="page-head"><div><h1>داده آماده ایران</h1></div></div>
 <p class="muted">معابر، مکان‌های مهم، ساختمان‌ها، کاربری زمین و مرزهای اداری هر استان، شهرستان یا شهر را با یک کلیک در پایگاه داده خودتان داشته باشید؛ همراه با شبکه آماده مسیریابی.</p>
@@ -15,28 +15,24 @@
 <div class="msg warning">داده OSM ایران هنوز روی سرور آماده نشده است. معمولاً در چند ساعت آینده در دسترس قرار می‌گیرد.</div>
 {% else %}
 <form method="post" class="panel ready-form" id="rform">{% csrf_token %}
-  <div class="field">
-    <label for="prov">استان</label>
-    <select id="prov" aria-label="استان"><option value="">در حال بارگذاری…</option></select>
+  <div class="rd-row">
+    <div class="field"><label id="prov-l">استان</label><div class="pk" id="prov" data-label="prov-l" data-ph="انتخاب استان"></div></div>
+    <div class="field"><label id="sub-l">شهرستان یا شهر</label><div class="pk" id="sub" data-label="sub-l" data-ph="ابتدا استان" data-search></div></div>
   </div>
-  <div class="field">
-    <label for="sub">شهرستان یا شهر</label>
-    <select id="sub" disabled aria-label="شهرستان یا شهر"><option value="">ابتدا استان را انتخاب کنید</option></select>
-    <input type="hidden" name="area" id="area-id">
-    <p class="small muted" style="margin:6px 0 0">هر چه محدوده کوچک‌تر باشد، ورود سریع‌تر و حجم کمتر است. فقط همان محدوده و همان دسته‌هایی که تیک می‌زنید دریافت می‌شود.</p>
-  </div>
-  <fieldset class="bf-group"><legend>داده‌ها</legend>
-    <div class="ready-sets">
-      {% for d in datasets %}
-      <label class="check"><input type="checkbox" name="datasets" value="{{ d.key }}" {% if d.key in "roads pois" %}checked{% endif %}>
-        <span><b>{{ d.title }}</b> <span class="ltr small muted">osm_{{ d.key }}</span><br><span class="small muted">{{ d.description }}</span></span></label>
+  <input type="hidden" name="area" id="area-id">
+  <div class="rd-sets">
+    <div class="rd-sets-head"><b>داده‌ها</b><button type="button" class="linkbtn small" id="sets-all">انتخاب همه</button></div>
+    <div class="chips">
+      {% for d in datasets %}<label class="pick-chip" title="{{ d.description }} — جدول osm_{{ d.key }}"><input type="checkbox" name="datasets" value="{{ d.key }}" {% if d.key in "roads pois" %}checked{% endif %}><span>{{ d.title }}</span></label>
       {% endfor %}
     </div>
-  </fieldset>
+  </div>
   <label class="check" id="routing-row"><input type="checkbox" name="routing" id="routing" disabled {% if not pgrouting %}data-off{% endif %}>
-    <span><b>شبکه معابر آماده مسیریابی (pgRouting)</b><br><span class="small muted">جدول <span class="ltr">routing.ways</span> با هزینه و جهت، برای کوتاه‌ترین مسیر و حوزه دسترسی. فقط برای شهر یا شهرستان.</span>{% if not pgrouting %}<br><span class="small" style="color:var(--red)">افزونه pgRouting روی سرور این پایگاه داده نصب نیست.</span>{% endif %}<br><span class="small muted" id="routing-why">ابتدا یک شهر یا شهرستان را از فهرست انتخاب کنید.</span></span></label>
-  <p class="small muted">جدول‌هایی با همین نام اگر از قبل وجود داشته باشند جایگزین می‌شوند. داده روی فضای پایگاه داده شما حساب می‌شود.</p>
-  <button class="btn" type="submit" id="rsubmit" {% if db.status != 'active' or active %}data-locked{% endif %} disabled>دریافت داده</button>
+    <span><b>شبکه مسیریابی (pgRouting)</b> <span class="small muted">جدول <span class="ltr">routing.ways</span> برای کوتاه‌ترین مسیر و حوزه دسترسی؛ فقط شهر یا شهرستان.</span>{% if not pgrouting %}<br><span class="small" style="color:var(--red)">افزونه pgRouting روی سرور این پایگاه داده نصب نیست.</span>{% endif %}<br><span class="small muted" id="routing-why">ابتدا استان و بعد شهرستان یا شهر را انتخاب کنید.</span></span></label>
+  <div class="rd-foot">
+    <p class="small muted" id="rd-sum">جدول‌های هم‌نام جایگزین می‌شوند و روی فضای پایگاه داده شما حساب می‌شوند. فقط همین محدوده و دسته‌های تیک‌خورده دریافت می‌شود.</p>
+    <button class="btn" type="submit" id="rsubmit" {% if db.status != 'active' or active %}data-locked{% endif %} disabled>دریافت داده</button>
+  </div>
 </form>
 {% endif %}
 
@@ -70,54 +66,100 @@ JOIN routing.ways w ON w.gid = r.edge;</code></pre>
 </div>
 
 {% if active %}<script src="{% static 'js/ready.js' %}" defer></script>{% endif %}
+{{ provinces|json_script:"prov-data" }}
 <script>
 (() => {
-  const prov = document.getElementById("prov"); if (!prov) return;
-  const sub = document.getElementById("sub"), id = document.getElementById("area-id");
-  const routing = document.getElementById("routing"), why = document.getElementById("routing-why"), submit = document.getElementById("rsubmit");
-  const url = "{% url 'iranmap:areas' %}";
-  const WHY_NONE = "ابتدا استان و بعد یک شهرستان یا شهر را انتخاب کنید.";
-  const WHY_BIG = "برای کل استان یا محدوده بزرگ ساخته نمی‌شود؛ یک شهرستان یا شهر انتخاب کنید.";
+  const root = document.getElementById("prov"); if (!root) return;
+  const norm = (t) => String(t).replace(/ي/g, "ی").replace(/ك/g, "ک").trim();
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-  const opt = (v, t, extra = "") => `<option value="${esc(v)}" ${extra}>${esc(t)}</option>`;
+
+  // انتخابگر سفارشی: <select> بومی در برخی مرورگرها متن گزینه‌ها را نشان نمی‌دهد
+  function picker(el, onChange) {
+    el.innerHTML = '<button type="button" class="pk-btn" aria-haspopup="listbox" aria-expanded="false"><span class="pk-val ph"></span>{% icon "chev" 16 %}</button>'
+      + '<div class="pk-pop" hidden><input type="search" class="pk-q" placeholder="جست‌وجو…" autocomplete="off"><ul class="pk-list" role="listbox"></ul></div>';
+    const btn = el.querySelector(".pk-btn"), val = el.querySelector(".pk-val"), pop = el.querySelector(".pk-pop");
+    const q = el.querySelector(".pk-q"), ul = el.querySelector(".pk-list");
+    btn.setAttribute("aria-labelledby", el.dataset.label);
+    const withSearch = "search" in el.dataset;
+    let items = [], shown = [], act = -1, current = null;
+    const setVal = () => { val.classList.toggle("ph", !current); val.innerHTML = current ? esc(current.text) + (current.tag ? ` <small>${esc(current.tag)}</small>` : "") : esc(el.dataset.ph); };
+    function render() {
+      const f = norm(q.value);
+      shown = items.filter((i) => !f || norm(i.text).includes(f));
+      let last = null, html = "";
+      shown.forEach((i, n) => {
+        if (i.group && i.group !== last) { html += `<li class="pk-g" role="presentation">${esc(i.group)}</li>`; last = i.group; }
+        html += `<li role="option" data-n="${n}" ${current && current.value === i.value ? 'aria-selected="true"' : ""}>${esc(i.text)}</li>`;
+      });
+      ul.innerHTML = html || '<li class="pk-g" role="presentation">چیزی پیدا نشد</li>';
+      act = f ? 0 : shown.findIndex((i) => current && i.value === current.value); mark(true);
+    }
+    function mark(scroll) {
+      ul.querySelectorAll("li[role=option]").forEach((li) => li.classList.toggle("act", +li.dataset.n === act));
+      const li = ul.querySelector(`li[data-n="${act}"]`); if (li && scroll) li.scrollIntoView({block: "nearest"});
+    }
+    function open() { if (btn.disabled) return; pop.hidden = false; btn.setAttribute("aria-expanded", "true"); q.hidden = !withSearch; q.value = ""; render(); (withSearch ? q : btn).focus(); }
+    function close(focus) { pop.hidden = true; btn.setAttribute("aria-expanded", "false"); if (focus) btn.focus(); }
+    function pick(i) { current = i; setVal(); close(true); onChange(i); }
+    btn.addEventListener("click", () => (pop.hidden ? open() : close()));
+    btn.addEventListener("keydown", (e) => { if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); open(); } });
+    ul.addEventListener("click", (e) => { const li = e.target.closest("li[role=option]"); if (li) pick(shown[+li.dataset.n]); });
+    pop.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.preventDefault(); close(true); }
+      else if (e.key === "ArrowDown") { e.preventDefault(); act = Math.min(shown.length - 1, act + 1); mark(true); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); act = Math.max(0, act - 1); mark(true); }
+      else if (e.key === "Enter") { e.preventDefault(); if (shown[act]) pick(shown[act]); }
+    });
+    q.addEventListener("input", render);
+    document.addEventListener("click", (e) => { if (!pop.hidden && !el.contains(e.target)) close(); });
+    setVal();
+    return {
+      set(list, text) { items = list; current = null; if (text) el.dataset.ph = text; setVal(); btn.disabled = !list.length; },
+      clear(text) { this.set([], text); },
+      get value() { return current; },
+    };
+  }
+
+  const url = "{% url 'iranmap:areas' %}";
+  const id = document.getElementById("area-id"), routing = document.getElementById("routing");
+  const why = document.getElementById("routing-why"), submit = document.getElementById("rsubmit"), sum = document.getElementById("rd-sum");
+  const WHY_NONE = "ابتدا استان و بعد شهرستان یا شهر را انتخاب کنید.";
+  const WHY_BIG = "برای کل استان یا محدوده بزرگ ساخته نمی‌شود؛ شهرستان یا شهر انتخاب کنید.";
+  const SUM0 = sum.textContent, cache = new Map();
   function sync(ok, routingOk) {
     submit.disabled = !ok || submit.hasAttribute("data-locked");
     routing.disabled = !ok || !routingOk || routing.hasAttribute("data-off");
     if (routing.disabled) routing.checked = false;
     why.textContent = !ok ? WHY_NONE : (routingOk ? "" : WHY_BIG);
   }
-  async function get(qs) { const r = await fetch(`${url}?${qs}`); if (!r.ok) throw new Error(r.status); return (await r.json()).results; }
-  async function loadProvinces() {
-    try {
-      const rows = await get("level=province");
-      prov.innerHTML = opt("", "استان را انتخاب کنید") + rows.map((a) => opt(a.id, a.name)).join("");
-    } catch (e) { prov.innerHTML = opt("", "بارگذاری نشد؛ صفحه را دوباره باز کنید"); }
-  }
-  prov.addEventListener("change", async () => {
-    id.value = ""; sync(false, false);
-    if (!prov.value) { sub.disabled = true; sub.innerHTML = opt("", "ابتدا استان را انتخاب کنید"); return; }
-    sub.disabled = true; sub.innerHTML = opt("", "در حال بارگذاری…");
-    try {
-      const rows = await get(`province=${encodeURIComponent(prov.value)}`);
-      const name = prov.options[prov.selectedIndex].text;
-      const group = (title, lvl) => {
-        const items = rows.filter((a) => a.level === lvl);
-        return items.length ? `<optgroup label="${title}">${items.map((a) => opt(a.id, a.name, `data-routing="${a.routing}"`)).join("")}</optgroup>` : "";
-      };
-      // کل استان هم هست (برای داده‌ها، نه مسیریابی)؛ همان شناسه استان
-      sub.innerHTML = opt("", "شهرستان یا شهر را انتخاب کنید") + opt(prov.value, `کل استان ${name} (بدون مسیریابی)`, 'data-routing="false"')
-        + group("شهرستان‌ها", "county") + group("شهرها", "city");
-      sub.disabled = false;
-    } catch (e) { sub.innerHTML = opt("", "بارگذاری نشد؛ دوباره امتحان کنید"); }
+  const sub = picker(document.getElementById("sub"), (i) => {
+    id.value = i.value; sync(true, i.routing);
+    sum.textContent = `${prov.value.text} ← ${i.text}`;
   });
-  sub.addEventListener("change", () => {
-    id.value = sub.value;
-    const o = sub.options[sub.selectedIndex];
-    sync(!!sub.value, !!sub.value && o.dataset.routing === "true");
+  const prov = picker(root, async (p) => {
+    id.value = ""; sync(false, false); sum.textContent = SUM0;
+    sub.clear("در حال بارگذاری…");
+    try {
+      if (!cache.has(p.value)) {
+        const r = await fetch(`${url}?province=${encodeURIComponent(p.value)}`);
+        if (!r.ok) throw new Error(r.status);
+        cache.set(p.value, (await r.json()).results);
+      }
+      const rows = cache.get(p.value);
+      const mk = (a, group, tag) => ({value: a.id, text: a.name, group, tag: a.name.startsWith(tag + " ") ? "" : tag, routing: a.routing});
+      sub.set([{value: p.value, text: "کل استان", group: "", tag: "", routing: false},
+        ...rows.filter((a) => a.level === "county").map((a) => mk(a, "شهرستان‌ها", "شهرستان")),
+        ...rows.filter((a) => a.level === "city").map((a) => mk(a, "شهرها", "شهر"))], "شهرستان یا شهر");
+    } catch (e) { sub.clear("بارگذاری نشد؛ دوباره امتحان کنید"); }
   });
-  document.getElementById("rform").addEventListener("submit", (e) => { if (!id.value) { e.preventDefault(); (prov.value ? sub : prov).focus(); } });
+  prov.set(JSON.parse(document.getElementById("prov-data").textContent).map((a) => ({value: a.id, text: a.name})));
+  sub.clear("ابتدا استان");
+  document.getElementById("sets-all").addEventListener("click", () => {
+    const boxes = [...document.querySelectorAll('input[name="datasets"]')], all = boxes.every((b) => b.checked);
+    boxes.forEach((b) => (b.checked = !all));
+  });
+  document.getElementById("rform").addEventListener("submit", (e) => { if (!id.value) { e.preventDefault(); (prov.value ? document.querySelector("#sub .pk-btn") : root.querySelector(".pk-btn")).focus(); } });
   sync(false, false);
-  loadProvinces();
 })();
 </script>
 {% endblock %}

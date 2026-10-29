@@ -15,6 +15,12 @@ from . import osm, ready
 from .models import Area
 
 
+def _province_list() -> list[dict]:
+    """استان‌ها با نام کوتاه (بدون «استان»)؛ داخل خود صفحه می‌آیند تا درخواست جدا لازم نباشد."""
+    rows = [{"id": a.pk, "name": osm.clean_name("province", a.name)} for a in Area.objects.filter(level="province")]
+    return sorted(rows, key=lambda r: r["name"])
+
+
 @site_user_required
 @require_http_methods(["GET", "POST"])
 def ready_data(request, pk):
@@ -46,6 +52,7 @@ def ready_data(request, pk):
         "source": osm.source_info(), "has_areas": Area.objects.exists(), "recent": recent,
         "active": any(j.active for j in recent), "attribution": osm.ATTRIBUTION,
         "routing_max": ready.ROUTING_MAX_DEG2, "pgrouting": ready.pgrouting_available(db),
+        "provinces": _province_list(),
     })
 
 
@@ -80,8 +87,8 @@ def areas(request):
     """سه حالت: ?level=province همه استان‌ها؛ ?province=<id> شهرستان‌ها و شهرهای آن استان؛ ?q= جست‌وجوی متنی."""
     if request.GET.get("level") == "province":
         rows = sorted(Area.objects.filter(level="province"), key=lambda a: a.name)
-        return JsonResponse({"results": [{"id": a.pk, "name": a.name, "label": a.label} for a in rows]},
-                            json_dumps_params={"ensure_ascii": False})
+        return JsonResponse({"results": [{"id": a.pk, "name": osm.clean_name("province", a.name), "label": a.label}
+                                         for a in rows]}, json_dumps_params={"ensure_ascii": False})
     if request.GET.get("province"):
         prov = Area.objects.filter(pk=request.GET["province"] if request.GET["province"].isdigit() else 0,
                                    level="province").first()
@@ -91,7 +98,7 @@ def areas(request):
         order = {"county": 0, "city": 1}
         kids = sorted(Area.objects.filter(province=prov.name, level__in=["county", "city"]),
                       key=lambda a: (order[a.level], a.name))
-        return JsonResponse({"results": [{"id": a.pk, "name": a.name, "level": a.level,
+        return JsonResponse({"results": [{"id": a.pk, "name": osm.clean_name(a.level, a.name), "level": a.level,
                                           "routing": ready.routing_allowed(a)} for a in kids]},
                             json_dumps_params={"ensure_ascii": False})
     q = (request.GET.get("q") or "").strip()

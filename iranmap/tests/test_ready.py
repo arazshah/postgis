@@ -228,14 +228,19 @@ class HierarchyTests(TestCase):
 
     def test_provinces_endpoint(self):
         r = self.client.get(reverse("iranmap:areas"), {"level": "province"}).json()["results"]
-        self.assertEqual([a["name"] for a in r], ["استان البرز", "استان تهران"])
+        self.assertEqual([a["name"] for a in r], ["البرز", "تهران"])  # نام کوتاه، بدون «استان»
 
     def test_children_only_of_that_province(self):
         r = self.client.get(reverse("iranmap:areas"), {"province": self.tehran.pk}).json()["results"]
-        self.assertEqual([(a["level"], a["name"]) for a in r], [("county", "شهرستان تهران"), ("city", "شهر ری")])
+        self.assertEqual([(a["level"], a["name"]) for a in r], [("county", "تهران"), ("city", "شهر ری")])
         self.assertTrue(all(a["routing"] for a in r))
         self.assertEqual(self.client.get(reverse("iranmap:areas"), {"province": self.alborz.pk}).json()["results"], [])
         self.assertEqual(self.client.get(reverse("iranmap:areas"), {"province": "x"}).json()["results"], [])
+
+    def test_province_list_for_page(self):
+        from iranmap.user_views import _province_list
+
+        self.assertEqual([p["name"] for p in _province_list()], ["البرز", "تهران"])
 
     def test_representative_point_inside_concave(self):
         # شکل C: مرکز ثقل بیرون از ناحیه است
