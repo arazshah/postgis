@@ -12,6 +12,15 @@ PRESETS = [
 ]
 
 
+def preset_tiles() -> list[tuple[int, str, str]]:
+    """(srid، عنوان کوتاه، توضیح) برای کاشی‌های انتخاب سیستم مختصات."""
+    out = []
+    for srid, label in PRESETS:
+        title, _, hint = label.partition(" (")
+        out.append((srid, title, hint.rstrip(")")))
+    return out
+
+
 class CrsError(ValueError):
     pass
 
