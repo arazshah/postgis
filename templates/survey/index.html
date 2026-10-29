@@ -2,44 +2,58 @@
 {% block title %}برداشت میدانی {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 <div class="wrap page">
-  <div class="page-head"><div><h1>{% icon "pin" 22 %} برداشت میدانی</h1></div></div>
+  <div class="page-head"><div><h1>{% icon "pin" 22 %} برداشت میدانی</h1></div>{% if db.can_edit and projects %}<button class="btn" type="button" data-dialog-open="sv-new" {% if not left %}title="سهمیه پروژه پلن پر است"{% endif %}>{% icon "plus" 18 %}پروژه تازه</button>{% endif %}</div>
   <p class="lead muted" style="max-width:72ch">برای نقشه‌برداران: نقطه، خط و چندضلعی را با GPS گوشی یا گیرنده دقیق برداشت کنید، حتی بدون اینترنت. داده مستقیم در جدول‌های PostGIS خودتان ذخیره می‌شود و همه‌ی امکانات سایت (تحلیل، نقشه، انتشار، QGIS و API) رویش کار می‌کند.</p>
 
-  <div class="pub-stats">
-    <div><b>{{ projects|length|fanum }}</b> از {{ cap|fanum }} پروژه</div>
-    <div>سقف <b>{{ points_cap|fanum }}</b> نقطه</div>
-    <div>{% if gnss_external %}گیرنده خارجی فعال است{% else %}فقط GPS گوشی (گیرنده خارجی در پلن‌های پولی){% endif %}</div>
+  <div class="sv-stats">
+    <span class="chip geo">{% icon "layers" 16 %}<b>{{ projects|length|fanum }}</b> از {{ cap|fanum }} پروژه</span>
+    <span class="chip">{% icon "pin" 16 %}سقف <b>{{ points_cap|fanum }}</b> نقطه</span>
+    <span class="chip">{% if gnss_external %}گیرنده خارجی فعال است{% else %}فقط GPS گوشی؛ گیرنده خارجی در پلن‌های پولی{% endif %}</span>
   </div>
 
   {% if projects %}
   <div class="wm-cards">
     {% for p in projects %}
-    <article class="card wm-card">
-      <div class="pub-head"><h2 style="font-size:1.1rem;margin:0">{{ p.name }}</h2><span class="badge active ltr">EPSG:{{ p.srid }}</span></div>
-      <p class="small muted ltr" style="margin:0">{{ p.slug }}</p>
-      <div class="wm-actions">
+    <article class="card wm-card sv-card">
+      <div class="sv-card-h">
+        <span class="dlg-i">{% icon "pin" 20 %}</span>
+        <div class="sv-card-t"><h2>{{ p.name }}</h2><span class="small muted ltr">{{ p.slug }}</span></div>
+        {% if db.is_mine %}
+        <div class="pop-wrap">
+          <button class="ib sm" type="button" data-pop="sv-m{{ p.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های {{ p.name }}">{% icon "more" 16 %}</button>
+          <div class="pop-m" id="sv-m{{ p.pk }}" role="menu" hidden>
+            <form method="post" action="{% url 'survey:archive' db.pk p.pk %}" data-confirm="پروژه «{{ p.name }}» بایگانی شود؟ جدول‌های آن در پایگاه داده می‌مانند." data-confirm-title="بایگانی پروژه" data-confirm-text="بایگانی کن" data-confirm-kind="warn">{% csrf_token %}<button class="danger" role="menuitem" type="submit">{% icon "trash" 18 %}<span>بایگانی</span></button></form>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      <div class="sv-card-f">
+        <span class="badge active ltr">EPSG:{{ p.srid }}</span>
         <a class="btn sm" href="{% url 'survey:studio' db.pk p.pk %}">باز کردن</a>
-        {% if db.is_mine %}<form method="post" action="{% url 'survey:archive' db.pk p.pk %}" class="inline-form" data-confirm="پروژه «{{ p.name }}» بایگانی شود؟ جدول‌های آن در پایگاه داده می‌مانند." data-confirm-title="بایگانی پروژه" data-confirm-text="بایگانی کن" data-confirm-kind="warn">{% csrf_token %}<button class="btn ghost sm wm-del" type="submit">بایگانی</button></form>{% endif %}
       </div>
     </article>
     {% endfor %}
   </div>
+  {% else %}
+  <div class="empty">{% icon "pin" 28 %}<h2>هنوز پروژه‌ی برداشتی ندارید</h2><p class="muted">اولین پروژه را بسازید و برداشت را شروع کنید.</p>{% if db.can_edit and left %}<button class="btn sm" type="button" data-dialog-open="sv-new">{% icon "plus" 16 %}پروژه تازه</button>{% endif %}</div>
   {% endif %}
 
   {% if db.can_edit %}
-  <section class="card" style="margin-top:var(--s5)">
-    <h2 style="font-size:1.2rem">پروژه تازه</h2>
-    <form method="post" action="{% url 'survey:create' db.pk %}" class="wm-new">{% csrf_token %}
-      <div class="field"><label for="sv-name">نام پروژه</label><input id="sv-name" type="text" name="name" maxlength="120" required placeholder="مثلاً: برداشت قطعه ۱۲ کرج"></div>
-      <div class="field"><label for="sv-srid">سیستم مختصات</label>
-        <select id="sv-srid" name="srid">{% for srid, label in presets %}<option value="{{ srid }}">{{ label }}</option>{% endfor %}</select>
-        <p class="small muted">ایران در منطقه‌های UTM ۳۸ تا ۴۱ شمالی است؛ تهران ۳۹.</p></div>
-      <div class="field"><label for="sv-tpl">قالب (فهرست کدهای عارضه)</label>
-        <select id="sv-tpl" name="template">{% for k, label in templates %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></div>
-      <button class="btn" type="submit" {% if not left %}disabled title="سهمیه پروژه پلن پر است"{% endif %}>ساخت پروژه</button>
-      {% if not left %}<p class="small muted">سهمیه پروژه برداشت پلن شما پر است؛ <a href="{% url 'billing:plans' %}">پلن را ارتقا دهید</a>.</p>{% endif %}
+  <dialog class="dlg" id="sv-new" aria-labelledby="sv-new-t">
+    <form method="post" action="{% url 'survey:create' db.pk %}">{% csrf_token %}
+      <div class="dlg-h"><span class="dlg-i">{% icon "pin" 22 %}</span><h2 id="sv-new-t">پروژه تازه</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+      <div class="dlg-b">
+        <div class="field"><label for="sv-name">نام پروژه</label><input id="sv-name" type="text" name="name" maxlength="120" required placeholder="مثلاً: برداشت قطعه ۱۲ کرج"></div>
+        <fieldset class="sv-fs"><legend>سیستم مختصات</legend>
+          <div class="sv-tiles">{% for srid, title, hint in presets %}<label class="sv-tile"><input type="radio" name="srid" value="{{ srid }}" {% if forloop.first %}checked{% endif %}><span><b>{{ title }}</b>{% if hint %}<small>{{ hint }}</small>{% endif %}</span></label>{% endfor %}</div>
+          <p class="help small muted">ایران در منطقه‌های UTM ۳۸ تا ۴۱ شمالی است؛ تهران ۳۹.</p></fieldset>
+        <fieldset class="sv-fs"><legend>قالب (فهرست کدهای عارضه)</legend>
+          <div class="chips">{% for k, label in templates %}<label class="pick-chip"><input type="radio" name="template" value="{{ k }}" {% if forloop.first %}checked{% endif %}><span>{{ label }}</span></label>{% endfor %}</div></fieldset>
+        {% if not left %}<div class="msg warning">سهمیه پروژه برداشت پلن شما پر است؛ <a href="{% url 'billing:plans' %}">پلن را ارتقا دهید</a>.</div>{% endif %}
+      </div>
+      <div class="dlg-f"><button class="btn" type="submit" {% if not left %}disabled{% endif %}>{% icon "check" 18 %}ساخت پروژه</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
     </form>
-  </section>
+  </dialog>
   {% endif %}
 </div>
 {% endblock %}

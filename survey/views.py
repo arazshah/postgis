@@ -73,7 +73,7 @@ def index(request, pk):
     projects = list(services.active_projects(db))
     return render(request, "survey/index.html", {
         "db": db, "projects": projects, "cap": db.plan.survey_projects, "left": services.quota_left(db),
-        "points_cap": db.plan.survey_max_points, "presets": crs.PRESETS, "templates": presets.template_choices(),
+        "points_cap": db.plan.survey_max_points, "presets": crs.preset_tiles(), "templates": presets.template_choices(),
         "gnss_external": db.plan.gnss_external,
     })
 
