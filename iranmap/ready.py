@@ -15,7 +15,7 @@ from . import osm
 from .models import Area
 
 DAILY_LIMIT = 5
-ROUTING_MAX_DEG2 = 0.6  # حدود یک شهر بزرگ یا شهرستان؛ استان کامل برای گراف مسیریابی سنگین است
+ROUTING_MAX_DEG2 = 1.5  # جعبه محیطی شهرستان‌های بزرگ هم رد نشود؛ سقف واقعی حجم معابر در osm.import_routing بررسی می‌شود
 
 
 class ReadyError(Exception):

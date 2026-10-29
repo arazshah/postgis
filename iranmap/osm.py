@@ -263,10 +263,12 @@ def representative_point(geom: dict) -> tuple[float, float] | None:
     return None
 
 
-def _assign_parents():
+def _assign_parents(model=None):
     """استان هر شهرستان و شهر: استانی که نقطه داخلی ناحیه در چندضلعی‌اش می‌افتد.
     (جعبه محیطی کافی نیست: جعبه استان البرز مرکز شهرستان تهران را هم دربر می‌گیرد و کوچک‌تر از جعبه استان تهران است.)"""
-    from .models import Area
+    if model is None:
+        from .models import Area as model
+    Area = model  # noqa: N806  migration مدل تاریخی را می‌دهد
 
     provinces = list(Area.objects.filter(level="province"))
 
@@ -321,9 +323,6 @@ def import_routing(db, pbf: Path) -> int:
     from databases.explorer import Explorer
     from databases.provisioner import Provisioner
 
-    if pbf.stat().st_size > ROUTING_MAX_MB * 1024 * 1024:
-        raise OsmError(f"ناحیه برای شبکه مسیریابی بزرگ است (بیش از {ROUTING_MAX_MB} مگابایت داده OSM)؛ "
-                       "یک شهر یا شهرستان انتخاب کنید.")
     Provisioner.for_server(db.server).install_extension(db.db_name, "pgrouting")
     with Explorer(db).connect(read_only=False) as conn:
         conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
@@ -331,8 +330,14 @@ def import_routing(db, pbf: Path) -> int:
         conn.commit()
     tgt = gdal.target(db)
     with tempfile.TemporaryDirectory() as d:
+        # فقط راه‌ها (و گره‌هایشان): ساختمان و کاربری و … برای گراف لازم نیست و حجم را چندین برابر می‌کند
+        roads = Path(d) / "roads.osm.pbf"
+        _run([_bin("osmium"), "tags-filter", "--overwrite", "-o", str(roads), str(pbf), "w/highway"])
+        if roads.stat().st_size > ROUTING_MAX_MB * 1024 * 1024:
+            raise OsmError(f"شبکه معابر این ناحیه برای مسیریابی بزرگ است (بیش از {ROUTING_MAX_MB} مگابایت)؛ "
+                           "شهر یا شهرستان کوچک‌تری انتخاب کنید.")
         osm = Path(d) / "area.osm"
-        _run([_bin("osmium"), "cat", "--overwrite", "-o", str(osm), str(pbf)])
+        _run([_bin("osmium"), "cat", "--overwrite", "-o", str(osm), str(roads)])
         conf = _mapconfig()
         server = db.server
         user = Provisioner.browser_role_name(db.role_name)

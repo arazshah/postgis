@@ -124,16 +124,17 @@ JOIN routing.ways w ON w.gid = r.edge;</code></pre>
   const id = document.getElementById("area-id"), routing = document.getElementById("routing");
   const why = document.getElementById("routing-why"), submit = document.getElementById("rsubmit"), sum = document.getElementById("rd-sum");
   const WHY_NONE = "ابتدا استان و بعد شهرستان یا شهر را انتخاب کنید.";
-  const WHY_BIG = "برای کل استان یا محدوده بزرگ ساخته نمی‌شود؛ شهرستان یا شهر انتخاب کنید.";
+  const WHY_PROV = "برای کل استان ساخته نمی‌شود؛ یک شهرستان یا شهر انتخاب کنید.";
+  const WHY_BIG = "این محدوده برای مسیریابی بزرگ است؛ شهر یا شهرستان کوچک‌تری انتخاب کنید.";
   const SUM0 = sum.textContent, cache = new Map();
-  function sync(ok, routingOk) {
+  function sync(ok, routingOk, whole) {
     submit.disabled = !ok || submit.hasAttribute("data-locked");
     routing.disabled = !ok || !routingOk || routing.hasAttribute("data-off");
     if (routing.disabled) routing.checked = false;
-    why.textContent = !ok ? WHY_NONE : (routingOk ? "" : WHY_BIG);
+    why.textContent = !ok ? WHY_NONE : (routingOk ? "" : (whole ? WHY_PROV : WHY_BIG));
   }
   const sub = picker(document.getElementById("sub"), (i) => {
-    id.value = i.value; sync(true, i.routing);
+    id.value = i.value; sync(true, i.routing, i.whole);
     sum.textContent = `${prov.value.text} ← ${i.text}`;
   });
   const prov = picker(root, async (p) => {
@@ -147,7 +148,7 @@ JOIN routing.ways w ON w.gid = r.edge;</code></pre>
       }
       const rows = cache.get(p.value);
       const mk = (a, group, tag) => ({value: a.id, text: a.name, group, tag: a.name.startsWith(tag + " ") ? "" : tag, routing: a.routing});
-      sub.set([{value: p.value, text: "کل استان", group: "", tag: "", routing: false},
+      sub.set([{value: p.value, text: "کل استان", group: "", tag: "", routing: false, whole: true},
         ...rows.filter((a) => a.level === "county").map((a) => mk(a, "شهرستان‌ها", "شهرستان")),
         ...rows.filter((a) => a.level === "city").map((a) => mk(a, "شهرها", "شهر"))], "شهرستان یا شهر");
     } catch (e) { sub.clear("بارگذاری نشد؛ دوباره امتحان کنید"); }

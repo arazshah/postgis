@@ -237,6 +237,24 @@ class HierarchyTests(TestCase):
         self.assertEqual(self.client.get(reverse("iranmap:areas"), {"province": self.alborz.pk}).json()["results"], [])
         self.assertEqual(self.client.get(reverse("iranmap:areas"), {"province": "x"}).json()["results"], [])
 
+    def test_migration_fixes_stale_parent(self):
+        """فهرست قدیمی: شهرستان تهران زیر البرز؛ migration بدون بازسازی دستی درستش می‌کند."""
+        import importlib
+
+        from django.apps import apps
+
+        Area.objects.filter(pk=self.county.pk).update(province="استان البرز")
+        importlib.import_module("iranmap.migrations.0002_reassign_parents").reassign(apps, None)
+        self.county.refresh_from_db()
+        self.assertEqual(self.county.province, "استان تهران")
+
+    def test_routing_allowed_for_big_county_not_province(self):
+        big = Area.objects.create(name="شهرستان بزرگ", level="county", bbox=[44, 37, 45, 37.9], geometry={})  # ۰٫۹ درجه‌مربع
+        self.assertTrue(ready.routing_allowed(big))
+        self.assertFalse(ready.routing_allowed(self.tehran))
+        huge = Area.objects.create(name="شهرستان خیلی بزرگ", level="county", bbox=[44, 35, 46, 37], geometry={})
+        self.assertFalse(ready.routing_allowed(huge))
+
     def test_province_list_for_page(self):
         from iranmap.user_views import _province_list
 
