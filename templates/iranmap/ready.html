@@ -30,10 +30,10 @@
       {% endfor %}
     </div>
   </fieldset>
-  <label class="check" id="routing-row"><input type="checkbox" name="routing" id="routing" {% if not pgrouting %}disabled data-off{% endif %}>
-    <span><b>شبکه معابر آماده مسیریابی (pgRouting)</b><br><span class="small muted">جدول <span class="ltr">routing.ways</span> با هزینه و جهت، برای کوتاه‌ترین مسیر و حوزه دسترسی. فقط برای شهر یا شهرستان.</span>{% if not pgrouting %}<br><span class="small" style="color:var(--red)">افزونه pgRouting روی سرور این پایگاه داده نصب نیست.</span>{% endif %}</span></label>
+  <label class="check" id="routing-row"><input type="checkbox" name="routing" id="routing" disabled {% if not pgrouting %}data-off{% endif %}>
+    <span><b>شبکه معابر آماده مسیریابی (pgRouting)</b><br><span class="small muted">جدول <span class="ltr">routing.ways</span> با هزینه و جهت، برای کوتاه‌ترین مسیر و حوزه دسترسی. فقط برای شهر یا شهرستان.</span>{% if not pgrouting %}<br><span class="small" style="color:var(--red)">افزونه pgRouting روی سرور این پایگاه داده نصب نیست.</span>{% endif %}<br><span class="small muted" id="routing-why">ابتدا یک شهر یا شهرستان را از فهرست انتخاب کنید.</span></span></label>
   <p class="small muted">جدول‌هایی با همین نام اگر از قبل وجود داشته باشند جایگزین می‌شوند. داده روی فضای پایگاه داده شما حساب می‌شود.</p>
-  <button class="btn" type="submit" {% if db.status != 'active' or active %}disabled{% endif %}>دریافت داده</button>
+  <button class="btn" type="submit" id="rsubmit" {% if db.status != 'active' or active %}data-locked{% endif %} disabled>دریافت داده</button>
 </form>
 {% endif %}
 
@@ -72,6 +72,15 @@ JOIN routing.ways w ON w.gid = r.edge;</code></pre>
   const q = document.getElementById("area-q"); if (!q) return;
   const list = document.getElementById("area-results"), id = document.getElementById("area-id");
   const picked = document.getElementById("area-picked"), routing = document.getElementById("routing");
+  const why = document.getElementById("routing-why"), submit = document.getElementById("rsubmit");
+  const WHY_NONE = "ابتدا یک شهر یا شهرستان را از فهرست انتخاب کنید.";
+  const WHY_BIG = "برای استان یا محدوده بزرگ ساخته نمی‌شود؛ یک شهر یا شهرستان انتخاب کنید.";
+  function sync(ok, routingOk) {
+    submit.disabled = !ok || submit.hasAttribute("data-locked");
+    routing.disabled = !ok || !routingOk || routing.hasAttribute("data-off");
+    if (routing.disabled) routing.checked = false;
+    why.textContent = !ok ? WHY_NONE : (routingOk ? "" : WHY_BIG);
+  }
   const url = "{% url 'iranmap:areas' %}";
   let timer;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
@@ -85,10 +94,17 @@ JOIN routing.ways w ON w.gid = r.edge;</code></pre>
     if (!li.dataset.id) return;
     id.value = li.dataset.id; picked.hidden = false; picked.querySelector("b").textContent = li.textContent;
     list.innerHTML = ""; q.value = li.textContent;
-    const ok = li.dataset.routing === "true";
-    routing.disabled = !ok || routing.hasAttribute("data-off"); if (routing.disabled) routing.checked = false;
+    sync(true, li.dataset.routing === "true");
   }
-  q.addEventListener("input", () => { clearTimeout(timer); id.value = ""; timer = setTimeout(search, 200); });
+  q.addEventListener("input", () => { clearTimeout(timer); id.value = ""; picked.hidden = true; sync(false, false); timer = setTimeout(search, 200); });
+  q.addEventListener("keydown", async (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();  // Enter اولین نتیجه را انتخاب می‌کند، نه ارسال فرم بدون محدوده
+    clearTimeout(timer);
+    if (!list.querySelector("li[data-id]")) await search();
+    const first = list.querySelector("li[data-id]"); if (first) choose(first);
+  });
+  document.getElementById("rform").addEventListener("submit", (e) => { if (!id.value) { e.preventDefault(); q.focus(); } });
   q.addEventListener("focus", () => { if (!list.children.length) search(); });
   list.addEventListener("click", (e) => { const li = e.target.closest("li"); if (li) choose(li); });
   list.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); choose(e.target); } });

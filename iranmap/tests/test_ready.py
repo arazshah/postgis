@@ -146,6 +146,44 @@ class ReadyDataTests(TestCase):
         self.assertEqual(owners, {self.db.role_name})
 
 
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class AreaSearchTests(TestCase):
+    """جست‌وجوی محدوده بدون نیاز به ابزار OSM: ترتیب نتیجه و املای عربی/فارسی."""
+
+    def setUp(self):
+        box = [51.0, 35.0, 51.5, 35.4]
+        big = [50.0, 34.0, 53.0, 36.5]
+        mk = lambda name, level, bb: Area.objects.create(name=name, level=level, bbox=bb, geometry={})  # noqa: E731
+        mk("تهران", "province", big)
+        mk("تهران", "county", box)
+        mk("تهران", "city", box)
+        mk("شهر ری", "county", box)
+        mk("کرمان", "province", big)
+        self.user = User.objects.create_user("09120000083")
+        self.client.force_login(self.user)
+
+    def _search(self, q):
+        return self.client.get(reverse("iranmap:areas"), {"q": q}).json()["results"]
+
+    def test_city_before_county_before_province(self):
+        rows = self._search("تهران")
+        self.assertEqual([r["level"] for r in rows], ["city", "county", "province"])
+        self.assertTrue(rows[0]["routing"])
+        self.assertFalse(rows[-1]["routing"])
+
+    def test_exact_name_first(self):
+        Area.objects.create(name="تهران‌سر", level="city", bbox=[51, 35, 51.1, 35.1], geometry={})
+        self.assertEqual(self._search("تهران")[0]["label"].split(" — ")[0], "شهر تهران")
+
+    def test_arabic_letters_match(self):
+        self.assertEqual(len(self._search("كرمان")), 1)
+        Area.objects.create(name="يزد", level="city", bbox=[54, 31, 54.1, 31.1], geometry={})
+        self.assertEqual(len(self._search("یزد")), 1)
+
+    def test_county_level_six_is_mapped(self):
+        self.assertEqual(osm.LEVELS["6"], "county")
+
+
 class NoSourceTests(TestCase):
     def test_no_source_file(self):
         with tempfile.TemporaryDirectory() as d, override_settings(OSM_ROOT=d):

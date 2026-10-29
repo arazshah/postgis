@@ -1,5 +1,6 @@
 """صفحه «داده آماده ایران» در مرورگر پایگاه داده."""
 from django.contrib import messages
+from django.db.models import Case, IntegerField, Q, When
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -66,15 +67,35 @@ def status(request, pk):
                         json_dumps_params={"ensure_ascii": False})
 
 
+def _variants(q: str) -> set[str]:
+    """املای فارسی و عربی (ی/ي، ک/ك) را یکی می‌گیرد؛ داده OSM هر دو را دارد."""
+    fa = q.replace("ي", "ی").replace("ك", "ک")
+    ar = fa.replace("ی", "ي").replace("ک", "ك")
+    return {q, fa, ar}
+
+
 @site_user_required
 @require_GET
 def areas(request):
     q = (request.GET.get("q") or "").strip()
     qs = Area.objects.all()
     if q:
-        qs = qs.filter(name__icontains=q) | Area.objects.filter(name_en__icontains=q)
-    order = {"province": 0, "county": 1, "city": 2}
-    rows = sorted(qs[:200], key=lambda a: (order[a.level], a.name))[:40]
+        names = _variants(q)
+        match = Q()
+        for n in names:
+            match |= Q(name__icontains=n) | Q(name_en__icontains=n)
+        exact = Q()
+        for n in names:
+            exact |= Q(name__iexact=n)
+        # نام دقیق اول، بعد شهر، شهرستان و استان؛ مرتب‌سازی در پایگاه داده تا نتیجه مناسب با سقف تعداد حذف نشود
+        qs = qs.filter(match).annotate(
+            exact=Case(When(exact, then=0), default=1, output_field=IntegerField()),
+            lvl=Case(When(level="city", then=0), When(level="county", then=1), default=2, output_field=IntegerField()),
+        ).order_by("exact", "lvl", "name")
+    else:
+        qs = qs.annotate(lvl=Case(When(level="province", then=0), When(level="county", then=1), default=2,
+                                  output_field=IntegerField())).order_by("lvl", "name")
+    rows = list(qs[:40])
     return JsonResponse({"results": [{"id": a.pk, "label": a.label, "level": a.level,
                                       "routing": ready.routing_allowed(a)} for a in rows]},
                         json_dumps_params={"ensure_ascii": False})

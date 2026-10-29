@@ -31,7 +31,9 @@ log = logging.getLogger(__name__)
 
 ATTRIBUTION = "© مشارکت‌کنندگان OpenStreetMap — مجوز ODbL 1.0 — https://www.openstreetmap.org/copyright"
 OSMCONF = Path(__file__).parent / "osmconf.ini"
-LEVELS = {"4": "province", "5": "county", "8": "city"}
+# در OSM ایران: استان ۴، شهرستان ۶ (در برخی داده‌ها ۵)، بخش ۷، و شهر ۸؛ دهستان‌های روستایی را کنار می‌گذاریم.
+LEVELS = {"4": "province", "5": "county", "6": "county", "8": "city"}
+_RURAL_PLACES = {"village", "hamlet", "locality", "farm", "isolated_dwelling"}
 ROUTING_MAX_MB = int(os.environ.get("OSM_ROUTING_MAX_MB", "40"))
 
 
@@ -136,7 +138,7 @@ def download_source(url: str | None = None) -> Path:
 
 
 def refresh_areas() -> int:
-    """مرز استان (۴)، شهرستان (۵) و شهر (۸) از خود فایل؛ چندضلعی ساده‌شده برای برش با osmium."""
+    """مرز استان (۴)، شهرستان (۶ یا ۵) و شهر (۸) از خود فایل؛ چندضلعی ساده‌شده برای برش با osmium."""
     from .models import Area
 
     src = source_file()
@@ -148,7 +150,7 @@ def refresh_areas() -> int:
               "r/boundary=administrative"])
         out = Path(d) / "areas.geojsonl"
         gdal._run([gdal._bin("ogr2ogr"), "-f", "GeoJSONSeq", str(out), str(bnd), "multipolygons",
-                   "-where", "admin_level IN ('4','5','8')", "-simplify", "0.002",
+                   "-where", "admin_level IN ('4','5','6','8')", "-simplify", "0.002",
                    "-oo", f"CONFIG_FILE={OSMCONF}", "-lco", "RS=NO"], env=gdal._env())
         rows = []
         for line in out.read_text(encoding="utf-8").splitlines():
@@ -159,6 +161,8 @@ def refresh_areas() -> int:
             name = p.get("name_fa") or p.get("name")
             geom = f.get("geometry")
             if not name or not geom:
+                continue
+            if p.get("admin_level") == "8" and (p.get("place") or "") in _RURAL_PLACES:
                 continue
             xs, ys = _coords(geom)
             rows.append(Area(name=name[:120], name_en=(p.get("name_en") or "")[:120], level=LEVELS[p["admin_level"]],
