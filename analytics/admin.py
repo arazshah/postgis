@@ -1,7 +1,7 @@
 from django import forms
 from django.conf import settings
 from django.contrib import admin
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.template.response import TemplateResponse
 from django.utils.html import format_html
 
@@ -30,6 +30,31 @@ class SourceReportAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def get_urls(self):
+        from django.urls import path
+
+        return [path("export/", self.admin_site.admin_view(self.export_view), name="analytics_export"),
+                *super().get_urls()]
+
+    def export_view(self, request):
+        """خروجی اکسل کامل (همه‌ی رویدادها و وضعیت سایت)؛ days=0 یعنی همه‌ی زمان‌ها."""
+        from django.http import HttpResponse
+        from django.utils import timezone
+
+        from . import export
+
+        if not self.has_module_permission(request):
+            raise PermissionDenied
+        try:
+            days = max(0, min(int(request.GET.get("days", 90)), 3650))
+        except ValueError:
+            days = 90
+        resp = HttpResponse(export.build(days),
+                            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        resp["Content-Disposition"] = f'attachment; filename="postgis-analytics-{timezone.now():%Y%m%d-%H%M}.xlsx"'
+        resp["Cache-Control"] = "no-store"
+        return resp
 
     def changelist_view(self, request, extra_context=None):
         try:

@@ -257,3 +257,75 @@ class TrackedLinkTests(TestCase):
         r = self.client.get(reverse("admin:analytics_trackedlink_change", args=[self.link.pk]))
         self.assertContains(r, "/go/linkedin-oct/")
         self.assertEqual(self.client.get(reverse("admin:analytics_trackedlink_add")).status_code, 200)
+
+
+class ClassifyRepairTests(SimpleTestCase):
+    def test_broken_utm_with_question_marks_is_split(self):
+        r = cl.classify({"utm_source": "aparat?utm_medium=social?utm_campaign=help-videos"}, "")
+        self.assertEqual((r["source"], r["medium"], r["campaign"]), ("aparat", "social", "help-videos"))
+
+    def test_proper_params_not_overwritten_by_repair(self):
+        r = cl.classify({"utm_source": "x?utm_medium=y", "utm_medium": "paid"}, "")
+        self.assertEqual((r["source"], r["medium"]), ("x", "paid"))
+
+    def test_android_app_referrer_is_social_not_referral(self):
+        self.assertEqual(cl.classify({}, "com.linkedin.android")["source"], "linkedin")
+        r = cl.classify({}, "org.telegram.messenger")
+        self.assertEqual((r["source"], r["medium"]), ("telegram", "social"))
+
+
+class ActionTrackingTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(phone="09121234567")
+        self.client.get("/", HTTP_USER_AGENT=UA_DESK)
+        self.client.force_login(self.user)
+
+    def test_view_and_post_are_recorded_without_form_content(self):
+        self.client.get(reverse("databases:create"), HTTP_USER_AGENT=UA_DESK)
+        self.client.post(reverse("databases:create"), {"label": "x", "password": "secret-pass-123"}, HTTP_USER_AGENT=UA_DESK)
+        names = set(Event.objects.values_list("name", flat=True))
+        self.assertTrue(any(n.startswith("view:") for n in names), names)
+        self.assertTrue(any(n.startswith("do:") for n in names), names)
+        blob = " ".join(str(e.meta) + e.path for e in Event.objects.all())
+        self.assertNotIn("secret-pass-123", blob)
+
+    def test_staff_and_ajax_are_not_recorded(self):
+        staff = User.objects.create_admin("root", "Str0ng-Admin-Pass")
+        self.client.force_login(staff)
+        self.client.get(reverse("databases:create"), HTTP_USER_AGENT=UA_DESK)
+        self.client.force_login(self.user)
+        self.client.get(reverse("databases:create"), HTTP_USER_AGENT=UA_DESK, HTTP_X_REQUESTED_WITH="fetch")
+        self.assertFalse(Event.objects.filter(name__startswith="view:").exists())
+
+
+class ExportTests(TestCase):
+    def test_workbook_has_all_sheets_and_masks_phone(self):
+        import io
+
+        from openpyxl import load_workbook
+
+        from analytics import export
+
+        user = User.objects.create_user(phone="09121234567")
+        self.client.get("/?utm_source=linkedin&utm_medium=paid&utm_campaign=oct", HTTP_USER_AGENT=UA_DESK)
+        self.client.force_login(user)
+        self.client.get(reverse("databases:create"), HTTP_USER_AGENT=UA_DESK)
+        wb = load_workbook(io.BytesIO(export.build(30)))
+        for name in ("راهنما", "خلاصه", "قیف", "روزانه", "منابع", "کاربران", "ریزکارها", "رویدادهای قیف", "بازدیدها",
+                     "ثبت عملیات", "پایگاه‌ها", "کارها", "فاکتورها", "لینک‌ها"):
+            self.assertIn(name, wb.sheetnames)
+        users = [[c.value for c in row] for row in wb["کاربران"].iter_rows(min_row=2)]
+        self.assertEqual(users[0][1], "0912***4567")
+        self.assertEqual(users[0][-1], "فقط ثبت‌نام")
+        actions = [[c.value for c in row] for row in wb["ریزکارها"].iter_rows(min_row=2)]
+        self.assertTrue(any(r[3] == "databases:create" for r in actions))
+        self.assertEqual(export.mask_phone("تماس 09121234567 و 09351112233"), "تماس 0912***4567 و 0935***2233")
+
+    def test_admin_download_requires_staff_and_returns_xlsx(self):
+        self.assertEqual(self.client.get(reverse("admin:analytics_export")).status_code, 302)
+        admin = User.objects.create_admin("root", "Str0ng-Admin-Pass")
+        self.client.force_login(admin)
+        r = self.client.get(reverse("admin:analytics_export") + "?days=0")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("spreadsheetml", r["Content-Type"])
+        self.assertTrue(r.content.startswith(b"PK"))
