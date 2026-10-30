@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=3000">
+<title>نقشه راه ۹۰ روزه PostGIS.ir</title>
+<!-- پوستر A1 (۵۹۴×۸۴۱ میلی‌متر). ساخت PDF و PNG: node docs/marketing/build.js
+     آیکون‌ها با {{i:نام}} از core/icons.py جایگزین می‌شوند؛ رنگ‌ها همان توکن‌های app.css و ds.css. -->
+<style>
+@font-face{font-family:"Vazirmatn";font-weight:400;src:url(../../static/fonts/vazirmatn-arabic-400-normal.woff2) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:"Vazirmatn";font-weight:500;src:url(../../static/fonts/vazirmatn-arabic-500-normal.woff2) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:"Vazirmatn";font-weight:700;src:url(../../static/fonts/vazirmatn-arabic-700-normal.woff2) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:"Vazirmatn";font-weight:400;src:url(../../static/fonts/vazirmatn-latin-400-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+2000-206F}
+@font-face{font-family:"Vazirmatn";font-weight:500;src:url(../../static/fonts/vazirmatn-latin-500-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+2000-206F}
+@font-face{font-family:"Vazirmatn";font-weight:700;src:url(../../static/fonts/vazirmatn-latin-700-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+2000-206F}
+@font-face{font-family:"Kufi";font-weight:700;src:url(../../static/fonts/noto-kufi-arabic-arabic-700-normal.woff2) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:"Kufi";font-weight:800;src:url(../../static/fonts/noto-kufi-arabic-arabic-800-normal.woff2) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:"Kufi";font-weight:700;src:url(../../static/fonts/noto-kufi-arabic-latin-700-normal.woff2) format("woff2");unicode-range:U+0000-00FF}
+@font-face{font-family:"Kufi";font-weight:800;src:url(../../static/fonts/noto-kufi-arabic-latin-800-normal.woff2) format("woff2");unicode-range:U+0000-00FF}
+@font-face{font-family:"JBMono";font-weight:500;src:url(../../static/fonts/jetbrains-mono-latin-500-normal.woff2) format("woff2")}
+
+:root{
+  --paper:#EEF2EC;--paper-2:#E3EAE1;--surface:#F9FBF8;--card:#fff;--line:#C9D6CB;--line-2:#DDE5DA;
+  --ink:#12313A;--ink-2:#4B6269;--ink-3:#5F7479;
+  --teal:#0F5C59;--teal-dark:#0A4341;--teal-soft:#D3E5DF;
+  --ochre:#E0A526;--ochre-soft:#F5E7BD;--ochre-ink:#7a5200;
+  --blue:#3E7CB1;--blue-soft:#DCE8F3;
+  --red:#B42318;--red-soft:#F7DEDA;--green:#1A7F4B;--green-soft:#D7EEDF;
+  --f-body:"Vazirmatn",Tahoma,sans-serif;--f-display:"Kufi","Vazirmatn",sans-serif;--f-mono:"JBMono",monospace;
+  --W:3000px;--H:4243px;--pad:64px;--gap:22px;--r:18px;
+}
+@page{size:594mm 841mm;margin:0}
+@media print{html{zoom:.74834}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:var(--f-body);font-size:15.5px;line-height:1.72}
+.poster{width:var(--W);height:var(--H);overflow:hidden;position:relative;background:var(--paper);display:flex;flex-direction:column}
+h1,h2,h3,h4{font-family:var(--f-display);margin:0;font-weight:800;line-height:1.4}
+b,strong{font-weight:700}
+.mono,code{font-family:var(--f-mono);direction:ltr;unicode-bidi:isolate;font-size:.92em}
+.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none;vertical-align:-5px}
+ul{margin:0;padding:0;list-style:none}
+p{margin:0}
+
+/* ---------- سربرگ ---------- */
+.hero{background:var(--teal-dark);color:#fff;padding:40px var(--pad) 32px;position:relative;overflow:hidden}
+.hero svg.contours{position:absolute;inset:0;width:100%;height:100%;opacity:.13}
+.hero-in{position:relative;display:grid;grid-template-columns:1.2fr 1fr;gap:56px;align-items:start}
+.kicker{display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);border-radius:99px;padding:6px 18px;font-weight:700;font-size:17px;color:var(--ochre-soft)}
+.hero h1{font-size:76px;line-height:1.3;margin:14px 0 2px;letter-spacing:0}
+.hero h1 .dom{color:var(--ochre);font-family:var(--f-display)}
+.hero .sub{font-size:30px;font-family:var(--f-display);font-weight:700;color:#D3E5DF}
+.hero .dates{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border-radius:99px;background:rgba(255,255,255,.1);font-weight:700;font-size:16.5px}
+.pill.o{background:var(--ochre);color:var(--ink)}
+.mission{margin-top:18px;border-inline-start:6px solid var(--ochre);padding:6px 22px;font-size:21px;line-height:1.8;color:#fff;max-width:1180px}
+.mission small{display:block;color:#BFD6CF;font-size:15.5px;margin-top:4px}
+.targets{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.t{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:16px;padding:12px 18px 10px}
+.t .n{font-family:var(--f-display);font-weight:800;font-size:54px;line-height:1.1;color:#fff}
+.t .l{font-weight:700;font-size:18px;color:#E9F2EE}
+.t .d{font-size:14.5px;color:#BFD6CF;line-height:1.6}
+.t.star{grid-column:1/-1;background:var(--ochre);color:var(--ink);border:0;display:flex;align-items:center;gap:22px}
+.t.star .n{color:var(--ink);font-size:54px}
+.t.star .l,.t.star .d{color:var(--ink)}
+.t.star .d{color:#3b2c00}
+.note-s{font-size:14px;color:#BFD6CF;margin-top:10px}
+
+/* ---------- بدنه ---------- */
+.body{zoom:.92;padding:26px calc(var(--pad) / .92) 0;display:flex;flex-direction:column;gap:var(--gap);flex:1;min-height:0}
+.row{display:grid;gap:var(--gap)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px 26px;box-shadow:0 10px 26px -22px rgba(18,49,58,.55);min-width:0}
+.card>h2{display:flex;align-items:center;gap:12px;font-size:26px;margin-bottom:14px;color:var(--teal-dark)}
+.card>h2 .num{display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:var(--teal);color:#fff;font-size:22px;flex:none}
+.card>h2 .i{width:30px;height:30px;color:var(--teal)}
+h3{font-size:18.5px;color:var(--teal);margin:14px 0 6px;display:flex;align-items:center;gap:8px}
+h3:first-child{margin-top:0}
+.muted{color:var(--ink-2)}
+.small{font-size:14px;line-height:1.65}
+.dot li{position:relative;padding-inline-start:20px;margin:3px 0}
+.dot li::before{content:"";position:absolute;inset-inline-start:2px;top:.72em;width:8px;height:8px;border-radius:50%;background:var(--ochre)}
+.chk li{position:relative;padding-inline-start:30px;margin:4px 0}
+.chk li::before{content:"";position:absolute;inset-inline-start:0;top:.32em;width:18px;height:18px;border:2px solid var(--teal);border-radius:5px;background:#fff}
+.quote{background:var(--teal-soft);border-radius:12px;padding:12px 16px;color:var(--teal-dark);font-weight:500}
+.warn{background:var(--ochre-soft);border-radius:12px;padding:10px 16px;color:#4a3600}
+.tag{display:inline-block;font-size:13px;font-weight:700;padding:1px 10px;border-radius:99px;background:var(--teal-soft);color:var(--teal-dark);white-space:nowrap}
+.tag.o{background:var(--ochre-soft);color:var(--ochre-ink)}
+.tag.b{background:var(--blue-soft);color:#1f4f78}
+.tag.r{background:var(--red-soft);color:var(--red)}
+.tag.g{background:var(--green-soft);color:var(--green)}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:start;vertical-align:top;padding:7px 10px;border-bottom:1px solid var(--line-2)}
+th{font-size:14px;color:var(--ink-3);font-weight:700;background:var(--surface)}
+tr:last-child td{border-bottom:0}
+.tbl td{font-size:14.5px;line-height:1.6}
+
+/* ردیف ۱ */
+.r1{grid-template-columns:1.12fr 1fr 1.22fr .92fr}
+.pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0}
+.pillar{border:1px solid var(--line-2);border-radius:12px;padding:9px 13px;background:var(--surface)}
+.pillar b{display:flex;align-items:center;gap:8px;color:var(--teal-dark)}
+.pillar span{font-size:14px;color:var(--ink-2);line-height:1.55;display:block}
+.tiers{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.tier{display:grid;grid-template-columns:200px 1fr;align-items:center;border-radius:12px;padding:9px 14px;gap:12px}
+.tier b{font-family:var(--f-display);font-size:18px}
+.tier.a{background:var(--ochre-soft)} .tier.p{background:var(--teal);color:#fff} .tier.c{background:var(--blue-soft)}
+.tier span{font-size:14.5px}
+.funnel{display:flex;flex-direction:column;gap:7px;align-items:center;margin:4px 0 12px}
+.fb{height:52px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;color:#fff;font-weight:700;font-size:16px}
+.fb .v{font-family:var(--f-display);font-size:24px}
+.fb small{font-weight:500;opacity:.9;font-size:13.5px}
+.pipe{display:flex;gap:4px;align-items:stretch;margin:6px 0 10px}
+.pipe div{flex:1;text-align:center;background:var(--blue-soft);border-radius:8px;padding:6px 2px;font-size:12.5px;line-height:1.35;color:#1f4f78}
+.pipe div b{display:block;font-family:var(--f-display);font-size:21px}
+.defs li{margin:5px 0;font-size:14.5px;line-height:1.6}
+.defs li b{color:var(--teal-dark)}
+
+/* نوار زمان */
+.timeline{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px 26px 16px}
+.tl-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.tl-head h2{font-size:26px;color:var(--teal-dark);display:flex;gap:12px;align-items:center}
+.weeks{display:grid;grid-template-columns:repeat(13,1fr);gap:6px;position:relative}
+.wk{border-radius:10px;padding:6px 8px 7px;text-align:center;color:#fff;line-height:1.35}
+.wk b{font-family:var(--f-display);font-size:19px;display:block}
+.wk span{font-size:12.5px;opacity:.92}
+.ph1{background:var(--teal)} .ph2{background:var(--blue)} .ph3{background:#B9821A}
+.phases{display:grid;grid-template-columns:4fr 4fr 5fr;gap:6px;margin-bottom:6px}
+.phases div{border-radius:10px;padding:5px 12px;font-weight:700;font-size:15.5px;text-align:center}
+.phases .p1{background:var(--teal-soft);color:var(--teal-dark)} .phases .p2{background:var(--blue-soft);color:#1f4f78} .phases .p3{background:var(--ochre-soft);color:var(--ochre-ink)}
+.ms{display:grid;grid-template-columns:repeat(13,1fr);gap:6px;margin-top:8px}
+.ms div{font-size:12.8px;line-height:1.45;text-align:center;color:var(--ink-2);min-height:20px}
+.ms div b{display:block;color:var(--ink);font-size:13.5px}
+.ms .pin{border-top:4px solid var(--ochre);padding-top:5px}
+.ms .gate{border-top:4px solid var(--red);padding-top:5px}
+
+/* سه فاز */
+.r2{grid-template-columns:1fr 1fr 1.14fr}
+.phase{display:flex;flex-direction:column;gap:12px;min-width:0}
+.phead{border-radius:var(--r);padding:16px 22px;color:#fff}
+.phead h2{font-size:30px}
+.phead .goal{font-size:16px;line-height:1.65;margin-top:4px;opacity:.96}
+.gatebox{margin-top:10px;background:rgba(255,255,255,.14);border-radius:12px;padding:8px 14px;font-size:14.5px;line-height:1.6}
+.gatebox b{color:var(--ochre-soft)}
+.week{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 18px 10px;position:relative}
+.week .wh{display:flex;align-items:baseline;gap:12px;margin-bottom:4px;flex-wrap:wrap}
+.week .wn{font-family:var(--f-display);font-weight:800;font-size:20px;color:#fff;border-radius:9px;padding:0 11px}
+.week .wt{font-family:var(--f-display);font-weight:800;font-size:18px}
+.week .wd{font-size:13.5px;color:var(--ink-3);margin-inline-start:auto}
+.week .chk li{font-size:14.6px;line-height:1.58;margin:2px 0}
+.week .chk li::before{width:16px;height:16px;top:.3em}
+.week .out{font-size:13.5px;color:var(--ink-2);margin-top:3px;border-top:1px dashed var(--line);padding-top:4px}
+.week .out b{color:var(--teal-dark)}
+.p1c .wn{background:var(--teal)} .p2c .wn{background:var(--blue)} .p3c .wn{background:#B9821A}
+.p1c{border-inline-start:6px solid var(--teal)} .p2c{border-inline-start:6px solid var(--blue)} .p3c{border-inline-start:6px solid var(--ochre)}
+.extra{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:12px 18px}
+.extra h4{font-size:16.5px;color:var(--teal-dark);margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.extra p,.extra li{font-size:14.2px;line-height:1.65}
+.mat{width:100%;font-size:13.5px}
+.mat th,.mat td{padding:4px 6px;text-align:center;border:1px solid var(--line-2)}
+.mat td:first-child,.mat th:first-child{text-align:start}
+
+/* موتورها */
+.r3{grid-template-columns:1fr 1fr 1fr 1.18fr}
+.chain{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 8px}
+.chain span{background:var(--teal-soft);color:var(--teal-dark);border-radius:8px;padding:2px 10px;font-size:13.8px;font-weight:700}
+.chain .ar{background:none;color:var(--ochre);padding:0}
+.kw{display:flex;flex-wrap:wrap;gap:6px}
+.kw span{border:1px solid var(--line);border-radius:99px;padding:1px 12px;font-size:13.5px;background:var(--surface)}
+.ideas{columns:2;column-gap:18px;font-size:14px}
+.ideas li{break-inside:avoid;margin:2px 0}
+.seq{display:flex;flex-direction:column;gap:6px}
+.seq div{display:grid;grid-template-columns:78px 1fr;gap:10px;align-items:start;font-size:14.3px;line-height:1.55}
+.seq div b{background:var(--ochre-soft);color:var(--ochre-ink);border-radius:8px;text-align:center;font-size:13.5px;padding:2px 0}
+.path{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 4px}
+.path span{background:var(--teal);color:#fff;border-radius:8px;padding:3px 10px;font-size:13.8px;font-weight:700}
+.path .ar{background:none;color:var(--ochre);padding:0}
+.pk{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px}
+.pkg{border:1px solid var(--line-2);border-radius:12px;padding:9px 13px;background:var(--surface)}
+.pkg b{display:flex;gap:8px;align-items:center;color:var(--teal-dark);font-size:15.5px}
+.pkg p{font-size:13.6px;line-height:1.55;color:var(--ink-2)}
+.pkg .price{margin-top:5px;font-size:13.5px;color:var(--ink);border-top:1px dashed var(--line);padding-top:4px}
+.steps{counter-reset:s;display:flex;gap:6px;margin:6px 0 8px}
+.steps div{flex:1;background:var(--blue-soft);border-radius:10px;padding:6px 8px;font-size:13px;line-height:1.45;color:#1f4f78;position:relative}
+.steps div::before{counter-increment:s;content:counter(s,persian);display:block;font-family:var(--f-display);font-weight:800;font-size:18px}
+.obj td{font-size:13.8px;line-height:1.55;padding:5px 8px}
+.obj td:first-child{font-weight:700;color:var(--red);width:34%}
+
+/* سیستم اجرایی */
+.r4{grid-template-columns:.96fr 1.62fr 1fr}
+.cal td,.cal th{font-size:14px;padding:5px 8px}
+.cal td:first-child{font-weight:700;color:var(--teal-dark);white-space:nowrap}
+.blocks{display:flex;gap:6px;margin:8px 0}
+.blocks div{border-radius:10px;padding:6px 8px;color:#fff;font-size:13.5px;line-height:1.4;text-align:center}
+.blocks div b{display:block;font-family:var(--f-display);font-size:18px}
+.mins{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}
+.mins div{background:var(--surface);border:1px solid var(--line-2);border-radius:10px;text-align:center;padding:4px 2px;font-size:13px;line-height:1.35}
+.mins div b{display:block;font-family:var(--f-display);font-size:22px;color:var(--teal)}
+.kpi{table-layout:fixed}
+.kpi th,.kpi td{border:1px solid var(--line);padding:0;text-align:center;font-size:13px;height:46px;vertical-align:middle}
+.kpi th{height:40px;font-size:13px;color:var(--ink);background:var(--paper-2)}
+.kpi th.ph-a{background:var(--teal-soft)} .kpi th.ph-b{background:var(--blue-soft)} .kpi th.ph-c{background:var(--ochre-soft)}
+.kpi td.m{text-align:start;padding:0 10px;font-weight:700;font-size:13.8px;width:190px;line-height:1.3}
+.kpi td.m small{display:block;font-weight:400;color:var(--ink-3);font-size:12px}
+.kpi td .tg{display:block;font-size:12px;color:var(--ink-3);text-align:end;padding:2px 5px 0;line-height:1}
+.kpi td.gate{background:#FBEFEC}
+.kpi tr.total td{background:var(--surface)}
+.bx{display:inline-block;width:17px;height:17px;border:2px solid var(--teal);border-radius:4px;background:#fff;vertical-align:-3px;margin:0 2px}
+.gates{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.g{border-radius:12px;border:1px solid var(--line-2);padding:8px 12px;font-size:13.6px;line-height:1.55;background:var(--surface)}
+.g h4{font-size:15.5px;color:var(--red);margin-bottom:3px}
+.g .gr{color:var(--green);font-weight:700} .g .ye{color:var(--ochre-ink);font-weight:700} .g .rd{color:var(--red);font-weight:700}
+.bud td,.bud th{font-size:13.8px;padding:4px 8px;text-align:center}
+.bud td:first-child,.bud th:first-child{text-align:start}
+.bud tr.sum td{font-weight:800;background:var(--teal-soft)}
+.risks{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}.risks div{font-size:13.6px;line-height:1.5;border-bottom:1px solid var(--line-2);padding:3px 0}.risks b{display:block;color:var(--red)}
+.risk td:first-child{font-weight:700;width:42%}
+.rules{counter-reset:r}
+.rules li{counter-increment:r;position:relative;padding-inline-start:38px;margin:5px 0;font-size:15px;line-height:1.55}
+.rules li::before{content:counter(r,persian);position:absolute;inset-inline-start:0;top:0;width:28px;height:28px;border-radius:8px;background:var(--teal);color:#fff;display:grid;place-items:center;font-family:var(--f-display);font-weight:800;font-size:15px}
+.oath{background:var(--teal-dark);color:#fff}
+.oath>h2{color:#fff}.oath>h2 .num{background:var(--ochre);color:var(--ink)}
+.oath .rules li::before{background:var(--ochre);color:var(--ink)}
+.oath .rules li b{color:var(--ochre-soft)}
+.sign{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px;font-size:15px}
+.sign div{border-bottom:2px dashed rgba(255,255,255,.55);padding-bottom:30px;color:#D3E5DF}
+.decisions{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.decisions div{background:rgba(255,255,255,.08);border-radius:10px;padding:6px 12px;font-size:14px;line-height:1.55;color:#E9F2EE}
+.decisions b{color:var(--ochre)}
+.foot{display:flex;justify-content:space-between;align-items:center;padding:10px var(--pad) 12px;font-size:14px;color:var(--ink-3)}
+.foot b{color:var(--teal-dark)}
+</style>
+</head>
+<body>
+<div class="poster">
+
+<!-- ======================= سربرگ ======================= -->
+<header class="hero">
+  <svg class="contours" viewBox="0 0 1300 420" preserveAspectRatio="none" aria-hidden="true">
+    <g fill="none" stroke="#fff" stroke-width="1.4">
+      <path d="M-20 300 C180 220 300 360 520 280 S880 150 1080 240 1320 210 1320 210"/>
+      <path d="M-20 330 C190 250 320 390 540 310 S890 185 1090 270 1320 245 1320 245"/>
+      <path d="M-20 360 C200 285 340 420 560 340 S900 220 1100 300 1320 280 1320 280"/>
+      <path d="M-20 80 C160 140 320 20 520 90 S860 200 1060 110 1320 140 1320 140"/>
+      <path d="M-20 50 C170 110 330 -10 530 60 S870 170 1070 80 1320 110 1320 110"/>
+      <ellipse cx="980" cy="170" rx="90" ry="42"/><ellipse cx="980" cy="170" rx="56" ry="24"/><ellipse cx="980" cy="170" rx="22" ry="9"/>
+      <ellipse cx="260" cy="190" rx="120" ry="50"/><ellipse cx="260" cy="190" rx="70" ry="28"/>
+    </g>
+  </svg>
+  <div class="hero-in">
+    <div>
+      <span class="kicker">{{i:target}} نقشه‌ی راه ۹۰ روزه · بازاریابی، جامعه و درآمد · نسخه‌ی دیوار دفتر</span>
+      <h1><span class="dom">PostGIS.ir</span> — از محصول به کسب‌وکار</h1>
+      <div class="sub">زیرساخت مکانی پروژه‌های ایران</div>
+      <div class="dates">
+        <span class="pill o">{{i:clock}} شروع: شنبه ۹ آبان ۱۴۰۵</span>
+        <span class="pill">پایان: جمعه ۹ بهمن ۱۴۰۵</span>
+        <span class="pill">۱۳ هفته · ۷۸ روز کاری · ۳ تا ۴ ساعت در روز</span>
+        <span class="pill">بودجه: ۴ میلیون تومان در ماه</span>
+      </div>
+      <p class="mission">در این ۹۰ روز، Araz را بنیان‌گذار یک اکوسیستم تخصصی GIS معرفی کن، نه فقط توسعه‌دهنده‌ی یک محصول. PostGIS.ir محصولِ این اکوسیستم است، نه تمام هویت آن؛ اما هر فعالیت جامعه باید یک مسیر طبیعی به استفاده‌ی واقعی از محصول داشته باشد.
+        <small>پنج محور: ۱. جایگاه‌سازی و هویت برند · ۲. محتوا و رسانه · ۳. جامعه و همکاری · ۴. جذب و فعال‌سازی · ۵. فروش و درآمدزایی</small></p>
+    </div>
+    <div>
+      <div class="targets">
+        <div class="t"><div class="n">۳۰۰</div><div class="l">ثبت‌نام تجمعی</div><div class="d">از حدود ۶٬۰۰۰ بازدید یکتا (تبدیل ۵٪)</div></div>
+        <div class="t"><div class="n">۱۲۰</div><div class="l">کاربر فعال‌شده</div><div class="d">۴۰٪ ثبت‌نام‌ها: پایگاه + داده + نقشه در ۷ روز</div></div>
+        <div class="t"><div class="n">۵۰</div><div class="l">کاربر فعال ماهانه</div><div class="d">دست‌کم ۲ روز استفاده در ماه</div></div>
+        <div class="t"><div class="n">۵</div><div class="l">مشتری پرداخت‌کننده</div><div class="d">۳ از فروش مستقیم + ۲ خرید خودکار از سایت</div></div>
+        <div class="t"><div class="n">۳</div><div class="l">همکاری دانشگاهی/تجاری</div><div class="d">انجمن علمی، مدرس همکار، شرکت یا آموزشگاه</div></div>
+        <div class="t"><div class="n">۴<small style="font-size:24px"> میلیون تومان</small></div><div class="l">درآمد ماه سوم (دست‌کم)</div><div class="d">دست‌کم برابر بودجه‌ی ماهانه‌ی بازاریابی</div></div>
+        <div class="t star">{{i:spark}}<div><div class="l">ستاره‌ی قطبی (North Star): پایگاه‌های داده‌ای که هر هفته با داده‌ی واقعی استفاده می‌شوند</div><div class="d">همه‌ی تصمیم‌ها با یک پرسش سنجیده می‌شوند: «این کار این عدد را بالا می‌برد؟» هدف هفته‌ی ۱۳: ۳۵ پایگاه فعال هفتگی</div></div><div class="n" style="margin-inline-start:auto">۳۵</div></div>
+      </div>
+      <p class="note-s">این اعداد هدف آزمایشی‌اند، نه پیش‌بینی قطعی فروش. در دروازه‌های روز ۲۸ و ۵۶ با نرخ تبدیل واقعی تنظیم می‌شوند. ۳۰۰ ثبت‌نام با ۵۰ کاربر فعال و ۵ مشتری واقعی از ۳٬۰۰۰ ثبت‌نام غیرفعال ارزشمندتر است.</p>
+    </div>
+  </div>
+</header>
+
+<main class="body">
+
+<!-- ======================= ردیف ۱: پایه‌های استراتژی ======================= -->
+<section class="row r1">
+
+  <article class="card">
+    <h2><span class="num">۱</span>جایگاه‌سازی و پیام واحد</h2>
+    <div class="quote"><b>یک جمله:</b> PostGIS.ir در کمتر از یک دقیقه یک پایگاه داده‌ی مکانی PostGIS آماده به شما می‌دهد؛ با پنل فارسی، داده‌ی آماده‌ی ایران، اتصال مستقیم QGIS و GeoServer و پرداخت ریالی. بدون نصب، بدون سرور، بدون دردسر تحریم.</div>
+    <div class="pillars">
+      <div class="pillar"><b>{{i:bolt}} فوری</b><span>۶۰ ثانیه تا پایگاه آماده؛ ۱۰ دقیقه تا اولین نقشه</span></div>
+      <div class="pillar"><b>{{i:pin}} بومی</b><span>فارسی، پرداخت شاپرکی، داده‌ی OSM ایران و نقشه‌ی پایه‌ی فارسی</span></div>
+      <div class="pillar"><b>{{i:layers}} کامل</b><span>ورود داده، SQL و پرسش فارسی، تحلیل، نقشه و نمودار، WMS/WFS، API، کلاس، برداشت میدانی</span></div>
+      <div class="pillar"><b>{{i:lock}} امن و بی‌قفل</b><span>بکاپ و بازگردانی، نقش محدود، خروجی کامل هر زمان؛ داده مال مشتری است</span></div>
+    </div>
+    <h3>{{i:compare}} چرا ما؟ جایگزین فعلی مشتری</h3>
+    <table class="tbl">
+      <tr><th>امروز چه می‌کند</th><th>درد</th><th>پاسخ ما</th></tr>
+      <tr><td>نصب PostgreSQL روی لپ‌تاپ</td><td>خطای نصب و افزونه، کار تیمی ناممکن</td><td>پایگاه ابری با یک رشته‌ی اتصال</td></tr>
+      <tr><td>سرور یا VPS شخصی</td><td>نگهداری، امنیت، بکاپ، زمان DevOps</td><td>سرویس مدیریت‌شده با پایش و بکاپ</td></tr>
+      <tr><td>سرویس خارجی</td><td>تحریم، پرداخت ارزی، کندی</td><td>داخل ایران، ریالی، پشتیبانی فارسی</td></tr>
+      <tr><td>Shapefile و اکسل پراکنده</td><td>نسخه‌های متعدد، بدون کوئری</td><td>یک منبع حقیقت با SQL و نقشه</td></tr>
+    </table>
+    <h3>{{i:play}} معرفی ۳۰ ثانیه‌ای (همه‌جا یکسان)</h3>
+    <p class="small">«دانشجو یا تیم GIS هستید؟ به‌جای یک روز درگیری با نصب، در یک دقیقه پایگاه PostGIS بسازید، داده‌ی استان خودتان را با یک کلیک وارد کنید، در QGIS باز کنید و نقشه را منتشر کنید. رایگان شروع کنید: PostGIS.ir»</p>
+    <p class="warn small" style="margin-top:8px"><b>نام برند:</b> PostGIS نام پروژه‌ی متن‌باز OSGeo است. همه‌جا بنویس «سرویس مستقل مبتنی بر PostGIS» و سهم جامعه‌ی متن‌باز را با آموزش و ترجمه برگردان؛ این خودش اعتبار است.</p>
+  </article>
+
+  <article class="card">
+    <h2><span class="num">۲</span>معماری برند و نقش کانال‌ها</h2>
+    <div class="tiers">
+      <div class="tier a"><b>Araz</b><span>چهره‌ی تخصصی: آموزش، روایت ساخت، اعتمادسازی</span></div>
+      <div class="tier p"><b>PostGIS.ir</b><span>برند اصلی محصول و کسب‌وکار: قابلیت، قیمت، فروش</span></div>
+      <div class="tier c"><b>PostGIS Community</b><span>جامعه، رویداد، چالش؛ دارایی بلندمدت مستقل از خرید</span></div>
+    </div>
+    <table class="tbl">
+      <tr><th>کانال</th><th>چه منتشر شود</th><th>تواتر</th></tr>
+      <tr><td><b>LinkedIn شخصی Araz</b></td><td>تحلیل تخصصی، ساخت در ملأعام، درس‌های پروژه‌های GIS</td><td>۲ در هفته</td></tr>
+      <tr><td><b>LinkedIn شرکت</b></td><td>خبر قابلیت، مطالعه‌ی موردی، رویداد</td><td>۲ در هفته</td></tr>
+      <tr><td><b>Instagram</b></td><td>ریلز ۳۰ تا ۹۰ ثانیه، کاروسل آموزشی، پشت صحنه</td><td>۳ در هفته</td></tr>
+      <tr><td><b>Telegram Community</b></td><td>آموزش، چالش، پرسش و پاسخ، اعلان رویداد</td><td>روزانه، سبک</td></tr>
+      <tr><td><b>آپارات + YouTube</b></td><td>ویدیوی کامل آموزشی و ضبط وبینارها</td><td>۱ در هفته</td></tr>
+      <tr><td><b>وبلاگ سایت + ویرگول</b></td><td>مقاله و راهنمای جست‌وجوپذیر (SEO)</td><td>۱ در هفته</td></tr>
+      <tr><td><b>پیامک و ایمیل محصول</b></td><td>فعال‌سازی و یادآوری، فقط کاربر ثبت‌نامی</td><td>رفتاری</td></tr>
+      <tr><td><b>GitHub</b></td><td>نوت‌بوک‌ها، نمونه‌کدها و دیتاست چالش‌ها</td><td>با هر پروژه</td></tr>
+    </table>
+    <p class="quote small" style="margin-top:10px"><b>قانون:</b> یک موضوع، چند روایت. هیچ محتوایی کپی‌شده در همه‌ی کانال‌ها منتشر نمی‌شود؛ قالب و زاویه با مخاطب هر کانال جور می‌شود. هر لینک UTM دارد (<span class="mono">utm_campaign=w03-postgisday</span>) تا آمار داخلی سایت منبع اولین ورود را ثبت کند.</p>
+  </article>
+
+  <article class="card">
+    <h2><span class="num">۳</span>مخاطبان هدف: چه کسی، چه دردی، چه پیشنهادی</h2>
+    <table class="tbl">
+      <tr><th style="width:17%">بخش</th><th>درد اصلی</th><th>لحظه‌ی «آها»</th><th style="width:21%">پیشنهاد و نقش</th></tr>
+      <tr><td><b>دانشجو</b><br><span class="small muted">ارشد، دکتری، پایان‌نامه</span></td><td>نصب، نبود داده‌ی ایران، یادگیری SQL مکانی</td><td>داده‌ی OSM استان خودش در ۵ دقیقه روی نقشه</td><td>پلن رایگان، پلن پایان‌نامه <span class="tag">حجم و دهان‌به‌دهان</span></td></tr>
+      <tr><td><b>استاد و مدرس</b></td><td>آماده‌کردن محیط برای ۳۰ دانشجو در هر ترم</td><td>کلاس با کد ورود و نقشه‌ی مشترک کلاس</td><td>بسته‌ی دانشگاهی ترمی <span class="tag b">اعتماد و کانال</span></td></tr>
+      <tr><td><b>توسعه‌دهنده</b><br><span class="small muted">Python، وب</span></td><td>DevOps، اتصال امن، API و کاشی</td><td>رشته‌ی اتصال، REST API، کاشی برداری</td><td>بسته‌ی توسعه‌دهنده <span class="tag o">درآمد پیوسته</span></td></tr>
+      <tr><td><b>شرکت GIS و مشاور</b></td><td>سرور، بکاپ، دسترسی تیم، انتشار WMS</td><td>تیم و نقش‌ها، GeoServer، بکاپ و بازگردانی</td><td>بسته‌ی تیمی و سازمانی <span class="tag o">درآمد اصلی</span></td></tr>
+      <tr><td><b>مهندس نقشه‌بردار</b></td><td>برداشت پراکنده، انتقال دستی داده</td><td>برداشت با گوشی یا RTK مستقیم در پایگاه</td><td>بسته‌ی برداشت میدانی <span class="tag g">بازار تازه</span></td></tr>
+    </table>
+    <h3>{{i:info}} اولویت ۹۰ روز</h3>
+    <ul class="dot small">
+      <li><b>دانشگاه کانال اعتماد است، شرکت کانال درآمد</b>؛ هر دو از روز اول در برنامه‌اند، چون هم‌پوشانی دارند: دانشجوی امروز، کارمند شرکت فرداست.</li>
+      <li><b>نقشه‌بردار آزمون بازار تازه است:</b> ۵ دمو در ماه سوم. اگر ۲ نفر پرداخت کردند، فصل بعد بخش اصلی می‌شود.</li>
+      <li><b>شهرداری‌ها و سازمان‌ها بعد از ۹۰ روز:</b> چرخه‌ی فروش طولانی است. اول ۲ مطالعه‌ی موردی، بعد مذاکره‌ی سازمانی.</li>
+    </ul>
+    <h3>{{i:users}} جای پیدا کردن مخاطب</h3>
+    <p class="small">انجمن‌های علمی جغرافیا، نقشه‌برداری، عمران و شهرسازی · گروه‌های تلگرامی GIS و QGIS · سازمان نظام مهندسی و دفاتر نقشه‌برداری · فروشندگان گیرنده‌ی GNSS · شرکت‌های WebGIS و مشاوران شهری · آموزشگاه‌ها و پلتفرم‌های آموزش آنلاین · مقاله‌نویسان کنفرانس‌های ژئوماتیک</p>
+  </article>
+
+  <article class="card">
+    <h2><span class="num">۴</span>قیف و ریاضی هدف</h2>
+    <div class="funnel">
+      <div class="fb" style="width:100%;background:var(--teal-dark)"><span>بازدید یکتا</span><span class="v">۶٬۰۰۰</span></div>
+      <div class="fb" style="width:88%;background:var(--teal)"><span>ثبت‌نام <small>۵٪</small></span><span class="v">۳۰۰</span></div>
+      <div class="fb" style="width:74%;background:#2E7A6F"><span>فعال‌شده <small>۴۰٪</small></span><span class="v">۱۲۰</span></div>
+      <div class="fb" style="width:60%;background:var(--blue)"><span>فعال ماهانه</span><span class="v">۵۰</span></div>
+      <div class="fb" style="width:46%;background:var(--ochre);color:var(--ink)"><span>پرداخت <small>۱۰٪</small></span><span class="v">۵</span></div>
+    </div>
+    <h3>{{i:target}} قیف فروش مستقیم (B2B و دانشگاه)</h3>
+    <div class="pipe">
+      <div><b>۶۰</b>سرنخ</div><div><b>۲۰</b>پاسخ</div><div><b>۱۲</b>گفت‌وگوی کشف</div><div><b>۸</b>دمو</div><div><b>۵</b>آزمایشی</div><div style="background:var(--ochre-soft);color:var(--ochre-ink)"><b>۳</b>قرارداد</div>
+    </div>
+    <ul class="defs">
+      <li><b>فعال‌سازی (Activation):</b> ساخت پایگاه، ورود اولین لایه و دیدن آن روی نقشه تا ۷ روز پس از ثبت‌نام. هدف ۴۰٪.</li>
+      <li><b>ماندگاری (Retention):</b> درصد فعال‌شده‌ها که هفته‌ی بعد و هفته‌ی چهارم برمی‌گردند. هدف ۳۰٪.</li>
+      <li><b>تبدیل (Conversion):</b> درصد کاربران فعال که پرداخت می‌کنند. هدف ۱۰٪.</li>
+    </ul>
+    <p class="warn small" style="margin-top:8px"><b>قانون قیف:</b> اگر ثبت‌نام بالا و فعال‌سازی پایین بود، تبلیغ را متوقف کن و مسیر ورود را درست کن. پول روی سطل سوراخ نریز.</p>
+  </article>
+</section>
+
+<!-- ======================= نوار زمان ======================= -->
+<section class="timeline">
+  <div class="tl-head"><h2>{{i:clock}} نوار زمان ۱۳ هفته‌ای و نقطه‌های عطف تقویم ایران</h2>
+    <span class="small muted">هر شنبه کارت هفته را بخوان، هر جمعه تیک بزن و عدد بنویس. <span class="tag r">قرمز = دروازه‌ی تصمیم</span> <span class="tag o">زرد = رویداد</span></span></div>
+  <div class="phases"><div class="p1">فاز ۱ · شناخت · روز ۱ تا ۲۸</div><div class="p2">فاز ۲ · اعتماد · روز ۲۹ تا ۵۶</div><div class="p3">فاز ۳ · درآمد · روز ۵۷ تا ۹۱</div></div>
+  <div class="weeks">
+    <div class="wk ph1"><b>هفته ۱</b><span>۹ تا ۱۵ آبان</span></div>
+    <div class="wk ph1"><b>هفته ۲</b><span>۱۶ تا ۲۲ آبان</span></div>
+    <div class="wk ph1"><b>هفته ۳</b><span>۲۳ تا ۲۹ آبان</span></div>
+    <div class="wk ph1"><b>هفته ۴</b><span>۳۰ آبان تا ۶ آذر</span></div>
+    <div class="wk ph2"><b>هفته ۵</b><span>۷ تا ۱۳ آذر</span></div>
+    <div class="wk ph2"><b>هفته ۶</b><span>۱۴ تا ۲۰ آذر</span></div>
+    <div class="wk ph2"><b>هفته ۷</b><span>۲۱ تا ۲۷ آذر</span></div>
+    <div class="wk ph2"><b>هفته ۸</b><span>۲۸ آذر تا ۴ دی</span></div>
+    <div class="wk ph3"><b>هفته ۹</b><span>۵ تا ۱۱ دی</span></div>
+    <div class="wk ph3"><b>هفته ۱۰</b><span>۱۲ تا ۱۸ دی</span></div>
+    <div class="wk ph3"><b>هفته ۱۱</b><span>۱۹ تا ۲۵ دی</span></div>
+    <div class="wk ph3"><b>هفته ۱۲</b><span>۲۶ دی تا ۲ بهمن</span></div>
+    <div class="wk ph3"><b>هفته ۱۳</b><span>۳ تا ۹ بهمن</span></div>
+  </div>
+  <div class="ms">
+    <div class="pin"><b>شروع عملیات</b>پیام واحد، کانال‌ها، داشبورد</div>
+    <div class="pin"><b>اعلام وبینار ۱</b>دعوت ۱۰ انجمن و ۵ مدرس</div>
+    <div class="pin"><b>۲۷ آبان: روز جهانی GIS</b>۲۸ آبان: PostGIS Day، رونمایی رسمی، وبینار ۱، چالش ۱</div>
+    <div class="gate"><b>دروازه‌ی ۱ · روز ۲۸</b>بازخورد و رفع موانع</div>
+    <div class="pin"><b>نتایج چالش ۱</b>پروژه‌ی شهری</div>
+    <div class="pin"><b>وبینار ۲</b>Python و توسعه‌دهندگان</div>
+    <div class="pin"><b>چالش ۲</b>WebGIS و آزمایشی شرکت‌ها</div>
+    <div class="pin"><b>۳۰ آذر: یلدا</b>کمپین پلن سالانه · <span style="color:var(--red)">دروازه‌ی ۲</span></div>
+    <div class="pin"><b>استادان درس بهار را می‌چینند</b>فروش بسته‌ی دانشگاهی</div>
+    <div class="pin"><b>وبینار ۳</b>WebGIS سازمانی، دموی نقشه‌برداران</div>
+    <div class="pin"><b>چالش ۳</b>pgRouting، برنامه‌ی معرفی</div>
+    <div class="pin"><b>بودجه‌ی پایان سال سازمان‌ها</b>پیش‌فاکتور و قرارداد سالانه</div>
+    <div class="gate"><b>دروازه‌ی ۳ · روز ۹۱</b>گزارش ۹۰ روز و برنامه‌ی فصل دوم</div>
+  </div>
+</section>
+
+<!-- ======================= ردیف ۲: سه فاز و کارت هفته‌ها ======================= -->
+<section class="row r2">
+
+  <!-- فاز ۱ -->
+  <div class="phase">
+    <div class="phead ph1">
+      <h2>فاز ۱ · ساخت شناخت برند</h2>
+      <p class="goal">هر کسی در جامعه‌ی GIS در کمتر از یک دقیقه بفهمد PostGIS.ir چه ارزشی می‌دهد. رونمایی رسمی روی PostGIS Day سوار می‌شود.</p>
+      <div class="gatebox"><b>دروازه‌ی روز ۲۸:</b> ۹۰ ثبت‌نام · ۳۶ فعال‌شده · ۱۵۰ عضو تلگرام · ۱ همکاری · ۱۵ گفت‌وگوی واقعی با کاربر</div>
+    </div>
+    <div class="week p1c">
+      <div class="wh"><span class="wn">۱</span><span class="wt">آماده‌سازی برند و اندازه‌گیری</span><span class="wd">۹ تا ۱۵ آبان</span></div>
+      <ul class="chk">
+        <li><b>شنبه:</b> نهایی‌کردن شعار، پیام واحد و معرفی ۳۰ ثانیه‌ای</li>
+        <li><b>یکشنبه:</b> LinkedIn شرکت و پروفایل Araz (تیتر: «بنیان‌گذار PostGIS.ir · زیرساخت مکانی ایران»)</li>
+        <li><b>دوشنبه:</b> Bio و Highlight اینستاگرام؛ ساخت کانال و گروه تلگرام PostGIS Community</li>
+        <li><b>سه‌شنبه:</b> قالب پست، ریلز و کاور؛ ضبط ۳ ویدیوی کوتاه از قابلیت‌های واقعی</li>
+        <li><b>چهارشنبه:</b> بازبینی صفحه‌ی اصلی، قیمت و ثبت‌نام؛ زمان ثبت‌نام تا اولین نقشه حداکثر ۱۰ دقیقه</li>
+        <li><b>پنجشنبه:</b> داشبورد، UTM و Search Console؛ فهرست ۶۰ سرنخ (۲۰ انجمن و استاد، ۲۰ شرکت، ۲۰ نقشه‌بردار و توسعه‌دهنده)</li>
+        <li><b>جمعه:</b> مرور اعداد و نوشتن برنامه‌ی هفته‌ی ۲</li>
+      </ul>
+      <p class="out"><b>خروجی:</b> لوگو و رنگ ثابت، قالب کاور، صفحه‌ی معرفی، قیمت روشن، دکمه‌ی «شروع رایگان»، صفحه‌ی تماس و پشتیبانی</p>
+    </div>
+    <div class="week p1c">
+      <div class="wh"><span class="wn">۲</span><span class="wt">موتور محتوا روشن می‌شود</span><span class="wd">۱۶ تا ۲۲ آبان</span></div>
+      <ul class="chk">
+        <li>۴ محتوای پایه، هر کدام یک ریلز ۳۰ تا ۹۰ ثانیه و یک مقاله: PostGIS چیست · پایگاه مکانی بدون نصب · اتصال QGIS · اولین کوئری مکانی روی داده‌ی ایران</li>
+        <li>۱۰ پیام به انجمن‌های علمی و ۵ پیام به مدرسان GIS: دعوت به همکاری در PostGIS Day</li>
+        <li>اعلام وبینار ۱ و صفحه‌ی ثبت‌نام آن (با محیط تمرین رایگان برای هر شرکت‌کننده)</li>
+        <li>برنامه‌ی «۵۰ عضو بنیان‌گذار» جامعه؛ ۵ مصاحبه‌ی ۲۰ دقیقه‌ای با کاربران فعلی</li>
+      </ul>
+    </div>
+    <div class="week p1c">
+      <div class="wh"><span class="wn">۳</span><span class="wt">هفته‌ی رونمایی · روز GIS و PostGIS Day</span><span class="wd">۲۳ تا ۲۹ آبان</span></div>
+      <ul class="chk">
+        <li>شنبه تا سه‌شنبه هر روز رونمایی یک قابلیت: پایگاه در ۶۰ ثانیه · داده‌ی آماده‌ی ایران · پرسش فارسی به SQL · نقشه، نمودار و انتشار WMS/WFS</li>
+        <li><b>چهارشنبه ۲۷ آبان:</b> یادداشت Araz در لینکدین: «چرا ایران یک زیرساخت مکانی بومی لازم دارد»</li>
+        <li><b>پنجشنبه ۲۸ آبان:</b> وبینار ۱ «از QGIS تا پایگاه داده‌ی مکانی ابری؛ اجرای یک پروژه‌ی واقعی با PostGIS»</li>
+        <li>اعلام چالش ۱ <span class="mono">#PostGISChallenge</span> و پیشنهاد ۷ روزه‌ی شرکت‌کنندگان</li>
+      </ul>
+    </div>
+    <div class="week p1c">
+      <div class="wh"><span class="wn">۴</span><span class="wt">بازخورد و رفع موانع</span><span class="wd">۳۰ آبان تا ۶ آذر</span></div>
+      <ul class="chk">
+        <li>انتشار ضبط وبینار در آپارات و YouTube، به‌همراه مقاله‌ی خلاصه</li>
+        <li>پیگیری همه‌ی شرکت‌کننده‌ها («به کجا رسیدی؟») و ۱۰ گفت‌وگوی بازخورد</li>
+        <li>رفع ۳ مانع اول فعال‌سازی (قابلیت تازه ساخته نمی‌شود)</li>
+        <li>اولین ۵ تماس با شرکت‌های GIS؛ مرور دروازه‌ی ۱</li>
+      </ul>
+    </div>
+    <div class="extra">
+      <h4>{{i:share}} برنامه‌ی وبینار ۱ (۹۰ دقیقه)</h4>
+      <p>معرفی مسئله (۱۰ دقیقه) · آشنایی با PostgreSQL و PostGIS (۱۵) · ساخت پایگاه و ورود داده (۲۰) · اتصال QGIS و تحلیل (۲۰) · پرسش و پاسخ (۱۵) · معرفی PostGIS.ir و پلن رایگان (۵). <b>شرکت‌کننده باید چیزی یاد بگیرد که فردا خودش اجرا کند.</b> تبلیغ فقط ۵ دقیقه‌ی آخر.</p>
+    </div>
+    <div class="extra" style="flex:1">
+      <h4>{{i:edit}} پیام همکاری با استاد یا انجمن (کوتاه و شخصی)</h4>
+      <p>سلام و وقت بخیر، [نام]. من Araz هستم، توسعه‌دهنده‌ی PostGIS.ir؛ پلتفرمی که ساخت و مدیریت پایگاه داده‌ی مکانی ابری را برای پروژه‌های GIS ساده می‌کند. [یک جمله درباره‌ی کار مشخص آن‌ها، مثلاً درس یا رویدادشان.] پیشنهاد می‌کنم یک کارگاه رایگان ۹۰ دقیقه‌ای با موضوع «آشنایی عملی با PostGIS در پروژه‌های GIS» برای اعضای شما برگزار کنیم؛ هر شرکت‌کننده یک پایگاه داده‌ی تمرینی اختصاصی و داده‌ی آماده‌ی ایران می‌گیرد. اگر موافق باشید، ۱۵ دقیقه تماس بگیریم و جزئیات را هماهنگ کنیم.</p>
+      <p class="small muted" style="margin-top:4px">پیگیری: روز ۳ یک پیام کوتاه، روز ۷ یک نمونه‌ی ویدیویی. بعد از دو پیگیری بی‌پاسخ، سراغ سرنخ بعدی برو.</p>
+    </div>
+  </div>
+
+  <!-- فاز ۲ -->
+  <div class="phase">
+    <div class="phead ph2">
+      <h2>فاز ۲ · تبدیل شناخت به اعتماد</h2>
+      <p class="goal">از معرفی محصول عبور کن و شواهد واقعی ارزش بساز: سه پروژه‌ی نمایشی، اولین نظر مشتری‌ها و اولین پرداخت‌ها.</p>
+      <div class="gatebox"><b>دروازه‌ی روز ۵۶:</b> ۱۸۵ ثبت‌نام · ۷۵ فعال‌شده · ۳۰ کاربر فعال ماهانه · ۲ مشتری · ۲ همکاری · ۲ مدرس همکار</div>
+    </div>
+    <div class="week p2c">
+      <div class="wh"><span class="wn">۵</span><span class="wt">پروژه‌ی ۱: تحلیل مکانی شهری</span><span class="wd">۷ تا ۱۳ آذر</span></div>
+      <ul class="chk">
+        <li>داده‌ی محله‌ها، پارک‌ها و خدمات شهری را وارد کن و تحلیل واقعی «دسترسی پیاده به پارک» را انجام بده (مخاطب: دانشجو و شرکت)</li>
+        <li>اعلام نتایج چالش ۱ و معرفی برترین‌ها در لینکدین و تلگرام</li>
+        <li>دعوت ۱۰ کاربر اولیه به ثبت تجربه (متن یا ویدیوی ۳۰ ثانیه‌ای)</li>
+        <li>۵ تماس با شرکت‌ها و ۲ دمو</li>
+      </ul>
+    </div>
+    <div class="week p2c">
+      <div class="wh"><span class="wn">۶</span><span class="wt">پروژه‌ی ۲: Python و PostGIS</span><span class="wd">۱۴ تا ۲۰ آذر</span></div>
+      <ul class="chk">
+        <li>GeoPandas ← PostGIS ← کوئری ← نقشه؛ نوت‌بوک عمومی در GitHub (مخاطب: توسعه‌دهنده)</li>
+        <li>وبینار ۲: «PostGIS برای برنامه‌نویس‌ها: Python، API و کاشی برداری»</li>
+        <li>معرفی بسته‌ی توسعه‌دهنده؛ ۳ دسترسی آزمایشی هدفمند</li>
+        <li>جذب مدرس همکار ۱</li>
+      </ul>
+    </div>
+    <div class="week p2c">
+      <div class="wh"><span class="wn">۷</span><span class="wt">پروژه‌ی ۳: ساخت WebGIS</span><span class="wd">۲۱ تا ۲۷ آذر</span></div>
+      <ul class="chk">
+        <li>اتصال پایگاه به GeoServer یا WMS/WFS داخلی و انتشار نقشه در یک برنامه‌ی وب با MapLibre (مخاطب: شرکت GIS)</li>
+        <li>چالش ۲: نزدیک‌ترین مرکز درمانی و مناطق کم‌برخوردار</li>
+        <li>دسترسی آزمایشی ۱۴ روزه با هدف مشخص برای ۳ شرکت منتخب</li>
+        <li>جذب مدرس همکار ۲</li>
+      </ul>
+    </div>
+    <div class="week p2c">
+      <div class="wh"><span class="wn">۸</span><span class="wt">یلدا · بستن اولین قراردادها</span><span class="wd">۲۸ آذر تا ۴ دی</span></div>
+      <ul class="chk">
+        <li>کمپین ۷۲ ساعته‌ی یلدا «بلندترین شب، طولانی‌ترین پلن»: خرید سالانه با ماه‌های هدیه</li>
+        <li>اولین مطالعه‌ی موردی مشتری (مسئله ← راه‌حل ← عدد)</li>
+        <li>پیشنهاد پرداخت به همه‌ی دسترسی‌های آزمایشی؛ ثبت‌نام «مشتریان بنیان‌گذار»</li>
+        <li>مرور دروازه‌ی ۲</li>
+      </ul>
+    </div>
+    <div class="extra" style="flex:1">
+      <h4>{{i:layers}} هر پروژه‌ی نمایشی = ۵ خروجی</h4>
+      <table class="mat">
+        <tr><th>خروجی</th><th>شهری</th><th>Python</th><th>WebGIS</th></tr>
+        <tr><td>ویدیوی آموزشی کامل</td><td><i class="bx"></i></td><td><i class="bx"></i></td><td><i class="bx"></i></td></tr>
+        <tr><td>دو ریلز کوتاه</td><td><i class="bx"></i> <i class="bx"></i></td><td><i class="bx"></i> <i class="bx"></i></td><td><i class="bx"></i> <i class="bx"></i></td></tr>
+        <tr><td>مقاله‌ی تخصصی</td><td><i class="bx"></i></td><td><i class="bx"></i></td><td><i class="bx"></i></td></tr>
+        <tr><td>پست لینکدین</td><td><i class="bx"></i></td><td><i class="bx"></i></td><td><i class="bx"></i></td></tr>
+        <tr><td>نمونه‌ی زنده یا فایل تمرین</td><td><i class="bx"></i></td><td><i class="bx"></i></td><td><i class="bx"></i></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- فاز ۳ -->
+  <div class="phase">
+    <div class="phead ph3">
+      <h2>فاز ۳ · ایجاد اولین درآمد</h2>
+      <p class="goal">منتظر نمان مشتری خودش از سایت بیاید. فروش مستقیم و مشاوره‌ای؛ سوار بر دو موج تقویمی: برنامه‌ریزی ترم بهار و بودجه‌ی پایان سال.</p>
+      <div class="gatebox"><b>دروازه‌ی روز ۹۱:</b> ۳۰۰ ثبت‌نام · ۱۲۰ فعال‌شده · ۵۰ کاربر فعال ماهانه · ۵ مشتری · ۳ همکاری · درآمد ماه دست‌کم ۴ میلیون تومان</div>
+    </div>
+    <div class="week p3c">
+      <div class="wh"><span class="wn">۹</span><span class="wt">بسته‌ی دانشگاهی برای ترم بهار</span><span class="wd">۵ تا ۱۱ دی</span></div>
+      <ul class="chk">
+        <li>صفحه‌ی فرود «کلاس GIS با PostGIS.ir» و دموی ۱۵ دقیقه‌ای کلاس</li>
+        <li>پیشنهاد مکتوب به ۱۵ استاد: کلاس آزمایشی رایگان در ازای استفاده در درس بهار</li>
+        <li>شروع ریتم ثابت: ۵ تماس B2B در هر هفته</li>
+      </ul>
+    </div>
+    <div class="week p3c">
+      <div class="wh"><span class="wn">۱۰</span><span class="wt">وبینار سازمانی و نقشه‌برداران</span><span class="wd">۱۲ تا ۱۸ دی</span></div>
+      <ul class="chk">
+        <li>وبینار ۳: «WebGIS سازمانی: از پایگاه داده تا GeoServer، بکاپ و دسترسی تیم»</li>
+        <li>دموی برداشت میدانی برای ۵ نقشه‌بردار و ۲ فروشنده‌ی گیرنده‌ی GNSS (پیشنهاد بسته‌ی مشترک)</li>
+        <li>تبدیل آزمایشی‌ها: جلسه‌ی مرور نتیجه، بعد پیشنهاد پرداخت</li>
+      </ul>
+    </div>
+    <div class="week p3c">
+      <div class="wh"><span class="wn">۱۱</span><span class="wt">رشد کنترل‌شده</span><span class="wd">۱۹ تا ۲۵ دی</span></div>
+      <ul class="chk">
+        <li>چالش ۳: مسیر و حوزه‌ی دسترسی با pgRouting</li>
+        <li>تبلیغ هدفمند فقط روی ۲ محتوایی که ارگانیک بهترین بوده‌اند (با اندازه‌گیری فعال‌سازی)</li>
+        <li>برنامه‌ی معرفی: هر دعوت موفق = یک ماه یا حجم هدیه برای هر دو طرف</li>
+        <li>بستن قرارداد دانشگاهی ۱</li>
+      </ul>
+    </div>
+    <div class="week p3c">
+      <div class="wh"><span class="wn">۱۲</span><span class="wt">بودجه‌ی پایان سال</span><span class="wd">۲۶ دی تا ۲ بهمن</span></div>
+      <ul class="chk">
+        <li>کمپین «پیش از پایان سال مالی»: پیش‌فاکتور رسمی، قرارداد سالانه، راه‌اندازی و آموزش تیم</li>
+        <li>۲ مطالعه‌ی موردی (یک شرکت و یک کلاس)</li>
+        <li>راه‌اندازی کلاس‌های ترم بهار و پشتیبانی مدرس</li>
+      </ul>
+    </div>
+    <div class="week p3c">
+      <div class="wh"><span class="wn">۱۳</span><span class="wt">جمع‌بندی و فصل دوم</span><span class="wd">۳ تا ۹ بهمن</span></div>
+      <ul class="chk">
+        <li>گزارش عمومی «۹۰ روز ساخت PostGIS.ir در ملأعام» در لینکدین Araz</li>
+        <li>دروازه‌ی ۳: کدام بخش بیشترین پول را داد؟ فصل دوم روی همان متمرکز می‌شود</li>
+        <li>کانال برنده دو برابر، کانال بازنده حذف؛ برنامه‌ی ۹۰ روز دوم</li>
+      </ul>
+    </div>
+    <div class="extra">
+      <h4>{{i:help}} ۴ پرسش بازخورد (به‌جای «راضی هستید؟»)</h4>
+      <ul class="dot">
+        <li>قبلاً پایگاه داده‌ی مکانی‌تان را چطور راه‌اندازی می‌کردید؟</li>
+        <li>کدام بخش PostGIS.ir برایتان ارزشمند بود؟</li>
+        <li>چه چیزی مانع استفاده‌ی مستمر شماست؟</li>
+        <li>برای کدام قابلیت حاضرید پرداخت کنید و چقدر؟</li>
+      </ul>
+      <p class="small muted" style="margin-top:4px">پاسخ‌ها را کلمه‌به‌کلمه یادداشت کن؛ زبان خود مشتری بهترین متن تبلیغ است.</p>
+    </div>
+    <div class="extra" style="flex:1">
+      <h4>{{i:card}} پیشنهاد «مشتری بنیان‌گذار» (فقط ۲۰ نفر)</h4>
+      <p>۳۰٪ تخفیف دائمی تا وقتی اشتراک فعال است، در ازای سه تعهد: یک مطالعه‌ی موردی یا نظر عمومی، یک جلسه‌ی بازخورد ماهانه، و حق استفاده از نام و لوگو. ظرفیت محدود را شفاف بنویس و شمارنده‌ی باقی‌مانده را در تلگرام اعلام کن. تخفیف دیگری بی‌دلیل داده نمی‌شود.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= ردیف ۳: چهار موتور ======================= -->
+<section class="row r3">
+
+  <article class="card">
+    <h2><span class="num">۵</span>موتور محتوا و رسانه</h2>
+    <h3>{{i:k-pie}} ستون‌های محتوا</h3>
+    <ul class="dot small">
+      <li><b>۴۰٪ آموزش عملی:</b> SQL مکانی، QGIS، ورود داده، انتشار</li>
+      <li><b>۲۵٪ داده و داستان ایران:</b> «کدام شهر بیشترین فضای سبز سرانه را دارد؟» با نقشه</li>
+      <li><b>۲۰٪ ساخت در ملأعام:</b> تصمیم‌ها، اعداد، اشتباه‌ها و درس‌های Araz</li>
+      <li><b>۱۵٪ مشتری و مطالعه‌ی موردی:</b> مسئله، راه‌حل، نتیجه‌ی عددی</li>
+    </ul>
+    <h3>{{i:copy}} زنجیره‌ی تکثیر: ۱ پروژه، ۸ محتوا</h3>
+    <div class="chain"><span>پروژه‌ی فنی</span><b class="ar">←</b><span>ویدیوی کامل</span><b class="ar">←</b><span>۲ ریلز</span><b class="ar">←</b><span>مقاله</span><b class="ar">←</b><span>پست لینکدین</span><b class="ar">←</b><span>کاروسل</span><b class="ar">←</b><span>تمرین تلگرام</span><b class="ar">←</b><span>فایل نمونه</span></div>
+    <h3>{{i:search}} خوشه‌های کلیدواژه (SEO)</h3>
+    <div class="kw"><span>آموزش PostGIS</span><span>اتصال QGIS به PostgreSQL</span><span>پایگاه داده مکانی</span><span>دانلود لایه‌های OSM ایران</span><span>شیپ‌فایل استان‌ها</span><span>مسیریابی pgRouting</span><span>سیستم مختصات UTM ایران</span><span>ورود Shapefile به PostGIS</span><span>پروژه GIS پایان‌نامه</span><span>WebGIS چیست</span></div>
+    <h3>{{i:book}} بانک ۱۲ ایده (همه از قابلیت واقعی محصول)</h3>
+    <ul class="ideas dot">
+      <li>۶۰ ثانیه تا پایگاه PostGIS</li><li>داده‌ی استان خودت روی نقشه</li><li>«به فارسی بپرس»، SQL تحویل بگیر</li><li>فاصله به متر واقعی، نه درجه</li>
+      <li>Shapefile فارسی بدون به‌هم‌ریختگی</li><li>کدام SRID برای ایران؟</li><li>نقشه‌ی تراکم شش‌ضلعی</li><li>نقشه‌ی چاپی A4 در یک کلیک</li>
+      <li>انتشار WMS و باز کردن در QGIS</li><li>کاشی برداری برای وب</li><li>برداشت میدانی با گوشی</li><li>بکاپ و بازگردانی در ۲ دقیقه</li>
+    </ul>
+    <p class="quote small" style="margin-top:8px"><b>قانون ریلز:</b> ۳ ثانیه‌ی اول نتیجه (نقشه) است، نه لوگو. زیرنویس فارسی همیشه، و فقط یک دعوت به اقدام.</p>
+  </article>
+
+  <article class="card">
+    <h2><span class="num">۶</span>موتور جامعه و همکاری</h2>
+    <h3>{{i:spark}} کمپین محوری <span class="mono">#PostGISChallenge</span></h3>
+    <p class="small">هر ماه یک دیتاست واقعی ایران در پنل منتشر می‌شود و جامعه با SQL و PostGIS یک مسئله را حل می‌کند. ارسال: کوئری، نقشه و یک پاراگراف. داوری: درستی، خلاقیت، ارائه.</p>
+    <table class="tbl" style="margin:6px 0">
+      <tr><th>دوره</th><th>مسئله</th><th>زمان</th></tr>
+      <tr><td><b>۱</b></td><td>دسترسی پیاده‌ی ۵۰۰ متری به پارک‌ها در تهران یا شهر خودت</td><td>هفته‌ی ۳ تا ۵</td></tr>
+      <tr><td><b>۲</b></td><td>نزدیک‌ترین مرکز درمانی و مناطق کم‌برخوردار از خدمات</td><td>هفته‌ی ۷ تا ۸</td></tr>
+      <tr><td><b>۳</b></td><td>مسیر و حوزه‌ی دسترسی ایستگاه‌ها با pgRouting</td><td>هفته‌ی ۱۱ تا ۱۲</td></tr>
+    </table>
+    <p class="small"><b>جایزه:</b> ۳ ماه پلن حرفه‌ای، معرفی در لینکدین Araz و گواهی دیجیتال قابل‌اشتراک. هزینه‌ی نقدی تقریباً صفر، ارزش برای برنده بالا.</p>
+    <h3>{{i:users}} سازوکارهای جامعه</h3>
+    <ul class="dot small">
+      <li><b>تلگرام:</b> پیام سنجاق‌شده‌ی «از اینجا شروع کن»، پرسش و پاسخ زنده‌ی پنجشنبه‌ها، تمرین هفته. ۸۰٪ ارزش آموزشی، ۲۰٪ محصول.</li>
+      <li><b>سفیران دانشگاهی (هدف ۵):</b> در هر دانشگاه یک سفیر با پلن حرفه‌ای، گواهی و کد معرفی؛ وظیفه: یک کارگاه و معرفی به استادان.</li>
+      <li><b>مدرسان همکار (هدف ۲):</b> محیط کلاس رایگان در ازای استفاده در درس، به‌اضافه‌ی ۲۰٪ پورسانت ارجاع.</li>
+      <li><b>آموزشگاه‌ها و پلتفرم‌های آموزش آنلاین:</b> PostGIS.ir محیط تمرین رسمی دوره‌ها؛ هر دانشجوی دوره یک کاربر بالقوه است.</li>
+      <li><b>متن‌باز:</b> ترجمه و آموزش فارسی برای جامعه‌ی PostGIS و QGIS، اعتبار بدون تبلیغ.</li>
+    </ul>
+    <p class="warn small" style="margin-top:8px"><b>قانون جامعه:</b> جامعه کانال تبلیغ نیست. اگر کسی هیچ‌وقت خرید نکند، باید باز هم از عضویت سود ببرد.</p>
+  </article>
+
+  <article class="card">
+    <h2><span class="num">۷</span>موتور جذب و فعال‌سازی</h2>
+    <h3>{{i:next}} مسیر طلایی ۱۰ دقیقه‌ای (لحظه‌ی «آها»)</h3>
+    <div class="path"><span>ثبت‌نام با موبایل</span><b class="ar">←</b><span>ساخت پایگاه</span><b class="ar">←</b><span>داده‌ی آماده‌ی استان</span><b class="ar">←</b><span>دیدن روی نقشه</span><b class="ar">←</b><span>اتصال QGIS</span><b class="ar">←</b><span>نقشه‌ی اشتراکی</span></div>
+    <p class="small muted">هر هفته این مسیر را خودت با یک حساب تازه طی کن و زمانش را بنویس. هر گامی که بیش از ۲ دقیقه طول بکشد، مانع است.</p>
+    <h3>{{i:clock}} توالی پیام رفتاری (پیامک و ایمیل)</h3>
+    <div class="seq">
+      <div><b>روز ۰</b><span>خوش‌آمد و لینک راهنمای ۱۰ دقیقه‌ای</span></div>
+      <div><b>روز ۱</b><span>اگر پایگاه نساخته: «یک کلیک تا پایگاه آماده»</span></div>
+      <div><b>روز ۳</b><span>اگر داده ندارد: «داده‌ی استان خودت را وارد کن»</span></div>
+      <div><b>روز ۷</b><span>دعوت به جامعه‌ی تلگرام و چالش ماه</span></div>
+      <div><b>روز ۱۴</b><span>پیام شخصی Araz به کاربران فعال: «۱۰ دقیقه گفت‌وگو؟»</span></div>
+      <div><b>پیش از انقضا</b><span>یادآوری تمدید با خلاصه‌ی استفاده‌ی خود کاربر</span></div>
+    </div>
+    <h3>{{i:pulse}} اهرم‌های داخلی محصول</h3>
+    <ul class="dot small">
+      <li>هر ثبت‌نام دانشگاهی یا سازمانی در ۲۴ ساعت یک پیام شخصی از Araz می‌گیرد.</li>
+      <li>«جست‌وجوهای بی‌نتیجه»ی دستیار هوشمند و تیکت‌ها، منبع هفتگی موضوع محتوا و فهرست موانع‌اند.</li>
+      <li>پایگاه دانش و راهنما با هر محتوای تازه به‌روز می‌شود؛ هر مقاله‌ی وبلاگ به یک مقاله‌ی پایگاه دانش لینک دارد.</li>
+      <li>پیامک فقط برای کاربر ثبت‌نامی، با امکان لغو؛ ارسال تبلیغاتی انبوه ممنوع.</li>
+    </ul>
+  </article>
+
+  <article class="card">
+    <h2><span class="num">۸</span>موتور فروش و درآمد</h2>
+    <div class="pk">
+      <div class="pkg"><b>{{i:code}} بسته‌ی توسعه‌دهنده</b><p>پایگاه آماده، اتصال Python و QGIS، REST API و کاشی برداری، آموزش راه‌اندازی، پشتیبانی اولیه، مسیر ارتقا</p><div class="price">قیمت ماهانه: ______________ تومان</div></div>
+      <div class="pkg"><b>{{i:book}} بسته‌ی دانشگاهی</b><p>کلاس با کد ورود، پایگاه مستقل برای هر دانشجو، دیتاست و تمرین SQL مکانی، نقشه‌ی مشترک، پایان ترم و بایگانی، پشتیبانی مدرس</p><div class="price">به‌ازای هر دانشجو در ترم: ________ تومان</div></div>
+      <div class="pkg"><b>{{i:users}} بسته‌ی تیمی و سازمانی</b><p>تیم و نقش‌ها، بکاپ و بازگردانی، GeoServer و WMS/WFS، راه‌اندازی و مشاوره، پشتیبانی با زمان پاسخ مشخص</p><div class="price">قرارداد سالانه از: ____________ تومان</div></div>
+      <div class="pkg"><b>{{i:point}} بسته‌ی برداشت میدانی</b><p>پروژه‌ی برداشت با گوشی، RTK و NTRIP، محاسبات COGO، کار آفلاین، خروجی مستقیم در پایگاه</p><div class="price">قیمت ماهانه: ______________ تومان</div></div>
+    </div>
+    <p class="small"><b>قیمت‌گذاری:</b> از هزینه‌ی واقعی زیرساخت و پشتیبانی شروع کن، با ارزش برای مشتری بسنج؛ نه تخفیف روی پلن‌های موجود. پلن سالانه = بهای ۱۰ ماه. هزینه‌ی سرور جدا از بودجه‌ی بازاریابی حساب می‌شود.</p>
+    <h3>{{i:sort}} فرایند فروش مستقیم · هر هفته ۵ تیم یا شرکت</h3>
+    <div class="steps"><div>شناسایی شرکت یا تیم مناسب</div><div>پیام کوتاه، مرتبط با کار خودشان</div><div>پرسش از زیرساخت فعلی GIS</div><div>دموی ۲۰ دقیقه‌ای روی مسئله‌ی خودشان</div><div>آزمایشی با معیار موفقیت مکتوب</div><div>پیگیری و پیشنهاد پرداخت</div></div>
+    <h3>{{i:warn}} اعتراض‌ها و پاسخ‌ها</h3>
+    <table class="obj">
+      <tr><td>«داده‌ی ما امن است؟»</td><td>نقش محدود برای هر پایگاه، رمز رمزنگاری‌شده، بکاپ منظم؛ داده مال شماست.</td></tr>
+      <tr><td>«اگر شما نباشید چه؟»</td><td>PostgreSQL استاندارد؛ خروجی کامل هر لحظه، بدون قفل.</td></tr>
+      <tr><td>«سرور داریم» یا «گران است»</td><td>هزینه‌ی واقعی DevOps و یک روز کار مهندس را با هم حساب کنیم؛ نسخه‌ی سازمانی هم هست.</td></tr>
+    </table>
+    <p class="quote small" style="margin-top:8px">هدف این نیست که هر شرکتی مشتری شود؛ هدف این است که بفهمی کدام گروه واقعاً برای این زیرساخت پول می‌دهد.</p>
+  </article>
+</section>
+
+<!-- ======================= ردیف ۴: سیستم اجرایی ======================= -->
+<section class="row r4">
+
+  <article class="card">
+    <h2><span class="num">۹</span>ریتم ثابت هفته و روز</h2>
+    <table class="cal tbl">
+      <tr><th>روز</th><th>فعالیت اصلی</th><th>خروجی</th></tr>
+      <tr><td>شنبه</td><td>محتوای آموزشی</td><td>یک مقاله + ریلز</td></tr>
+      <tr><td>یکشنبه</td><td>دانشگاه‌ها و مدرسان</td><td>۳ ارتباط تازه</td></tr>
+      <tr><td>دوشنبه</td><td>نمایش قابلیت محصول</td><td>یک ویدیوی دمو</td></tr>
+      <tr><td>سه‌شنبه</td><td>شرکت‌ها و نقشه‌برداران</td><td>۳ ارتباط تجاری + ۱ دمو</td></tr>
+      <tr><td>چهارشنبه</td><td>محتوای تخصصی لینکدین</td><td>یک یادداشت Araz</td></tr>
+      <tr><td>پنجشنبه</td><td>جامعه و رویداد</td><td>وبینار، چالش یا پرسش و پاسخ</td></tr>
+      <tr><td>جمعه</td><td>استراحت و مرور</td><td>۳۰ دقیقه مرور اعداد و برنامه</td></tr>
+    </table>
+    <h3>{{i:clock}} هر روز کاری (۳ ساعت)</h3>
+    <div class="blocks">
+      <div style="flex:2;background:var(--teal)"><b>۶۰ دقیقه</b>تولید و انتشار محتوا</div>
+      <div style="flex:2;background:var(--blue)"><b>۶۰ دقیقه</b>ارتباط و جامعه‌سازی</div>
+      <div style="flex:1;background:#B9821A"><b>۳۰</b>فروش مستقیم</div>
+      <div style="flex:1;background:var(--ink-2)"><b>۳۰</b>تحلیل و بهبود</div>
+    </div>
+    <p class="small muted">اول ارتباط و فروش، بعد محتوا، آخر تحلیل. ساعت چهارم = محتوای بیشتر.</p>
+    <h3>{{i:check}} حداقل خروجی هر هفته</h3>
+    <div class="mins">
+      <div><b>۳</b>ریلز</div><div><b>۲</b>پست لینکدین</div><div><b>۱</b>مقاله</div><div><b>۱</b>ویدیوی کامل</div>
+      <div><b>۳</b>محتوای تلگرام</div><div><b>۱۰</b>ارتباط هدفمند</div><div><b>۱</b>گفت‌وگوی مشتری</div><div><b>۱</b>دمو</div>
+    </div>
+    <h3>{{i:card}} بودجه‌ی ماهانه (هزار تومان)</h3>
+    <table class="bud tbl">
+      <tr><th>بخش</th><th>ماه ۱</th><th>ماه ۲</th><th>ماه ۳</th></tr>
+      <tr><td>تدوین و طراحی محتوا</td><td>۱٬۴۰۰</td><td>۱٬۲۰۰</td><td>۸۰۰</td></tr>
+      <tr><td>همکاری و معرفی تخصصی</td><td>۱٬۰۰۰</td><td>۱٬۰۰۰</td><td>۱٬۲۰۰</td></tr>
+      <tr><td>تبلیغ هدفمند</td><td>۴۰۰</td><td>۸۰۰</td><td>۱٬۲۰۰</td></tr>
+      <tr><td>رویداد، وبینار و جایزه</td><td>۸۰۰</td><td>۶۰۰</td><td>۴۰۰</td></tr>
+      <tr><td>ابزار و ذخیره‌ی احتیاطی</td><td>۴۰۰</td><td>۴۰۰</td><td>۴۰۰</td></tr>
+      <tr class="sum"><td>جمع (۱۲ میلیون تومان در ۹۰ روز)</td><td>۴٬۰۰۰</td><td>۴٬۰۰۰</td><td>۴٬۰۰۰</td></tr>
+    </table>
+    <p class="small muted">اگر خودت تدوین می‌کنی، آن سهم به مدرسان و انتشار می‌رود. تبلیغ فقط روی محتوای برنده‌ی ارگانیک، و هرگز بدون اندازه‌گیری فعال‌سازی.</p>
+  </article>
+
+  <article class="card">
+    <h2><span class="num">۱۰</span>داشبورد دیواری: هر جمعه عدد واقعی را با خودکار بنویس</h2>
+    <table class="kpi">
+      <tr><th style="width:190px">شاخص <small>(هدف در گوشه)</small></th>
+        <th class="ph-a">۱</th><th class="ph-a">۲</th><th class="ph-a">۳</th><th class="ph-a">۴</th>
+        <th class="ph-b">۵</th><th class="ph-b">۶</th><th class="ph-b">۷</th><th class="ph-b">۸</th>
+        <th class="ph-c">۹</th><th class="ph-c">۱۰</th><th class="ph-c">۱۱</th><th class="ph-c">۱۲</th><th class="ph-c">۱۳</th></tr>
+      <tr><td class="m">ثبت‌نام تازه<small>تجمعی: ۹۰ ← ۱۸۵ ← ۳۰۰</small></td>
+        <td><span class="tg">۱۰</span></td><td><span class="tg">۱۵</span></td><td><span class="tg">۴۰</span></td><td class="gate"><span class="tg">۲۵</span></td><td><span class="tg">۲۰</span></td><td><span class="tg">۲۵</span></td><td><span class="tg">۲۵</span></td><td class="gate"><span class="tg">۲۵</span></td><td><span class="tg">۲۵</span></td><td><span class="tg">۲۵</span></td><td><span class="tg">۲۰</span></td><td><span class="tg">۲۰</span></td><td class="gate"><span class="tg">۲۵</span></td></tr>
+      <tr><td class="m">فعال‌شده<small>پایگاه + داده + نقشه</small></td>
+        <td><span class="tg">۴</span></td><td><span class="tg">۶</span></td><td><span class="tg">۱۶</span></td><td class="gate"><span class="tg">۱۰</span></td><td><span class="tg">۸</span></td><td><span class="tg">۱۰</span></td><td><span class="tg">۱۰</span></td><td class="gate"><span class="tg">۱۰</span></td><td><span class="tg">۱۰</span></td><td><span class="tg">۱۰</span></td><td><span class="tg">۸</span></td><td><span class="tg">۸</span></td><td class="gate"><span class="tg">۱۰</span></td></tr>
+      <tr><td class="m">پایگاه فعال هفتگی<small>ستاره‌ی قطبی</small></td>
+        <td><span class="tg">۵</span></td><td><span class="tg">۷</span></td><td><span class="tg">۱۰</span></td><td class="gate"><span class="tg">۱۲</span></td><td><span class="tg">۱۵</span></td><td><span class="tg">۱۷</span></td><td><span class="tg">۱۹</span></td><td class="gate"><span class="tg">۲۱</span></td><td><span class="tg">۲۴</span></td><td><span class="tg">۲۶</span></td><td><span class="tg">۲۹</span></td><td><span class="tg">۳۲</span></td><td class="gate"><span class="tg">۳۵</span></td></tr>
+      <tr><td class="m">عضو جامعه‌ی تلگرام<small>تجمعی</small></td>
+        <td><span class="tg">۳۰</span></td><td><span class="tg">۶۰</span></td><td><span class="tg">۱۲۰</span></td><td class="gate"><span class="tg">۱۵۰</span></td><td><span class="tg">۱۸۰</span></td><td><span class="tg">۲۱۰</span></td><td><span class="tg">۲۴۰</span></td><td class="gate"><span class="tg">۲۷۰</span></td><td><span class="tg">۳۰۰</span></td><td><span class="tg">۳۳۰</span></td><td><span class="tg">۳۶۰</span></td><td><span class="tg">۳۸۰</span></td><td class="gate"><span class="tg">۴۰۰</span></td></tr>
+      <tr><td class="m">ارتباط هدفمند تازه</td>
+        <td><span class="tg">۱۰</span></td><td><span class="tg">۱۵</span></td><td><span class="tg">۱۰</span></td><td class="gate"><span class="tg">۱۰</span></td><td><span class="tg">۱۰</span></td><td><span class="tg">۱۰</span></td><td><span class="tg">۱۰</span></td><td class="gate"><span class="tg">۱۰</span></td><td><span class="tg">۱۵</span></td><td><span class="tg">۱۵</span></td><td><span class="tg">۱۰</span></td><td><span class="tg">۱۰</span></td><td class="gate"><span class="tg">۵</span></td></tr>
+      <tr><td class="m">گفت‌وگو یا دمو</td>
+        <td><span class="tg">۱</span></td><td><span class="tg">۵</span></td><td><span class="tg">۲</span></td><td class="gate"><span class="tg">۱۰</span></td><td><span class="tg">۲</span></td><td><span class="tg">۲</span></td><td><span class="tg">۲</span></td><td class="gate"><span class="tg">۲</span></td><td><span class="tg">۳</span></td><td><span class="tg">۷</span></td><td><span class="tg">۳</span></td><td><span class="tg">۳</span></td><td class="gate"><span class="tg">۲</span></td></tr>
+      <tr><td class="m">محتوای منتشرشده<small>حداقل ۱۱ در هفته</small></td>
+        <td><span class="tg">۸</span></td><td><span class="tg">۱۱</span></td><td><span class="tg">۱۴</span></td><td class="gate"><span class="tg">۱۱</span></td><td><span class="tg">۱۱</span></td><td><span class="tg">۱۱</span></td><td><span class="tg">۱۱</span></td><td class="gate"><span class="tg">۱۱</span></td><td><span class="tg">۱۱</span></td><td><span class="tg">۱۱</span></td><td><span class="tg">۱۱</span></td><td><span class="tg">۱۱</span></td><td class="gate"><span class="tg">۱۱</span></td></tr>
+      <tr><td class="m">مشتری پرداخت‌کننده<small>تجمعی</small></td>
+        <td><span class="tg">۰</span></td><td><span class="tg">۰</span></td><td><span class="tg">۰</span></td><td class="gate"><span class="tg">۰</span></td><td><span class="tg">۱</span></td><td><span class="tg">۱</span></td><td><span class="tg">۱</span></td><td class="gate"><span class="tg">۲</span></td><td><span class="tg">۲</span></td><td><span class="tg">۳</span></td><td><span class="tg">۳</span></td><td><span class="tg">۴</span></td><td class="gate"><span class="tg">۵</span></td></tr>
+      <tr><td class="m">درآمد هفته<small>هزار تومان</small></td>
+        <td></td><td></td><td></td><td class="gate"></td><td></td><td></td><td></td><td class="gate"></td><td></td><td></td><td></td><td></td><td class="gate"></td></tr>
+      <tr class="total"><td class="m">تیک برنامه‌ی هفته<small>همه‌ی کارهای کارت هفته</small></td>
+        <td><i class="bx"></i></td><td><i class="bx"></i></td><td><i class="bx"></i></td><td class="gate"><i class="bx"></i></td><td><i class="bx"></i></td><td><i class="bx"></i></td><td><i class="bx"></i></td><td class="gate"><i class="bx"></i></td><td><i class="bx"></i></td><td><i class="bx"></i></td><td><i class="bx"></i></td><td><i class="bx"></i></td><td class="gate"><i class="bx"></i></td></tr>
+    </table>
+    <div class="gates">
+      <div class="g"><h4>دروازه‌ی ۱ · روز ۲۸</h4><span class="gr">سبز:</span> دست‌کم ۹۰ ثبت‌نام و فعال‌سازی ۴۰٪ یا بیشتر ← ادامه و تبلیغ آزمایشی کوچک.<br><span class="ye">زرد:</span> فعال‌سازی ۲۵ تا ۴۰٪ ← هفته‌ی ۵ صرف رفع موانع ورود.<br><span class="rd">قرمز:</span> کمتر از ۵۰ ثبت‌نام ← پیام و کانال را عوض کن، نه محصول را.</div>
+      <div class="g"><h4>دروازه‌ی ۲ · روز ۵۶</h4><span class="gr">سبز:</span> دو مشتری یا بیشتر ← بسته‌ها ثابت؛ فروش مستقیم دو برابر.<br><span class="ye">زرد:</span> ۱ مشتری ← بازنگری قیمت و پیشنهاد آزمایشی.<br><span class="rd">قرمز:</span> بدون مشتری ← ۱۰ گفت‌وگوی «چرا نخریدی؟» پیش از هر کار دیگر.</div>
+      <div class="g"><h4>دروازه‌ی ۳ · روز ۹۱</h4>کدام بخش بیشترین پول و کمترین زحمت را داشت: دانشگاه، شرکت یا نقشه‌بردار؟ فصل دوم ۷۰٪ روی همان، ۲۰٪ روی دومی، ۱۰٪ آزمایش تازه. کانالی که در ۹۰ روز هیچ کاربر فعالی نیاورد حذف می‌شود.</div>
+    </div>
+    <h3 style="margin-top:12px">{{i:warn}} ریسک‌ها و پیشگیری</h3>
+    <div class="risks"><div><b>بنیان‌گذار به کدنویسی برمی‌گردد</b>۳ ساعت بازاریابی پیش از هر خط کد؛ قابلیت تازه فقط با قاعده‌ی «۳ مشتری»</div><div><b>توقف برنامه بعد از دو هفته</b>به حداقل خروجی پایبند باش، نه حداکثر؛ جمعه استراحت واقعی</div><div><b>ثبت‌نام زیاد و بی‌کیفیت</b>فعال‌سازی را پیش از هر تبلیغ اندازه بگیر</div><div><b>اختلال اینترنت یا دسترسی به شبکه‌ها</b>کانال‌های چندگانه (سایت، تلگرام، آپارات) و فهرست تماس اختصاصی کاربران</div><div><b>قطعی سرویس در روز رونمایی</b>آزمون بار و بکاپ پیش از هر وبینار؛ صفحه‌ی وضعیت و پیام آماده</div><div><b>وابستگی به یک مشتری بزرگ</b>سقف ۴۰٪ درآمد از یک مشتری</div></div>
+  </article>
+
+  <article class="card oath">
+    <h2><span class="num">۱۱</span>تعهدنامه‌ی ۹۰ روزه</h2>
+    <ul class="rules">
+      <li><b>اول بازاریابی، بعد کد:</b> هر روز کاری ۳ ساعت بازاریابی پیش از توسعه.</li>
+      <li><b>قاعده‌ی ۳ مشتری:</b> قابلیت تازه ساخته نمی‌شود مگر ۳ مشتری آن را خواسته باشند یا مانع فعال‌سازی باشد.</li>
+      <li><b>هر هفته یک گفت‌وگوی واقعی</b> با مشتری بالقوه، بدون استثنا.</li>
+      <li><b>پروژه‌ی واقعی بفروش،</b> نه فهرست ۲۰ قابلیت.</li>
+      <li><b>یک موضوع، چند روایت؛</b> کپی در همه‌ی کانال‌ها ممنوع.</li>
+      <li><b>تبلیغ فقط روی برنده‌ی ارگانیک</b> و فقط با اندازه‌گیری فعال‌سازی.</li>
+      <li><b>چیزی که اندازه گرفته نشود، اتفاق نیفتاده:</b> UTM روی هر لینک.</li>
+      <li><b>جمعه روز مرور است:</b> عدد واقعی روی همین پوستر نوشته می‌شود.</li>
+      <li><b>منتشر کن، بعد کامل کن:</b> ۸۰٪ خوب یعنی آماده‌ی انتشار.</li>
+      <li><b>جامعه پیش از فروش:</b> ۸۰٪ ارزش، ۲۰٪ محصول.</li>
+    </ul>
+    <h3 style="color:var(--ochre)">{{i:target}} پنج تصمیم بنیادین</h3>
+    <div class="decisions">
+      <div><b>۱. یک چهره:</b> Araz، بنیان‌گذار، در محتوای تخصصی حاضر است.</div>
+      <div><b>۲. مسئله، نه امکانات:</b> نشان بده یک مسئله‌ی واقعی چطور حل می‌شود.</div>
+      <div><b>۳. دانشگاه اعتماد می‌سازد، شرکت درآمد؛</b> هر دو از روز اول.</div>
+      <div><b>۴. جامعه دارایی بلندمدت است،</b> نه کانال تبلیغ.</div>
+      <div><b>۵. رشد کنترل‌شده:</b> کیفیت فعال‌سازی پیش از تعداد ثبت‌نام.</div>
+    </div>
+    <div class="sign"><div>امضا:</div><div>تاریخ شروع: ۹ آبان ۱۴۰۵</div></div>
+  </article>
+</section>
+</main>
+
+<footer class="foot">
+  <span><b>PostGIS.ir</b> · ژئوپایگاه · زیرساخت مکانی پروژه‌های ایران · سرویس مستقل مبتنی بر PostGIS</span>
+  <span>نقشه‌ی راه ۹۰ روزه‌ی بازاریابی و درآمد · نسخه‌ی ۱ · آبان ۱۴۰۵ · چاپ A1 (۵۹۴×۸۴۱ میلی‌متر)</span>
+</footer>
+</div>
+</body>
+</html>
