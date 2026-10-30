@@ -65,7 +65,7 @@ class Visit(models.Model):
 
 
 class Event(models.Model):
-    """رویداد قیف (سمت سرور): درخواست کد، تأیید کد، ثبت‌نام، ساخت پایگاه داده ..."""
+    """رویداد قیف (سمت سرور): درخواست کد، تأیید کد، ثبت‌نام، ساخت پایگاه داده، ورود داده، دیدن نقشه ..."""
 
     OTP_REQUESTED = "otp_requested"
     OTP_SEND_FAILED = "otp_send_failed"
@@ -74,6 +74,8 @@ class Event(models.Model):
     SIGNUP = "signup"
     LOGIN = "login"
     DB_CREATED = "db_created"
+    IMPORT_QUEUED = "import_queued"
+    MAP_VIEWED = "map_viewed"
 
     visitor = models.ForeignKey(Visitor, on_delete=models.CASCADE, related_name="events")
     visit = models.ForeignKey(Visit, on_delete=models.SET_NULL, null=True, blank=True, related_name="events")
