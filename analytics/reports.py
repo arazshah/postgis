@@ -52,7 +52,8 @@ def funnel(days: int) -> list[dict]:
 
     steps = [("بازدیدکننده", visitors), ("درخواست کد ورود", count(Event.OTP_REQUESTED)),
              ("ورود کد صحیح", count(Event.OTP_VERIFIED)), ("ثبت‌نام جدید", count(Event.SIGNUP)),
-             ("ساخت پایگاه داده", count(Event.DB_CREATED))]
+             ("ساخت پایگاه داده", count(Event.DB_CREATED)), ("ورود اولین داده", count(Event.IMPORT_QUEUED)),
+             ("دیدن داده روی نقشه", count(Event.MAP_VIEWED))]
     out, prev = [], None
     for label, n in steps:
         out.append({"label": label, "n": n, "of_total": _pct(n, visitors), "of_prev": _pct(n, prev) if prev else "—",

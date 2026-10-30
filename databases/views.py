@@ -324,6 +324,11 @@ def explore_table(request, pk, schema, table):
 
             mappable = [x for x in tables if any(not g["geography"] and g["srid"] for g in x.geometry)]
             ctx["mappable"] = t in mappable
+            if ctx["mappable"]:
+                from analytics import services as analytics
+                from analytics.models import Event
+
+                analytics.record(request, Event.MAP_VIEWED)
             ctx["compare"] = len(mappable) > 1
             ctx["maps"] = list(WebMap.objects.filter(database=db).only("pk", "title")) if db.can_edit else []
         else:
@@ -742,6 +747,10 @@ def import_review(request, pk, job_id):
             job.status = Job.Status.QUEUED
             job.created_at = timezone.now()
             job.save(update_fields=["params", "status", "created_at"])
+            from analytics import services as analytics
+            from analytics.models import Event
+
+            analytics.record(request, Event.IMPORT_QUEUED, ext=str(job.params.get("file", "")).rsplit(".", 1)[-1])
             messages.success(request, "ورود فایل در صف قرار گرفت.")
             return redirect("databases:import_review", pk=db.pk, job_id=job.pk)
     known = {code for code, _ in gdal.SRID_CHOICES}

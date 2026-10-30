@@ -162,6 +162,14 @@ class FunnelTests(TestCase):
         row = reports.breakdown(["first_source"], 30)[0]
         self.assertEqual((row["requested"], row["signup"], row["stuck"]), (1, 0, 1))
 
+    def test_funnel_counts_import_and_map_steps_once_per_visitor(self):
+        self.client.get("/", HTTP_USER_AGENT=UA_DESK)
+        req = SimpleNamespace(COOKIES={"gp_vid": Visitor.objects.get().vid}, META={}, path="/dashboard/1/")
+        for name in (Event.IMPORT_QUEUED, Event.MAP_VIEWED, Event.MAP_VIEWED):
+            services.record(req, name)
+        steps = {s["label"]: s["n"] for s in reports.funnel(30)}
+        self.assertEqual((steps["ورود اولین داده"], steps["دیدن داده روی نقشه"]), (1, 1))
+
     def test_no_cookie_no_event(self):
         services.record(SimpleNamespace(COOKIES={}, META={}, path="/x"), "signup")
         self.assertEqual(Event.objects.count(), 0)
