@@ -1,5 +1,7 @@
 -r requirements.txt
 ruff>=0.6
+# خواندن خروجی اکسل آمار در آزمون‌ها (analytics/tests)
+openpyxl>=3.1
 # ساخت glyph نقشه و داده OSM ساختگی آزمون‌ها
 numpy>=1.26
 scipy>=1.11
