@@ -65,6 +65,8 @@
     <div class="faq">{% for q, a in g.faq %}<details><summary>{{ q }}</summary><p>{{ a }}</p></details>{% endfor %}</div>
     {% endif %}
 
+    {% include "partials/start_cta.html" with where="help" %}
+
     <nav class="pager" aria-label="راهنمای قبلی و بعدی">
       <span>{% if prev %}<a href="{% url 'core:help_page' prev.slug %}">قبلی: {{ prev.title }}</a>{% endif %}</span>
       <span>{% if next %}<a href="{% url 'core:help_page' next.slug %}">بعدی: {{ next.title }}</a>{% endif %}</span>

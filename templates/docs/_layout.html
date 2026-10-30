@@ -28,6 +28,7 @@
     <h1>{{ doc.1 }}</h1>
     <p class="muted">{{ doc.2 }}</p>
     {% block doc %}{% endblock %}
+    {% include "partials/start_cta.html" with where="docs" %}
     <nav class="pager" aria-label="آموزش قبلی و بعدی">
       <span>{% if prev %}<a href="{% url 'core:doc' prev.0 %}">قبلی: {{ prev.1 }}</a>{% endif %}</span>
       <span>{% if next %}<a href="{% url 'core:doc' next.0 %}">بعدی: {{ next.1 }}</a>{% endif %}</span>

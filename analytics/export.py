@@ -16,7 +16,7 @@ from django.db.models import Count, Max, Min, Q, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
-from . import reports
+from . import quality, reports
 from .models import Event, TrackedLink, Visit, Visitor
 
 MAX_ROWS = 200_000  # سقف سطر هر برگه؛ Excel تا ۱٬۰۴۸٬۵۷۶ سطر را می‌پذیرد ولی فایل سنگین می‌شود
@@ -25,7 +25,7 @@ PHONE_RE = re.compile(r"(?<!\d)(09\d{2})\d{3}(\d{4})(?!\d)")
 EVENT_LABELS = {
     Event.OTP_REQUESTED: "درخواست کد ورود", Event.OTP_SEND_FAILED: "ارسال پیامک ناموفق", Event.OTP_WRONG: "کد اشتباه",
     Event.OTP_VERIFIED: "ورود کد صحیح", Event.SIGNUP: "ثبت‌نام جدید", Event.LOGIN: "ورود",
-    Event.DB_CREATED: "ساخت پایگاه داده", Event.IMPORT_QUEUED: "ورود داده (در صف)", Event.MAP_VIEWED: "دیدن نقشه جدول",
+    Event.DB_CREATED: "ساخت پایگاه داده", Event.IMPORT_QUEUED: "ورود داده (در صف)", Event.CTA_CLICK: "کلیک «شروع رایگان»", Event.MAP_VIEWED: "دیدن نقشه جدول",
 }
 
 
@@ -147,6 +147,7 @@ def _guide(book: Book, days: int) -> None:
     book.text("راهنما", [
         ("بازه‌ی گزارش", f"{span}. برگه‌های «کاربران» و «پایگاه‌ها» وضعیت کامل امروزند و بازه ندارند."),
         ("حریم خصوصی", "موبایل ناقص است (۰۹۱۲***۴۵۶۷)، متن پرسش و فرم، رمز و کلید در فایل نیست. بازدیدکننده با ۸ نویسه‌ی اول شناسه‌ی کوکی نشان داده می‌شود."),
+        ("برچسب‌ها", "بازدیدکننده‌ی «داخلی» (حساب مدیر یا حساب علامت‌خورده در پنل) و «مشکوک به ربات» (موج ناگهانی بازدید direct تک‌صفحه‌ای) در خلاصه، قیف، روزانه و منابع شمرده نمی‌شوند؛ در برگه‌های بازدیدها و رویدادها با ستون «برچسب» می‌مانند تا خودتان فیلتر کنید."),
         ("زمان‌ها", "ستون «زمان» به وقت تهران و قابل‌مرتب‌سازی است؛ ستون «تاریخ شمسی» همان زمان به شمسی است."),
         ("خلاصه", "شمارنده‌های کل سایت و بازه در یک نگاه."),
         ("قیف", "بازدیدکننده تا ساخت پایگاه، ورود داده و دیدن نقشه؛ هر بازدیدکننده در هر مرحله یک بار."),
@@ -173,14 +174,18 @@ def _summary(book: Book, days: int, since) -> None:
     from databases.models import UserDatabase
     from jobs.models import Job
 
-    vis = _within(Visitor.objects.all(), "first_seen", since)
-    ev = _within(Event.objects.all(), "created_at", since)
-    paid = _within(Invoice.objects.filter(status=Invoice.Status.PAID), "paid_at", since)
+    vis = _within(Visitor.objects.filter(flag=""), "first_seen", since)
+    ev = _within(Event.objects.filter(visitor__flag=""), "created_at", since)
+    paid = _within(Invoice.objects.filter(status=Invoice.Status.PAID, user__analytics_exclude=False), "paid_at", since)
+    excl = quality.excluded_counts(days)
     book.key_value("خلاصه", [
         ("تاریخ تهیه‌ی گزارش", jalali(timezone.now())),
         ("بازه", f"{days} روز اخیر" if days else "همه‌ی زمان‌ها"),
         ("بازدیدکننده‌ی جدید", vis.count()),
-        ("نشست (Visit)", _within(Visit.objects.all(), "started_at", since).count()),
+        ("نشست (Visit)", _within(Visit.objects.filter(visitor__flag=""), "started_at", since).count()),
+        ("بازدیدکننده‌ی مشکوک به ربات (کنار گذاشته شد)", excl["bot"]),
+        ("بازدیدکننده‌ی داخلی (کنار گذاشته شد)", excl["internal"]),
+        ("کلیک «شروع رایگان» (صفحه‌های دانش، راهنما و آموزش)", ev.filter(name=Event.CTA_CLICK).count()),
         ("درخواست کد ورود", ev.filter(name=Event.OTP_REQUESTED).count()),
         ("ثبت‌نام جدید", ev.filter(name=Event.SIGNUP).count()),
         ("ورود (کاربر قبلی)", ev.filter(name=Event.LOGIN).count()),
@@ -230,15 +235,15 @@ def _daily(book: Book, since) -> None:
         for r in q.annotate(n=Count("id") if not agg else Sum(agg["sum"])):
             table.setdefault(r["d"], {}).update({key: r["n"] or 0})
 
-    add(_within(Visitor.objects.all(), "first_seen", since), "first_seen", "visitors")
-    add(_within(Visit.objects.all(), "started_at", since), "started_at", "visits")
-    ev = _within(Event.objects.all(), "created_at", since)
+    add(_within(Visitor.objects.filter(flag=""), "first_seen", since), "first_seen", "visitors")
+    add(_within(Visit.objects.filter(visitor__flag=""), "started_at", since), "started_at", "visits")
+    ev = _within(Event.objects.filter(visitor__flag=""), "created_at", since)
     for name, key in [(Event.OTP_REQUESTED, "otp"), (Event.SIGNUP, "signup"), (Event.LOGIN, "login"),
                       (Event.DB_CREATED, "db"), (Event.IMPORT_QUEUED, "imp"), (Event.MAP_VIEWED, "map")]:
         add(ev.filter(name=name), "created_at", key)
     add(ev.filter(name__startswith=Event.VIEW), "created_at", "views")
     add(ev.filter(name__startswith=Event.DO), "created_at", "dos")
-    paid = _within(Invoice.objects.filter(status=Invoice.Status.PAID), "paid_at", since)
+    paid = _within(Invoice.objects.filter(status=Invoice.Status.PAID, user__analytics_exclude=False), "paid_at", since)
     add(paid, "paid_at", "paid")
     add(paid, "paid_at", "revenue", sum="amount_toman")
     add(_within(Ticket.objects.all(), "created_at", since), "created_at", "tickets")
@@ -253,10 +258,11 @@ def _visits(book: Book, since) -> None:
     qs = _within(Visit.objects.select_related("visitor"), "started_at", since).order_by("-started_at")
     rows = ([local(v.started_at), jalali(v.started_at), _vid(v.visitor.vid), v.visitor.user_id, v.source, v.medium,
              v.campaign, v.content, v.referrer_host, v.landing_path, v.last_path, v.pages, v.device, v.browser,
-             v.in_app] for v in qs.iterator(chunk_size=2000))
+             v.in_app, v.visitor.get_flag_display()] for v in qs.iterator(chunk_size=2000))
     book.sheet("بازدیدها", ["زمان", "تاریخ شمسی", "بازدیدکننده", "شناسه‌ی کاربر", "منبع", "نوع", "کمپین", "محتوا",
-                            "ارجاع‌دهنده", "صفحه فرود", "آخرین صفحه", "صفحه‌ها", "دستگاه", "مرورگر", "مرورگر برنامه"],
-               rows, [17, 17, 12, 10, 14, 10, 20, 14, 20, 30, 30, 8, 10, 10, 12])
+                            "ارجاع‌دهنده", "صفحه فرود", "آخرین صفحه", "صفحه‌ها", "دستگاه", "مرورگر", "مرورگر برنامه",
+                            "برچسب"],
+               rows, [17, 17, 12, 10, 14, 10, 20, 14, 20, 30, 30, 8, 10, 10, 12, 14])
 
 
 def _events(book: Book, since) -> None:
@@ -264,9 +270,11 @@ def _events(book: Book, since) -> None:
           .exclude(Q(name__startswith=Event.VIEW) | Q(name__startswith=Event.DO)).order_by("-created_at"))
     rows = ([local(e.created_at), jalali(e.created_at), event_label(e.name), e.name, _vid(e.visitor.vid),
              e.visitor.user_id, e.visitor.first_source, e.visitor.first_campaign, e.path,
-             "; ".join(f"{k}={v}" for k, v in (e.meta or {}).items())] for e in qs.iterator(chunk_size=2000))
+             "; ".join(f"{k}={v}" for k, v in (e.meta or {}).items()), e.visitor.get_flag_display()]
+            for e in qs.iterator(chunk_size=2000))
     book.sheet("رویدادهای قیف", ["زمان", "تاریخ شمسی", "رویداد", "نام فنی", "بازدیدکننده", "شناسه‌ی کاربر",
-                                 "منبع اولیه", "کمپین اولیه", "مسیر", "جزئیات"], rows, [17, 17, 22, 18, 12, 10, 14, 18, 34, 40])
+                                 "منبع اولیه", "کمپین اولیه", "مسیر", "جزئیات", "برچسب"], rows,
+               [17, 17, 22, 18, 12, 10, 14, 18, 34, 40, 14])
 
 
 def _actions(book: Book, since) -> None:
@@ -277,11 +285,12 @@ def _actions(book: Book, since) -> None:
         m = e.meta or {}
         extra = "; ".join(f"{k}={v}" for k, v in m.items() if k not in ("route", "status", "ok"))
         return [local(e.created_at), jalali(e.created_at), event_label(e.name), m.get("route", e.name), e.path,
-                m.get("status"), bool(m.get("ok", True)), extra, e.visitor.user_id, _vid(e.visitor.vid)]
+                m.get("status"), bool(m.get("ok", True)), extra, e.visitor.user_id, _vid(e.visitor.vid),
+                e.visitor.get_flag_display()]
 
     book.sheet("ریزکارها", ["زمان", "تاریخ شمسی", "نوع", "مسیر (route)", "آدرس", "کد پاسخ", "موفق", "شناسه‌های آدرس",
-                            "شناسه‌ی کاربر", "بازدیدکننده"], (row(e) for e in qs.iterator(chunk_size=2000)),
-               [17, 17, 14, 34, 40, 8, 8, 36, 10, 12])
+                            "شناسه‌ی کاربر", "بازدیدکننده", "برچسب"], (row(e) for e in qs.iterator(chunk_size=2000)),
+               [17, 17, 14, 34, 40, 8, 8, 36, 10, 12, 14])
 
 
 def _activity(book: Book, since) -> None:
@@ -334,13 +343,15 @@ def _users(book: Book) -> None:
                    d["n"] if d else 0, local(d["first"]) if d else None, local(i["first"]) if i else None,
                    i["n"] if i else 0, local(e.get("map_first")), t["n"] if t else 0, e.get("views", 0),
                    e.get("dos", 0), p["n"] if p else 0, p["s"] if p else 0, local(u.last_login),
-                   local(max([x for x in (e.get("last"), u.last_login) if x], default=None)), stage]
+                   local(max([x for x in (e.get("last"), u.last_login) if x], default=None)), stage,
+                   u.analytics_exclude]
 
     book.sheet("کاربران", ["شناسه", "موبایل", "سازمان", "زمان ثبت‌نام", "تاریخ شمسی", "منبع اولیه", "نوع منبع",
                            "کمپین", "صفحه فرود", "دستگاه", "مرورگر برنامه", "پایگاه‌ها", "اولین پایگاه",
                            "اولین ورود داده", "ورود موفق داده", "اولین نقشه", "تحلیل/پرسش", "صفحه‌ی دیده‌شده",
-                           "عملیات", "فاکتور پرداخت‌شده", "پرداخت (تومان)", "آخرین ورود", "آخرین فعالیت", "مرحله"],
-               rows(), [8, 14, 22, 17, 12, 14, 10, 18, 26, 10, 12, 8, 17, 17, 9, 17, 9, 10, 9, 10, 12, 17, 17, 16])
+                           "عملیات", "فاکتور پرداخت‌شده", "پرداخت (تومان)", "آخرین ورود", "آخرین فعالیت", "مرحله",
+                           "حساب داخلی"],
+               rows(), [8, 14, 22, 17, 12, 14, 10, 18, 26, 10, 12, 8, 17, 17, 9, 17, 9, 10, 9, 10, 12, 17, 17, 16, 10])
 
 
 def _databases(book: Book) -> None:
@@ -463,6 +474,7 @@ def _links(book: Book) -> None:
 def build(days: int = 90) -> bytes:
     """فایل xlsx کامل را در حافظه می‌سازد. days=۰ یعنی همه‌ی زمان‌ها."""
     since = _since(days)
+    quality.refresh()
     buf = io.BytesIO()
     book = Book(buf)
     _guide(book, days)

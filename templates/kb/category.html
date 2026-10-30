@@ -8,6 +8,7 @@
 {% block kbbody %}
 <div class="kb-layout">
   <aside class="kb-side" aria-label="دسته‌ها"><ul>{% for c in categories %}<li><a href="{{ c.get_absolute_url }}" {% if c.pk == cat.pk %}aria-current="page"{% endif %}>{{ c.title }}</a></li>{% endfor %}</ul></aside>
-  <ul class="kb-list">{% for a in articles %}{% include "kb/_card.html" %}{% endfor %}</ul>
+  <div><ul class="kb-list">{% for a in articles %}{% include "kb/_card.html" %}{% endfor %}</ul>
+  {% include "partials/start_cta.html" with where="kb-category" %}</div>
 </div>
 {% endblock %}

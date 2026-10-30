@@ -133,6 +133,21 @@ def create(request):
         "public_port": server.public_port if server else None})
 
 
+def _first_steps(db) -> str:
+    """پایگاه تازه خالی است؛ تا اولین ورود داده موفق، صفحه‌ی نمای کلی راه بعدی را نشان می‌دهد.
+
+    خروجی: "" (کارت لازم نیست)، "start" (هنوز داده‌ای نیامده) یا "running" (ورود در صف یا در حال اجراست).
+    """
+    from jobs.models import Job
+
+    if not db.is_live:
+        return ""
+    jobs = db.jobs.filter(kind__in=[Job.Kind.IMPORT, Job.Kind.OSM_IMPORT])
+    if jobs.filter(status=Job.Status.DONE).exists():
+        return ""
+    return "running" if jobs.filter(status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).exists() else "start"
+
+
 @site_user_required
 def detail(request, pk):
     db = _user_db(request, pk, "viewer")
@@ -142,6 +157,7 @@ def detail(request, pk):
     return render(request, "databases/detail.html", {
         "db": db,
         "once_password": once_password,
+        "first_steps": _first_steps(db),
         "pw_form": PasswordResetForm(initial={"password": generate_password()}),
         "ext_form": AddExtensionForm(db=db),
         "delete_form": DeleteConfirmForm(expected=db.label),

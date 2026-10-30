@@ -11,6 +11,10 @@ class Visitor(models.Model):
     first_seen = models.DateTimeField("اولین بازدید", auto_now_add=True)
     last_seen = models.DateTimeField("آخرین بازدید", auto_now_add=True)
     visits_count = models.PositiveIntegerField("تعداد بازدید", default=0)
+    FLAG_INTERNAL, FLAG_BOT = "internal", "bot"
+    flag = models.CharField("برچسب", max_length=10, blank=True, db_index=True,
+                            choices=[(FLAG_INTERNAL, "حساب داخلی"), (FLAG_BOT, "مشکوک به ربات")],
+                            help_text="بازدیدکننده‌ی برچسب‌دار در قیف و گزارش‌ها شمرده نمی‌شود (در خروجی اکسل با برچسب می‌آید).")
     linked_at = models.DateTimeField("زمان اتصال به کاربر", null=True, blank=True)
     # first-touch
     first_source = models.CharField("منبع اولیه", max_length=80, blank=True)
@@ -75,6 +79,7 @@ class Event(models.Model):
     LOGIN = "login"
     DB_CREATED = "db_created"
     IMPORT_QUEUED = "import_queued"
+    CTA_CLICK = "cta_click"
     MAP_VIEWED = "map_viewed"
     # ریزکارهای کاربر واردشده: «view:<مسیر>» برای دیدن صفحه و «do:<مسیر>» برای ارسال فرم/انجام عملیات
     VIEW = "view:"

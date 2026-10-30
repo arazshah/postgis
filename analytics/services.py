@@ -199,7 +199,9 @@ def attach_user(request, user, *, new_user: bool) -> None:
         if visitor.user_id is None:
             visitor.user = user
             visitor.linked_at = timezone.now()
-            visitor.save(update_fields=["user", "linked_at"])
+            if user.is_staff or user.analytics_exclude:
+                visitor.flag = Visitor.FLAG_INTERNAL
+            visitor.save(update_fields=["user", "linked_at", "flag"])
         Event.objects.create(visitor=visitor, visit=visit, name=Event.SIGNUP if new_user else Event.LOGIN,
                              path=request.path[:300], meta={})
     except Exception:  # noqa: BLE001

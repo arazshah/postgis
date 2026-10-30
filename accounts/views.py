@@ -1,3 +1,5 @@
+import re
+
 from django.contrib import messages
 from django.contrib.auth import login
 from django.shortcuts import redirect, render
@@ -31,6 +33,9 @@ def login_start(request):
     if request.user.is_authenticated:
         return redirect("databases:dashboard")
     nxt = _safe_next(request, request.GET.get("next") or request.POST.get("next"))
+    cta = request.GET.get("cta", "")
+    if request.method == "GET" and re.fullmatch(r"[a-z0-9-]{1,30}", cta):
+        analytics.record(request, Event.CTA_CLICK, where=cta)  # دکمه‌ی «شروع رایگان» صفحه‌های عمومی
     form = PhoneForm(request.POST or None, initial={"phone": request.session.get(SESSION_PHONE, "")})
     if request.method == "POST" and form.is_valid():
         phone = form.cleaned_data["phone"]

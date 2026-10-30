@@ -5,8 +5,10 @@ kind: howto
 keywords: بعد از ساخت, قدم بعدی, چک لیست, اولین کارها, شروع کار
 related: quick-start, import-formats, data-health, publish-layer-overview, backups-overview
 order: 160
-reviewed: 2026-10-21
+reviewed: 2026-10-30
 ---
+تا وقتی هیچ داده‌ای وارد نشده، بالای صفحه‌ی «نمای کلی و اتصال» کارت «پایگاه شما آماده است؛ حالا داده بگذارید» با سه راه دیده می‌شود: [داده‌ی آماده‌ی ایران](kb:osm-data-overview) (سریع‌ترین راه برای اولین نقشه)، ورود فایل خودتان و اتصال از QGIS. بعد از اولین ورود موفق، کارت خودش کنار می‌رود.
+
 1. **اتصال را بیازمایید:** [اطلاعات اتصال](kb:connection-info) را در [QGIS](kb:connect-qgis) بگذارید و Test Connection بزنید.
 2. **داده وارد کنید:** [آپلود در سایت](kb:import-formats) یا [DB Manager در QGIS](kb:import-qgis-db-manager) یا [ogr2ogr](kb:import-ogr2ogr).
 3. **سیستم مختصات را بررسی کنید:** [SRID درست](kb:what-is-srid) رایج‌ترین دلیل «جابه‌جا افتادن لایه‌هاست».

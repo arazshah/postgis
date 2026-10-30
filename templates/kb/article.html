@@ -21,6 +21,8 @@
     {% if toc %}<nav class="kb-toc" aria-label="در این مقاله"><b>در این مقاله</b><ol>{% for lvl, name, anchor in toc %}<li><a href="#{{ anchor }}">{{ name }}</a></li>{% endfor %}</ol></nav>{% endif %}
     <div class="kb-body prose">{{ body_html }}</div>
 
+    {% include "partials/start_cta.html" with where="kb-article" %}
+
     <section class="kb-vote" aria-labelledby="kb-vote-h">
       <h2 id="kb-vote-h">آیا این مقاله به شما کمک کرد؟</h2>
       {% if voted %}<p class="muted">بازخورد شما ثبت شد؛ ممنون.</p>

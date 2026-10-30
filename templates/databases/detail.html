@@ -19,6 +19,37 @@
       </section>
   {% endif %}
 
+  {% if first_steps %}
+  <section class="card first-steps" aria-labelledby="fs-title">
+    <div class="fs-head">
+      <span class="dash-ico">{% icon "bolt" 20 %}</span>
+      <div>
+        <h2 id="fs-title">{% if first_steps == 'running' %}ورود داده در حال انجام است{% else %}پایگاه شما آماده است؛ حالا داده بگذارید{% endif %}</h2>
+        <p class="small muted">{% if first_steps == 'running' %}چند دقیقه‌ی دیگر جدول‌ها در «جدول‌ها» پیدا می‌شوند. می‌توانید پیشرفت را در صفحه‌ی داده‌ی آماده ببینید.{% else %}پایگاه تازه خالی است. با داده‌ی آماده‌ی ایران در چند دقیقه اولین نقشه‌تان را ببینید.{% endif %}</p>
+      </div>
+    </div>
+    <ol class="fs-steps" aria-label="مراحل شروع">
+      <li class="done"><i>{% icon "check" 12 %}</i>پایگاه ساخته شد</li>
+      <li class="on"><i>۲</i>داده بیاورید</li>
+      <li><i>۳</i>روی نقشه ببینید</li>
+    </ol>
+    <div class="fs-grid">
+      <a class="dash-tile fs-main" href="{% url 'iranmap:ready' db.pk %}">
+        <span class="dash-ico">{% icon "pin" 20 %}</span>
+        <span class="dash-txt"><b>{% if first_steps == 'running' %}پیگیری ورود داده{% else %}داده‌ی آماده‌ی ایران{% endif %}</b><small>استان یا شهرستان را انتخاب کنید؛ جاده، ساختمان و مرز با یک کلیک وارد می‌شود.</small></span>
+      </a>
+      <a class="dash-tile" href="{% url 'databases:import' db.pk %}">
+        <span class="dash-ico">{% icon "upload" 20 %}</span>
+        <span class="dash-txt"><b>فایل خودتان را وارد کنید</b><small>Shapefile (zip)، GeoJSON، GeoPackage، KML یا CSV.</small></span>
+      </a>
+      <a class="dash-tile" href="#howto-title">
+        <span class="dash-ico">{% icon "link" 20 %}</span>
+        <span class="dash-txt"><b>از QGIS وصل شوید</b><small>اطلاعات اتصال همین صفحه را در QGIS بگذارید.</small></span>
+      </a>
+    </div>
+  </section>
+  {% endif %}
+
   <div class="duo">
     <section class="card" aria-labelledby="conn-title">
         <h2 id="conn-title">اطلاعات اتصال</h2>

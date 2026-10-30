@@ -19,6 +19,8 @@
 <p class="an-note">آمار بر پایه <b>منبع اولین ورود</b> هر بازدیدکننده است (بازدیدکننده‌های جدید همین بازه). ربات‌ها و درخواست‌های «Do Not Track» شمرده نمی‌شوند.
   برای اینکه تبلیغ‌ها از «direct» جدا شوند، هر لینک تبلیغ را با <code>utm_source</code> و <code>utm_medium</code> و <code>utm_campaign</code> بسازید؛ مثلاً
   <code dir="ltr">?utm_source=linkedin&amp;utm_medium=paid&amp;utm_campaign=oct-gis</code></p>
+{% if excluded.bot or excluded.internal %}<p class="an-note">در این بازه <b>{{ excluded.bot }}</b> بازدیدکننده‌ی مشکوک به ربات (موج ناگهانی بازدید تک‌صفحه‌ای) و <b>{{ excluded.internal }}</b> بازدیدکننده‌ی داخلی از آمار کنار گذاشته شد.
+  <a href="{% url 'admin:analytics_visitor_changelist' %}?flag__exact=bot">دیدن مشکوک‌ها</a> (اگر درست تشخیص داده نشده، با اقدام «برداشتن برچسب» برگردانید). حساب داخلی را در «کاربران سایت» با علامت «حساب داخلی» تعیین کنید.</p>{% endif %}
 <div class="an-range">{% for r in ranges %}<a href="?days={{ r }}" class="{% if r == days %}on{% endif %}">{{ r }} روز اخیر</a>{% endfor %}</div>
 <div class="an-export">
   <b>خروجی اکسل کامل</b>
