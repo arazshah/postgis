@@ -80,6 +80,9 @@ class User(AbstractUser):
     full_name = models.CharField("نام و نام خانوادگی", max_length=150, blank=True)
     organization = models.CharField("دانشگاه / سازمان", max_length=200, blank=True)
     phone_verified_at = models.DateTimeField("تأیید موبایل", null=True, blank=True)
+    analytics_exclude = models.BooleanField(
+        "حساب داخلی (در آمار شمرده نشود)", default=False,
+        help_text="حساب خودتان و تیم: بازدید و رویدادهای این کاربر از قیف و گزارش منابع ورود بیرون می‌ماند.")
 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS: list[str] = []

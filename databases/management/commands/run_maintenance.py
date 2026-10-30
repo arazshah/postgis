@@ -27,6 +27,9 @@ class Command(BaseCommand):
             from analytics import services as analytics_services
 
             self.stdout.write(f"analytics: {analytics_services.cleanup()}")
+            from analytics import quality
+
+            self.stdout.write(f"analytics quality: {quality.refresh()}")
         if only in (None, "assistant"):
             from assistant.services_maintenance import maintenance as assistant_maintenance
 

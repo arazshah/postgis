@@ -6,6 +6,7 @@ from datetime import timedelta
 from django.db.models import Count
 from django.utils import timezone
 
+from . import quality
 from .models import Event, Visitor
 
 RANGES = (7, 30, 90)
@@ -18,10 +19,10 @@ def _pct(a: int, b: int) -> str:
 def breakdown(fields: list[str], days: int, limit: int = 30) -> list[dict]:
     """بازدیدکننده‌های جدید این بازه، گروه‌بندی‌شده با قیف ثبت‌نام."""
     since = timezone.now() - timedelta(days=days)
-    base = Visitor.objects.filter(first_seen__gte=since)
+    base = Visitor.objects.filter(first_seen__gte=since, flag="")
     rows = {tuple(r[f] for f in fields): {"visitors": r["n"]}
             for r in base.values(*fields).annotate(n=Count("id"))}
-    ev = (Event.objects.filter(visitor__first_seen__gte=since)
+    ev = (Event.objects.filter(visitor__first_seen__gte=since, visitor__flag="")
           .values(*[f"visitor__{f}" for f in fields], "name").annotate(n=Count("visitor", distinct=True)))
     for r in ev:
         key = tuple(r[f"visitor__{f}"] for f in fields)
@@ -45,10 +46,11 @@ def breakdown(fields: list[str], days: int, limit: int = 30) -> list[dict]:
 
 def funnel(days: int) -> list[dict]:
     since = timezone.now() - timedelta(days=days)
-    visitors = Visitor.objects.filter(first_seen__gte=since).count()
+    visitors = Visitor.objects.filter(first_seen__gte=since, flag="").count()
 
     def count(name):
-        return Event.objects.filter(visitor__first_seen__gte=since, name=name).values("visitor").distinct().count()
+        return (Event.objects.filter(visitor__first_seen__gte=since, visitor__flag="", name=name)
+                .values("visitor").distinct().count())
 
     steps = [("بازدیدکننده", visitors), ("درخواست کد ورود", count(Event.OTP_REQUESTED)),
              ("ورود کد صحیح", count(Event.OTP_VERIFIED)), ("ثبت‌نام جدید", count(Event.SIGNUP)),
@@ -64,7 +66,9 @@ def funnel(days: int) -> list[dict]:
 
 def build(days: int) -> dict:
     days = days if days in RANGES else 30
+    quality.refresh()
     return {
+        "excluded": quality.excluded_counts(days),
         "days": days, "ranges": RANGES, "funnel": funnel(days),
         "sources": breakdown(["first_source", "first_medium", "first_campaign"], days),
         "landing": breakdown(["first_landing"], days, 15),

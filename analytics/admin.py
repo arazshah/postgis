@@ -69,8 +69,9 @@ class SourceReportAdmin(admin.ModelAdmin):
 @admin.register(Visitor)
 class VisitorAdmin(ReadOnly):
     list_display = ("vid_short", "first_seen", "first_source", "first_medium", "first_campaign", "device", "in_app",
-                    "visits_count", "user")
-    list_filter = ("first_source", "first_medium", "device", "in_app")
+                    "visits_count", "user", "flag")
+    list_filter = ("flag", "first_source", "first_medium", "device", "in_app")
+    actions = ["clear_flag", "mark_bot"]
     search_fields = ("vid", "first_campaign", "first_landing", "user__phone")
     date_hierarchy = "first_seen"
     list_select_related = ("user",)
@@ -78,6 +79,16 @@ class VisitorAdmin(ReadOnly):
     @admin.display(description="شناسه")
     def vid_short(self, obj):
         return obj.vid[:8]
+
+    @admin.action(description="برداشتن برچسب (دوباره در آمار شمرده شود)")
+    def clear_flag(self, request, queryset):
+        n = queryset.exclude(flag="").update(flag="")
+        self.message_user(request, f"برچسب {n} بازدیدکننده برداشته شد.")
+
+    @admin.action(description="برچسب «مشکوک به ربات»")
+    def mark_bot(self, request, queryset):
+        n = queryset.filter(user__isnull=True, flag="").update(flag=Visitor.FLAG_BOT)
+        self.message_user(request, f"{n} بازدیدکننده مشکوک به ربات علامت خورد.")
 
 
 @admin.register(Visit)

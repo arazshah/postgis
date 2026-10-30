@@ -25,7 +25,7 @@ class UserDatabaseInline(admin.TabularInline):
 class SiteUserForm(forms.ModelForm):
     class Meta:
         model = SiteUser
-        fields = ["phone", "full_name", "email", "organization", "is_active"]
+        fields = ["phone", "full_name", "email", "organization", "is_active", "analytics_exclude"]
 
     def clean_phone(self):
         return normalize_mobile(self.cleaned_data["phone"])
@@ -35,11 +35,11 @@ class SiteUserForm(forms.ModelForm):
 class SiteUserAdmin(admin.ModelAdmin):
     form = SiteUserForm
     list_display = ["phone", "full_name", "organization", "db_count", "is_active", "date_joined", "last_login"]
-    list_filter = ["is_active", "date_joined"]
+    list_filter = ["is_active", "analytics_exclude", "date_joined"]
     search_fields = ["phone", "full_name", "organization", "email"]
     readonly_fields = ["date_joined", "last_login", "phone_verified_at"]
-    fields = ["phone", "full_name", "email", "organization", "is_active", "phone_verified_at", "date_joined",
-              "last_login"]
+    fields = ["phone", "full_name", "email", "organization", "is_active", "analytics_exclude", "phone_verified_at",
+              "date_joined", "last_login"]
     inlines = [UserDatabaseInline]
     actions = ["deactivate", "activate"]
     ordering = ["-date_joined"]

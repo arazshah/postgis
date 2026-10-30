@@ -1,0 +1,10 @@
+{% load ws %}{% if not user.is_authenticated %}
+<aside class="start-cta" aria-labelledby="sc-{{ where }}">
+  <span class="dash-ico">{% icon "bolt" 20 %}</span>
+  <div class="sc-txt">
+    <h2 id="sc-{{ where }}">پایگاه PostGIS خودتان را در یک دقیقه بسازید</h2>
+    <p>رایگان شروع کنید؛ داده‌ی آماده‌ی ایران را با یک کلیک وارد کنید و در QGIS باز کنید. نصب لازم نیست.</p>
+  </div>
+  <a class="btn" href="{% url 'accounts:login' %}?cta={{ where }}">شروع رایگان</a>
+</aside>
+{% endif %}

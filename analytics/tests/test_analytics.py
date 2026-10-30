@@ -316,7 +316,8 @@ class ExportTests(TestCase):
             self.assertIn(name, wb.sheetnames)
         users = [[c.value for c in row] for row in wb["کاربران"].iter_rows(min_row=2)]
         self.assertEqual(users[0][1], "0912***4567")
-        self.assertEqual(users[0][-1], "فقط ثبت‌نام")
+        self.assertEqual(users[0][-2], "فقط ثبت‌نام")
+        self.assertEqual(users[0][-1], "خیر")  # ستون «حساب داخلی»
         actions = [[c.value for c in row] for row in wb["ریزکارها"].iter_rows(min_row=2)]
         self.assertTrue(any(r[3] == "databases:create" for r in actions))
         self.assertEqual(export.mask_phone("تماس 09121234567 و 09351112233"), "تماس 0912***4567 و 0935***2233")
@@ -329,3 +330,23 @@ class ExportTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn("spreadsheetml", r["Content-Type"])
         self.assertTrue(r.content.startswith(b"PK"))
+
+
+class StartCtaTests(TestCase):
+    def test_kb_article_shows_cta_to_anonymous_only_and_click_is_recorded(self):
+        from kb.models import Article, Category
+
+        cat = Category.objects.create(slug="c", title="c")
+        Article.objects.create(category=cat, slug="a", title="مقاله", status="published", summary="s", body="متن")
+        url = "/kb/a/"
+        html = self.client.get(url, HTTP_USER_AGENT=UA_DESK).content.decode()
+        self.assertIn("start-cta", html)
+        self.assertIn("?cta=kb-article", html)
+        self.client.get(reverse("accounts:login") + "?cta=kb-article", HTTP_USER_AGENT=UA_DESK)
+        ev = Event.objects.get(name=Event.CTA_CLICK)
+        self.assertEqual(ev.meta, {"where": "kb-article"})
+        self.client.get(reverse("accounts:login") + "?cta=<script>", HTTP_USER_AGENT=UA_DESK)
+        self.assertEqual(Event.objects.filter(name=Event.CTA_CLICK).count(), 1)  # مقدار ناجور نادیده
+
+        self.client.force_login(User.objects.create_user("09121234500"))
+        self.assertNotIn("start-cta", self.client.get(url, HTTP_USER_AGENT=UA_DESK).content.decode())
