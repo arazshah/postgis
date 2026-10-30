@@ -10,4 +10,5 @@ class AnalyticsMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         services.track_pageview(request, response)
+        services.track_action(request, response)
         return response

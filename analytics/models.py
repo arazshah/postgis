@@ -76,6 +76,9 @@ class Event(models.Model):
     DB_CREATED = "db_created"
     IMPORT_QUEUED = "import_queued"
     MAP_VIEWED = "map_viewed"
+    # ریزکارهای کاربر واردشده: «view:<مسیر>» برای دیدن صفحه و «do:<مسیر>» برای ارسال فرم/انجام عملیات
+    VIEW = "view:"
+    DO = "do:"
 
     visitor = models.ForeignKey(Visitor, on_delete=models.CASCADE, related_name="events")
     visit = models.ForeignKey(Visit, on_delete=models.SET_NULL, null=True, blank=True, related_name="events")

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 CLICK_IDS = {"gclid": ("google", "cpc"), "fbclid": ("facebook", "social"), "li_fat_id": ("linkedin", "paid"),
              "msclkid": ("bing", "cpc"), "yclid": ("yandex", "cpc"), "ttclid": ("tiktok", "paid")}
@@ -20,6 +20,13 @@ REFERRERS = [
     ("rubika.ir", "rubika", "social"), ("aparat.com", "aparat", "video"), ("youtube.com", "youtube", "video"),
     ("youtu.be", "youtube", "video"), ("github.com", "github", "referral"),
     ("reddit.com", "reddit", "social"), ("aut.ac.ir", "aut.ac.ir", "referral"),
+    # اندروید به‌جای دامنه، نام بسته‌ی برنامه را به‌عنوان Referer می‌فرستد (android-app://com.linkedin.android)
+    ("com.linkedin.android", "linkedin", "social"), ("com.instagram.android", "instagram", "social"),
+    ("org.telegram.messenger", "telegram", "social"), ("org.telegram.messenger.web", "telegram", "social"),
+    ("com.facebook.katana", "facebook", "social"), ("com.twitter.android", "twitter", "social"),
+    ("com.whatsapp", "whatsapp", "social"), ("ir.eitaa.messenger", "eitaa", "social"),
+    ("ir.nasim", "bale", "social"), ("ir.resaneh1.iptv", "rubika", "social"),
+    ("com.google.android.googlequicksearchbox", "google", "organic"),
 ]
 
 BOT_RE = re.compile(
@@ -90,9 +97,23 @@ def _host_matches(host: str, pattern: str) -> bool:
     return host == pattern or host.endswith("." + pattern)
 
 
+def _repair(params) -> dict:
+    """لینک با «?» یا «&» اضافه (utm_source=aparat?utm_medium=social) همه‌ی مقدارها را در utm_source می‌ریزد؛ دوباره جدا می‌شود."""
+    flat = {k: params.get(k) for k in ("utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", *CLICK_IDS)}
+    for key in [k for k in flat if k.startswith("utm_")]:
+        value = flat[key] or ""
+        if "?" in value or "&" in value:
+            head, _, tail = value.replace("&", "?").partition("?")
+            flat[key] = head
+            for k, v in parse_qsl(tail.replace("?", "&")):
+                if k in flat and not flat[k]:
+                    flat[k] = v
+    return flat
+
+
 def classify(params, ref_host: str, in_app: str = "") -> dict:
     """از UTM و شناسه کلیک و Referer، منبع/نوع/کمپین را برمی‌گرداند. UTM همیشه برنده است."""
-    get = params.get
+    get = _repair(params).get
     source, medium = clean(get("utm_source"), 80), clean(get("utm_medium"), 40)
     out = {"campaign": clean(get("utm_campaign"), 120), "content": clean(get("utm_content"), 120),
            "term": clean(get("utm_term"), 120), "click_id": ""}

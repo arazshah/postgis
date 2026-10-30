@@ -8,6 +8,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from . import classify as cl
@@ -72,6 +73,44 @@ def track_pageview(request, response) -> None:
         _track(request, response)
     except Exception:  # noqa: BLE001
         log.exception("analytics tracking failed")
+
+
+ACTION_RETENTION_DAYS = 365
+ACTION_STATUS_OK = (200, 201, 302, 303)
+
+
+def track_action(request, response) -> None:
+    """ریزکارهای کاربر واردشده (دیدن صفحه و ارسال فرم) برای خروجی اکسل. فقط نام مسیر و شناسه‌های آدرس؛ هرگز محتوای فرم."""
+    try:
+        user = getattr(request, "user", None)
+        if user is None or not user.is_authenticated or user.is_staff or not enabled():
+            return
+        if request.path.startswith(SKIP_PREFIXES) or request.META.get("HTTP_DNT") == "1" \
+                or request.META.get("HTTP_SEC_GPC") == "1" or request.headers.get("X-Requested-With"):
+            return
+        match = getattr(request, "resolver_match", None)
+        if match is None or not match.view_name:
+            return
+        if request.method == "GET":
+            if response.status_code != 200 or "text/html" not in response.get("Content-Type", ""):
+                return
+            prefix = Event.VIEW
+        elif request.method == "POST":
+            if response.status_code not in ACTION_STATUS_OK:
+                return
+            prefix = Event.DO
+        else:
+            return
+        visitor, visit = _current(request)
+        if visitor is None:
+            return
+        meta = {"route": match.view_name, "status": response.status_code,
+                "ok": request.method == "GET" or response.status_code != 200}
+        meta.update({k: v for k, v in match.kwargs.items() if isinstance(v, int | str) and len(str(v)) <= 64})
+        Event.objects.create(visitor=visitor, visit=visit, name=(prefix + match.view_name)[:40],
+                             path=request.path[:300], meta=meta)
+    except Exception:  # noqa: BLE001
+        log.exception("analytics action failed")
 
 
 def _track(request, response) -> None:
@@ -171,7 +210,10 @@ def cleanup(days: int | None = None) -> dict:
     """داده خام قدیمی پاک می‌شود؛ بازدیدکننده‌های وصل‌شده به کاربر (منبع ثبت‌نام) می‌مانند."""
     days = days or getattr(settings, "ANALYTICS_RETENTION_DAYS", 90)
     cutoff = timezone.now() - timedelta(days=days)
-    ev = Event.objects.filter(created_at__lt=cutoff, visitor__user__isnull=True).delete()[0]
+    action_cutoff = timezone.now() - timedelta(days=max(days, ACTION_RETENTION_DAYS))
+    acts = Event.objects.filter(created_at__lt=action_cutoff).filter(
+        Q(name__startswith=Event.VIEW) | Q(name__startswith=Event.DO)).delete()[0]
+    ev = acts + Event.objects.filter(created_at__lt=cutoff, visitor__user__isnull=True).delete()[0]
     vi = Visit.objects.filter(started_at__lt=cutoff, visitor__user__isnull=True).delete()[0]
     vr = Visitor.objects.filter(last_seen__lt=cutoff, user__isnull=True).delete()[0]
     return {"events": ev, "visits": vi, "visitors": vr}

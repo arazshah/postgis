@@ -5,6 +5,7 @@ gunicorn>=23
 whitenoise>=6.7
 dj-database-url>=2.2
 jdatetime>=5.0
+XlsxWriter>=3.2  # خروجی اکسل آمار (analytics/export.py)
 Pillow>=10
 defusedxml>=0.7
 pmtiles>=3.4
