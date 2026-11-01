@@ -6,8 +6,10 @@ keywords: داده آماده, osm, openstreetmap, داده ایران, معاب
 related: osm-area-choice, osm-tables-reference, routing-network, odbl-attribution, osm-data-freshness
 featured: yes
 order: 10
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: داده آماده ایران و مسیریابی](help:ready)** را ببینید (۰ دقیقه و ۴۴ ثانیه، بدون نیاز به صدا).
+
 ## چه کسی به آن نیاز دارد؟
 
 اگر برای پروژه خود داده پایه (جاده، مدرسه، ساختمان، ...) می‌خواهید و جمع‌آوری آن وقت‌گیر است، «داده آماده ایران» را از مرورگر داده باز کنید.

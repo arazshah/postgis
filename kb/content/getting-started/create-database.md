@@ -6,8 +6,10 @@ keywords: ساخت دیتابیس, ایجاد پایگاه داده, دیتاب�
 related: database-naming-rules, password-rules, choose-extensions, connection-info, password-shown-once
 featured: yes
 order: 40
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: ساخت پایگاه داده مکانی](help:create)** را ببینید (۰ دقیقه و ۳۶ ثانیه، بدون نیاز به صدا).
+
 ## مراحل
 
 1. در «پایگاه‌های داده من» روی «ساخت پایگاه داده» بزنید.

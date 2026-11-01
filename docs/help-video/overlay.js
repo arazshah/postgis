@@ -13,17 +13,18 @@
   @keyframes vh{from{box-shadow:0 0 0 3px rgba(224,165,38,.2)}to{box-shadow:0 0 0 9px rgba(224,165,38,.35)}}
   #v-toast{position:fixed;z-index:6;bottom:22px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:#0A4341;color:#fff;border-radius:14px;padding:11px 20px 11px 18px;font:700 19px/1.6 Vazirmatn,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.28);max-width:86vw;direction:rtl;transition:opacity .25s}
   #v-toast b{display:inline-grid;place-items:center;min-width:34px;height:34px;border-radius:9px;background:#E0A526;color:#0A4341;font:800 19px var(--f-display,Vazirmatn)}
+  #v-toast.top{bottom:auto;top:72px}
   #v-prog{position:fixed;z-index:6;left:0;bottom:0;height:5px;background:#E0A526;transition:width .6s ease}
-  #v-card{position:fixed;inset:0;z-index:9;display:flex;flex-direction:column;justify-content:center;padding:6vw 9vw;direction:rtl;color:#EEF2EC;
+  #v-card{position:fixed;inset:0;z-index:9;display:flex;flex-direction:column;justify-content:center;padding:5vw 9vw 90px;direction:rtl;color:#EEF2EC;
     background:radial-gradient(ellipse at 15% 55%,rgba(224,165,38,.16),transparent 38%),linear-gradient(135deg,#0A4341,#0F5C59 60%,#0B3F3B);transition:opacity .5s;overflow:hidden}
   #v-card::before{content:"";position:absolute;inset:0;background:url(/static/img/contours.svg) center/cover;opacity:.35}
   #v-card>*{position:relative}
   #v-card .brand{position:absolute;top:34px;right:5vw;display:flex;align-items:center;gap:10px;font:800 24px var(--f-display,Vazirmatn);direction:ltr}
   #v-card .badge{align-self:flex-start;background:#E0A526;color:#0A4341;font:800 17px Vazirmatn;padding:6px 18px;border-radius:10px;margin-bottom:26px}
   #v-card h1{font:800 clamp(34px,5.4vw,66px)/1.45 var(--f-display,Vazirmatn);margin:0 0 18px;max-width:80%}
-  #v-card p{font:500 clamp(16px,1.9vw,23px)/1.9 Vazirmatn;margin:0;max-width:72%;opacity:.88}
+  #v-card p{font:500 clamp(15px,1.7vw,21px)/1.85 Vazirmatn;margin:0;max-width:74%;opacity:.88}
   #v-card .url{position:absolute;bottom:34px;left:5vw;font:500 20px "JetBrains Mono",monospace;direction:ltr;opacity:.8}
-  #v-card .steps{position:absolute;bottom:34px;right:9vw;display:flex;gap:10px;flex-wrap:wrap;max-width:60%;font:600 16px Vazirmatn}
+  #v-card .steps{margin-top:26px;display:flex;gap:10px;flex-wrap:wrap;max-width:78%;font:600 16px Vazirmatn}
   #v-card .steps span{background:rgba(255,255,255,.12);border-radius:9px;padding:4px 12px}`;
   function root() {
     let r = document.getElementById("v-root");
@@ -58,6 +59,7 @@
       const fa = String(n).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
       t.innerHTML = `<b>${fa}</b><span></span>`; t.lastChild.textContent = text; t.style.display = "flex"; save({ toast: [n, text] }); top();
     },
+    setpos(pos) { const r = root(); if (!r) return; r.querySelector("#v-toast").classList.toggle("top", pos === "top"); save({ pos }); },
     prog(p) { const r = root(); if (r) r.querySelector("#v-prog").style.width = p * 100 + "%"; save({ p }); },
     card(c) {
       const r = root(); if (!r) return; let el = document.getElementById("v-card");
@@ -78,6 +80,7 @@
     const s = st(); if (!root()) return;
     if (s.x != null) W.__v.cursor(s.x, s.y);
     if (s.toast) W.__v.toast(s.toast[0], s.toast[1]);
+    if (s.pos) W.__v.setpos(s.pos);
     if (s.p != null) W.__v.prog(s.p);
     if (s.card) W.__v.card(s.card);
     top();

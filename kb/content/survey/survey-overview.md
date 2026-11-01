@@ -6,8 +6,10 @@ keywords: برداشت میدانی, نقشه برداری, GNSS, GPS, RTK, نق
 related: survey-first-project, survey-data-tables, survey-phone-gps, survey-external-receiver
 featured: yes
 order: 10
-reviewed: 2026-10-25
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: برداشت میدانی: از ساخت پروژه تا خروجی DXF](help:survey)** را ببینید (۱ دقیقه و ۷ ثانیه، بدون نیاز به صدا).
+
 **برداشت میدانی** یک فضای کار کامل برای ثبت داده در میدان است. از منوی کنار پایگاه داده «برداشت میدانی» را باز کنید.
 
 ## چه کارهایی می‌شود کرد

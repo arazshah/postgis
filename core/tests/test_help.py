@@ -68,11 +68,12 @@ class HelpCenterTests(TestCase):
                 self.assertGreater(g.seconds, 20)
             self.assertGreaterEqual(len(g.steps), 4)
 
-    def test_index_shows_guides_without_video(self):
+    def test_every_guide_has_a_video_and_survey_guides_are_listed(self):
         html = self.client.get("/help/").content.decode()
-        for slug in ("survey", "gnss", "surface"):
+        for slug in ("survey", "gnss", "surface", "workspace", "classroom-teacher", "classroom-student"):
             self.assertIn(f'href="/help/{slug}/"', html)
-            self.assertNotIn(f"/static/help/video/{slug}.jpg", html)
+        # قالب یکدست: همه‌ی راهنماها ویدیو و پوستر دارند (فقط راهنمای بدون ویدیو در دست تهیه نمایش داده می‌شود)
+        self.assertEqual([g.slug for g in GUIDES if not g.has_video], [])
 
     def test_survey_doc_page(self):
         r = self.client.get("/docs/survey/")

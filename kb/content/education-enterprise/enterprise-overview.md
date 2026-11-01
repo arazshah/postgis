@@ -5,8 +5,10 @@ kind: concept
 keywords: پلن سازمانی, enterprise, geoserver اختصاصی, رستر, کپی پایگاه داده, بکاپ ساعتی, سازمان
 related: enterprise-geoserver, enterprise-raster, enterprise-clone, enterprise-snapshots, plans-overview
 order: 50
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: امکانات سازمانی: GeoServer اختصاصی، رستر و کپی](help:enterprise)** را ببینید (۰ دقیقه و ۳۵ ثانیه، بدون نیاز به صدا).
+
 | امکان | توضیح |
 |---|---|
 | [GeoServer اختصاصی](kb:enterprise-geoserver) | سرور GeoServer جدا با آدرس خودتان و اتصال خودکار به پایگاه داده |

@@ -6,8 +6,10 @@ keywords: مرورگر داده, explorer, جدول ها, نمایش روی نق
 related: edit-table-data, explorer-map-limit, import-formats, export-formats, data-health, sql-console
 featured: yes
 order: 100
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: مرورگر داده: جدول‌ها، نقشه و دانلود](help:explore)** را ببینید (۰ دقیقه و ۴۸ ثانیه، بدون نیاز به صدا).
+
 ## زبانه‌ها
 
 | بخش | کار |

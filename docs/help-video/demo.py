@@ -15,6 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 import django  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 django.setup()
 
 from django.contrib.auth import BACKEND_SESSION_KEY, HASH_SESSION_KEY, SESSION_KEY  # noqa: E402
@@ -123,7 +125,107 @@ def graded():
     services.grade(sub, "grade", "18", "عالی بود! فقط ایندکس مکانی روی خروجی را فراموش نکنید (GIST).")
 
 
+def real_server():
+    """سرور PostGIS واقعی (محلی) برای ویدیوهای مرورگر داده، SQL، نقشه و ..."""
+    from databases.provisioner import Provisioner
+
+    srv = DatabaseServer(name="demo", host=os.environ.get("PG_HOST", "localhost"), port=int(os.environ.get("PG_PORT", "5432")),
+                         admin_user="postgres", sslmode="disable", public_host="db.postgis.ir", public_port=5439, is_default=True)
+    srv.set_admin_password(os.environ.get("PG_PASSWORD", "postgres"))
+    srv.save()
+    Provisioner.for_server(srv).harden()
+    return srv
+
+
+NEIGH = [("ونک", 51.395, 35.760), ("تجریش", 51.430, 35.805), ("نارمک", 51.510, 35.735), ("شهرک غرب", 51.365, 35.765),
+         ("جمهوری", 51.415, 35.700), ("هفت‌تیر", 51.425, 35.725)]
+
+
+def init_main():
+    """کاربر اصلی با پایگاه داده‌ی tehran_gis و داده‌ی نمونه (مدرسه، مترو، پارک، محله، مراکز درمانی)."""
+    from databases import gdal
+    from databases import services as dbs
+    from databases.models import Plan
+
+    call_command("migrate", verbosity=0)
+    call_command("kb_sync", verbosity=0)  # مقاله‌ها برای دستیار
+    from core.models import SiteSettings
+
+    conf = SiteSettings.get()
+    conf.sms_backend = "console"  # کد تأیید در ویدیو دیده می‌شود
+    conf.survey_enabled = True
+    conf.assistant_enabled, conf.assistant_base_url = True, f"http://127.0.0.1:{int(os.environ.get('PORT', '8765')) + 100}/v1"  # سرویس ساختگی (fake_llm.py)
+    conf.set_assistant_api_key("demo")
+    conf.pay_enabled, conf.pay_gateway_enabled, conf.gateway_sandbox = True, True, True  # صفحه‌ی پلن‌ها و فاکتور (پرداخت واقعی انجام نمی‌شود)
+    conf.pay_manual_enabled, conf.pay_card_number, conf.pay_card_holder, conf.pay_bank_name = True, "6037991122334455", "شرکت نمونه", "ملی"
+    conf.save()
+    real_server()
+    from databases.models import Plan as _Plan
+
+    for i, (slug, name, mb, conn, price, days, maps) in enumerate((
+            ("basic", "پایه", 5120, 10, 190000, 30, 5), ("pro", "حرفه‌ای", 25600, 25, 390000, 30, 20),
+            ("org", "سازمانی", 102400, 60, 1290000, 30, 100))):
+        _Plan.objects.update_or_create(slug=slug, defaults={
+            "name": name, "quota_mb": mb, "max_connections": conn, "duration_days": days, "is_free": False,
+            "price_toman": price, "is_public": True, "is_renewable": False, "order": 10 + i, "maps": maps,
+            "publish_layers": 10 * (i + 1), "backup_retention_days": 7 * (i + 1), "team_members": 3 * (i + 1),
+            "ows_projects": i + 1, "description": f"پلن {name}"})
+    u = User.objects.create_user("09120000100")
+    u.first_name, u.last_name = "علی", "رضایی"
+    u.save()
+    plan = Plan.objects.filter(is_default=True).first() or Plan.objects.filter(is_free=True).first()
+    pw = "Demo-Pass-2026x"
+    db = dbs.create_database(u, "tehran_gis", pw, ["postgis"], plan=plan)
+    sample = Path(__file__).resolve().parents[2] / "classroom" / "sample"
+    for name in ("schools", "metro_stations", "parks"):
+        gdal.import_layer(db, sample / f"{name}.geojson", {"name": name, "table": name, "mode": "create", "geom_type": ""}, None)
+    import psycopg
+
+    with psycopg.connect(host=db.server.host, port=db.server.port, user=db.role_name, password=pw, dbname=db.db_name,
+                         autocommit=True) as c:
+        c.execute("CREATE TABLE neighborhoods (gid serial PRIMARY KEY, name text, population int, geom geometry(Polygon,4326))")
+        for i, (n, x, y) in enumerate(NEIGH):
+            c.execute("INSERT INTO neighborhoods(name,population,geom) VALUES (%s,%s,ST_MakeEnvelope(%s,%s,%s,%s,4326))",
+                      (n, 18000 + i * 9500, x - .02, y - .02, x + .02, y + .02))
+        c.execute("CREATE INDEX ON neighborhoods USING gist(geom)")
+        c.execute("CREATE TABLE health_centers (gid serial PRIMARY KEY, name text, type text, beds int, geom geometry(Point,4326))")
+        for i in range(40):
+            c.execute("INSERT INTO health_centers(name,type,beds,geom) VALUES (%s,%s,%s,ST_SetSRID(ST_MakePoint(%s,%s),4326))",
+                      (f"مرکز {i + 1}", ["بیمارستان", "درمانگاه", "کلینیک"][i % 3], (i * 7) % 90, 51.33 + (i % 8) * .028, 35.68 + (i // 8) * .03))
+    # «داده آماده ایران»: فهرست نواحی و یک فایل منبع خالی تا صفحه آماده نمایش باشد (واردکردن واقعی لازم نیست)
+    from iranmap import osm as _osm
+    from iranmap.models import Area
+
+    _osm.source_file().touch()
+    for name, level, prov, bb in (("تهران", "province", "", [50.3, 34.1, 53.0, 36.3]), ("تهران", "county", "تهران", [51.0, 35.5, 51.7, 35.9]),
+                                  ("کرج", "county", "البرز", [50.8, 35.7, 51.1, 35.95]), ("اصفهان", "county", "اصفهان", [51.5, 32.5, 51.9, 32.8])):
+        poly = {"type": "Polygon", "coordinates": [[[bb[0], bb[1]], [bb[2], bb[1]], [bb[2], bb[3]], [bb[0], bb[3]], [bb[0], bb[1]]]]}
+        Area.objects.create(name=name, level=level, province=prov, bbox=bb, geometry=poly, population=8700000)
+    f = User.objects.create_user("09120000101")  # کاربر تازه، بدون پایگاه داده (ویدیوی «ساخت پایگاه داده»)
+    f.first_name, f.last_name = "مریم", "کریمی"
+    f.save()
+    OUT.write_text(json.dumps({"main": session(u), "fresh": session(f), "dbpw": pw, "dbid": db.pk}))
+
+
+def plan(slug):
+    """پلن پایگاه داده‌ی اصلی را عوض می‌کند (برای ویدیوهای سازمانی و برداشت میدانی)."""
+    from databases.models import Plan
+
+    p = Plan.objects.get(slug=slug)
+    p.survey_projects, p.survey_max_points, p.gnss_external = 10, 100000, True
+    p.dedicated_geoserver, p.raster_mb, p.clone_enabled, p.snapshot_hours = True, 2048, True, 6
+    p.basemap_api, p.team_members, p.db_roles, p.maps, p.map_layers, p.map_charts = True, 10, 5, 50, 10, 10
+    p.save()
+    UserDatabase.objects.filter(owner__phone="09120000100").update(plan=p)
+
+
 def serve():
+    if os.environ.get("REAL_PG"):
+        import fake_llm
+
+        fake_llm.start(int(os.environ.get("PORT", "8765")) + 100)
+        call_command("runserver", os.environ.get("PORT", "8765"), "--noreload")
+        return
     from classroom import services as cs
 
     def fake_create(user, label, password, exts, plan=None, ignore_limit=False, **kw):
@@ -131,15 +233,16 @@ def serve():
 
     cs.db_services.create_database = fake_create
     cs.seed = lambda *a, **k: None
-    call_command("runserver", "8765", "--noreload")
+    call_command("runserver", os.environ.get("PORT", "8765"), "--noreload")
 
 
 if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == "init":
-        init(sys.argv[2].removeprefix("classroom-"))
+        prof = sys.argv[2]
+        init_main() if prof == "main" else init(prof.removeprefix("classroom-"))
     elif cmd == "serve":
         serve()
     else:
-        {"students": students, "submissions": submissions, "map": student_join_data, "returned": returned,
+        plan(sys.argv[2]) if cmd == "plan" else {"students": students, "submissions": submissions, "map": student_join_data, "returned": returned,
          "graded": graded}[cmd]()

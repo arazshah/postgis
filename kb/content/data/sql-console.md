@@ -6,8 +6,10 @@ keywords: کنسول sql, sql console, کوئری, اجرای sql, select, ۵۰�
 related: sql-persian-question, sql-nearest-features, sql-buffer, err-statement-timeout, explorer-overview, edit-table-data
 featured: yes
 order: 150
-reviewed: 2026-10-28
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: اجرای SQL و تحلیل مکانی در سایت](help:sql)** را ببینید (۱ دقیقه و ۲ ثانیه، بدون نیاز به صدا).
+
 ## ویژگی‌ها
 
 - نتیجه تا **۵۰۰ ردیف** نمایش داده می‌شود؛ اگر بیشتر بود اعلام می‌شود که نتیجه کوتاه شده است.

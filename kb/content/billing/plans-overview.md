@@ -6,8 +6,10 @@ keywords: پلن, قیمت, تعرفه, plan, pricing, مقایسه پلن, را
 related: upgrade-plan, free-plan-limits, new-database-purchase, quota-and-readonly
 featured: yes
 order: 10
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: پلن‌ها، ارتقا و پرداخت](help:billing)** را ببینید (۰ دقیقه و ۴۹ ثانیه، بدون نیاز به صدا).
+
 {{plans_table}}
 
 ## چطور انتخاب کنم؟

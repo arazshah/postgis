@@ -5,8 +5,10 @@ kind: howto
 keywords: نقشه چندلایه, چند لایه, چند جدول, یک نقشه, نمایش با هم, webmap, لایه‌ها, روشن خاموش
 related: map-builder, multi-layer-style, map-charts, multi-layer-quota, err-map-layer-missing, map-find-layer
 order: 91
-reviewed: 2026-10-23
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: نقشه چندلایه: چند جدول در یک نقشه](help:maps)** را ببینید (۰ دقیقه و ۵۶ ثانیه، بدون نیاز به صدا).
+
 ## مراحل
 
 1. از منوی کنار پایگاه داده **نقشه‌های چندلایه** را باز کنید.

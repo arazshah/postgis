@@ -6,8 +6,10 @@ keywords: ثبت نام, ورود, لاگین, موبایل, کد تایید, ot
 related: otp-not-received, one-account-rule, create-database
 featured: yes
 order: 20
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: ثبت‌نام و ورود با موبایل](help:account)** را ببینید (۰ دقیقه و ۴۲ ثانیه، بدون نیاز به صدا).
+
 ## مراحل
 
 1. بالای سایت روی «ورود / ثبت‌نام» بزنید. ورود و ثبت‌نام یک صفحه است.

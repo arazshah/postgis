@@ -5,8 +5,10 @@ kind: howto
 keywords: گیرنده gnss, rtk, nmea, web serial, بلوتوث, ble, کابل usb, emlid, گیرنده خارجی
 related: survey-ntrip-rtk, survey-phone-gps, survey-quota, survey-troubleshooting
 order: 50
-reviewed: 2026-10-25
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: گیرنده RTK، تصحیح NTRIP و نقشه آفلاین](help:gnss)** را ببینید (۰ دقیقه و ۵۲ ثانیه، بدون نیاز به صدا).
+
 ## پیش‌نیاز
 
 - پلن شما «اتصال گیرنده خارجی» داشته باشد: [سهمیه و پلن برداشت](kb:survey-quota). اگر نداشته باشد پیام «اتصال گیرنده خارجی در پلن‌های پولی فعال است» می‌بینید.
