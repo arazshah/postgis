@@ -8,12 +8,14 @@ import threading
 import time
 import unittest
 import uuid
+from datetime import timedelta
 from pathlib import Path
 
 import psycopg
 from django.conf import settings
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import User
 from databases import services as db_services
@@ -57,7 +59,7 @@ class PoolerUsageTests(TestCase):
     # ------------------------------------------------------------------ مصرف
     def test_usage_page(self):
         self.client.force_login(self.user)
-        SizeSample.objects.create(database=self.db, day="2026-10-01", size_bytes=1000)
+        SizeSample.objects.create(database=self.db, day=timezone.localdate() - timedelta(days=5), size_bytes=1000)  # داخل پنجرهٔ نمودار، نه تاریخ ثابت
         url = reverse("databases:usage", args=[self.db.pk])
         r = self.client.get(url)
         self.assertEqual(r.status_code, 200)
