@@ -23,3 +23,5 @@ reviewed: 2026-11-01
 - ابزارها همان ابزارهای سایت‌اند ([مرورگر داده](kb:explorer-overview)، [QGIS](kb:connect-qgis)).
 
 برای شروع قرارداد، از صفحه «پلن کلاس» درخواست همکاری بدهید. مراحل: [ساخت کلاس](kb:classroom-create)، [ورود دانشجو](kb:classroom-student-join)، [پایان ترم](kb:classroom-end-term).
+
+ویدیوها: [استاد](help:classroom-teacher) · [دانشجو](help:classroom-student) · [آموزش کامل](doc:classroom).

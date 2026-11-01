@@ -101,3 +101,21 @@ class CreatePreviewPortTests(TestCase):
         html = self.client.get("/dashboard/new/").content.decode()
         self.assertIn("<dd>5434</dd>", html)
         self.assertNotIn("<dd>5432</dd>", html)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+class ClassroomVideosTests(TestCase):
+    def test_teacher_and_student_guides_have_real_videos(self):
+        from core.help import GUIDE_MAP
+
+        for slug, steps in (("classroom-teacher", 13), ("classroom-student", 12)):
+            g = GUIDE_MAP[slug]
+            self.assertTrue(g.has_video, slug)
+            self.assertEqual(len(g.steps), steps)
+            html = self.client.get(f"/help/{slug}/").content.decode()
+            self.assertIn(f"/static/help/video/{slug}.mp4", html)
+        # آموزش کامل و پایگاه دانش به ویدیوها پیوند دارند
+        self.assertContains(self.client.get("/docs/classroom/"), "/help/classroom-student/")
+        kb = Path(settings.BASE_DIR) / "kb" / "content" / "education-enterprise"
+        self.assertIn("help:classroom-student", (kb / "classroom-submit.md").read_text(encoding="utf-8"))
+        self.assertIn("help:classroom-teacher", (kb / "classroom-grade.md").read_text(encoding="utf-8"))

@@ -7,6 +7,8 @@ related: classroom-overview, classroom-submit, password-shown-once, create-accou
 order: 30
 reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی دانشجو: ورود به کلاس، انجام و تحویل تمرین](help:classroom-student)** را ببینید.
+
 1. [حساب بسازید](kb:create-account) یا وارد شوید.
 2. در داشبورد **ورود به کلاس** را بزنید و **کد کلاس** را بنویسید (یا لینک استاد را باز کنید).
 3. نام کامل و شماره دانشجویی را بنویسید.

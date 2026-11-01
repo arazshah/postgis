@@ -7,6 +7,8 @@ related: classroom-overview, classroom-submit, classroom-grade, classroom-share-
 order: 25
 reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی استاد: ساخت کلاس، تمرین و نمره‌دهی](help:classroom-teacher)** را ببینید (حدود ۲ دقیقه، بدون نیاز به صدا).
+
 1. در صفحه کلاس بخش **تمرین‌ها** ← **تمرین جدید**.
 2. این‌ها را بدهید:
    - **عنوان** و **صورت تمرین**: هدف، جدول‌های ورودی (مثلاً `schools`، `metro_stations`)، کار خواسته‌شده و نام خروجی (مثلاً `hw1_buffer`).
