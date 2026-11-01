@@ -7,3 +7,5 @@ staticfiles/
 *.log
 .ruff_cache/
 media/
+docs/help-video/session.json
+docs/help-video/out/
