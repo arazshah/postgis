@@ -5,7 +5,7 @@ kind: howto
 keywords: حوزه دسترسی, isochrone, service area, دسترسی, محدوده قابل دسترس, pgr_drivingdistance, پیاده, ۵ دقیقه
 related: routing-network, analysis-tools, routing-shortest-path
 order: 60
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
 ## تفاوت با بافر
 
@@ -14,7 +14,7 @@ reviewed: 2026-10-21
 ## مراحل
 
 1. [شبکه مسیریابی](kb:routing-network) را وارد کنید.
-2. در بخش تحلیل «حوزه دسترسی» را انتخاب کنید ([ابزارها](kb:analysis-tools)).
+2. در بخش «ابزارها» «حوزه دسترسی» را انتخاب کنید ([ابزارها](kb:analysis-tools)).
 3. لایه نقطه‌های مبدأ و فاصله را بدهید؛ خروجی جدول چندضلعی‌هاست.
 
 ## با SQL

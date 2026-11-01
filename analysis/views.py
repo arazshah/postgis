@@ -1,10 +1,9 @@
-"""صفحه «تحلیل»: پرسش فارسی (s3geo با کلید خود کاربر) و ابزارهای آماده بدون SQL."""
-from urllib.parse import urlencode, urlsplit
+"""صفحه «تحلیل»: پرسش فارسی (s3geo با کلید خود کاربر). ابزارهای آماده بدون SQL در اپ tools هستند."""
+from urllib.parse import urlsplit
 
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
@@ -13,27 +12,8 @@ from databases.explorer import ExplorerError
 from databases.views import _explorer_db
 from jobs.models import Job
 
-from . import ask, tools
-from .models import LlmConfig, Question, ToolRun
-
-HISTORY_LIMIT = 15
-# پیشنهاد نمودار برای نتیجه هر ابزار: «ساخت نقشه و نمودار» جدول نتیجه را به نقشه می‌برد و فرم نمودار را پر می‌کند
-CHART_HINTS = {
-    "nearest": {"kind": "hist", "field": "distance_m", "cumulative": "1"},
-    "count": {"kind": "hist", "field": "point_count"},
-    "overlap": {"kind": "stacked", "field": "zone", "series": "category", "value": "area_m2", "agg": "sum", "percent": "1"},
-    "hexbin": {"kind": "hist", "field": "count"},
-    "change": {"kind": "sankey", "field": "from_category", "target": "to_category", "value": "area_m2", "agg": "sum"},
-}
-# نام فارسی مرحله‌های رایج برنامهٔ s3geo در گزارش مرحله‌به‌مرحلهٔ پرسش
-OP_LABELS = {
-    "input": "ورودی", "crs_transform": "تبدیل مختصات", "filter_attribute": "فیلتر ستونی", "sort_limit": "مرتب‌سازی",
-    "spatial_nearest": "نزدیک‌ترین", "nearest_neighbor": "نزدیک‌ترین", "filter_by_distance": "فیلتر فاصله",
-    "spatial_join": "اتصال مکانی", "filter_points_in_polygon": "نقطه در چندضلعی", "buffer": "حریم",
-    "summarize_vector": "خلاصه", "attribute_statistics": "آمار ستونی", "top_n": "برترین‌ها", "dissolve": "ادغام",
-    "area_perimeter": "طول و مساحت", "calculate_field": "محاسبه ستون", "distance_to": "فاصله",
-}
-GLYPHS = {"buffer": "◎", "nearest": "⌖", "count": "#", "overlap": "▦", "change": "⇄", "hexbin": "⬡", "isochrone": "◔"}
+from . import ask, history
+from .models import LlmConfig, Question
 
 
 def _busy(db) -> bool:
@@ -41,33 +21,8 @@ def _busy(db) -> bool:
                               status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).exists()
 
 
-def _together(db, output: str, inputs) -> str:
-    """«نمایش با هم»: نتیجه بالای لایه‌های ورودی (بدون ذخیره نقشه)."""
-    keys = [f"public.{output}"] + [k for k in (inputs or []) if isinstance(k, str) and k]
-    keys = list(dict.fromkeys(keys))
-    if len(keys) < 2:
-        return ""
-    return reverse("maps:quick", args=[db.pk]) + "?" + urlencode([("t", k) for k in keys])
-
-
-def _entries(db):
-    """تاریخچه یکپارچه ابزارها و پرسش‌ها، تازه‌ترین اول."""
-    out = []
-    for r in ToolRun.objects.filter(database=db).select_related("job")[:HISTORY_LIMIT]:
-        t = tools.TOOL_MAP.get(r.tool)
-        out.append({"kind": "tool", "id": f"t{r.pk}", "title": t.title if t else r.tool, "glyph": GLYPHS.get(r.tool, "◇"),
-                    "detail": r.summary, "table": r.output_table, "rows": r.rows, "job": r.job,
-                    "created": r.created_at, "chart": CHART_HINTS.get(r.tool),
-                    "together": _together(db, r.output_table, [r.params.get("layer"), r.params.get("other")])})
-    for q in Question.objects.filter(database=db).select_related("job")[:HISTORY_LIMIT]:
-        steps = [{**s, "label": OP_LABELS.get(s.get("op"), s.get("op"))} for s in q.steps or []]
-        out.append({"kind": "ask", "id": f"q{q.pk}", "pk": q.pk, "title": q.text, "glyph": "؟", "detail": q.goal,
-                    "ops": q.operations, "steps": steps, "result": q.result_kind, "notes": q.notes,
-                    "plan_text": q.plan_text, "summary": q.summary, "preview": q.preview, "followable": q.result_kind == "layer", "answer": q.answer,
-                    "table": q.output_table, "rows": q.rows, "job": q.job,
-                    "created": q.created_at, "together": _together(db, q.output_table, q.layers)})
-    out.sort(key=lambda e: e["created"], reverse=True)
-    return out[:HISTORY_LIMIT]
+def _entries(db, kinds=("tool", "ask")):
+    return history.entries(db, kinds)
 
 
 @site_user_required
@@ -89,8 +44,31 @@ def status(request, pk):
 
 
 @site_user_required
+def history_fragment(request, pk):
+    """فقط بخش تاریخچه (کارت‌ها و مودال‌ها) برای تازه‌سازی بدون بارگذاری کل صفحه."""
+    db, ex = _explorer_db(request, pk, "editor")
+    if ex is None:
+        raise Http404
+    kind = request.GET.get("k", "ask")
+    kinds = ("tool",) if kind == "tool" else ("ask",) if kind == "ask" else ("tool", "ask")
+    hist = _entries(db, kinds)
+    tool = request.GET.get("tool", "")
+    if tool:
+        hist = [e for e in hist if e.get("tool") == tool]
+    return render(request, "analysis/_history.html", {
+        "db": db, "history": hist, "active": any(e["job"] and e["job"].active for e in hist),
+        "hist_kinds": kind, "hist_tool": tool, "fragment": True})
+
+
+@site_user_required
 @require_http_methods(["GET", "POST"])
 def page(request, pk):
+    # لینک‌های قدیمی «?tool=» به بخش مستقل ابزارها می‌روند
+    if request.method == "GET" and request.GET.get("tool"):
+        from tools.catalog import INFO
+
+        key = request.GET["tool"]
+        return redirect("tools:detail", pk=pk, key=key) if key in INFO else redirect("tools:page", pk=pk)
     db, ex = _explorer_db(request, pk, "editor")
     if ex is None:
         return redirect("databases:detail", pk=db.pk)
@@ -150,25 +128,6 @@ def page(request, pk):
                 q.save(update_fields=["job", "result_kind"])
                 messages.success(request, "برنامه تأیید شد و در صف اجرا قرار گرفت.")
             return redirect(f"{request.path}#history")
-        if action == "tool":
-            if db.status != db.Status.ACTIVE:
-                messages.error(request, "پایگاه داده فقط‌خواندنی یا غیرفعال است.")
-                return here
-            key = request.POST.get("tool", "")
-            params = {k: request.POST.get(k, "").strip() for k in tools.PUBLIC_PARAMS if request.POST.get(k)}
-            if _busy(db):
-                messages.error(request, "یک تحلیل در حال اجراست؛ صبر کنید تمام شود.")
-                return redirect(f"{request.path}?tool={key}#tools")
-            try:
-                out = tools.validate(db, key, params)
-                summary = tools.summarize(db, key, params)
-            except (tools.ToolError, ExplorerError) as exc:
-                messages.error(request, str(exc))
-                return redirect(f"{request.path}?tool={key}#tools")
-            job = Job.objects.create(kind=Job.Kind.TOOL, database=db, user=request.user, status=Job.Status.QUEUED)
-            ToolRun.objects.create(database=db, user=request.user, tool=key, params=params, summary=summary,
-                                   output_table=out, job=job)
-            return redirect(f"{request.path}#history")
         return here
     try:
         tables = ex.tables()
@@ -176,7 +135,7 @@ def page(request, pk):
         messages.error(request, str(exc))
         tables = []
     spatial = [t for t in tables if t.geometry]
-    history = _entries(db)
+    hist = _entries(db, ("ask",))
     # «ویرایش و پرسش دوباره»: فرم پرسش با متن، لایه‌ها و نام جدول یک پرسش قبلی پر می‌شود
     again = follow = None
     if request.GET.get("again", "").isdigit():
@@ -189,10 +148,8 @@ def page(request, pk):
         ([f"public.{follow.output_table}"] + list(follow.layers)) if follow else (again.layers if again else [])))[:ask.MAX_LAYERS]
     parent_pk = follow.pk if follow else (again.parent_id if again else None)
     return render(request, "analysis/page.html", {
-        "db": db, "tables": tables, "spatial": spatial, "section": "analysis", "cfg": cfg, "history": history,
-        "active": any(e["job"] and e["job"].active for e in history), "tools": tools.TOOLS,
-        "open_tool": request.GET.get("tool") if request.GET.get("tool") in tools.TOOL_MAP else tools.TOOLS[0].key, "has_routing": any(t.schema == "routing" and t.name == "ways"
-                                                                    for t in tables),
+        "db": db, "tables": tables, "spatial": spatial, "section": "analysis", "cfg": cfg, "history": hist,
+        "active": any(e["job"] and e["job"].active for e in hist), "hist_kinds": "ask",
         "max_layers": ask.MAX_LAYERS, "max_auto": ask.MAX_AUTO_LAYERS, "layer_limit": ask.LAYER_LIMIT, "again": again,
         "follow": follow, "prefill_layers": prefill_layers, "parent_pk": parent_pk,
     })

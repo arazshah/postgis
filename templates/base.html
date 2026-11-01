@@ -24,6 +24,7 @@
   <link rel="preload" href="{% static 'fonts/vazirmatn-arabic-400-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <link rel="stylesheet" href="{% static 'css/ds.css' %}">
+  {% if user.is_authenticated and not user.is_staff %}<link rel="stylesheet" href="{% static 'css/notify.css' %}">{% endif %}
   {% block head %}{% endblock %}
   {% block jsonld %}{% endblock %}
   <script src="{% static 'js/ui.js' %}" defer></script>
@@ -37,6 +38,14 @@
   {% block app_search %}<form class="app-search" role="search" action="{% url 'kb:search' %}" method="get">{% icon "search" 16 %}<input type="search" name="q" placeholder="جستجو در راهنما و پایگاه دانش…" aria-label="جستجو در پایگاه دانش" autocomplete="off"></form>{% endblock %}
   <span class="app-gap"></span>
   <span class="app-top-gpa" data-gpa-slot="top"></span>
+  <div class="pop-wrap">
+    <button class="ib ntf-bell" id="ntf-bell" type="button" data-pop="pop-ntf" aria-haspopup="menu" aria-expanded="false" aria-label="اعلان‌ها" title="اعلان‌ها"
+      data-poll="{% url 'notifications:poll' %}" data-read="{% url 'notifications:read' %}" data-log="{% url 'notifications:log' %}">{% icon "bell" 20 %}<span class="ntf-badge" id="ntf-badge" hidden>۰</span></button>
+    <div class="pop-m ntf-panel" id="pop-ntf" role="menu" aria-label="اعلان‌ها" hidden>
+      <div class="ntf-head"><h6>اعلان‌ها</h6><button type="button" class="btn ghost sm" id="ntf-readall">همه خوانده شد</button></div>
+      <div class="ntf-list" id="ntf-list"><div class="ntf-empty"><span>در حال بارگذاری…</span></div></div>
+    </div>
+  </div>
   <div class="pop-wrap">
     <button class="ib" type="button" data-pop="pop-help" aria-haspopup="menu" aria-expanded="false" aria-label="راهنما و پشتیبانی" title="راهنما و پشتیبانی">{% icon "help" 20 %}</button>
     <div class="pop-m" id="pop-help" role="menu" hidden>
@@ -94,7 +103,7 @@
 <main id="main">
   {% if messages %}
   <div class="wrap msgs" style="padding-top:24px">
-    <ul class="messages">{% for m in messages %}<li class="msg {{ m.tags }}" role="status">{{ m }}</li>{% endfor %}</ul>
+    <ul class="messages"{% if user.is_authenticated and not user.is_staff %} data-flash hidden{% endif %}>{% for m in messages %}<li class="msg {{ m.tags }}" role="status">{{ m }}</li>{% endfor %}</ul>
   </div>
   {% endif %}
   {% block content %}{% endblock %}
@@ -164,6 +173,8 @@
 </footer>{% endif %}{% endblock %}
 <script src="{% static 'js/app.js' %}" defer></script>
 <script src="{% static 'js/shell.js' %}" defer></script>
+{% if user.is_authenticated and not user.is_staff %}<script src="{% static 'js/notifications.js' %}" defer></script>
+<noscript><style>ul.messages[hidden]{display:block!important}.msgs{display:block!important}</style></noscript>{% endif %}
 {% if SITE.assistant_ready %}
 <link rel="stylesheet" href="{% static 'css/assistant.css' %}">
 <script src="{% static 'js/assistant.js' %}" defer data-config="{% url 'assistant:config' %}" data-ask="{% url 'assistant:ask' %}" data-feedback="{% url 'assistant:feedback' %}" data-kb="{% url 'kb:index' %}"></script>

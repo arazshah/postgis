@@ -17,15 +17,14 @@
       if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) e.target.close();
     }
   });
-  const btns = Array.from(document.querySelectorAll("[data-pop]"));
-  if (!btns.length) return;
   let open = null;
   const menuOf = (b) => document.getElementById(b.dataset.pop);
   function close(restore) {
     if (!open) return;
-    menuOf(open).hidden = true;
+    const m = menuOf(open);
+    if (m) m.hidden = true;
     open.setAttribute("aria-expanded", "false");
-    if (restore) open.focus();
+    if (restore && open.isConnected) open.focus();
     open = null;
   }
   function show(b) {
@@ -36,8 +35,14 @@
     const first = menuOf(b).querySelector("a,button");
     if (first) first.focus({ preventScroll: true });
   }
-  btns.forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); if (open === b) close(true); else show(b); }));
-  document.addEventListener("click", (e) => { if (open && !menuOf(open).contains(e.target)) close(false); });
+  // شنونده روی document: منوهایی که بعداً (مثلاً با تازه‌شدن تاریخچه) به صفحه اضافه می‌شوند هم کار می‌کنند
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-pop]");
+    if (!b) return;
+    e.stopImmediatePropagation();
+    if (open === b) close(true); else show(b);
+  });
+  document.addEventListener("click", (e) => { if (open && !(menuOf(open) || document.body).contains(e.target) || open && !open.isConnected) close(false); });
   document.addEventListener("keydown", (e) => {
     if (!open) return;
     if (e.key === "Escape") { close(true); return; }

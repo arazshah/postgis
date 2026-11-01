@@ -1,0 +1,42 @@
+{% extends "databases/_ws.html" %}{% load fa static ws %}
+{% block title %}ابزارها — {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/analysis.css' %}">{% endblock %}
+{% block ws %}
+<div class="page-head"><div><h1>ابزارها</h1><p class="muted page-sub">تحلیل‌های آمادهٔ مکانی بدون نوشتن SQL. هر ابزار یک جدول تازه با کلید اصلی و نمایهٔ مکانی می‌سازد که روی نقشه می‌بینید، منتشر می‌کنید یا در QGIS باز می‌کنید.</p></div>
+  <div class="page-acts"><a class="btn ghost" href="{% url 'analysis:page' db.pk %}">{% icon "spark" 18 %}پرسش فارسی از داده</a></div></div>
+
+<div data-tl>
+  <div class="tl-bar">
+    <label class="tl-search">{% icon "search" 16 %}<input type="search" data-tl-q placeholder="جست‌وجوی ابزار؛ مثلاً حریم یا شمارش…" aria-label="جست‌وجوی ابزار" autocomplete="off"></label>
+    <div class="tl-cats" role="group" aria-label="دسته‌بندی">
+      <button type="button" class="tl-cat on" data-tl-cat="all" aria-pressed="true">همه ({{ total|fanum }})</button>
+      {% for g in groups %}<button type="button" class="tl-cat" data-tl-cat="{{ g.key }}" aria-pressed="false">{{ g.title }}</button>{% endfor %}
+    </div>
+  </div>
+
+  {% for g in groups %}
+  <section class="tl-group" aria-labelledby="g-{{ g.key }}">
+    <h2 id="g-{{ g.key }}">{{ g.title }}</h2><p>{{ g.hint }}</p>
+    <div class="tl-grid">
+      {% for c in g.cards %}{% with i=c.info %}
+      <article class="tl-card{% if c.blocked %} off{% endif %}" data-cat="{{ g.key }}" data-text="{{ i.title }} {{ i.description }} {{ i.example }} {{ i.key }}">
+        <div class="tl-head"><span class="tl-ico">{% icon i.icon 26 %}</span><h3>{{ i.title }}</h3></div>
+        <p class="tl-desc">{{ i.description }}</p>
+        <div class="tl-io" aria-label="ورودی و خروجی">
+          {% for x in i.inputs %}<span class="tl-chip">{{ x }}</span>{% endfor %}
+          {% icon "next" 14 %}<span class="tl-chip">{{ i.output }}</span>
+        </div>
+        {% if c.blocked %}<div class="tl-why">{{ c.blocked }}{% if i.needs_routing %} — <a href="{% url 'iranmap:ready' db.pk %}">گرفتن داده آماده</a>{% endif %}</div>{% endif %}
+        <div class="tl-foot"><a class="btn sm{% if c.blocked %} ghost{% endif %}" href="{{ c.url }}">{% icon "play" 16 %}{% if c.blocked %}مشاهده{% else %}استفاده{% endif %}</a></div>
+      </article>
+      {% endwith %}{% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  <div class="tl-none" hidden>ابزاری با این عبارت پیدا نشد.</div>
+</div>
+
+<div class="an-head" id="history"><h3>آخرین اجراها</h3></div>
+{% include "analysis/_history.html" %}
+{% endblock %}
+{% block ws_scripts %}<script src="{% static 'js/tools.js' %}" defer></script>{% endblock %}

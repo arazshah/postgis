@@ -5,7 +5,7 @@ kind: faq
 keywords: پرسش فارسی, هوش مصنوعی, llm, کلید api, سوال به فارسی, تحلیل با زبان طبیعی, openai
 related: analysis-tools, sql-console, data-ownership-privacy
 order: 120
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
 ## چطور کار می‌کند
 
