@@ -40,8 +40,8 @@ def _blocked(info, spatial, has_routing) -> str:
     if info.needs_routing and not has_routing:
         return "به شبکه معابر نیاز دارد"
     for p in info.params:
-        if p.kind == "layer" and not _layers(spatial, p.geom):
-            what = {"point": "نقطه‌ای", "polygon": "چندضلعی"}.get(p.geom, "مکانی")
+        if p.kind == "layer" and p.required and not _layers(spatial, p.geom):
+            what = {"point": "نقطه‌ای", "polygon": "چندضلعی", "line": "خطی"}.get(p.geom, "مکانی")
             return f"لایه {what} ندارید"
     return ""
 

@@ -44,7 +44,7 @@ dialog.dlg.dlg-xl{width:min(820px,calc(100vw - 32px))}
 .tl-group{margin-bottom:var(--s5)}
 .tl-group h2{font:800 15px var(--f-display);margin:0 0 2px}
 .tl-group>p{margin:0 0 var(--s3);font-size:12.5px;color:var(--ink-3)}
-.tl-grid{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.tl-grid{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
 .tl-card{position:relative;display:flex;flex-direction:column;gap:10px;background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-card);padding:16px;transition:box-shadow .15s ease,transform .15s ease,border-color .15s ease}
 .tl-card:hover{box-shadow:0 8px 24px rgba(18,49,58,.12);border-color:var(--teal);transform:translateY(-1px)}
 .tl-card[hidden]{display:none}

@@ -13,6 +13,8 @@ CHART_HINTS = {
     "count": {"kind": "hist", "field": "point_count"},
     "overlap": {"kind": "stacked", "field": "zone", "series": "category", "value": "area_m2", "agg": "sum", "percent": "1"},
     "hexbin": {"kind": "hist", "field": "count"},
+    "cluster": {"kind": "hist", "field": "point_count"},
+    "netnearest": {"kind": "hist", "field": "network_m", "cumulative": "1"},
     "change": {"kind": "sankey", "field": "from_category", "target": "to_category", "value": "area_m2", "agg": "sum"},
 }
 # نام فارسی مرحله‌های رایج برنامهٔ s3geo در گزارش مرحله‌به‌مرحلهٔ پرسش
@@ -25,7 +27,8 @@ OP_LABELS = {
 }
 # آیکون هر ردیف (نام از core/icons.py)
 ICONS = {"buffer": "t-buffer", "nearest": "t-nearest", "count": "t-count", "overlap": "t-overlap",
-         "change": "t-change", "hexbin": "t-hexbin", "isochrone": "t-isochrone"}
+         "change": "t-change", "hexbin": "t-hexbin", "isochrone": "t-isochrone",
+         **{k: f"t-{k}" for k in ("within", "voronoi", "cluster", "measure", "clip", "erase", "route", "netnearest", "coverage")}}
 
 
 def together(db, output: str, inputs) -> str:

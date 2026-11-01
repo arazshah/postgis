@@ -35,6 +35,15 @@ TOOLS = [
     Tool("change", "تغییر بین دو نسخه", "دو نسخه‌ی یک لایه چندضلعی (مثلاً کاربری ۱۴۰۰ و ۱۴۰۵) را برش می‌دهد و مساحت هر «از ← به» را می‌دهد.", "change"),
     Tool("hexbin", "نقشه تراکم شش‌ضلعی", "شبکه شش‌ضلعی روی نقطه‌ها و تعداد هر خانه؛ برای نقشه حرارتی.", "hexbin"),
     Tool("isochrone", "حوزه دسترسی", "محدوده‌ای که از یک نقطه با پیمودن فاصله مشخص روی شبکه معابر می‌رسید.", "isochrone"),
+    Tool("within", "انتخاب بر اساس فاصله", "عارضه‌های یک لایه را که تا فاصله‌ی مشخصی از لایه‌ی دیگر هستند جدا می‌کند و تعداد همسایه‌ها را کنارشان می‌گذارد.", "within"),
+    Tool("voronoi", "حوزه نفوذ (تیسن)", "هر نقطه از محدوده را به نزدیک‌ترین مرکز نسبت می‌دهد؛ برای حوزه‌ی خدمات کلانتری‌ها یا شعبه‌ها.", "voronoi"),
+    Tool("cluster", "خوشه‌بندی نقطه‌ها", "نقطه‌های نزدیک به هم را خوشه می‌کند و دور هر خوشه چندضلعی و تعدادش را می‌دهد؛ برای یافتن کانون‌ها.", "cluster"),
+    Tool("measure", "طول و مساحت در چندضلعی", "مجموع طول خط‌ها یا مساحت چندضلعی‌های یک لایه را داخل هر چندضلعی حساب می‌کند.", "measure"),
+    Tool("clip", "برش با مرز", "هر لایه‌ای را با یک مرز چندضلعی می‌بُرد و فقط بخش داخل مرز را نگه می‌دارد.", "clip"),
+    Tool("erase", "حذف ناحیه", "بخشی از لایه چندضلعی را که زیر لایه‌ی چندضلعی دیگر قرار دارد حذف می‌کند.", "erase"),
+    Tool("route", "کوتاه‌ترین مسیر", "کوتاه‌ترین مسیر روی شبکه معابر بین دو نقطه، با طول آن به متر.", "route"),
+    Tool("netnearest", "نزدیک‌ترین روی شبکه", "برای هر نقطه نزدیک‌ترین مرکز را با فاصله‌ی واقعی روی خیابان‌ها پیدا می‌کند.", "netnearest"),
+    Tool("coverage", "پوشش چند مرکز", "حوزه‌ی دسترسی روی شبکه معابر را برای همه‌ی نقطه‌های یک لایه می‌سازد و هر بخش را به نزدیک‌ترین مرکز می‌دهد.", "coverage"),
 ]
 TOOL_MAP = {t.key: t for t in TOOLS}
 
@@ -132,6 +141,16 @@ def _prepare(db, key: str, params: dict):
         return v
 
     target = sql.Identifier("public", out)
+    guards: list = []  # (پرس‌وجوی شمارش، سقف، پیام): بررسی پیش از ساخت جدول در run
+
+    def guard(t, col, cap, msg):
+        guards.append((sql.SQL("SELECT count(*) FROM (SELECT 1 FROM {} WHERE {} IS NOT NULL LIMIT {}) x").format(
+            sql.Identifier(t.schema, t.name), sql.Identifier(col), sql.Literal(cap + 1)), cap, msg))
+
+    def need_routing():
+        if "routing.ways" not in tables:
+            raise ToolError("شبکه معابر (routing.ways) ندارید؛ از «داده آماده ایران» شبکه مسیریابی بگیرید.")
+
     if key == "buffer":
         t = table("layer")
         col, srid, _ = _geom_of(t)
@@ -240,9 +259,10 @@ def _prepare(db, key: str, params: dict):
             "SELECT count(*) AS count, ST_Transform(grid.geom, 4326)::geometry(Polygon, 4326) AS geom "
             "FROM grid JOIN pts ON ST_Intersects(grid.geom, pts.g) GROUP BY grid.geom").format(
             g=g3857, src=sql.Identifier(t.schema, t.name), c=sql.Identifier(col), size=sql.Literal(size))
+    elif key in NEW_TOOLS:
+        body = _prepare_new(key, params, ex, table, number, guard, need_routing)
     else:  # isochrone
-        if "routing.ways" not in tables:
-            raise ToolError("شبکه معابر (routing.ways) ندارید؛ از «داده آماده ایران» شبکه مسیریابی بگیرید.")
+        need_routing()
         lon, lat = number("lon", -180, 180), number("lat", -90, 90)
         dist = number("distance", 50, 50_000)
         body = sql.SQL(
@@ -256,7 +276,187 @@ def _prepare(db, key: str, params: dict):
             "ST_Multi(ST_ConcaveHull(ST_Collect(e.the_geom), 0.3))::geometry(MultiPolygon, 4326) AS geom FROM e").format(
             lon=sql.Literal(lon), lat=sql.Literal(lat), dist=sql.Literal(dist))
 
-    return ex, out, target, body
+    return ex, out, target, body, guards
+
+
+NEW_TOOLS = {"within", "voronoi", "cluster", "measure", "clip", "erase", "route", "netnearest", "coverage"}
+EDGES = ("'SELECT gid AS id, source, target, length_m AS cost, "
+         "CASE WHEN reverse_cost < 0 THEN -1 ELSE length_m END AS reverse_cost FROM routing.ways'")
+CAP_VORONOI, CAP_NET_FROM, CAP_NET_TO, CAP_COVERAGE = 5000, 3000, 500, 500
+
+
+def _attr_sql(ex, t, alias: str):
+    a = _attrs(ex, t, alias)
+    return sql.SQL(", ").join(a) + sql.SQL(", ") if a else sql.SQL("")
+
+
+def _nearest_vertex(lon, lat):
+    return sql.SQL("ORDER BY the_geom <-> ST_SetSRID(ST_MakePoint({}, {}), 4326) LIMIT 1").format(sql.Literal(lon), sql.Literal(lat))
+
+
+def _bbox_pre(alias: str, col: str, srid: int, other):
+    """شرط && روی نمایه مکانی (فقط وقتی SRID ستون روشن است)؛ خالی = بدون پیش‌فیلتر."""
+    c = sql.SQL("{}.{}").format(sql.Identifier(alias), sql.Identifier(col))
+    if srid == 4326:
+        return sql.SQL("AND {} && {}").format(c, other)
+    if srid > 0:
+        return sql.SQL("AND {} && ST_Transform({}, {})").format(c, other, sql.Literal(srid))
+    return sql.SQL("")
+
+
+def _base_kinds(gtype: str) -> list[str]:
+    return [k for k in ("POINT", "LINESTRING", "POLYGON") if k in gtype]
+
+
+def _prepare_new(key, params, ex, table, number, guard, need_routing):
+    """بدنه SELECT ابزارهای افزوده‌شده (فاصله، تیسن، خوشه، طول و مساحت، برش، حذف و سه ابزار شبکه)."""
+    ident = sql.Identifier
+    if key == "within":
+        a, b = table("layer"), table("other")
+        ca, sa, _ = _geom_of(a)
+        cb, sb, _ = _geom_of(b)
+        d = number("distance", 1, 100_000)
+        ga, gb = _geom4326("a", ca, sa), _geom4326("b", cb, sb)
+        pre = sql.SQL("")
+        if sb in (0, 4326):  # پیش‌فیلتر جعبه‌ای با نمایه لایه دوم؛ درجه طول با کسینوس عرض بزرگ‌نمایی می‌شود
+            pre = sql.SQL("AND b.{cb} && ST_Expand({ga}, {d} / (111320.0 * greatest(cos(radians(least(abs(ST_Y(ST_PointOnSurface({ga}))), "
+                          "85))), 0.05)))").format(cb=ident(cb), ga=ga, d=sql.Literal(d))
+        return sql.SQL(
+            "SELECT {attrs}c.neighbor_count, {ga}::geometry AS geom FROM {A} a CROSS JOIN LATERAL (SELECT count(*) AS neighbor_count "
+            "FROM {B} b WHERE b.{cb} IS NOT NULL {pre} AND ST_DWithin({ga}::geography, {gb}::geography, {d})) c "
+            "WHERE a.{ca} IS NOT NULL AND c.neighbor_count > 0").format(
+            attrs=_attr_sql(ex, a, "a"), ga=ga, gb=gb, A=ident(a.schema, a.name), B=ident(b.schema, b.name), ca=ident(ca),
+            cb=ident(cb), pre=pre, d=sql.Literal(d))
+    if key == "voronoi":
+        p = table("layer")
+        cp, sp, _ = _geom_of(p, ("POINT",), ex)
+        guard(p, cp, CAP_VORONOI, f"حوزه نفوذ تا {CAP_VORONOI} نقطه را پشتیبانی می‌کند؛ لایه را کوچک‌تر کنید.")
+        clip_t = table("other") if params.get("other") else None
+        mask, cell = sql.SQL(""), sql.SQL("cells.cell")
+        if clip_t is not None:
+            cq, sq, _ = _geom_of(clip_t, ("POLYGON",), ex)
+            mask = sql.SQL(", mask AS (SELECT ST_Union(ST_MakeValid({g})) AS g FROM {Q} q WHERE q.{c} IS NOT NULL)").format(
+                g=_geom4326("q", cq, sq), Q=ident(clip_t.schema, clip_t.name), c=ident(cq))
+            cell = sql.SQL("ST_CollectionExtract(ST_Intersection(ST_MakeValid(cells.cell), mask.g), 3)")
+        return sql.SQL(
+            "WITH pts AS (SELECT {attrs}{g}::geometry AS g FROM {P} p WHERE p.{cp} IS NOT NULL), "
+            "cells AS (SELECT (ST_Dump(ST_VoronoiPolygons((SELECT ST_Collect(g) FROM pts)))).geom AS cell){mask} "
+            "SELECT {out_attrs}round(ST_Area(r.g::geography)::numeric, 1) AS area_m2, r.g AS geom FROM cells "
+            "JOIN pts ON ST_Contains(cells.cell, pts.g) {mask_join}CROSS JOIN LATERAL (SELECT {cell} AS g) r "
+            "WHERE NOT ST_IsEmpty(r.g)").format(
+            attrs=_attr_sql(ex, p, "p"), g=_geom4326("p", cp, sp), P=ident(p.schema, p.name), cp=ident(cp), mask=mask,
+            out_attrs=_attr_sql(ex, p, "pts"), cell=cell, mask_join=sql.SQL("CROSS JOIN mask ") if clip_t is not None else sql.SQL(""))
+    if key == "cluster":
+        p = table("layer")
+        cp, sp, _ = _geom_of(p, ("POINT",), ex)
+        eps, n = number("distance", 1, 100_000), int(number("minpoints", 2, 1000))
+        return sql.SQL(
+            "WITH pts AS (SELECT {g}::geometry AS g FROM {P} p WHERE p.{cp} IS NOT NULL), "
+            "k AS (SELECT greatest(cos(radians(least(abs(avg(ST_Y(g))), 85))), 0.05) AS c FROM pts), "
+            "cl AS (SELECT g, ST_ClusterDBSCAN(ST_Transform(g, 3857), eps := {eps} / (SELECT c FROM k), minpoints := {n}) OVER () AS cid "
+            "FROM pts) "
+            "SELECT (cid + 1)::int AS cluster_id, count(*) AS point_count, "
+            "ST_Buffer(ST_ConvexHull(ST_Collect(g))::geography, least({eps} * 0.1, 50))::geometry(Polygon, 4326) AS geom "
+            "FROM cl WHERE cid IS NOT NULL GROUP BY cid").format(
+            g=_geom4326("p", cp, sp), P=ident(p.schema, p.name), cp=ident(cp), eps=sql.Literal(eps), n=sql.Literal(n))
+    if key == "measure":
+        p, q = table("layer"), table("other")
+        mode = "area" if params.get("mode") == "area" else "length"
+        cp, sp, _ = _geom_of(p, ("POLYGON",), ex)
+        cq, sq, _ = _geom_of(q, ("POLYGON",) if mode == "area" else ("LINE",), ex)
+        pg, qg = _geom4326("p", cp, sp), _geom4326("q", cq, sq)
+        inter = sql.SQL("ST_CollectionExtract(ST_Intersection(ST_MakeValid({pg}), ST_MakeValid({qg})), {k})").format(
+            pg=pg, qg=qg, k=sql.Literal(3 if mode == "area" else 2))
+        if mode == "area":
+            val = sql.SQL("coalesce(ST_Area(ST_Union({i})::geography), 0)").format(i=inter)
+            out = sql.SQL("round(m.v::numeric, 1) AS area_m2, round((100 * m.v / NULLIF(ST_Area({pg}::geography), 0))::numeric, 2) "
+                          "AS share_pct").format(pg=pg)
+        else:
+            val = sql.SQL("coalesce(sum(ST_Length({i}::geography)), 0)").format(i=inter)
+            out = sql.SQL("round(m.v::numeric, 1) AS length_m, round((m.v / 1000.0 / NULLIF(ST_Area({pg}::geography) / 1e6, 0))::numeric, 3) "
+                          "AS km_per_km2").format(pg=pg)
+        return sql.SQL(
+            "SELECT {attrs}{out}, {pg} AS geom FROM {P} p CROSS JOIN LATERAL (SELECT {val} AS v FROM {Q} q "
+            "WHERE q.{cq} IS NOT NULL AND ST_Intersects(p.{cp}, {gq})) m WHERE p.{cp} IS NOT NULL").format(
+            attrs=_attr_sql(ex, p, "p"), out=out, pg=pg, val=val, P=ident(p.schema, p.name), Q=ident(q.schema, q.name),
+            cp=ident(cp), cq=ident(cq), gq=_in_srid("q", cq, sq, sp))
+    if key in ("clip", "erase"):
+        a, q = table("layer"), table("other")
+        ca, sa, ta = _geom_of(a, ("POLYGON",) if key == "erase" else ("POINT", "LINE", "POLYGON"), ex)
+        cq, sq, _ = _geom_of(q, ("POLYGON",), ex)
+        ga = _geom4326("a", ca, sa)
+        mask = sql.SQL("WITH m AS (SELECT ST_Union(ST_MakeValid({g})) AS g FROM {Q} q WHERE q.{c} IS NOT NULL) ").format(
+            g=_geom4326("q", cq, sq), Q=ident(q.schema, q.name), c=ident(cq))
+        A = ident(a.schema, a.name)
+        if key == "clip":
+            kinds = _base_kinds(ta.upper())
+            res = sql.SQL("ST_Intersection(ST_MakeValid({ga}), m.g)").format(ga=ga)
+            if len(kinds) == 1:
+                res = sql.SQL("ST_CollectionExtract({}, {})").format(res, sql.Literal({"POINT": 1, "LINESTRING": 2, "POLYGON": 3}[kinds[0]]))
+            return mask + sql.SQL(
+                "SELECT {attrs}c.g AS geom FROM {A} a CROSS JOIN m CROSS JOIN LATERAL (SELECT {res} AS g) c "
+                "WHERE a.{ca} IS NOT NULL AND m.g IS NOT NULL {pre} AND ST_Intersects({ga}, m.g) AND NOT ST_IsEmpty(c.g)").format(
+                attrs=_attr_sql(ex, a, "a"), A=A, res=res, ca=ident(ca), ga=ga, pre=_bbox_pre("a", ca, sa, sql.SQL("m.g")))
+        res = sql.SQL("ST_CollectionExtract(CASE WHEN m.g IS NOT NULL AND ST_Intersects({ga}, m.g) "
+                      "THEN ST_Difference(ST_MakeValid({ga}), m.g) ELSE ST_MakeValid({ga}) END, 3)").format(ga=ga)
+        return mask + sql.SQL(
+            "SELECT {attrs}round(ST_Area(c.g::geography)::numeric, 1) AS area_m2, c.g AS geom FROM {A} a CROSS JOIN m "
+            "CROSS JOIN LATERAL (SELECT {res} AS g) c WHERE a.{ca} IS NOT NULL AND NOT ST_IsEmpty(c.g)").format(
+            attrs=_attr_sql(ex, a, "a"), A=A, res=res, ca=ident(ca))
+    # --- ابزارهای شبکه معابر ---
+    need_routing()
+    if key == "route":
+        lon, lat, lon2, lat2 = number("lon", -180, 180), number("lat", -90, 90), number("lon2", -180, 180), number("lat2", -90, 90)
+        return sql.SQL(
+            "WITH s AS (SELECT id FROM routing.ways_vertices_pgr {s}), t AS (SELECT id FROM routing.ways_vertices_pgr {t}), "
+            "r AS (SELECT * FROM pgr_dijkstra({edges}, (SELECT id FROM s), (SELECT id FROM t), true) WHERE edge > 0) "
+            "SELECT round(sum(r.cost)::numeric, 1) AS distance_m, count(*) AS edges, "
+            "ST_Multi(ST_LineMerge(ST_Collect(w.the_geom ORDER BY r.seq)))::geometry(MultiLineString, 4326) AS geom "
+            "FROM r JOIN routing.ways w ON w.gid = r.edge HAVING count(*) > 0").format(
+            s=_nearest_vertex(lon, lat), t=_nearest_vertex(lon2, lat2), edges=sql.SQL(EDGES))
+    a = table("layer")
+    ca, sa, _ = _geom_of(a, ("POINT",), ex)
+    vertex = sql.SQL("CROSS JOIN LATERAL (SELECT id FROM routing.ways_vertices_pgr ORDER BY the_geom <-> {g} LIMIT 1) v").format(
+        g=_geom4326("a", ca, sa))
+    if key == "coverage":
+        dist = number("distance", 50, 50_000)
+        guard(a, ca, CAP_COVERAGE, f"پوشش چند مرکز تا {CAP_COVERAGE} نقطه را پشتیبانی می‌کند؛ لایه را کوچک‌تر کنید.")
+        return sql.SQL(
+            "WITH o AS (SELECT {attrs}v.id AS vid FROM {A} a {vertex} WHERE a.{ca} IS NOT NULL), "
+            "d AS (SELECT * FROM pgr_drivingDistance({edges}, (SELECT array_agg(DISTINCT vid) FROM o), {dist}, true, true)), "
+            "h AS (SELECT d.start_vid, count(*) AS edges, ST_ConcaveHull(ST_Collect(w.the_geom), 0.3) AS hull "
+            "FROM d JOIN routing.ways w ON w.gid = d.edge GROUP BY d.start_vid) "
+            "SELECT {oattrs}{dist}::int AS distance_m, h.edges, CASE WHEN GeometryType(h.hull) = 'POLYGON' THEN h.hull "
+            "ELSE ST_Buffer(h.hull::geography, 20)::geometry END AS geom FROM o JOIN h ON h.start_vid = o.vid").format(
+            attrs=_attr_sql(ex, a, "a"), A=ident(a.schema, a.name), vertex=vertex, ca=ident(ca), edges=sql.SQL(EDGES),
+            dist=sql.Literal(dist), oattrs=_attr_sql(ex, a, "o"))
+    # netnearest
+    b = table("other")
+    cb, sb, _ = _geom_of(b, ("POINT",), ex)
+    label = params.get("label") or ""
+    if label and label not in _cols(ex, b):
+        raise ToolError("ستون نام لایه دوم نامعتبر است.")
+    dist = number("distance", 50, 50_000)
+    guard(a, ca, CAP_NET_FROM, f"این ابزار تا {CAP_NET_FROM} نقطه مبدأ را پشتیبانی می‌کند؛ لایه را کوچک‌تر کنید.")
+    guard(b, cb, CAP_NET_TO, f"این ابزار تا {CAP_NET_TO} مرکز مقصد را پشتیبانی می‌کند؛ لایه را کوچک‌تر کنید.")
+    gb = _geom4326("b", cb, sb)
+    lbl_t = sql.SQL(", b.{}::text AS lbl").format(ident(label)) if label else sql.SQL("")
+    return sql.SQL(
+        "WITH o AS (SELECT {attrs}{ga}::geometry AS g, v.id AS vid FROM {A} a {vertex} WHERE a.{ca} IS NOT NULL), "
+        "t AS (SELECT DISTINCT ON (v.id) v.id AS vid{lbl_t} FROM {B} b CROSS JOIN LATERAL (SELECT id FROM routing.ways_vertices_pgr "
+        "ORDER BY the_geom <-> {gb} LIMIT 1) v WHERE b.{cb} IS NOT NULL), "
+        "near AS (SELECT DISTINCT ON (start_vid) start_vid, end_vid, dist FROM ("
+        "SELECT start_vid, end_vid, max(agg_cost) AS dist FROM pgr_dijkstraNear({edges}, "
+        "(SELECT array_agg(DISTINCT vid) FROM o), (SELECT array_agg(vid) FROM t), directed := true, cap := 1, global := false) "
+        "GROUP BY start_vid, end_vid "
+        "UNION ALL SELECT o2.vid, t.vid, 0 FROM (SELECT DISTINCT vid FROM o) o2 JOIN t ON t.vid = o2.vid) u "
+        "ORDER BY start_vid, dist) "
+        "SELECT {oattrs}round(n.dist::numeric, 1) AS network_m{lbl_out}, o.g AS geom FROM o "
+        "LEFT JOIN near n ON n.start_vid = o.vid AND n.dist <= {dist} LEFT JOIN t ON t.vid = n.end_vid").format(
+        attrs=_attr_sql(ex, a, "a"), ga=_geom4326("a", ca, sa), A=ident(a.schema, a.name), vertex=vertex, ca=ident(ca),
+        lbl_t=lbl_t, B=ident(b.schema, b.name), gb=gb, cb=ident(cb), edges=sql.SQL(EDGES), oattrs=_attr_sql(ex, a, "o"),
+        lbl_out=sql.SQL(", t.lbl AS nearest_name") if label else sql.SQL(""), dist=sql.Literal(dist))
+
 
 
 def validate(db, key: str, params: dict) -> str:
@@ -274,8 +474,14 @@ def summarize(db, key: str, params: dict) -> str:
     for k, label, unit in (("distance", "فاصله", "متر"), ("size", "اندازه خانه", "متر")):
         if params.get(k):
             parts.append(f"{label} {params[k]} {unit}")
-    if key == "isochrone" and params.get("lon"):
-        parts.append(f"نقطه {params.get('lon')}, {params.get('lat')}")
+    if key in ("isochrone", "route") and params.get("lon"):
+        parts.append(f"از {params.get('lon')}, {params.get('lat')}")
+    if key == "route" and params.get("lon2"):
+        parts.append(f"تا {params.get('lon2')}, {params.get('lat2')}")
+    if key == "cluster" and params.get("minpoints"):
+        parts.append(f"حداقل {params['minpoints']} نقطه")
+    if key == "measure":
+        parts.append("مساحت" if params.get("mode") == "area" else "طول")
     if params.get("value"):
         parts.append(f"{params.get('agg') or 'sum'} {params['value']}")
     if params.get("category"):
@@ -286,7 +492,7 @@ def summarize(db, key: str, params: dict) -> str:
 
 
 PUBLIC_PARAMS = ("layer", "other", "label", "distance", "size", "lon", "lat", "dissolve", "output", "replace", "value", "agg",
-                 "category", "zone", "category2")
+                 "category", "zone", "category2", "lon2", "lat2", "minpoints", "mode")
 
 
 def run_job(job) -> dict:
@@ -301,7 +507,7 @@ def run(db, key: str, params: dict, job=None, run_row=None) -> dict:
             job.set_progress(pct, text)
 
     step(5, "بررسی ورودی‌ها")
-    ex, out, target, body = _prepare(db, key, params)
+    ex, out, target, body, guards = _prepare(db, key, params)
     step(12, "ساخت جدول نتیجه (سنگین‌ترین مرحله)")
     from databases.provisioner import Provisioner
 
@@ -309,8 +515,13 @@ def run(db, key: str, params: dict, job=None, run_row=None) -> dict:
         with ex.connect(read_only=False) as conn:
             conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
             conn.execute(sql.SQL("SET statement_timeout = {}").format(sql.Literal(TIMEOUT)))
+            for q, cap, msg in guards:
+                if conn.execute(q).fetchone()[0] > cap:
+                    raise ToolError(msg)
             conn.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(target))
             conn.execute(sql.SQL("CREATE TABLE {} AS {}").format(target, body))
+            if key == "route" and conn.execute(sql.SQL("SELECT count(*) FROM {}").format(target)).fetchone()[0] == 0:
+                raise ToolError("مسیری بین این دو نقطه روی شبکه معابر پیدا نشد (شاید در دو بخش جدا از هم هستند).")
             step(65, "تنظیم نوع هندسه و سیستم مختصات")
             _fix_geom_type(conn, target)
             step(78, "افزودن کلید اصلی")
