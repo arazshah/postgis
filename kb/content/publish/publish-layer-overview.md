@@ -6,8 +6,10 @@ keywords: انتشار, publish, لایه وب, وب جی آی اس, webgis, آ�
 related: vector-tiles-urls, ogc-api-features, rest-api-overview, map-builder, layer-privacy, api-keys, daily-limits
 featured: yes
 order: 10
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: انتشار لایه: کاشی برداری، OGC API و کلید API](help:publish)** را ببینید (۰ دقیقه و ۵۳ ثانیه، بدون نیاز به صدا).
+
 ## مراحل
 
 1. صفحه پایگاه داده ← **انتشار**.

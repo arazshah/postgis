@@ -5,8 +5,10 @@ kind: faq
 keywords: مصرف, usage, حجم مصرفی, نمودار حجم, اتصال هم زمان, عملکرد, آمار, سقف
 related: quota-and-readonly, pgbouncer, daily-limits, sql-explain-performance
 order: 130
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: مصرف، کارایی و اتصال با PgBouncer](help:usage)** را ببینید (۰ دقیقه و ۳۲ ثانیه، بدون نیاز به صدا).
+
 - **حجم:** مصرف نسبت به سقف پلن و نمودار روزانه ([سهمیه](kb:quota-and-readonly)).
 - **اتصال‌ها:** سقف هم‌زمان پلن شما {{plan_connections}} است؛ نزدیک سقف از [PgBouncer](kb:pgbouncer) استفاده کنید.
 - **درخواست لایه‌ها:** مصرف روزانه نسبت به سقف {{plan_daily_requests}} ([سقف](kb:daily-limits)).

@@ -6,8 +6,10 @@ keywords: پشتیبانی, تیکت, تماس, support, ticket, ارتباط ب
 related: err-connection-refused, payment-not-activated, otp-not-received
 featured: yes
 order: 90
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: پشتیبانی و تیکت](help:support)** را ببینید (۰ دقیقه و ۳۵ ثانیه، بدون نیاز به صدا).
+
 ## راه‌های تماس
 
 | راه | آدرس |

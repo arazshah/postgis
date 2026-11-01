@@ -6,8 +6,10 @@ keywords: پلن رایگان, محدودیت, حجم, اتصال همزمان, 
 related: plans-overview, quota-and-readonly, expiry-lifecycle, renew-free-plan
 featured: yes
 order: 110
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: محدودیت‌ها و قوانین پلن رایگان](help:limits)** را ببینید (۰ دقیقه و ۳۹ ثانیه، بدون نیاز به صدا).
+
 ## مقدارهای پلن {{plan_name}}
 
 | مورد | مقدار |

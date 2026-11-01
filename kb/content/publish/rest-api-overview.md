@@ -6,8 +6,10 @@ keywords: rest api, rest, json, فیلتر, limit, offset, order, bbox, col__gt,
 related: rest-write-access, api-keys, ogc-api-features, field-form
 featured: yes
 order: 110
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: REST API و فرم جمع‌آوری میدانی](help:rest)** را ببینید (۰ دقیقه و ۴۳ ثانیه، بدون نیاز به صدا).
+
 ## آدرس‌ها
 
 | مسیر | کار |

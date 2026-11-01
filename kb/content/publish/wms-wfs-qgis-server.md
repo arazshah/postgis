@@ -5,8 +5,10 @@ kind: howto
 keywords: wms, wfs, qgis server, پروژه qgis, qgz, ows, سرویس نقشه, پروژه ذخیره شده, getcapabilities
 related: publish-layer-overview, api-keys, ogc-protocols-glossary, connect-qgis
 order: 100
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: WMS و WFS با QGIS Server](help:wms)** را ببینید (۰ دقیقه و ۲۹ ثانیه، بدون نیاز به صدا).
+
 ## مراحل
 
 1. در **انتشار ← سرویس OGC** پروژه `qgz` یا `qgs` را آپلود کنید، یا پروژه ذخیره‌شده در پایگاه داده خود را وارد کنید.

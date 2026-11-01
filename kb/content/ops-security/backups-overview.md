@@ -6,8 +6,10 @@ keywords: بکاپ, پشتیبان, backup, بکاپ خودکار, نگهدار�
 related: backup-manual, backup-restore, backup-safety-copy, backup-restore-test, expiry-lifecycle
 featured: yes
 order: 10
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: بکاپ، دانلود و بازگردانی](help:backups)** را ببینید (۰ دقیقه و ۵۰ ثانیه، بدون نیاز به صدا).
+
 ## انواع بکاپ
 
 | نوع | چه زمانی | ماندگاری |

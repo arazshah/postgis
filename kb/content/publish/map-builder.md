@@ -5,8 +5,10 @@ kind: howto
 keywords: نقشه ساز, map builder, iframe, جاسازی نقشه, لینک نقشه, اشتراک نقشه, embed, رنگ لایه, سبک, badge, نشان
 related: publish-layer-overview, layer-privacy, odbl-attribution
 order: 90
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: طراحی نقشه و اشتراک با لینک یا iframe](help:mapbuilder)** را ببینید (۰ دقیقه و ۵۰ ثانیه، بدون نیاز به صدا).
+
 ## مراحل
 
 1. [لایه را منتشر کنید](kb:publish-layer-overview) (برای نقشه عمومی باید [عمومی](kb:layer-privacy) باشد).

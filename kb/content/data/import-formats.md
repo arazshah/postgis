@@ -6,8 +6,10 @@ keywords: ورود فایل, آپلود, import, shapefile, geopackage, geojson,
 related: import-shapefile-zip, import-csv-points, import-persian-encoding, import-large-files, import-replace-append, data-health
 featured: yes
 order: 10
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: ورود فایل و سلامت داده](help:import)** را ببینید (۰ دقیقه و ۴۷ ثانیه، بدون نیاز به صدا).
+
 ## مراحل
 
 1. در مرورگر داده روی زبانه **«ورود فایل»** بزنید و فایل را بکشید یا انتخاب کنید.

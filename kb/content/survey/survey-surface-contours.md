@@ -5,8 +5,10 @@ kind: howto
 keywords: tin, منحنی میزان, کانتور, حجم, خاکبرداری, خاکریزی, contour, volume, سطح
 related: survey-cogo-stakeout, survey-import-export, survey-data-tables
 order: 110
-reviewed: 2026-10-25
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: منحنی میزان، حجم و محاسبه‌های نقشه‌برداری](help:surface)** را ببینید (۰ دقیقه و ۵۹ ثانیه، بدون نیاز به صدا).
+
 ## ساخت منحنی میزان
 
 1. دست‌کم چند نقطه با **ارتفاع** در پروژه داشته باشید.

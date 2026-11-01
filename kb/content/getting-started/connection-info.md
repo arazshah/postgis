@@ -6,8 +6,10 @@ keywords: host, port, میزبان, پورت, رشته اتصال, connection st
 related: connect-qgis, connection-string-formats, err-connection-refused, ssl-modes
 featured: yes
 order: 80
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: اطلاعات اتصال و وصل شدن از QGIS، GeoServer و پایتون](help:connect)** را ببینید (۰ دقیقه و ۴۷ ثانیه، بدون نیاز به صدا).
+
 ## کجا ببینم؟
 
 در «پایگاه‌های داده من» روی نام پایگاه داده یا «اطلاعات اتصال» بزنید. جدولی با این مقادیر می‌بینید؛ کنار هر کدام دکمه «کپی» است.

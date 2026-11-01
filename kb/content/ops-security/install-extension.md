@@ -5,8 +5,10 @@ kind: howto
 keywords: نصب افزونه, extension, create extension, pgrouting, pg_trgm, postgis_raster, افزونه مجاز, افزودن افزونه
 related: choose-extensions, postgis-extensions-explained, upgrade-plan, support-ticket
 order: 60
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
+🎬 **[ویدیوی راهنما: مدیریت پایگاه داده: افزونه، رمز، اعتبار و حذف](help:manage)** را ببینید (۰ دقیقه و ۳۶ ثانیه، بدون نیاز به صدا).
+
 1. صفحه پایگاه داده ← **افزونه‌ها**.
 2. از فهرست مجاز، افزونه را انتخاب و «نصب» را بزنید.
 
