@@ -91,6 +91,8 @@ INSTALLED_APPS = [
     "iranmap",
     "classroom",
     "analysis",
+    "tools",
+    "notifications",
     "restapi",
     "enterprise",
     "analytics",

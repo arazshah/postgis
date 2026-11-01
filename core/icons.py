@@ -3,6 +3,15 @@
 """
 
 ICONS: dict[str, str] = {
+    'bell': '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/>',
+    'toolbox': '<path d="M4 8h16v11H4z"/><path d="M9 8V5h6v3"/><path d="M4 13h16"/><path d="M11 12v3h2v-3"/>',
+    't-buffer': '<circle cx="12" cy="12" r="2.2" fill="currentColor"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="9.5" stroke-dasharray="2 2.4"/>',
+    't-nearest': '<circle cx="6" cy="17" r="2"/><circle cx="18" cy="7" r="2" fill="currentColor"/><path d="M7.6 15.6 16.4 8.4" stroke-dasharray="2 2"/>',
+    't-count': '<path d="M5 6l7-3 7 3v12l-7 3-7-3z"/><circle cx="10" cy="10" r="1" fill="currentColor"/><circle cx="14" cy="12" r="1" fill="currentColor"/><circle cx="11" cy="15" r="1" fill="currentColor"/>',
+    't-overlap': '<circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/>',
+    't-change': '<path d="M4 8h13"/><path d="M13 4l4 4-4 4"/><path d="M20 16H7"/><path d="M11 12l-4 4 4 4"/>',
+    't-hexbin': '<path d="M8 3h6l3 5-3 5H8L5 8z"/><path d="M14 13h5l2.5 4-2.5 4h-5l-2.5-4z"/>',
+    't-isochrone': '<path d="M12 4c5 0 8 4 8 8s-3 8-8 8c-3 0-5-1-7-3 1-3 0-6 1-8 1.5-3 3.5-5 6-5z"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/>',
     'back': '<path d="M9 6l6 6-6 6"/>',
     'bolt': '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
     'book': '<path d="M4 5c3-1 6-1 8 1 2-2 5-2 8-1v13c-3-1-6-1-8 1-2-2-5-2-8-1z"/><path d="M12 6v13"/>',

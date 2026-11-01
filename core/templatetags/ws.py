@@ -43,6 +43,7 @@ GROUPS = [
     ]),
     ("تحلیل و انتشار", [
         ("تحلیل", "analysis:page", ("analysis:page",), "chart", "editor"),
+        ("ابزارها", "tools:page", ("tools:page", "tools:detail"), "toolbox", "editor"),
         ("برداشت میدانی", "survey:index", ("survey:index", "survey:studio"), "target", "viewer"),
         ("نقشه‌های چندلایه", "maps:index", ("maps:index", "maps:composer", "maps:quick"), "layers", "viewer"),
         ("نقشه و API", "publish:manage", ("publish:manage", "publish:map_builder"), "globe", "editor"),
@@ -172,7 +173,7 @@ DASH_GROUPS = [
         ("برداشت میدانی", "با GPS یا گیرنده RTK در میدان نقطه برداشت کن؛ آفلاین هم کار می‌کند", "survey:index", "target"),
     ]),
     ("share", "تحلیل کن و منتشر کن", [
-        ("تحلیل مکانی", "بافر، نزدیک‌ترین، حوزه دسترسی و ... بدون کدنویسی", "analysis:page", "chart"),
+        ("ابزارهای تحلیل مکانی", "بافر، نزدیک‌ترین، حوزه دسترسی و ... بدون کدنویسی", "tools:page", "toolbox"),
         ("انتشار نقشه و API", "لایه را با لینک عمومی، کاشی برداری یا API در وب بگذار", "publish:manage", "globe"),
         ("نقشه‌های چندلایه", "چند لایه را با سبک دلخواه یک‌جا بچین و ارائه بده", "maps:index", "layers"),
     ]),

@@ -5,7 +5,7 @@ kind: howto
 keywords: پرسش فارسی sql, نتیجه خالی, چرا نتیجه خالی است, نقشه نتیجه sql, تبدیل متن به sql, text to sql, nl2sql, هوش مصنوعی sql, ساخت کوئری با هوش مصنوعی, کوئری فارسی, لایه جدید از sql, نقاط داخل پلیگون, کلید مدل زبانی, avalai
 related: sql-console, sql-nearest-features, sql-buffer, explorer-overview, err-statement-timeout
 order: 151
-reviewed: 2026-10-28
+reviewed: 2026-11-01
 ---
 این قابلیت فقط در **کنسول SQL** است و به بخش «تحلیل» ربطی ندارد: نتیجه‌اش یک دستور SQL معمولی است که می‌بینید، می‌توانید ویرایش کنید و با همان محدودیت‌های [کنسول SQL](kb:sql-console) اجرا می‌شود.
 

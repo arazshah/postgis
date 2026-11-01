@@ -350,8 +350,11 @@ def cleanup(now: datetime | None = None) -> int:
         shutil.rmtree(import_dir(job), ignore_errors=True)
         job.status = Job.Status.EXPIRED
         job.save(update_fields=["status"])
-    Job.objects.filter(status=Job.Status.RUNNING, started_at__lt=now - timedelta(seconds=DUMP_TIMEOUT + 600)).update(
-        status=Job.Status.FAILED, message="کار بیش از حد طول کشید یا worker متوقف شد.", finished_at=now)
+    # با save (نه update) تا اعلان خطا برای کاربر ساخته شود
+    for job in Job.objects.filter(status=Job.Status.RUNNING, started_at__lt=now - timedelta(seconds=DUMP_TIMEOUT + 600)):
+        job.status, job.finished_at = Job.Status.FAILED, now
+        job.message = "کار بیش از حد طول کشید یا worker متوقف شد."
+        job.save(update_fields=["status", "message", "finished_at"])
     return removed
 
 

@@ -1,6 +1,8 @@
-{% extends "databases/_explore_base.html" %}{% load fa static %}
+{% extends "databases/_explore_base.html" %}{% load fa static ws %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/analysis.css' %}">{% endblock %}
 {% block ex %}
-<div class="page-head"><div><h1>تحلیل</h1><p class="muted page-sub">پرسش فارسی از داده یا ابزارهای آماده؛ نتیجه در یک جدول تازه ذخیره می‌شود.</p></div></div>
+<div class="page-head"><div><h1>تحلیل</h1><p class="muted page-sub">سؤالتان را به فارسی بپرسید؛ نتیجه در یک جدول تازه ذخیره می‌شود.</p></div>
+  <div class="page-acts"><a class="btn ghost" href="{% url 'tools:page' db.pk %}">{% icon "toolbox" 18 %}ابزارهای آماده (بدون SQL)</a></div></div>
 
 <section class="panel ask-panel" aria-labelledby="ask-h">
   <h3 id="ask-h">پرسش فارسی از داده</h3>
@@ -52,122 +54,6 @@
 
 </section>
 
-<h3 id="tools" style="margin-top:var(--s6)">ابزارهای آماده (بدون SQL)</h3>
-<p class="small muted">هر ابزار یک جدول جدید با کلید اصلی و نمایه مکانی می‌سازد که می‌توانید روی نقشه ببینید، منتشر کنید یا در QGIS باز کنید. فاصله‌ها به متر است.</p>
-<nav class="tool-tabs" aria-label="ابزارهای تحلیل">
-{% for tool in tools %}<a href="?tool={{ tool.key }}#tools" {% if open_tool == tool.key %}aria-current="true"{% endif %}><b>{{ tool.title }}</b><span>{{ tool.description }}</span></a>{% endfor %}
-</nav>
-{% for tool in tools %}{% if open_tool == tool.key %}
-<section class="panel tool-form" aria-label="{{ tool.title }}">
-  <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="tool"><input type="hidden" name="tool" value="{{ tool.key }}">
-    <div class="bf-row">
-    {% if tool.key != 'isochrone' %}
-    <div class="field"><label>{% if tool.key == 'change' %}نسخه‌ی قدیم (لایه چندضلعی){% elif tool.key == 'count' or tool.key == 'overlap' %}لایه چندضلعی{% if tool.key == 'overlap' %} (مثلاً محله){% endif %}{% else %}لایه{% endif %}</label>
-      <select name="layer" required>{% for t in spatial %}<option value="{{ t.schema }}.{{ t.name }}">{{ t.name }} ({{ t.geometry.0.type|lower }})</option>{% endfor %}</select></div>
-    {% endif %}
-    {% if tool.key == 'nearest' or tool.key == 'count' or tool.key == 'overlap' or tool.key == 'change' %}
-    <div class="field"><label>{% if tool.key == 'count' %}لایه نقطه‌ای که شمرده شود{% elif tool.key == 'overlap' %}لایه چندضلعی دسته‌دار (مثلاً کاربری زمین){% elif tool.key == 'change' %}نسخه‌ی جدید (لایه چندضلعی){% else %}لایه هدف (نزدیک‌ترینِ آن){% endif %}</label>
-      <select name="other" required>{% for t in spatial %}<option value="{{ t.schema }}.{{ t.name }}">{{ t.name }}</option>{% endfor %}</select></div>
-    {% endif %}
-    {% if tool.key == 'nearest' %}<div class="field"><label>ستون نام در لایه هدف (اختیاری)</label><input type="text" name="label" class="ltr" placeholder="name"></div>{% endif %}
-    {% if tool.key == 'count' %}
-    <div class="field"><label>ستون عددی لایه نقطه‌ای برای جمع یا میانگین (اختیاری)</label><input type="text" name="value" class="ltr" placeholder="price"></div>
-    <div class="field"><label>محاسبه ستون</label><select name="agg"><option value="sum">جمع</option><option value="avg">میانگین</option><option value="min">کمینه</option><option value="max">بیشینه</option></select></div>
-    {% endif %}
-    {% if tool.key == 'overlap' %}
-    <div class="field"><label>ستون نام چندضلعی‌ها (لایه اول)</label><input type="text" name="zone" class="ltr" required placeholder="name"></div>
-    <div class="field"><label>ستون دسته (لایه دوم)</label><input type="text" name="category" class="ltr" required placeholder="landuse"></div>
-    {% endif %}
-    {% if tool.key == 'change' %}
-    <div class="field"><label>ستون دسته در نسخه‌ی قدیم</label><input type="text" name="category" class="ltr" required placeholder="landuse"></div>
-    <div class="field"><label>ستون دسته در نسخه‌ی جدید</label><input type="text" name="category2" class="ltr" required placeholder="landuse"></div>
-    {% endif %}
-    {% if tool.key == 'buffer' %}<div class="field"><label>فاصله (متر)</label><input type="text" name="distance" value="500" inputmode="numeric"></div>{% endif %}
-    {% if tool.key == 'hexbin' %}<div class="field"><label>اندازه هر خانه (متر)</label><input type="text" name="size" value="500" inputmode="numeric"></div>{% endif %}
-    {% if tool.key == 'isochrone' %}
-      {% if has_routing %}
-      <div class="field"><label>طول جغرافیایی نقطه شروع</label><input type="text" name="lon" class="ltr" placeholder="51.389"></div>
-      <div class="field"><label>عرض جغرافیایی</label><input type="text" name="lat" class="ltr" placeholder="35.700"></div>
-      <div class="field"><label>فاصله روی شبکه معابر (متر)</label><input type="text" name="distance" value="1000" inputmode="numeric"></div>
-      {% else %}<div class="msg info small" style="width:100%">به شبکه معابر نیاز دارد؛ از <a href="{% url 'iranmap:ready' db.pk %}">داده آماده ایران</a> شبکه مسیریابی یک شهر را بگیرید.</div>{% endif %}
-    {% endif %}
-    <div class="field"><label>نام جدول خروجی</label><input type="text" name="output" class="ltr" required pattern="[a-z_][a-z0-9_]*" value="{{ tool.key }}_result"></div>
-    </div>
-    <div class="tool-opts">
-      {% if tool.key == 'buffer' %}<label class="check small"><input type="checkbox" name="dissolve"><span>همه حریم‌ها یکی شوند</span></label>{% endif %}
-      <label class="check small"><input type="checkbox" name="replace"><span>اگر هست جایگزین شود</span></label>
-    </div>
-    <div class="tool-run"><button class="btn" type="submit" {% if tool.key == 'isochrone' and not has_routing or active %}disabled{% endif %}>اجرای تحلیل</button>
-      <span class="small muted">{% if active %}یک تحلیل در حال اجراست؛ بعد از تمام شدن می‌توانید دوباره اجرا کنید.{% else %}در پس‌زمینه اجرا می‌شود و پیشرفتش را در تاریخچه می‌بینید.{% endif %}</span></div>
-  </form>
-</section>
-{% endif %}{% endfor %}
-
-<div class="an-head" id="history"><h3>تاریخچه تحلیل‌ها</h3>{% if active %}<span class="badge warn">در حال اجرا</span>{% endif %}</div>
-{% if history %}
-<ul class="hist" id="hist" data-status="{% url 'analysis:status' db.pk %}" data-active="{% if active %}1{% endif %}">
-{% for e in history %}{% with j=e.job %}
-  <li class="hist-item {{ j.status }}" data-hid="{{ e.id }}">
-    <span class="hist-ico" aria-hidden="true">{{ e.glyph }}</span>
-    <div class="hist-main">
-      <div class="hist-title">{{ e.title }}</div>
-      <div class="hist-meta">
-        <span>{{ e.created|jdatetime_full }}</span>
-        <span class="st">{{ j.get_status_display }}</span>
-        {% if e.detail %}<span>{{ e.detail }}</span>{% endif %}
-      </div>
-      {% if e.steps %}<ol class="hist-steps" aria-label="مراحل اجرا">{% for s in e.steps %}<li class="{{ s.status }}{% if s.count == 0 %} zero{% endif %}" title="{{ s.op }} → {{ s.name }}"><span>{% if s.op == 'input' %}<span class="ltr">{{ s.name }}</span>{% else %}{{ s.label }}{% endif %}</span>{% if s.count is not None %}<b>{{ s.count|fanum }}</b>{% elif s.status == 'failed' %}<b>✕</b>{% elif s.status == 'skipped' %}<b>—</b>{% endif %}</li>{% endfor %}</ol>
-      {% elif e.ops %}<div class="hist-ops">{{ e.ops|join:" → " }}</div>{% endif %}
-      {% if e.notes and j.status != 'queued' and j.status != 'running' %}<ul class="hist-notes">{% for n in e.notes %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}
-      {% if e.result == 'plan' and j.status == 'done' %}
-      <div class="hist-plan"><b>برنامهٔ پیشنهادی (هنوز اجرا نشده)</b>
-        <ol>{% for line in e.plan_text %}<li>{{ line }}</li>{% endfor %}</ol>
-        <div class="hist-plan-act">
-          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="ask_run"><input type="hidden" name="q" value="{{ e.pk }}"><button class="btn sm" type="submit" {% if active %}disabled{% endif %}>درست است؛ اجرا کن</button></form>
-          <a class="btn ghost sm" href="?again={{ e.pk }}#ask-h">نه؛ ویرایش پرسش</a>
-          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="ask_cancel"><input type="hidden" name="q" value="{{ e.pk }}"><button class="btn ghost sm" type="submit">لغو</button></form>
-        </div>
-      </div>
-      {% elif e.kind == 'ask' and j.status == 'done' %}
-      <div class="hist-answer {{ e.result }}">
-        {% if e.result == 'table' %}<b>نتیجه: جدول <span class="ltr">{{ e.table }}</span> با {{ e.rows|fanum }} ردیف ساخته شد.</b>
-        {% elif e.rows %}<b>نتیجه: {{ e.rows|fanum }} عارضه پیدا شد و در جدول <span class="ltr">{{ e.table }}</span> ذخیره شد.</b>
-        {% elif e.result == 'empty' %}<b>نتیجه: هیچ عارضه‌ای با این شرایط پیدا نشد؛ جدول <span class="ltr">{{ e.table }}</span> ساخته نشد.</b>
-        {% elif e.answer %}<b>پاسخ (این تحلیل لایهٔ مکانی نساخت)</b>
-        {% else %}<b>تحلیل اجرا شد اما خروجی قابل نمایشی نداد.</b> <span class="small muted">پرسش را دقیق‌تر بنویسید؛ مثلاً بگویید «لایهٔ … بساز».</span>{% endif %}
-        {% if e.summary %}<pre class="hist-summary">{{ e.summary }}</pre>{% endif %}
-        {% if e.preview %}{{ e.preview|safe }}{% endif %}
-        {% if e.answer %}<pre>{{ e.answer }}</pre>{% endif %}
-      </div>{% endif %}
-    </div>
-    <div class="hist-side">
-      {% if j.status == 'done' and e.rows and e.result == 'table' %}
-        <span class="small muted">{{ e.rows|fanum }} ردیف</span>
-        <a class="btn ghost sm" href="{% url 'databases:explore_table' db.pk 'public' e.table %}"><span class="ltr">{{ e.table }}</span> ← جدول</a>
-      {% elif j.status == 'done' and e.rows %}
-        <span class="small muted">{{ e.rows|fanum }} عارضه</span>
-        <a class="btn ghost sm" href="{% url 'databases:explore_table' db.pk 'public' e.table %}?tab=map"><span class="ltr">{{ e.table }}</span> ← نقشه</a>
-        {% if e.together %}<a class="btn ghost sm" href="{{ e.together }}" title="نتیجه و لایه‌های ورودی روی یک نقشه">کنار ورودی‌ها</a>{% endif %}
-        {% if e.chart %}<form method="post" action="{% url 'maps:add_table' db.pk %}" style="display:inline">{% csrf_token %}
-          <input type="hidden" name="schema" value="public"><input type="hidden" name="table" value="{{ e.table }}"><input type="hidden" name="map" value="new">
-          {% for k, v in e.chart.items %}<input type="hidden" name="chart_{{ k }}" value="{{ v }}">{% endfor %}
-          <button class="btn ghost sm" type="submit" title="نتیجه را در نقشه تازه باز می‌کند و نمودار پیشنهادی را آماده می‌کند">نقشه و نمودار</button></form>{% endif %}
-      {% elif j.status == 'done' and e.result == 'empty' %}<span class="small muted">۰ عارضه</span>
-      {% elif j.status == 'done' and e.answer %}<span class="small muted">بدون لایه مکانی</span>
-      {% elif j.status == 'done' %}<span class="small muted">{{ j.message|truncatechars:60 }}</span>{% endif %}
-      {% if e.followable and j.status == 'done' %}<a class="btn sm" href="?follow={{ e.pk }}#ask-h" title="نتیجهٔ این پرسش لایهٔ ورودی پرسش بعدی می‌شود">ادامه با این نتیجه</a>{% endif %}
-      {% if e.kind == 'ask' and e.result != 'plan' and j.status != 'queued' and j.status != 'running' %}<a class="btn ghost sm" href="?again={{ e.pk }}#ask-h" title="فرم پرسش با همین متن و لایه‌ها پر می‌شود">ویرایش و پرسش دوباره</a>{% endif %}
-    </div>
-    {% if j.status == 'queued' or j.status == 'running' %}
-    <div class="hist-prog">
-      <div class="prog run" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ j.progress }}"><i style="width:{{ j.progress }}%"></i></div>
-      <div class="prog-label"><span class="stage">{% if j.status == 'queued' %}در صف؛ به‌زودی شروع می‌شود{% else %}{{ j.stage|default:"در حال شروع" }}{% endif %}</span><span><span class="pct">{{ j.progress|fanum }}</span>٪ · <span class="el"></span></span></div>
-      <p class="small muted" style="margin:6px 0 0">لطفاً صفحه را باز نگه دارید یا بعداً برگردید؛ تحلیل روی سرور ادامه پیدا می‌کند.</p>
-    </div>
-    {% elif j.status == 'failed' %}<div class="hist-err">{{ j.message }}</div>{% endif %}
-  </li>
-{% endwith %}{% endfor %}
-</ul>
-{% if active %}<script src="{% static 'js/analysis.js' %}" defer></script>{% endif %}
-{% else %}<div class="hist-empty">هنوز تحلیلی اجرا نکرده‌اید. یکی از ابزارهای بالا را اجرا کنید؛ نتیجه‌ها همین‌جا با لینک نقشه جمع می‌شوند.</div>{% endif %}
+<div class="an-head" id="history"><h3>تاریخچه پرسش‌ها</h3></div>
+{% include "analysis/_history.html" %}
 {% endblock %}

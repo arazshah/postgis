@@ -35,6 +35,8 @@ urlpatterns = [
     path("", include("survey.urls")),
     path("", include("iranmap.urls")),
     path("", include("analysis.urls")),
+    path("", include("tools.urls")),
+    path("", include("notifications.urls")),
     path("", include("restapi.urls")),
     path("", include("enterprise.urls")),
     path("", include("core.urls")),

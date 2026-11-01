@@ -843,11 +843,6 @@ input[type=range]{width:100%;accent-color:var(--teal)}
 .after .log li{break-inside:avoid}
 .danger-panel{padding:var(--s3) var(--s5);background:#fff8f7;border-color:var(--red-soft)}
 .danger-panel details[open]{padding-bottom:var(--s2)}
-.tool-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:var(--s2);margin:var(--s3) 0 var(--s3)}
-.tool-tabs a{display:flex;flex-direction:column;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3);text-decoration:none;color:var(--ink)}
-.tool-tabs a:hover{border-color:var(--teal)}
-.tool-tabs a[aria-current]{background:var(--ink);border-color:var(--ink);color:#fff}
-.tool-tabs span{font-size:.76rem;line-height:1.6;opacity:.75}
 .tool-form .bf-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--s3)}
 .tool-opts{display:flex;gap:var(--s5);flex-wrap:wrap}
 .tool-run{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}

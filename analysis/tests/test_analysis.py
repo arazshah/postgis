@@ -195,11 +195,14 @@ class AnalysisTests(TestCase):
     def test_page_and_access(self):
         url = reverse("analysis:page", args=[self.db.pk])
         r = self.client.get(url)
-        self.assertContains(r, "حریم (بافر)")
         self.assertContains(r, "تنظیم کلید مدل زبانی")
-        r = self.client.post(url, {"action": "tool", "tool": "buffer", "layer": "public.parks", "distance": "100",
-                                   "output": "park_100"})
-        self.assertRedirects(r, url + "#history", fetch_redirect_response=False)
+        tools_url = reverse("tools:page", args=[self.db.pk])
+        self.assertContains(self.client.get(tools_url), "حریم (بافر)")
+        durl = reverse("tools:detail", args=[self.db.pk, "buffer"])
+        # لینک قدیمی ?tool= به بخش مستقل ابزارها می‌رود
+        self.assertRedirects(self.client.get(url + "?tool=buffer"), durl, fetch_redirect_response=False)
+        r = self.client.post(durl, {"layer": "public.parks", "distance": "100", "output": "park_100"})
+        self.assertRedirects(r, durl + "#history", fetch_redirect_response=False)
         self.assertEqual(self._sql("SELECT to_regclass('public.park_100') IS NULL")[0][0], True)  # هنوز ساخته نشده
         # کلید: فقط https، رمزنگاری‌شده، دوباره نمایش داده نمی‌شود
         self.client.post(url, {"action": "llm_save", "base_url": "http://evil.example/v1", "api_key": "sk-1"})
@@ -222,9 +225,9 @@ class AnalysisTests(TestCase):
     def test_tool_runs_in_background_with_progress_and_history(self):
         from jobs import services as jobs
 
-        url = reverse("analysis:page", args=[self.db.pk])
-        post = {"action": "tool", "tool": "buffer", "layer": "public.parks", "distance": "100", "output": "park_100"}
-        # اعتبارسنجی همان لحظه: نام نامعتبر صف نمی‌شود
+        url = reverse("tools:detail", args=[self.db.pk, "buffer"])
+        post = {"layer": "public.parks", "distance": "100", "output": "park_100"}
+        # اعتبارسنجی همان لحظه: نام نامعتبر صف نمی‌شود (فرم با همان مقادیر دوباره نمایش داده می‌شود)
         self.client.post(url, {**post, "output": "Bad name"})
         self.assertEqual(ToolRun.objects.count(), 0)
         self.client.post(url, post)
@@ -236,7 +239,7 @@ class AnalysisTests(TestCase):
         self.assertEqual(ToolRun.objects.count(), 1)
         page = self.client.get(url)
         self.assertContains(page, 'role="progressbar"')
-        self.assertContains(page, "تاریخچه تحلیل‌ها")
+        self.assertContains(page, "اجراهای قبلی این ابزار")
         st = self.client.get(reverse("analysis:status", args=[self.db.pk])).json()
         self.assertTrue(st["active"])
         self.assertEqual(st["items"][0]["status"], "queued")
