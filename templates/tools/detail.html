@@ -20,7 +20,7 @@
           <div class="tl-choice" role="radiogroup" aria-labelledby="{{ f.id }}-l">{% for val, text in p.choices %}<label><input type="radio" name="{{ p.name }}" value="{{ val }}" {% if f.value == val %}checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</div></div>
         {% elif p.kind == 'layer' %}
         <div class="tl-field"><label for="{{ f.id }}">{{ p.label }}{% if p.required %} <span class="req" aria-hidden="true">*</span>{% endif %}</label>
-          <select id="{{ f.id }}" name="{{ p.name }}" required>{% for o in f.options %}<option value="{{ o.value }}" {% if f.value == o.value %}selected{% endif %}>{{ o.label }}{% if o.type %} ({{ o.type }}){% endif %}</option>{% empty %}<option value="">لایه مناسب نیست</option>{% endfor %}</select>
+          <select id="{{ f.id }}" name="{{ p.name }}" {% if p.required %}required{% endif %}>{% if not p.required %}<option value="">{{ p.empty|default:"هیچ‌کدام" }}</option>{% endif %}{% for o in f.options %}<option value="{{ o.value }}" {% if f.value == o.value %}selected{% endif %}>{{ o.label }}{% if o.type %} ({{ o.type }}){% endif %}</option>{% empty %}<option value="">لایه مناسب نیست</option>{% endfor %}</select>
           {% if p.help %}<span class="help">{{ p.help }}</span>{% endif %}</div>
         {% else %}
         <div class="tl-field"><label for="{{ f.id }}">{{ p.label }}{% if p.required %} <span class="req" aria-hidden="true">*</span>{% endif %}</label>

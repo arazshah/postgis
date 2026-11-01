@@ -19,8 +19,9 @@ class Param:
     default: str = ""
     required: bool = True
     placeholder: str = ""
-    geom: str = ""  # layer: point | polygon | "" (هر نوع)
+    geom: str = ""  # layer: point | line | polygon | "" (هر نوع)
     choices: tuple[tuple[str, str], ...] = ()
+    empty: str = ""  # layer اختیاری: متن گزینهٔ «انتخاب نشده»
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,67 @@ _INFO = [
              (Param("lon", "text", "طول جغرافیایی", "نقطهٔ شروع", placeholder="51.389"),
               Param("lat", "text", "عرض جغرافیایی", placeholder="35.700"),
               Param("distance", "number", "فاصله روی شبکه معابر (متر)", default="1000")),
+             needs_routing=True),
+    # --- مجاورت و فاصله ---
+    ToolInfo("within", "proximity", "t-within", ("لایه اول", "لایه دوم"), "عارضه‌های نزدیک + تعداد همسایه",
+             "مدرسه‌هایی که تا ۳۰۰ متری یک بزرگراه هستند، با تعداد بزرگراه‌های نزدیک هر کدام.",
+             ("ستون‌های لایه اول", "neighbor_count", "geom"),
+             (Param("layer", "layer", "لایه‌ای که از آن انتخاب شود", "مثلاً مدرسه‌ها"),
+              Param("other", "layer", "لایه مرجع", "مثلاً بزرگراه‌ها"),
+              Param("distance", "number", "حداکثر فاصله (متر)", "عارضه‌هایی که دورتر باشند در نتیجه نمی‌آیند", "300"))),
+    ToolInfo("voronoi", "proximity", "t-voronoi", ("لایه نقطه‌ای", "مرز (اختیاری)"), "حوزه نفوذ هر نقطه",
+             "حوزه‌ی خدمات هر کلانتری: هر نقطه‌ی شهر به نزدیک‌ترین کلانتری می‌رسد.",
+             ("ستون‌های لایه نقطه‌ای", "area_m2", "geom"),
+             (Param("layer", "layer", "لایه مراکز", "مثلاً کلانتری‌ها", geom="point"),
+              Param("other", "layer", "مرز برش (اختیاری)", "بدون مرز، حوزه‌های بیرونی تا مرز تقریبی داده‌ها کشیده می‌شوند",
+                    required=False, geom="polygon", empty="بدون مرز"))),
+    # --- شمارش و تراکم ---
+    ToolInfo("cluster", "aggregate", "t-cluster", ("لایه نقطه‌ای",), "چندضلعی هر خوشه + تعداد",
+             "کانون‌های تصادف: جاهایی که دست‌کم ۵ تصادف در شعاع ۲۰۰ متر دارند.",
+             ("cluster_id", "point_count", "geom"),
+             (Param("layer", "layer", "لایه نقطه‌ای", geom="point"),
+              Param("distance", "number", "شعاع همسایگی (متر)", "نقطه‌های نزدیک‌تر از این فاصله به هم می‌پیوندند", "200"),
+              Param("minpoints", "number", "حداقل نقطه در هر خوشه", "گروه‌های کوچک‌تر نقطهٔ پراکنده حساب می‌شوند", "5"))),
+    ToolInfo("measure", "aggregate", "t-measure", ("چندضلعی", "خط یا چندضلعی"), "چندضلعی‌ها + طول یا مساحت",
+             "کیلومتر معبر در هر محله، یا مساحت فضای سبز هر منطقه.",
+             ("ستون‌های چندضلعی", "length_m + km_per_km2", "یا area_m2 + share_pct"),
+             (Param("layer", "layer", "لایه چندضلعی", "مثلاً محله‌ها", geom="polygon"),
+              Param("other", "layer", "لایه‌ای که اندازه‌گیری شود", "خطی برای طول، چندضلعی برای مساحت"),
+              Param("mode", "choice", "اندازه‌گیری", default="length", required=False,
+                    choices=(("length", "طول خط‌ها"), ("area", "مساحت چندضلعی‌ها"))))),
+    # --- همپوشانی و تغییر ---
+    ToolInfo("clip", "overlay", "t-clip", ("هر لایه", "مرز چندضلعی"), "بخش داخل مرز",
+             "معابر فقط داخل منطقه ۶، یا مدرسه‌های داخل یک شهرستان.",
+             ("ستون‌های لایه ورودی", "geom"),
+             (Param("layer", "layer", "لایه‌ای که بریده شود", "نقطه، خط یا چندضلعی"),
+              Param("other", "layer", "مرز برش", "مثلاً منطقه شهرداری", geom="polygon"))),
+    ToolInfo("erase", "overlay", "t-erase", ("چندضلعی", "چندضلعی حذفی"), "چندضلعی باقی‌مانده",
+             "بخش‌هایی از شهر که بیرون حریم ۵۰۰ متری هر مدرسه‌اند؛ یعنی مناطق کم‌برخوردار.",
+             ("ستون‌های لایه اول", "area_m2", "geom"),
+             (Param("layer", "layer", "لایه‌ای که از آن حذف شود", "مثلاً مرز شهر", geom="polygon"),
+              Param("other", "layer", "ناحیهٔ حذفی", "مثلاً حریم مدرسه‌ها", geom="polygon"))),
+    # --- شبکه معابر ---
+    ToolInfo("route", "network", "t-route", ("دو نقطه",), "خط مسیر + طول",
+             "کوتاه‌ترین مسیر خودرو از یک نقطه تا نقطه‌ی دیگر روی خیابان‌ها.",
+             ("distance_m", "edges", "geom"),
+             (Param("lon", "text", "طول جغرافیایی مبدأ", placeholder="51.389"),
+              Param("lat", "text", "عرض جغرافیایی مبدأ", placeholder="35.700"),
+              Param("lon2", "text", "طول جغرافیایی مقصد", placeholder="51.420"),
+              Param("lat2", "text", "عرض جغرافیایی مقصد", placeholder="35.720")),
+             needs_routing=True),
+    ToolInfo("netnearest", "network", "t-netnearest", ("نقاط مبدأ", "نقاط مقصد"), "همان نقاط + فاصله روی خیابان",
+             "هر خانه تا نزدیک‌ترین درمانگاه چند متر راه دارد (نه فاصله مستقیم).",
+             ("ستون‌های لایه مبدأ", "network_m", "nearest_name (اختیاری)", "geom"),
+             (Param("layer", "layer", "لایه مبدأ", "مثلاً خانه‌ها یا مدرسه‌ها (حداکثر ۳۰۰۰ نقطه)", geom="point"),
+              Param("other", "layer", "لایه مقصد", "مثلاً درمانگاه‌ها (حداکثر ۵۰۰ نقطه)", geom="point"),
+              Param("label", "text", "ستون نام در لایه مقصد", "اختیاری؛ برای نوشتن نام نزدیک‌ترین", required=False, placeholder="name"),
+              Param("distance", "number", "حداکثر فاصله روی شبکه (متر)", "نقطه‌هایی که دورتر باشند بدون مقدار می‌مانند", "5000")),
+             needs_routing=True),
+    ToolInfo("coverage", "network", "t-coverage", ("نقاط مرکز",), "حوزه دسترسی هر مرکز",
+             "پوشش ۸۰۰ متری پیاده‌ی همه‌ی ایستگاه‌های مترو؛ هر بخش به نزدیک‌ترین ایستگاه تعلق دارد.",
+             ("ستون‌های لایه مرکز", "distance_m", "edges", "geom"),
+             (Param("layer", "layer", "لایه مراکز", "مثلاً ایستگاه‌ها (حداکثر ۵۰۰ نقطه)", geom="point"),
+              Param("distance", "number", "فاصله روی شبکه معابر (متر)", default="800")),
              needs_routing=True),
 ]
 # عنوان و توضیح از موتور اجرا (analysis.tools.TOOLS) می‌آید تا یک منبع حقیقت بماند
