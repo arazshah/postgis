@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% load fa ws %}
+{% block title %}ورود به کلاس — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page narrow">
+  <div class="page-head">
+    <div><h1>ورود به کلاس</h1><p class="page-sub muted">کد ۶ حرفی را از استاد بگیرید و اینجا بنویسید؛ پایگاه داده‌ی شخصی شما برای کلاس ساخته می‌شود.</p></div>
+  </div>
+  <form method="post" class="card">{% csrf_token %}
+    {% if error %}<div class="msg error" role="alert">{{ error }}</div>{% endif %}
+    <div class="field" style="margin:0"><label for="e-code">کد کلاس</label><input id="e-code" type="text" name="code" value="{{ code }}" class="ltr class-code-in" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" required></div>
+    <div><button class="btn" type="submit">{% icon "next" 18 %}ادامه</button></div>
+  </form>
+
+  <section style="margin-top:var(--s5)">
+    <h2 class="u-h">کلاس‌های من</h2>
+    {% if mine %}
+    <ul class="asg-list">{% for e in mine %}
+      <li>
+        <div><b>{{ e.classroom.title }}</b><div class="small muted">{{ e.classroom.contract.institution }} · تا {{ e.classroom.ends_at|jdate }}{% if e.classroom.status != 'active' %} · بایگانی‌شده{% endif %}</div></div>
+        <span class="wm-actions">
+          {% if e.open_count %}<span class="badge pending">{{ e.open_count|fanum }} تمرین بدون تحویل</span>{% endif %}
+          <a class="btn ghost sm" href="{% url 'classroom:join' e.classroom.code %}">باز کردن</a>
+        </span>
+      </li>{% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">{% icon "users" 28 %}<h2>هنوز در کلاسی نیستید</h2><p>با کدی که استاد داده وارد شوید؛ کلاس‌هایتان اینجا می‌آید.</p></div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

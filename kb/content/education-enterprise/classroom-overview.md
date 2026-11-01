@@ -3,18 +3,18 @@ title: «پلن کلاس» چیست و برای دانشگاه و آموزشگا
 summary: دانشگاه یا آموزشگاه قرارداد می‌بندد (تعداد دانشجو و بازه ترم). استاد کلاس می‌سازد و کد ورود ۶ حرفی می‌دهد؛ هر دانشجو با کد، پایگاه داده PostGIS مخصوص خودش را می‌گیرد. در پایان ترم پایگاه‌ها بکاپ و بایگانی می‌شوند.
 kind: concept
 keywords: پلن کلاس, دانشگاه, آموزشگاه, استاد, دانشجو, کد کلاس, قرارداد, آموزش gis, ترم, کلاس درس
-related: classroom-create, classroom-student-join, classroom-end-term, plans-overview
+related: classroom-create, classroom-assignments, classroom-student-join, classroom-grade, classroom-end-term, plans-overview
 featured: yes
 order: 10
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
 ## نقش‌ها
 
 | نقش | کار |
 |---|---|
 | مؤسسه | قرارداد: تعداد دانشجو (صندلی)، تاریخ شروع و پایان ترم، حجم هر دانشجو |
-| استاد | ساخت کلاس، انتخاب داده آغازین، دادن کد ورود |
-| دانشجو | ثبت‌نام با کد و دریافت پایگاه داده شخصی |
+| استاد | ساخت کلاس، انتخاب داده آغازین، دادن کد ورود، [ساخت تمرین](kb:classroom-assignments)، [نمره و بازخورد](kb:classroom-grade) |
+| دانشجو | ثبت‌نام با کد، دریافت پایگاه داده شخصی، [انجام و تحویل تمرین](kb:classroom-submit) |
 
 ## چه چیزی می‌گیرند
 
@@ -23,3 +23,5 @@ reviewed: 2026-10-21
 - ابزارها همان ابزارهای سایت‌اند ([مرورگر داده](kb:explorer-overview)، [QGIS](kb:connect-qgis)).
 
 برای شروع قرارداد، از صفحه «پلن کلاس» درخواست همکاری بدهید. مراحل: [ساخت کلاس](kb:classroom-create)، [ورود دانشجو](kb:classroom-student-join)، [پایان ترم](kb:classroom-end-term).
+
+ویدیوها: [استاد](help:classroom-teacher) · [دانشجو](help:classroom-student) · [آموزش کامل](doc:classroom).

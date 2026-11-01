@@ -1,0 +1,74 @@
+{% extends "base.html" %}{% load fa ws %}
+{% block title %}{{ a.title }} — {{ c.title }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page narrow">
+  <a class="back-link" href="{% if preview %}{% url 'classroom:detail' c.pk %}{% else %}{% url 'classroom:join' c.code %}{% endif %}">{% icon "back" 16 %}{{ c.title }}</a>
+  <div class="page-head">
+    <div>
+      <h1>{{ a.title }}</h1>
+      <p class="page-sub muted">{% if a.due_at %}مهلت: {{ a.due_at|jdatetime_full }}{% if a.is_overdue %} · <b>گذشته</b>{% endif %}{% else %}بدون مهلت{% endif %} · سقف نمره {{ a.max_score|fanum }}</p>
+    </div>
+  </div>
+  {% if preview %}<div class="msg info">پیش‌نمایش استاد: دانشجوها همین صفحه را می‌بینند{% if not a.is_published %}؛ این تمرین فعلاً پنهان است{% endif %}.</div>{% endif %}
+
+  <section class="card">
+    <h2 class="u-h">صورت تمرین</h2>
+    {% if a.body %}<p style="margin:0">{{ a.body|linebreaksbr }}</p>{% else %}<p class="muted small" style="margin:0">توضیحی نوشته نشده است.</p>{% endif %}
+    {% if a.class_map %}
+    <div class="actions">
+      <a class="btn ghost sm" href="{% url 'maps:map' a.class_map.webmap.slug %}" target="_blank" rel="noopener">{% icon "globe" 16 %}نقشه‌ی همراه: {{ a.class_map.webmap.title }}</a>
+      {% if a.class_map.webmap.slides.exists %}<a class="btn ghost sm" href="{% url 'maps:present' a.class_map.webmap.slug %}" target="_blank" rel="noopener">{% icon "slides" 16 %}ارائه</a>{% endif %}
+      {% if mine and mine.database and mine.database.is_live %}
+      <form method="post" action="{% url 'classroom:copy_map' c.code a.class_map.pk %}" class="inline-form">{% csrf_token %}<button class="btn ghost sm" type="submit">{% icon "copy" 16 %}کپی در پایگاه داده من</button></form>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% if mine and mine.database and mine.database.is_live %}
+    <div class="actions">
+      <a class="btn ghost sm" href="{% url 'databases:explore' mine.database.pk %}">{% icon "table" 16 %}جدول‌های من</a>
+      <a class="btn ghost sm" href="{% url 'databases:explore_sql' mine.database.pk %}">{% icon "code" 16 %}اجرای SQL</a>
+    </div>
+    {% endif %}
+  </section>
+
+  {% if sub and sub.status == 'graded' %}
+  <section class="card" style="margin-top:var(--s4)">
+    <h2 class="u-h">نمره‌ی شما</h2>
+    <p class="asg-score" style="margin:0;font-size:1.6rem">{{ sub.score_text|fanum }} <small class="muted">از {{ a.max_score|fanum }}</small></p>
+    {% if sub.feedback %}<div class="asg-fb">{{ sub.feedback }}</div>{% endif %}
+  </section>
+  {% elif sub and sub.status == 'returned' %}
+  <section class="card" style="margin-top:var(--s4)">
+    <div class="msg warning">استاد این تمرین را برای اصلاح برگرداند. اصلاح کنید و دوباره تحویل دهید.</div>
+    {% if sub.feedback %}<div class="asg-fb">{{ sub.feedback }}</div>{% endif %}
+  </section>
+  {% endif %}
+
+  {% if mine %}
+  <section class="card" style="margin-top:var(--s4)">
+    <h2 class="u-h">تحویل شما</h2>
+    {% if sub %}<p class="small muted" style="margin:0">آخرین تحویل: {{ sub.submitted_at|jdatetime_full }}{% if sub.is_late %} · با تأخیر{% endif %}{% if sub.status == 'submitted' %} · منتظر بررسی استاد{% endif %}</p>{% endif %}
+    {% if locked %}
+      {% if sub %}
+        {% if sub.note %}<div class="sub-note" dir="auto">{{ sub.note }}</div>{% endif %}
+        {% if sub.webmap %}<p class="small" style="margin:0">نقشه‌ی تحویلی: <a href="{% url 'maps:map' sub.webmap.slug %}" target="_blank" rel="noopener">{{ sub.webmap.title }}</a></p>{% endif %}
+      {% else %}<div class="msg warning">تحویل این تمرین بسته است.</div>{% endif %}
+    {% else %}
+    {% if a.is_overdue %}<div class="msg warning">مهلت گذشته؛ تحویل ثبت می‌شود ولی «با تأخیر» علامت می‌خورد.</div>{% endif %}
+    <form method="post" class="stack-form">{% csrf_token %}
+      <div class="field"><label for="s-note">پاسخ یا توضیح</label><textarea id="s-note" name="note" rows="7" maxlength="6000" placeholder="کار انجام‌شده، نام جدول‌های خروجی (مثلاً hw1_buffer) یا کوئری SQL را اینجا بنویسید.">{{ sub.note }}</textarea>
+        <p class="help">کارتان در پایگاه داده‌ی خودتان می‌ماند و استاد آن را می‌بیند؛ اینجا فقط می‌گویید کجا چه کرده‌اید.</p></div>
+      {% if my_maps %}
+      <div class="field"><span class="lbl">نقشه‌ی تحویلی (اختیاری)</span>
+        <div class="chips" role="radiogroup" aria-label="نقشه تحویلی">
+          <label class="pick-chip"><input type="radio" name="webmap" value="" {% if not sub.webmap_id %}checked{% endif %}><span>بدون نقشه</span></label>
+          {% for m in my_maps %}<label class="pick-chip"><input type="radio" name="webmap" value="{{ m.pk }}" {% if sub.webmap_id == m.pk %}checked{% endif %}><span>{{ m.title }}</span></label>{% endfor %}
+        </div></div>
+      {% endif %}
+      <button class="btn" type="submit">{% icon "upload" 18 %}{% if sub %}تحویل دوباره{% else %}تحویل تمرین{% endif %}</button>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

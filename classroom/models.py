@@ -166,3 +166,68 @@ class ClassMap(models.Model):
 
     def __str__(self):
         return f"{self.classroom}: {self.webmap.title}"
+
+
+class Assignment(models.Model):
+    """تمرین کلاس: صورت مسئله، مهلت، سقف نمره و (اختیاری) یک نقشه‌ی همراه از نقشه‌های کلاس."""
+
+    classroom = models.ForeignKey(Classroom, on_delete=models.CASCADE, related_name="assignments",
+                                  verbose_name="کلاس")
+    title = models.CharField("عنوان تمرین", max_length=150)
+    body = models.TextField("صورت تمرین", blank=True)
+    due_at = models.DateTimeField("مهلت تحویل", null=True, blank=True)
+    max_score = models.PositiveSmallIntegerField("سقف نمره", default=20)
+    class_map = models.ForeignKey(ClassMap, null=True, blank=True, on_delete=models.SET_NULL,
+                                  related_name="assignments", verbose_name="نقشه همراه")
+    is_published = models.BooleanField("برای دانشجوها دیده شود", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "تمرین"
+        verbose_name_plural = "تمرین‌ها"
+        ordering = ["created_at", "pk"]
+
+    def __str__(self):
+        return f"{self.title} ({self.classroom})"
+
+    @property
+    def is_overdue(self) -> bool:
+        return bool(self.due_at and timezone.now() > self.due_at)
+
+
+class Submission(models.Model):
+    """تحویل یک دانشجو برای یک تمرین؛ استاد نمره و بازخورد می‌دهد یا برای اصلاح برمی‌گرداند."""
+
+    class Status(models.TextChoices):
+        SUBMITTED = "submitted", "تحویل شد"
+        RETURNED = "returned", "برگشت برای اصلاح"
+        GRADED = "graded", "نمره داده شد"
+
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name="submissions",
+                                   verbose_name="تمرین")
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="submissions",
+                                   verbose_name="دانشجو")
+    note = models.TextField("پاسخ یا توضیح دانشجو", blank=True,
+                            help_text="شرح کار، نام جدول‌های خروجی یا کوئری SQL.")
+    webmap = models.ForeignKey("maps.WebMap", null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+                               verbose_name="نقشه تحویلی")
+    status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.SUBMITTED)
+    is_late = models.BooleanField("با تأخیر", default=False)
+    submitted_at = models.DateTimeField("زمان تحویل", default=timezone.now)
+    score = models.DecimalField("نمره", max_digits=5, decimal_places=2, null=True, blank=True)
+    feedback = models.TextField("بازخورد استاد", blank=True)
+    graded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "تحویل تمرین"
+        verbose_name_plural = "تحویل‌های تمرین"
+        ordering = ["submitted_at"]
+        constraints = [models.UniqueConstraint(fields=["assignment", "enrollment"], name="uniq_submission")]
+
+    def __str__(self):
+        return f"{self.enrollment.full_name}: {self.assignment.title}"
+
+    @property
+    def score_text(self) -> str:
+        """نمره بدون صفر اضافه (۱۰٫۰۰ ← ۱۰، ۸٫۵۰ ← ۸٫۵)."""
+        return "" if self.score is None else format(self.score.normalize(), "f")
