@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% load fa ws %}
+{% block title %}{{ a.title }} — {{ c.title }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <a class="back-link" href="{% url 'classroom:detail' c.pk %}">{% icon "back" 16 %}{{ c.title }}</a>
+  <div class="page-head">
+    <div>
+      <h1>{{ a.title }}</h1>
+      <p class="page-sub muted">{% if a.due_at %}مهلت: {{ a.due_at|jdatetime_full }}{% else %}بدون مهلت{% endif %} · سقف نمره {{ a.max_score|fanum }}{% if not a.is_published %} · <b>پنهان از دانشجوها</b>{% endif %}</p>
+    </div>
+    <div class="page-acts">
+      <a class="btn ghost" href="?format=csv">{% icon "download" 18 %}نمره‌ها (CSV)</a>
+      {% if need %}<a class="btn" href="{% url 'classroom:assignment_grade' c.pk a.pk need %}">{% icon "check" 18 %}بررسی تحویل بعدی</a>{% endif %}
+    </div>
+  </div>
+
+  <div class="stat-row" aria-label="خلاصه تحویل‌ها">
+    <div class="stat"><span class="stat-n">{{ stats.submitted|fanum }}<small> از {{ stats.total|fanum }}</small></span><span class="stat-l">تحویل داده‌اند</span></div>
+    <div class="stat {% if stats.waiting %}live{% endif %}"><span class="stat-n">{{ stats.waiting|fanum }}</span><span class="stat-l">منتظر بررسی</span></div>
+    <div class="stat"><span class="stat-n">{{ stats.returned|fanum }}</span><span class="stat-l">برگشت برای اصلاح</span></div>
+    <div class="stat"><span class="stat-n">{{ stats.graded|fanum }}</span><span class="stat-l">نمره داده شد</span></div>
+  </div>
+
+  {% if a.body %}<section class="card" style="margin-top:var(--s4)"><h2 class="u-h">صورت تمرین</h2><p style="margin:0">{{ a.body|linebreaksbr }}</p></section>{% endif %}
+
+  <section class="card" style="margin-top:var(--s4)">
+    <h2 class="u-h">دانشجوها</h2>
+    {% if rows %}
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>نام</th><th>شماره دانشجویی</th><th>وضعیت</th><th>زمان تحویل</th><th>نمره</th><th></th></tr></thead>
+      <tbody>{% for e, sub in rows %}<tr>
+        <td>{{ e.full_name }}</td><td class="small">{{ e.student_no|fanum|default:"—" }}</td>
+        <td>{% if not sub %}<span class="muted small">تحویل نشده</span>
+          {% else %}<span class="badge {% if sub.status == 'graded' %}active{% elif sub.status == 'returned' %}warn{% else %}pending{% endif %}">{{ sub.get_status_display }}</span>{% if sub.is_late %} <span class="badge error">با تأخیر</span>{% endif %}{% endif %}</td>
+        <td class="small">{% if sub %}{{ sub.submitted_at|jdatetime_full }}{% else %}—{% endif %}</td>
+        <td>{% if sub and sub.score is not None %}{{ sub.score_text|fanum }} از {{ a.max_score|fanum }}{% else %}—{% endif %}</td>
+        <td>{% if sub %}<a class="btn ghost sm" href="{% url 'classroom:assignment_grade' c.pk a.pk e.pk %}">{% if sub.status == 'submitted' %}بررسی{% else %}مشاهده{% endif %}</a>
+          {% elif e.database and e.database.is_live %}<a class="btn ghost sm" href="{% url 'databases:explore' e.database.pk %}">{% icon "db" 16 %}پایگاه داده</a>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="empty">{% icon "users" 28 %}<h2>هنوز دانشجویی ثبت‌نام نکرده</h2><p>لینک ثبت‌نام کلاس را برای دانشجوها بفرستید.</p><a class="btn sm" href="{% url 'classroom:detail' c.pk %}">لینک و کد کلاس</a></div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

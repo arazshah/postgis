@@ -1,0 +1,31 @@
+{% load fa ws %}
+{# فرم ساخت/ویرایش تمرین (a=None یعنی تمرین تازه). متغیرها: a، shared #}
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="assignment_save">{% if a %}<input type="hidden" name="assignment" value="{{ a.pk }}">{% endif %}
+  <div class="dlg-h"><span class="dlg-i">{% icon "book" 22 %}</span><h2 id="f{{ a.pk|default:"n" }}-t">{% if a %}ویرایش تمرین{% else %}تمرین جدید{% endif %}</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+  <div class="dlg-b">
+    <div class="field" style="margin:0"><label for="f{{ a.pk|default:"n" }}-title">عنوان</label><input id="f{{ a.pk|default:"n" }}-title" type="text" name="title" required maxlength="150" value="{{ a.title }}" placeholder="مثلاً تمرین ۱ — بافر ایستگاه‌های مترو"></div>
+    <div class="field" style="margin:0"><label for="f{{ a.pk|default:"n" }}-body">صورت تمرین</label><textarea id="f{{ a.pk|default:"n" }}-body" name="body" rows="6" maxlength="8000" placeholder="چه چیزی باید ساخته شود؟ از چه جدول‌هایی؟ خروجی را با چه نامی بسازند؟">{{ a.body }}</textarea>
+      <p class="help">قالب پیشنهادی: هدف، داده (جدول‌ها)، کار خواسته‌شده، نام خروجی (مثلاً hw1_buffer).</p></div>
+    <div class="field" style="margin:0"><span class="lbl">مهلت تحویل</span>
+      <div class="chips" role="radiogroup" aria-label="مهلت تحویل">
+        {% if a %}<label class="pick-chip"><input type="radio" name="due_days" value="keep" checked><span>{% if a.due_at %}بدون تغییر ({{ a.due_at|jdate }}){% else %}بدون تغییر (بدون مهلت){% endif %}</span></label>{% endif %}
+        <label class="pick-chip"><input type="radio" name="due_days" value="" {% if not a %}checked{% endif %}><span>بدون مهلت</span></label>
+        <label class="pick-chip"><input type="radio" name="due_days" value="3"><span>۳ روز دیگر</span></label>
+        <label class="pick-chip"><input type="radio" name="due_days" value="7"><span>۷ روز دیگر</span></label>
+        <label class="pick-chip"><input type="radio" name="due_days" value="14"><span>۱۴ روز دیگر</span></label>
+      </div>
+      <label class="help" for="f{{ a.pk|default:"n" }}-date" style="display:block;margin-top:8px">یا تاریخ دقیق (پایان همان روز؛ بر گزینه‌های بالا مقدم است)</label>
+      <input id="f{{ a.pk|default:"n" }}-date" type="date" name="due_date" class="ltr" style="max-width:200px"></div>
+    <div class="field" style="margin:0"><label for="f{{ a.pk|default:"n" }}-max">سقف نمره</label><input id="f{{ a.pk|default:"n" }}-max" type="text" inputmode="numeric" name="max_score" value="{{ a.max_score|default:20 }}" class="ltr" style="max-width:120px"></div>
+    {% if shared %}
+    <div class="field" style="margin:0"><span class="lbl">نقشه همراه (اختیاری)</span>
+      <div class="chips" role="radiogroup" aria-label="نقشه همراه">
+        <label class="pick-chip"><input type="radio" name="class_map" value="" {% if not a.class_map_id %}checked{% endif %}><span>بدون نقشه</span></label>
+        {% for s in shared %}<label class="pick-chip"><input type="radio" name="class_map" value="{{ s.pk }}" {% if a.class_map_id == s.pk %}checked{% endif %}><span>{{ s.webmap.title }}</span></label>{% endfor %}
+      </div>
+      <p class="help">دانشجو همین نقشه را کنار صورت تمرین می‌بیند و می‌تواند در پایگاه داده‌ی خودش کپی کند.</p></div>
+    {% endif %}
+    <div class="chips"><label class="pick-chip"><input type="checkbox" name="is_published" value="1" {% if not a or a.is_published %}checked{% endif %}><span>برای دانشجوها دیده شود</span></label></div>
+  </div>
+  <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}{% if a %}ذخیره{% else %}ساخت تمرین{% endif %}</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
+</form>

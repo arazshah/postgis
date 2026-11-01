@@ -4,6 +4,7 @@ import csv
 from django.contrib import messages
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
@@ -11,7 +12,7 @@ from core.models import SiteSettings
 from databases.explorer import ExplorerError
 
 from . import services
-from .models import ClassMap, Classroom, Contract, ContractRequest, Enrollment
+from .models import ClassMap, Classroom, Contract, ContractRequest, Enrollment, Submission
 
 SESSION_PW = "class_join_pw_{}"
 
@@ -118,27 +119,126 @@ def detail(request, pk):
         elif action == "unshare_map":
             ClassMap.objects.filter(classroom=c, pk=request.POST.get("share") or 0).delete()
             messages.success(request, "نقشه از کلاس برداشته شد.")
+        elif action in ("assignment_save", "assignment_toggle", "assignment_delete"):
+            _assignment_action(request, c, action)
         elif action == "archive" and c.status == Classroom.Status.ACTIVE:
             n = services.archive(c)
             messages.success(request, f"کلاس بایگانی شد؛ از {n} پایگاه داده بکاپ گرفته می‌شود. پایگاه‌ها تا پایان "
                                       "ترم قابل استفاده می‌مانند.")
         return redirect("classroom:detail", pk=c.pk)
-    rows = c.enrollments.select_related("database", "archive", "student")
+    rows = c.enrollments.select_related("database", "archive", "student").prefetch_related("submissions")
+    assignments = list(c.assignments.select_related("class_map__webmap").prefetch_related("submissions"))
     if request.GET.get("format") == "csv":
         resp = HttpResponse(content_type="text/csv; charset=utf-8")
         resp["Content-Disposition"] = f'attachment; filename="class-{c.pk}.csv"'
         resp.write("﻿")
         w = csv.writer(resp)
-        w.writerow(["نام", "شماره دانشجویی", "موبایل", "پایگاه داده", "نام کاربری", "حجم (بایت)", "ثبت‌نام"])
+        w.writerow(["نام", "شماره دانشجویی", "موبایل", "پایگاه داده", "نام کاربری", "حجم (بایت)", "ثبت‌نام"]
+                   + [f"{a.title} (از {a.max_score})" for a in assignments])
         for e in rows:
             db = e.database
+            marks = {s.assignment_id: s for s in e.submissions.all()}
             w.writerow([e.full_name, e.student_no, e.student.phone, db.db_name if db else "", db.role_name if db else "",
-                        db.size_bytes if db else 0, e.joined_at.date().isoformat()])
+                        db.size_bytes if db else 0, e.joined_at.date().isoformat()]
+                       + [_mark(marks.get(a.pk)) for a in assignments])
         return resp
     shared = c.maps.select_related("webmap")
+    total = len(rows)
+    for a in assignments:
+        a.stats = services.summary(a, total)
     return render(request, "classroom/detail.html", {
         "c": c, "rows": rows, "join_url": request.build_absolute_uri(f"/class/join/{c.code}/"),
-        "shared": shared, "my_maps": _teacher_maps(request.user).exclude(pk__in=[x.webmap_id for x in shared])})
+        "assignments": assignments, "shared": shared,
+        "my_maps": _teacher_maps(request.user).exclude(pk__in=[x.webmap_id for x in shared])})
+
+
+def _mark(sub) -> str:
+    """نمره یا وضعیت یک تحویل برای CSV."""
+    if sub is None:
+        return "تحویل نشده"
+    if sub.status == Submission.Status.GRADED:
+        return f"{sub.score.normalize():f}"
+    return sub.get_status_display()
+
+
+def _assignment_action(request, c: Classroom, action: str) -> None:
+    """ساخت/ویرایش، نمایش یا پنهان‌کردن و حذف تمرین از صفحه کلاس."""
+    pk = request.POST.get("assignment") or 0
+    a = c.assignments.filter(pk=pk).first() if pk else None
+    if action == "assignment_save":
+        if pk and a is None:
+            raise Http404
+        try:
+            saved = services.save_assignment(c, request.POST, a)
+        except services.ClassError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, f"تمرین «{saved.title}» " + ("به‌روز شد." if a else "ساخته شد."))
+        return
+    if a is None:
+        raise Http404
+    if action == "assignment_toggle":
+        a.is_published = not a.is_published
+        a.save(update_fields=["is_published"])
+        messages.success(request, "تمرین برای دانشجوها دیده می‌شود." if a.is_published else "تمرین پنهان شد.")
+    else:
+        a.delete()
+        messages.success(request, f"تمرین «{a.title}» با همه‌ی تحویل‌هایش حذف شد.")
+
+
+@site_user_required
+def assignment_review(request, pk, aid):
+    """فهرست تحویل‌های یک تمرین برای استاد: چه کسی تحویل داده، چه کسی نه، نمره‌ها."""
+    c = _my_class(request, pk)
+    a = get_object_or_404(c.assignments.select_related("class_map__webmap"), pk=aid)
+    rows = services.roster(a)
+    if request.GET.get("format") == "csv":
+        resp = HttpResponse(content_type="text/csv; charset=utf-8")
+        resp["Content-Disposition"] = f'attachment; filename="class-{c.pk}-assignment-{a.pk}.csv"'
+        resp.write("﻿")
+        w = csv.writer(resp)
+        w.writerow(["نام", "شماره دانشجویی", "وضعیت", "با تأخیر", "زمان تحویل", f"نمره (از {a.max_score})",
+                    "بازخورد"])
+        for e, sub in rows:
+            w.writerow([e.full_name, e.student_no, sub.get_status_display() if sub else "تحویل نشده",
+                        "بله" if sub and sub.is_late else "",
+                        timezone.localtime(sub.submitted_at).strftime("%Y-%m-%d %H:%M") if sub else "",
+                        f"{sub.score.normalize():f}" if sub and sub.score is not None else "",
+                        sub.feedback if sub else ""])
+        return resp
+    return render(request, "classroom/assignment_review.html", {
+        "c": c, "a": a, "rows": rows, "stats": services.summary(a, len(rows)),
+        "need": next((e.pk for e, sub in rows if sub and sub.status == Submission.Status.SUBMITTED), None)})
+
+
+@site_user_required
+@require_http_methods(["GET", "POST"])
+def assignment_grade(request, pk, aid, eid):
+    """بررسی تحویل یک دانشجو: دیدن پاسخ و نقشه، نمره‌دادن یا برگرداندن برای اصلاح."""
+    c = _my_class(request, pk)
+    a = get_object_or_404(c.assignments, pk=aid)
+    e = get_object_or_404(c.enrollments.select_related("database", "student"), pk=eid)
+    sub = Submission.objects.filter(assignment=a, enrollment=e).select_related("webmap").first()
+    rows = services.roster(a)
+    if request.method == "POST" and sub is not None:
+        try:
+            services.grade(sub, request.POST.get("do", "").removesuffix("_next"), request.POST.get("score", ""),
+                           request.POST.get("feedback", ""))
+        except services.ClassError as exc:
+            messages.error(request, str(exc))
+            return redirect("classroom:assignment_grade", pk=c.pk, aid=a.pk, eid=e.pk)
+        messages.success(request, f"نمره‌ی {e.full_name} ثبت شد." if sub.status == Submission.Status.GRADED
+                         else f"تمرین {e.full_name} برای اصلاح برگشت.")
+        nxt = next((x.pk for x, s in rows if s and s.status == Submission.Status.SUBMITTED and x.pk != e.pk), None)
+        if nxt and request.POST.get("do") == "grade_next":
+            return redirect("classroom:assignment_grade", pk=c.pk, aid=a.pk, eid=nxt)
+        return redirect("classroom:assignment_review", pk=c.pk, aid=a.pk)
+    ids = [x.pk for x, _ in rows]
+    i = ids.index(e.pk)
+    nxt = next((x.pk for x, s in rows if s and s.status == Submission.Status.SUBMITTED and x.pk != e.pk), None)
+    return render(request, "classroom/assignment_grade.html", {
+        "c": c, "a": a, "e": e, "sub": sub, "next_waiting": nxt,
+        "prev_id": ids[i - 1] if i else None, "next_id": ids[i + 1] if i + 1 < len(ids) else None})
 
 
 def _teacher_maps(user):
@@ -179,9 +279,62 @@ def join(request, code):
             request.session[SESSION_PW.format(mine.pk)] = pw
             return redirect("classroom:join", code=c.code)
     pw = request.session.pop(SESSION_PW.format(mine.pk), None) if mine else None
-    shared = c.maps.select_related("webmap") if mine or c.teacher_id == request.user.pk else []
+    is_teacher = c.teacher_id == request.user.pk
+    shared = c.maps.select_related("webmap") if mine or is_teacher else []
+    todo = []
+    if mine or is_teacher:
+        marks = {s.assignment_id: s for s in mine.submissions.all()} if mine else {}
+        todo = list(c.assignments.all() if is_teacher else c.assignments.filter(is_published=True))
+        for a in todo:
+            a.mine = marks.get(a.pk)
     return render(request, "classroom/join.html", {"c": c, "mine": mine, "password": pw, "error": error,
-                                                   "shared": shared})
+                                                   "shared": shared, "assignments": todo, "is_teacher": is_teacher})
+
+
+@site_user_required
+@require_http_methods(["GET", "POST"])
+def enter(request):
+    """ورود با کد: دانشجو کد را می‌نویسد؛ کلاس‌هایی که در آن‌ها ثبت‌نام کرده هم این‌جا فهرست است."""
+    error = None
+    code = ""
+    if request.method == "POST":
+        code = (request.POST.get("code") or "").strip().upper().replace(" ", "")
+        if Classroom.objects.filter(code=code).exists():
+            return redirect("classroom:join", code=code)
+        error = "کلاسی با این کد پیدا نشد؛ کد را از استاد دوباره بگیرید."
+    mine = (Enrollment.objects.filter(student=request.user).select_related("classroom__contract", "database")
+            .order_by("-joined_at"))
+    for e in mine:
+        e.open_count = e.classroom.assignments.filter(is_published=True).exclude(submissions__enrollment=e).count()
+    return render(request, "classroom/enter.html", {"error": error, "code": code, "mine": mine})
+
+
+@site_user_required
+@require_http_methods(["GET", "POST"])
+def assignment_page(request, code, aid):
+    """صفحه‌ی تمرین برای دانشجو: صورت مسئله، تحویل و نمره؛ استاد کلاس پیش‌نمایش را می‌بیند."""
+    c = get_object_or_404(Classroom.objects.select_related("contract", "teacher"), code=code.upper())
+    mine = Enrollment.objects.filter(classroom=c, student=request.user).select_related("database").first()
+    preview = mine is None and c.teacher_id == request.user.pk
+    if mine is None and not preview:
+        raise Http404
+    a = get_object_or_404(c.assignments.select_related("class_map__webmap"), pk=aid,
+                          **({} if preview else {"is_published": True}))
+    sub = Submission.objects.filter(assignment=a, enrollment=mine).select_related("webmap").first() if mine else None
+    if request.method == "POST" and mine is not None:
+        try:
+            services.submit(a, mine, request.POST.get("note", ""), request.POST.get("webmap"))
+        except services.ClassError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, "تمرین شما تحویل شد." + (" (بعد از مهلت)" if a.is_overdue else ""))
+        return redirect("classroom:assignment", code=c.code, aid=a.pk)
+    from maps.models import WebMap
+
+    my_maps = (WebMap.objects.filter(database=mine.database) if mine and mine.database_id else WebMap.objects.none())
+    locked = bool(sub and sub.status == Submission.Status.GRADED) or c.status != Classroom.Status.ACTIVE
+    return render(request, "classroom/assignment.html", {
+        "c": c, "a": a, "mine": mine, "sub": sub, "preview": preview, "my_maps": my_maps, "locked": locked})
 
 
 @site_user_required

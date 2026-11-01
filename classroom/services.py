@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from django.db import transaction
@@ -13,7 +14,7 @@ from databases.crypto import generate_password
 from databases.models import Member, Plan, UserDatabase
 from jobs.models import Job
 
-from .models import Classroom, Contract, Enrollment
+from .models import Assignment, ClassMap, Classroom, Contract, Enrollment, Submission
 
 log = logging.getLogger(__name__)
 SAMPLE_DIR = Path(__file__).parent / "sample"
@@ -155,3 +156,133 @@ def tick(now=None) -> int:
         archive(c)
         n += 1
     return n
+
+
+# ---------------------------------------------------------------- تمرین‌ها
+
+FA_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٫", "0123456789.")
+
+
+def _num(raw) -> str:
+    return str(raw or "").strip().translate(FA_DIGITS).replace(",", ".")
+
+
+def _due(days: str, day: str, keep: datetime | None) -> datetime | None:
+    """مهلت: تاریخ دقیق (آخر همان روز)، یا چند روز از امروز، یا بدون مهلت؛ «keep» مقدار قبلی را نگه می‌دارد."""
+    day, days = _num(day), _num(days)
+    if day:
+        try:
+            d = date.fromisoformat(day)
+        except ValueError as exc:
+            raise ClassError("تاریخ مهلت معتبر نیست.") from exc
+        return timezone.make_aware(datetime.combine(d, time(23, 59)))
+    if days == "keep":
+        return keep
+    if days:
+        if not days.isdigit() or not 0 < int(days) <= 365:
+            raise ClassError("مهلت را بین ۱ تا ۳۶۵ روز بدهید.")
+        return timezone.make_aware(datetime.combine(timezone.localdate() + timedelta(days=int(days)), time(23, 59)))
+    return None
+
+
+def save_assignment(classroom: Classroom, data, assignment: Assignment | None = None) -> Assignment:
+    """ساخت یا ویرایش تمرین؛ data مثل request.POST است."""
+    if classroom.status != Classroom.Status.ACTIVE:
+        raise ClassError("کلاس بایگانی شده و تمرین تازه نمی‌پذیرد.")
+    title = (data.get("title") or "").strip()
+    if not title:
+        raise ClassError("عنوان تمرین را بنویسید.")
+    try:
+        max_score = int(_num(data.get("max_score")) or 20)
+    except ValueError as exc:
+        raise ClassError("سقف نمره را عدد بنویسید.") from exc
+    if not 1 <= max_score <= 1000:
+        raise ClassError("سقف نمره باید بین ۱ تا ۱۰۰۰ باشد.")
+    class_map = None
+    if data.get("class_map"):
+        class_map = ClassMap.objects.filter(classroom=classroom, pk=_num(data.get("class_map")) or 0).first()
+        if class_map is None:
+            raise ClassError("نقشه همراه باید از نقشه‌های اشتراکی همین کلاس باشد.")
+    a = assignment or Assignment(classroom=classroom)
+    a.title = title[:150]
+    a.body = (data.get("body") or "").strip()[:8000]
+    a.max_score = max_score
+    a.class_map = class_map
+    a.due_at = _due(data.get("due_days", ""), data.get("due_date", ""), a.due_at if assignment else None)
+    a.is_published = data.get("is_published") in ("1", "on", "true", True)
+    a.save()
+    return a
+
+
+def submit(assignment: Assignment, enrollment: Enrollment, note: str, webmap_id=None) -> Submission:
+    """تحویل (یا تحویل دوباره) دانشجو؛ پس از نمره‌دادن فقط با «برگشت برای اصلاح» دوباره باز می‌شود."""
+    classroom = assignment.classroom
+    if enrollment.classroom_id != classroom.pk:
+        raise ClassError("این تمرین مال کلاس شما نیست.")
+    if classroom.status != Classroom.Status.ACTIVE or not assignment.is_published:
+        raise ClassError("تحویل این تمرین بسته است.")
+    if enrollment.database is None or not enrollment.database.is_live:
+        raise ClassError("پایگاه داده شما فعال نیست؛ به استاد یا پشتیبانی خبر دهید.")
+    sub = Submission.objects.filter(assignment=assignment, enrollment=enrollment).first()
+    if sub and sub.status == Submission.Status.GRADED:
+        raise ClassError("نمره‌ی این تمرین ثبت شده است؛ برای اصلاح از استاد بخواهید آن را برگرداند.")
+    note = (note or "").strip()[:6000]
+    webmap = None
+    if webmap_id:
+        from maps.models import WebMap
+
+        webmap = WebMap.objects.filter(pk=_num(webmap_id) or 0, database=enrollment.database).first()
+        if webmap is None:
+            raise ClassError("نقشه‌ی انتخابی در پایگاه داده‌ی شما نیست.")
+    if not note and webmap is None:
+        raise ClassError("پاسخ را بنویسید یا نقشه‌ی تحویلی را انتخاب کنید.")
+    sub = sub or Submission(assignment=assignment, enrollment=enrollment)
+    sub.note, sub.webmap = note, webmap
+    sub.status = Submission.Status.SUBMITTED
+    sub.is_late = assignment.is_overdue
+    sub.submitted_at = timezone.now()
+    sub.save()
+    return sub
+
+
+def grade(sub: Submission, action: str, score_raw, feedback: str) -> Submission:
+    """استاد نمره می‌دهد (action=grade) یا برای اصلاح برمی‌گرداند (action=return، با توضیح)."""
+    feedback = (feedback or "").strip()[:6000]
+    if sub.assignment.classroom.status != Classroom.Status.ACTIVE:
+        raise ClassError("کلاس بایگانی شده است.")
+    if action == "return":
+        if not feedback:
+            raise ClassError("بنویسید دانشجو چه چیزی را باید اصلاح کند.")
+        sub.status = Submission.Status.RETURNED
+        sub.score = None
+    elif action == "grade":
+        try:
+            score = Decimal(_num(score_raw))
+        except InvalidOperation as exc:
+            raise ClassError("نمره را عدد بنویسید.") from exc
+        if not 0 <= score <= sub.assignment.max_score:
+            raise ClassError(f"نمره باید بین ۰ و {sub.assignment.max_score} باشد.")
+        sub.score = score.quantize(Decimal("0.01"))
+        sub.status = Submission.Status.GRADED
+    else:
+        raise ClassError("عمل نامعتبر است.")
+    sub.feedback = feedback
+    sub.graded_at = timezone.now()
+    sub.save(update_fields=["score", "status", "feedback", "graded_at"])
+    return sub
+
+
+def roster(assignment: Assignment):
+    """همه‌ی دانشجوهای کلاس با تحویل‌شان (یا None): [(enrollment, submission|None)]."""
+    subs = {s.enrollment_id: s for s in assignment.submissions.all()}
+    return [(e, subs.get(e.pk)) for e in assignment.classroom.enrollments.select_related("database", "student")]
+
+
+def summary(assignment: Assignment, total: int | None = None) -> dict:
+    """شمارنده‌ها برای فهرست: تحویل‌شده، نمره‌داده‌شده، برگشتی."""
+    subs = list(assignment.submissions.all())
+    total = assignment.classroom.enrollments.count() if total is None else total
+    graded = sum(s.status == Submission.Status.GRADED for s in subs)
+    returned = sum(s.status == Submission.Status.RETURNED for s in subs)
+    return {"total": total, "submitted": len(subs), "graded": graded, "returned": returned,
+            "waiting": len(subs) - graded - returned}

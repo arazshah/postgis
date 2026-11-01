@@ -1182,3 +1182,13 @@ body.is-editing .data-table .rowact,body.is-editing .data-table th.rowact{displa
 .rv-warn p{margin:0}
 .pop-acts{display:flex;gap:6px;margin-top:8px}
 .leaflet-pm-toolbar{direction:ltr}
+
+/* ---------- تمرین‌های کلاس ---------- */
+.actions{display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center}
+.sub-note{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-ctl);padding:var(--s3);font-size:13.5px;max-height:320px;overflow:auto}
+.sub-note.code{font-family:var(--f-mono);direction:ltr;text-align:left}
+.asg-fb{border-inline-start:3px solid var(--ochre);background:var(--ochre-soft);border-radius:var(--r-ctl);padding:var(--s3);white-space:pre-wrap;overflow-wrap:anywhere}
+.asg-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.asg-list li{display:flex;gap:var(--s3);align-items:center;justify-content:space-between;flex-wrap:wrap;border:1px solid var(--line);border-radius:var(--r-card);padding:10px 14px;background:var(--card)}
+.asg-score{font-family:var(--f-display);font-weight:800;color:var(--teal-dark)}
+.class-code-in{font-family:var(--f-mono);font-size:1.4rem;letter-spacing:.2em;text-transform:uppercase;text-align:center;max-width:260px}

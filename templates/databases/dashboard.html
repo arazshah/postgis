@@ -8,6 +8,7 @@
       <p class="muted dash-sub">از همین‌جا به همه‌ی بخش‌ها می‌رسی: دیدن داده، تحلیل، انتشار نقشه، بکاپ و اتصال به QGIS یا GeoServer.</p>
     </div>
     <div class="dash-head-actions">
+      <a class="btn ghost" href="{% url 'classroom:enter' %}">{% icon "users" 18 %} ورود به کلاس</a>
       {% if is_teacher %}<a class="btn ghost" href="{% url 'classroom:teach' %}">{% icon "school" 18 %} کلاس‌های من</a>{% endif %}
       {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">{% icon "plus" 18 %} ساخت پایگاه داده جدید</a>{% endif %}
     </div>

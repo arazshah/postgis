@@ -1,0 +1,62 @@
+{% extends "base.html" %}{% load fa ws %}
+{% block title %}{{ e.full_name }} — {{ a.title }} — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <a class="back-link" href="{% url 'classroom:assignment_review' c.pk a.pk %}">{% icon "back" 16 %}{{ a.title }}</a>
+  <div class="page-head">
+    <div>
+      <h1>{{ e.full_name }}</h1>
+      <p class="page-sub muted">{% if e.student_no %}شماره دانشجویی {{ e.student_no|fanum }} · {% endif %}{% if sub %}تحویل: {{ sub.submitted_at|jdatetime_full }}{% else %}هنوز تحویل نداده{% endif %}</p>
+    </div>
+    <div class="page-acts">
+      {% if prev_id %}<a class="ib" href="{% url 'classroom:assignment_grade' c.pk a.pk prev_id %}" aria-label="دانشجوی قبلی" title="قبلی">{% icon "next" 18 %}</a>{% endif %}
+      {% if next_id %}<a class="ib" href="{% url 'classroom:assignment_grade' c.pk a.pk next_id %}" aria-label="دانشجوی بعدی" title="بعدی">{% icon "prev" 18 %}</a>{% endif %}
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2 class="u-h">صورت تمرین</h2>
+      {% if a.body %}<p style="margin:0">{{ a.body|linebreaksbr }}</p>{% else %}<p class="muted small" style="margin:0">صورت تمرینی نوشته نشده است.</p>{% endif %}
+      <p class="small muted" style="margin:0">سقف نمره {{ a.max_score|fanum }}{% if a.due_at %} · مهلت {{ a.due_at|jdatetime_full }}{% endif %}</p>
+    </section>
+
+    <section class="card">
+      <h2 class="u-h">کار دانشجو</h2>
+      {% if sub %}
+        <div>{% if sub.is_late %}<span class="badge error">با تأخیر</span> {% endif %}<span class="badge {% if sub.status == 'graded' %}active{% elif sub.status == 'returned' %}warn{% else %}pending{% endif %}">{{ sub.get_status_display }}</span></div>
+        {% if sub.note %}<div class="sub-note" dir="auto">{{ sub.note }}</div>{% else %}<p class="muted small" style="margin:0">پاسخ متنی ننوشته است.</p>{% endif %}
+        <div class="actions">
+          {% if sub.webmap %}<a class="btn ghost sm" href="{% url 'maps:map' sub.webmap.slug %}" target="_blank" rel="noopener">{% icon "globe" 16 %}نقشه‌ی تحویلی: {{ sub.webmap.title }}</a>{% endif %}
+          {% if e.database and e.database.is_live %}
+          <a class="btn ghost sm" href="{% url 'databases:explore' e.database.pk %}">{% icon "table" 16 %}جدول‌های دانشجو</a>
+          <a class="btn ghost sm" href="{% url 'databases:explore_sql' e.database.pk %}">{% icon "code" 16 %}اجرای SQL خواندنی</a>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="empty">{% icon "clock" 28 %}<h2>هنوز تحویل نداده</h2><p>تا تحویل نکند نمره‌ای ثبت نمی‌شود. می‌توانید پایگاه داده‌اش را ببینید.</p>
+          {% if e.database and e.database.is_live %}<a class="btn ghost sm" href="{% url 'databases:explore' e.database.pk %}">{% icon "db" 16 %}پایگاه داده‌ی دانشجو</a>{% endif %}</div>
+      {% endif %}
+    </section>
+  </div>
+
+  {% if sub %}
+  <section class="card" style="margin-top:var(--s4)">
+    <h2 class="u-h">نمره و بازخورد</h2>
+    {% if c.status != 'active' %}<div class="msg info">کلاس بایگانی شده است؛ نمره‌ها فقط‌خواندنی‌اند.</div>{% endif %}
+    <form method="post" class="stack-form">{% csrf_token %}
+      <div class="field"><label for="g-score">نمره (از {{ a.max_score|fanum }})</label><input id="g-score" type="text" inputmode="decimal" name="score" class="ltr" style="max-width:140px" value="{% if sub.score is not None %}{{ sub.score_text }}{% endif %}" {% if c.status != 'active' %}disabled{% endif %}></div>
+      <div class="field"><label for="g-fb">بازخورد برای دانشجو</label><textarea id="g-fb" name="feedback" rows="5" maxlength="6000" placeholder="چه چیزی خوب بود و چه چیزی باید اصلاح شود؟" {% if c.status != 'active' %}disabled{% endif %}>{{ sub.feedback }}</textarea>
+        <p class="help">برای «برگشت برای اصلاح» نوشتن بازخورد لازم است؛ دانشجو می‌تواند اصلاح کند و دوباره تحویل دهد.</p></div>
+      {% if c.status == 'active' %}
+      <div class="actions">
+        <button class="btn" type="submit" name="do" value="grade">{% icon "check" 18 %}ثبت نمره</button>
+        {% if next_waiting %}<button class="btn ghost" type="submit" name="do" value="grade_next">ثبت و بررسی بعدی</button>{% endif %}
+        <button class="btn ghost" type="submit" name="do" value="return">{% icon "refresh" 18 %}برگشت برای اصلاح</button>
+      </div>
+      {% endif %}
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

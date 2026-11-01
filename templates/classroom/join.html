@@ -29,6 +29,25 @@
       <p class="small muted">استاد کلاس جدول‌ها و نقشه‌های شما را می‌بیند (بدون امکان تغییر). پایان ترم از پایگاه داده شما بکاپ گرفته می‌شود و سپس غیرفعال می‌شود؛ پیش از آن، اگر خواستید از صفحه «بکاپ‌ها» نسخه خودتان را دانلود کنید.</p>
       {% else %}<div class="msg error">ساخت پایگاه داده شما کامل نشد؛ به پشتیبانی تیکت بزنید.</div>{% endif %}
     </section>
+    {% if assignments %}
+    <section class="card" style="margin-top:var(--s4)">
+      <h2 class="u-h">تمرین‌ها</h2>
+      <ul class="asg-list">{% for a in assignments %}
+        <li>
+          <div><b>{{ a.title }}</b>{% if not a.is_published %} <span class="badge warn">پنهان</span>{% endif %}
+            <div class="small muted">{% if a.due_at %}مهلت {{ a.due_at|jdate }}{% if a.is_overdue %} · گذشته{% endif %}{% else %}بدون مهلت{% endif %} · سقف {{ a.max_score|fanum }}</div></div>
+          <span class="wm-actions">
+            {% if a.mine %}
+              {% if a.mine.status == 'graded' %}<span class="asg-score">{{ a.mine.score_text|fanum }} از {{ a.max_score|fanum }}</span>
+              {% elif a.mine.status == 'returned' %}<span class="badge warn">برگشت برای اصلاح</span>
+              {% else %}<span class="badge pending">تحویل شد</span>{% endif %}
+            {% elif mine %}<span class="badge {% if a.is_overdue %}error{% else %}warn{% endif %}">تحویل نشده</span>{% endif %}
+            <a class="btn ghost sm" href="{% url 'classroom:assignment' c.code a.pk %}">{% if a.mine and a.mine.status == 'returned' %}اصلاح{% elif a.mine %}مشاهده{% else %}{% if mine %}انجام و تحویل{% else %}پیش‌نمایش{% endif %}{% endif %}</a>
+          </span>
+        </li>{% endfor %}
+      </ul>
+    </section>
+    {% endif %}
     {% if shared %}
     <section class="card" style="margin-top:var(--s4)">
       <h2 class="u-h">نقشه‌های کلاس</h2>

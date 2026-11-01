@@ -10,7 +10,7 @@
   <div class="grid-2">
     <section class="card">
       <h2 class="u-h">ثبت‌نام دانشجوها</h2>
-      <p class="small">این لینک را در گروه کلاس بگذارید، یا کد را روی تخته بنویسید تا دانشجو در <span class="ltr">postgis.ir/class/join/</span> وارد کند:</p>
+      <p class="small">این لینک را در گروه کلاس بگذارید، یا کد را روی تخته بنویسید تا دانشجو در <span class="ltr">postgis.ir/class/join/</span> (دکمه‌ی «ورود به کلاس» در داشبورد) وارد کند:</p>
       <div class="secret"><code id="j-url" class="ltr">{{ join_url }}</code><button class="copy" data-copy-target="#j-url">کپی</button></div>
       <p class="class-code ltr">{{ c.code }}</p>
       <p class="small muted">داده آغازین: {{ c.get_template_display }}{% if c.osm_area %} — {{ c.osm_area.label }}{% endif %} · پایان ترم {{ c.ends_at|jdate }}</p>
@@ -29,6 +29,42 @@
     </section>
   </div>
 
+  <section class="card" style="margin-top:var(--s5)">
+    <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 class="u-h" style="margin:0">تمرین‌ها</h2>
+      {% if c.status == 'active' %}<button class="btn sm" type="button" data-dialog-open="as-new">{% icon "plus" 16 %}تمرین جدید</button>{% endif %}
+    </div>
+    <p class="small muted" style="margin:0">صورت تمرین را بنویسید؛ دانشجو در صفحه کلاس می‌بیند، در پایگاه داده‌ی خودش انجام می‌دهد و تحویل می‌دهد. شما هر تحویل را می‌بینید، نمره می‌دهید یا با توضیح برای اصلاح برمی‌گردانید.</p>
+    {% if assignments %}
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>تمرین</th><th>مهلت</th><th>تحویل</th><th>منتظر بررسی</th><th>نمره‌دار</th><th></th></tr></thead>
+      <tbody>{% for a in assignments %}<tr>
+        <td><b>{{ a.title }}</b>{% if not a.is_published %} <span class="badge warn">پنهان</span>{% endif %}</td>
+        <td class="small">{% if a.due_at %}{{ a.due_at|jdate }}{% if a.is_overdue %} <span class="badge error">گذشته</span>{% endif %}{% else %}—{% endif %}</td>
+        <td>{{ a.stats.submitted|fanum }} از {{ a.stats.total|fanum }}</td>
+        <td>{% if a.stats.waiting %}<span class="badge pending">{{ a.stats.waiting|fanum }}</span>{% else %}—{% endif %}</td>
+        <td>{{ a.stats.graded|fanum }}</td>
+        <td><div class="actions" style="flex-wrap:nowrap;justify-content:flex-end">
+          <a class="btn ghost sm" href="{% url 'classroom:assignment_review' c.pk a.pk %}">{% icon "eye" 16 %}بررسی تحویل‌ها</a>
+          <div class="pop-wrap">
+            <button class="ib sm" type="button" data-pop="as-m{{ a.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های {{ a.title }}">{% icon "more" 16 %}</button>
+            <div class="pop-m" id="as-m{{ a.pk }}" role="menu" hidden>
+              <a role="menuitem" href="{% url 'classroom:assignment' c.code a.pk %}">{% icon "users" 18 %}<span>پیش‌نمایش دانشجو</span></a>
+              {% if c.status == 'active' %}
+              <button role="menuitem" type="button" data-dialog-open="as-{{ a.pk }}">{% icon "edit" 18 %}<span>ویرایش</span></button>
+              <form method="post">{% csrf_token %}<input type="hidden" name="action" value="assignment_toggle"><input type="hidden" name="assignment" value="{{ a.pk }}"><button role="menuitem" type="submit">{% icon "eye" 18 %}<span>{% if a.is_published %}پنهان کردن{% else %}نمایش به دانشجوها{% endif %}</span></button></form>
+              {% endif %}
+              <div class="msep"></div>
+              <form method="post" data-confirm="تمرین «{{ a.title }}» با همه‌ی تحویل‌ها و نمره‌هایش حذف شود؟" data-confirm-title="حذف تمرین" data-confirm-text="حذف کن" data-confirm-kind="danger">{% csrf_token %}<input type="hidden" name="action" value="assignment_delete"><input type="hidden" name="assignment" value="{{ a.pk }}"><button role="menuitem" type="submit" class="danger">{% icon "trash" 18 %}<span>حذف</span></button></form>
+            </div>
+          </div>
+        </div></td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="empty">{% icon "book" 28 %}<h2>هنوز تمرینی نساخته‌اید</h2><p>اولین تمرین را بسازید تا دانشجوها در صفحه کلاس ببینند.</p>
+      {% if c.status == 'active' %}<button class="btn sm" type="button" data-dialog-open="as-new">{% icon "plus" 16 %}تمرین جدید</button>{% endif %}</div>
+    {% endif %}
+  </section>
   <section class="card" style="margin-top:var(--s5)">
     <h2 class="u-h">نقشه‌های کلاس</h2>
     <p class="small">یکی از نقشه‌های چندلایه خودتان را با کلاس به اشتراک بگذارید. دانشجوها آن را در صفحه کلاس می‌بینند (حتی اگر نقشه خصوصی باشد)، ارائه‌اش را اجرا می‌کنند و با یک کلیک در پایگاه داده خودشان کپی می‌کنند. لایه‌ها در کپی به جدول‌های هم‌نام دانشجو وصل می‌شوند؛ برای کلاس با «داده تمرینی»، نقشه را روی همان جدول‌ها بسازید.</p>
@@ -74,5 +110,9 @@
       {% empty %}<tr><td colspan="6" class="muted">هنوز کسی ثبت‌نام نکرده است.</td></tr>{% endfor %}</tbody>
     </table></div>
   </section>
+  {% if c.status == 'active' %}
+  <dialog class="dlg" id="as-new" aria-labelledby="fn-t">{% include "classroom/_assignment_form.html" with a=None %}</dialog>
+  {% for a in assignments %}<dialog class="dlg" id="as-{{ a.pk }}" aria-labelledby="f{{ a.pk }}-t">{% include "classroom/_assignment_form.html" %}</dialog>{% endfor %}
+  {% endif %}
 </div>
 {% endblock %}
