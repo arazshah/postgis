@@ -137,7 +137,7 @@ def serve():
 if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == "init":
-        init(sys.argv[2])
+        init(sys.argv[2].removeprefix("classroom-"))
     elif cmd == "serve":
         serve()
     else:
