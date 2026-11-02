@@ -1,14 +1,16 @@
-{% extends "base.html" %}{% load fa ws %}
+{% extends "base.html" %}{% load fa ws static %}
 {% block title %}ورود به کلاس — {{ SITE_NAME }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/classroom.css' %}">{% endblock %}
 {% block content %}
-<div class="wrap page narrow">
+<div class="wrap page narrow cls">
   <div class="page-head">
-    <div><h1>ورود به کلاس</h1><p class="page-sub muted">کد ۶ حرفی را از استاد بگیرید و اینجا بنویسید؛ پایگاه داده‌ی شخصی شما برای کلاس ساخته می‌شود.</p></div>
+    <div><h1>{% icon "users" 22 %} ورود به کلاس</h1><p class="page-sub muted">کد ۶ حرفی را از استاد بگیرید و اینجا بنویسید؛ پایگاه داده‌ی شخصی شما برای کلاس ساخته می‌شود.</p></div>
   </div>
-  <form method="post" class="card">{% csrf_token %}
+  <form method="post" class="card enter-card">{% csrf_token %}
     {% if error %}<div class="msg error" role="alert">{{ error }}</div>{% endif %}
     <div class="field" style="margin:0"><label for="e-code">کد کلاس</label><input id="e-code" type="text" name="code" value="{{ code }}" class="ltr class-code-in" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" required></div>
     <div><button class="btn" type="submit">{% icon "next" 18 %}ادامه</button></div>
+    <ol class="enter-steps"><li><i>۱</i>کد را بنویسید</li><li><i>۲</i>پایگاه داده‌تان ساخته می‌شود</li><li><i>۳</i>تمرین‌ها را انجام دهید</li></ol>
   </form>
 
   <section style="margin-top:var(--s5)">

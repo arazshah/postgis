@@ -16,6 +16,28 @@ from .models import ClassMap, Classroom, Contract, ContractRequest, Enrollment, 
 
 SESSION_PW = "class_join_pw_{}"
 
+# پرسش‌های رایج صفحه معرفی (برای نمایش و داده ساخت‌یافته جستجو)؛ با رفتار واقعی سامانه هماهنگ بمانند
+FAQS = [
+    {"title": "دانشجو چطور وارد کلاس می‌شود؟",
+     "summary": "دانشجو با شماره موبایل وارد سایت می‌شود و کد ۶ حرفی کلاس را می‌زند؛ پایگاه داده‌ی شخصی او در چند ثانیه "
+                "ساخته می‌شود. لازم نیست چیزی نصب کند."},
+    {"title": "هر دانشجو با چه داده‌ای شروع می‌کند؟",
+     "summary": "استاد هنگام ساخت کلاس یکی از سه حالت را انتخاب می‌کند: پایگاه داده خالی با PostGIS، داده تمرینی تهران "
+                "(مدارس، مترو، پارک) یا داده آماده یک شهر از OSM."},
+    {"title": "آیا دانشجو می‌تواند از QGIS و Python وصل شود؟",
+     "summary": "بله؛ هر دانشجو یک پایگاه داده PostGIS کامل دارد و از QGIS، Python و مرورگر داده با اجرای SQL کار می‌کند."},
+    {"title": "پایان ترم چه بر سر پایگاه داده‌ها می‌آید؟",
+     "summary": "در تاریخ پایان قرارداد کلاس بایگانی می‌شود و از پایگاه داده همه دانشجوها بکاپ گرفته می‌شود؛ این بکاپ‌ها "
+                "تا ۱۸۰ روز برای استاد قابل دانلود است."},
+    {"title": "هزینه چگونه محاسبه می‌شود؟",
+     "summary": "هزینه بر اساس تعداد دانشجو در یک ترم است و مبلغ نهایی به تعداد دانشجو و حجم داده بستگی دارد. فاکتور "
+                "رسمی به نام دانشگاه یا آموزشگاه صادر می‌شود."},
+    {"title": "قرارداد را چه کسی فعال می‌کند و استاد چه می‌بیند؟",
+     "summary": "پس از ثبت قرارداد، شماره موبایل استاد در قرارداد ثبت می‌شود و صفحه «کلاس‌های من» برای او باز می‌شود؛ "
+                "آنجا کلاس می‌سازد، تمرین تعریف می‌کند و کار دانشجوها را می‌بیند."},
+]
+TERM_CHIPS = ["نیم‌سال اول", "نیم‌سال دوم", "ترم تابستان", "دوره کوتاه‌مدت"]
+
 
 @require_http_methods(["GET", "POST"])
 def landing(request):
@@ -57,9 +79,12 @@ def landing(request):
                 pass
             sent = True
             data = {}
+    from kb.faq import faq_jsonld
+
     conf = SiteSettings.get()
-    return render(request, "classroom/landing.html", {"sent": sent, "errors": errors, "data": data,
-                                                      "price": conf.class_price_per_student})
+    return render(request, "classroom/landing.html", {
+        "sent": sent, "errors": errors, "data": data, "price": conf.class_price_per_student,
+        "faqs": FAQS, "faq_json": faq_jsonld(FAQS), "term_chips": TERM_CHIPS})
 
 
 @site_user_required

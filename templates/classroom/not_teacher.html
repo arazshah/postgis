@@ -1,13 +1,19 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load fa ws static %}
 {% block title %}کلاس‌های من — {{ SITE_NAME }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/classroom.css' %}">{% endblock %}
 {% block content %}
-<div class="wrap page narrow">
-  <div class="page-head"><div><h1>کلاس‌های من</h1></div></div>
+<div class="wrap page narrow cls">
+  <div class="page-head"><div><h1>{% icon "users" 22 %} کلاس‌های من</h1><p class="page-sub muted">پنل استاد برای ساخت کلاس، تمرین و نمره‌دهی.</p></div></div>
   <div class="empty">
+    {% icon "lock" 28 %}
     <h2>هنوز قرارداد کلاسی برای حساب شما فعال نیست</h2>
-    <p class="muted">اگر استاد هستید، فرم «درخواست قرارداد» را پر کنید. پس از قرارداد، شماره موبایل شما در قرارداد ثبت می‌شود و این صفحه باز می‌شود.</p>
-    <p class="muted">اگر دانشجو هستید، لینک یا کد ثبت‌نام را از استادتان بگیرید.</p>
+    <p class="muted">پنل استاد پس از قرارداد باز می‌شود؛ شماره موبایل شما در قرارداد ثبت می‌شود و همین صفحه به‌صورت خودکار فعال می‌شود.</p>
     <a class="btn" href="{% url 'classroom:landing' %}#request">درخواست قرارداد</a>
+  </div>
+  <div class="card cls-role">
+    <span class="tl-ic">{% icon "db" 22 %}</span>
+    <div><h3>دانشجو هستید؟</h3><p class="muted">کد کلاس را از استادتان بگیرید و آن را وارد کنید تا پایگاه داده‌ی شخصی‌تان ساخته شود.</p></div>
+    <a class="btn ghost" href="{% url 'classroom:enter' %}">ورود با کد کلاس</a>
   </div>
 </div>
 {% endblock %}

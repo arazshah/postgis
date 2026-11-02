@@ -1,69 +1,243 @@
-{% extends "base.html" %}{% load fa %}
-{% block title %}پلن کلاس و دانشگاه — {{ SITE_NAME }}{% endblock %}
-{% block description %}برای هر دانشجو یک پایگاه داده PostGIS جدا با داده تمرینی؛ پنل استاد، بایگانی پایان ترم و قرارداد رسمی با دانشگاه و آموزشگاه.{% endblock %}
+{% extends "base.html" %}{% load fa ws static l10n %}
+{% block title %}پلن کلاس و آزمایشگاه GIS برای استادان — {{ SITE_NAME }}{% endblock %}
+{% block description %}آزمایشگاه GIS آنلاین برای استادان: هر دانشجو با کد کلاس یک پایگاه داده PostGIS جدا با داده تمرینی می‌گیرد؛ تمرین، نمره‌دهی، بایگانی پایان ترم و قرارداد رسمی با دانشگاه و آموزشگاه.{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/classroom.css' %}">{% endblock %}
+{% block jsonld %}<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":{{ faq_json }}}</script>{% endblock %}
 {% block content %}
-<section class="hero">
+<div class="cls">
+
+{# ───── قهرمان: هویت کلاس و آزمایشگاه ───── #}
+<section class="cls-hero" aria-labelledby="cls-h">
   <div class="wrap">
-    <div>
-      <h1>درس GIS را بدون آزمایشگاه و سرور برگزار کنید</h1>
-      <p class="lead">هر دانشجو با یک کد کلاس، پایگاه داده PostGIS خودش را با داده تمرینی می‌گیرد. شما از یک صفحه همه را می‌بینید، کارشان را بررسی می‌کنید و پایان ترم از کار همه بکاپ دارید.</p>
+    <div class="cls-copy">
+      <p class="cls-eyebrow">{% icon "book" 16 %}ویژه‌ی استادان، دانشگاه‌ها و آموزشگاه‌ها</p>
+      <h1 id="cls-h">درس GIS را بدون آزمایشگاه و سرور برگزار کنید</h1>
+      <p class="lead">هر دانشجو با یک کد کلاس، پایگاه داده PostGIS خودش را با داده تمرینی می‌گیرد. شما از یک صفحه همه را می‌بینید، تمرین می‌دهید، کارشان را بررسی و نمره می‌دهید و پایان ترم از کار همه بکاپ دارید.</p>
       <div class="actions">
-        <a class="btn" href="#request">درخواست قرارداد</a>
-        {% if user.is_authenticated %}<a class="btn ghost" href="{% url 'classroom:teach' %}">کلاس‌های من</a>{% endif %}
+        <a class="btn lg" href="#request">درخواست قرارداد</a>
+        {% if user.is_authenticated %}<a class="btn ghost lg" href="{% url 'classroom:teach' %}">{% icon "users" 18 %}کلاس‌های من</a>{% endif %}
+      </div>
+      <p class="cls-student">دانشجو هستید؟ <a href="{% url 'classroom:enter' %}">ورود با کد کلاس {% icon "next" 16 %}</a></p>
+      <ul class="cls-assure" aria-label="مزایا">
+        <li>{% icon "check" 16 %}بدون نصب و بدون سرور</li>
+        <li>{% icon "check" 16 %}یک پایگاه داده جدا برای هر دانشجو</li>
+        <li>{% icon "check" 16 %}بکاپ همه‌ی کارها در پایان ترم</li>
+      </ul>
+    </div>
+
+    <figure class="cls-preview" aria-label="نمونه‌ای از پنل استاد (نمایشی)">
+      <div class="pv-bar"><span class="pv-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="pv-title">پنل استاد — نمونه</span></div>
+      <div class="pv-body" aria-hidden="true">
+        <div class="pv-head">
+          <div><b>پایگاه داده مکانی — گروه ۲</b><small>نیم‌سال دوم</small></div>
+          <div class="pv-code"><small>کد کلاس</small><b>GX7K2Q</b></div>
+        </div>
+        <div class="pv-stats">
+          <div><b>۲۴<em>/۳۰</em></b><small>دانشجوی ثبت‌نام‌شده</small></div>
+          <div><b>۱۸</b><small>تحویل تمرین ۲</small></div>
+          <div><b>۱۶٫۵</b><small>میانگین نمره</small></div>
+        </div>
+        <div class="pv-meter"><i style="width:75%"></i></div>
+        <ul class="pv-rows">
+          <li><span class="pv-av">م</span><span>مهدی ا.</span><span class="badge active">تحویل شد</span></li>
+          <li><span class="pv-av">س</span><span>سارا ک.</span><span class="badge active">نمره داده شد</span></li>
+          <li><span class="pv-av">ن</span><span>نیما ر.</span><span class="badge pending">در انتظار</span></li>
+        </ul>
+      </div>
+    </figure>
+  </div>
+</section>
+
+{# ───── چرا: مقایسه ───── #}
+<section class="cls-sec">
+  <div class="wrap">
+    <header class="cls-head"><h2>آزمایشگاه سنتی یا کلاس روی ژئوپایگاه؟</h2><p>وقت کلاس باید صرف آموزش GIS شود، نه نصب نرم‌افزار و رفع اشکال سیستم‌ها.</p></header>
+    <div class="cls-vs">
+      <div class="vs-col old">
+        <h3>آزمایشگاه و سرور اختصاصی</h3>
+        <ul>
+          <li>نصب PostgreSQL و PostGIS روی سیستم‌ها یا سرور دانشکده</li>
+          <li>ناسازگاری نسخه‌ها و تنظیمات متفاوت هر دانشجو</li>
+          <li>دانشجو بیرون از کلاس راهی به پایگاه داده ندارد</li>
+          <li>خطای یک دانشجو می‌تواند کار بقیه را خراب کند</li>
+          <li>پایان ترم داده‌ها پراکنده است یا گم می‌شود</li>
+        </ul>
+      </div>
+      <div class="vs-col new">
+        <h3>کلاس روی ژئوپایگاه</h3>
+        <ul>
+          <li>دانشجو با کد کلاس در چند ثانیه پایگاه داده‌اش را دارد</li>
+          <li>همه یک نسخه‌ی یکسان PostGIS با داده تمرینی یکسان</li>
+          <li>از خانه، دانشگاه یا موبایل در دسترس است</li>
+          <li>هر دانشجو پایگاه داده‌ی جدا دارد؛ کارها روی هم اثر نمی‌گذارند</li>
+          <li>پایان ترم از همه بکاپ گرفته و برای شما نگه داشته می‌شود</li>
+        </ul>
       </div>
     </div>
   </div>
 </section>
 
-<section class="section">
+{# ───── یک ترم ───── #}
+<section class="cls-sec alt">
   <div class="wrap">
-    <div class="section-head"><h2>یک ترم با postgis.ir</h2></div>
-    <ol class="steps">
-      <li><h3>قرارداد</h3><p>تعداد دانشجو و تاریخ پایان ترم را مشخص می‌کنیم؛ فاکتور رسمی به نام دانشگاه یا آموزشگاه صادر می‌شود.</p></li>
-      <li><h3>ساخت کلاس</h3><p>استاد کلاس می‌سازد و داده آغازین را انتخاب می‌کند: خالی، داده تمرینی تهران یا داده آماده یک شهر از OSM.</p></li>
-      <li><h3>ثبت‌نام دانشجو</h3><p>دانشجو با موبایل وارد می‌شود و کد کلاس را می‌زند؛ پایگاه داده‌اش در چند ثانیه آماده است.</p></li>
-      <li><h3>پایان ترم</h3><p>از پایگاه داده همه دانشجوها بکاپ گرفته می‌شود و تا شش ماه برای استاد قابل دانلود است.</p></li>
+    <header class="cls-head"><h2>یک ترم با {{ SITE_NAME }}</h2><p>از قرارداد تا بایگانی، چهار گام.</p></header>
+    <ol class="cls-timeline">
+      <li><span class="tl-ic">{% icon "card" 22 %}</span><h3>قرارداد</h3><p>تعداد دانشجو و تاریخ پایان ترم را مشخص می‌کنیم؛ فاکتور رسمی به نام دانشگاه یا آموزشگاه صادر می‌شود.</p></li>
+      <li><span class="tl-ic">{% icon "users" 22 %}</span><h3>ساخت کلاس</h3><p>استاد کلاس می‌سازد و داده آغازین را انتخاب می‌کند: خالی، داده تمرینی تهران یا داده آماده یک شهر از OSM.</p></li>
+      <li><span class="tl-ic">{% icon "db" 22 %}</span><h3>ثبت‌نام دانشجو</h3><p>دانشجو با موبایل وارد می‌شود و کد کلاس را می‌زند؛ پایگاه داده‌اش در چند ثانیه آماده است.</p></li>
+      <li><span class="tl-ic">{% icon "save" 22 %}</span><h3>پایان ترم</h3><p>از پایگاه داده همه دانشجوها بکاپ گرفته می‌شود و تا ۱۸۰ روز برای استاد قابل دانلود است.</p></li>
     </ol>
   </div>
 </section>
 
-<section class="section alt">
+{# ───── امکانات پنل استاد ───── #}
+<section class="cls-sec">
   <div class="wrap">
-    <div class="section-head"><h2>چه چیزی به دانشجو می‌رسد</h2></div>
-    <div class="ext-grid">
-      <div class="ext-row"><b>PostGIS کامل</b><span class="muted small">اتصال از QGIS، Python و مرورگر داده با اجرای SQL</span></div>
-      <div class="ext-row"><b>داده تمرینی</b><span class="muted small">مدارس، ایستگاه‌های مترو و پارک‌ها یا معابر و مکان‌های واقعی یک شهر</span></div>
-      <div class="ext-row"><b>انتشار نقشه</b><span class="muted small">نقشه وب و WMS/WFS برای پروژه پایانی و پایان‌نامه</span></div>
-      <div class="ext-row"><b>شبکه مسیریابی</b><span class="muted small">تمرین pgRouting روی معابر واقعی</span></div>
+    <header class="cls-head"><h2>پنل استاد: همه‌چیز یک‌جا</h2><p>برای اداره‌ی کلاس لازم نیست سراغ پایگاه داده‌ی تک‌تک دانشجوها بروید.</p></header>
+    <div class="cls-cards">
+      <article class="cls-card">{% icon "users" 22 %}<h3>کد کلاس و ثبت‌نام</h3><p>یک کد برای هر کلاس؛ هر زمان خواستید ثبت‌نام را ببندید یا باز کنید.</p></article>
+      <article class="cls-card">{% icon "edit" 22 %}<h3>تمرین و نمره‌دهی</h3><p>تمرین تعریف کنید، تحویل دانشجوها را ببینید و نمره و بازخورد بدهید.</p></article>
+      <article class="cls-card">{% icon "share" 22 %}<h3>اشتراک نقشه با کلاس</h3><p>نقشه‌ی خودتان را با توضیح برای کلاس بگذارید تا دانشجوها نسخه‌ی خودشان را بسازند.</p></article>
+      <article class="cls-card">{% icon "table" 22 %}<h3>فهرست دانشجوها</h3><p>وضعیت پایگاه داده و حجم هر دانشجو، به‌همراه خروجی CSV از نمره‌ها.</p></article>
+      <article class="cls-card">{% icon "download" 22 %}<h3>بایگانی پایان ترم</h3><p>بکاپ پایگاه داده‌ی هر دانشجو را تا ۱۸۰ روز دانلود کنید.</p></article>
+      <article class="cls-card">{% icon "lock" 22 %}<h3>قرارداد و صندلی</h3><p>پیگیری صندلی‌های مصرف‌شده و تاریخ پایان در یک نگاه.</p></article>
     </div>
   </div>
 </section>
 
-<section class="section" id="request">
-  <div class="wrap narrow">
-    <div class="section-head">
-      <h2>درخواست قرارداد</h2>
-      <p class="muted">{% if price %}از {{ price|fanum }} تومان برای هر دانشجو در یک ترم؛ {% endif %}مبلغ نهایی به تعداد دانشجو و حجم داده بستگی دارد. فرم را پر کنید تا تماس بگیریم.</p>
+{# ───── آنچه دانشجو می‌گیرد ───── #}
+<section class="cls-sec alt">
+  <div class="wrap">
+    <header class="cls-head"><h2>دانشجو چه چیزی می‌گیرد؟</h2><p>یک پایگاه داده‌ی واقعی، نه شبیه‌ساز.</p></header>
+    <div class="cls-split">
+      <div>
+        <h3 class="cls-sub">داده آغازین؛ استاد انتخاب می‌کند</h3>
+        <div class="cls-tiles">
+          <div class="tile">{% icon "db" 22 %}<b>خالی</b><span>پایگاه داده‌ی خالی با PostGIS</span></div>
+          <div class="tile">{% icon "layers" 22 %}<b>تمرینی تهران</b><span>مدارس، ایستگاه‌های مترو و پارک‌ها</span></div>
+          <div class="tile">{% icon "globe" 22 %}<b>یک شهر از OSM</b><span>معابر و مکان‌های واقعی شهر</span></div>
+        </div>
+      </div>
+      <div>
+        <h3 class="cls-sub">ابزارهای در دسترس</h3>
+        <ul class="cls-tools">
+          <li>{% icon "code" 18 %}<b>SQL مکانی</b><span>در مرورگر داده</span></li>
+          <li>{% icon "pin" 18 %}<b>QGIS و Python</b><span>اتصال مستقیم</span></li>
+          <li>{% icon "globe2" 18 %}<b>انتشار نقشه</b><span>نقشه وب و WMS/WFS برای پروژه پایانی</span></li>
+          <li>{% icon "line" 18 %}<b>pgRouting</b><span>تمرین مسیریابی روی معابر واقعی</span></li>
+        </ul>
+      </div>
     </div>
-    {% if sent %}<div class="msg success" role="status">درخواست شما ثبت شد؛ در یکی دو روز کاری تماس می‌گیریم.</div>{% endif %}
-    <form method="post" class="panel">{% csrf_token %}
-      <div class="hp" aria-hidden="true"><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
-      <div class="bf-row">
-        <div class="field"><label for="f-inst">دانشگاه یا آموزشگاه</label><input id="f-inst" type="text" name="institution" value="{{ data.institution }}" required>{% if errors.institution %}<p class="err">{{ errors.institution }}</p>{% endif %}</div>
-        <div class="field"><label for="f-name">نام و سمت</label><input id="f-name" type="text" name="name" value="{{ data.name }}" required placeholder="مثلاً دکتر رضایی، استاد درس GIS">{% if errors.name %}<p class="err">{{ errors.name }}</p>{% endif %}</div>
-      </div>
-      <div class="bf-row">
-        <div class="field"><label for="f-phone">موبایل</label><input id="f-phone" type="tel" name="phone" value="{{ data.phone }}" required class="ltr">{% if errors.phone %}<p class="err">{{ errors.phone }}</p>{% endif %}</div>
-        <div class="field"><label for="f-email">ایمیل (اختیاری)</label><input id="f-email" type="email" name="email" value="{{ data.email }}" class="ltr"></div>
-      </div>
-      <div class="bf-row">
-        <div class="field"><label for="f-n">تعداد تقریبی دانشجو</label><input id="f-n" type="text" inputmode="numeric" name="students" value="{{ data.students|default:'30' }}">{% if errors.students %}<p class="err">{{ errors.students }}</p>{% endif %}</div>
-        <div class="field"><label for="f-term">ترم</label><input id="f-term" type="text" name="term" value="{{ data.term }}" placeholder="مثلاً نیم‌سال دوم ۱۴۰۵-۱۴۰۶"></div>
-      </div>
-      <div class="field"><label for="f-course">درس</label><input id="f-course" type="text" name="course" value="{{ data.course }}" placeholder="مثلاً پایگاه داده مکانی"></div>
-      <div class="field"><label for="f-msg">توضیح</label><textarea id="f-msg" name="message" rows="3">{{ data.message }}</textarea></div>
-      <button class="btn" type="submit">ثبت درخواست</button>
-    </form>
   </div>
 </section>
+
+{# ───── قرارداد و فرم ───── #}
+<section class="cls-sec" id="request">
+  <div class="wrap">
+    <header class="cls-head"><h2>درخواست قرارداد</h2>
+      <p>{% if price %}از <b>{{ price|fanum }} تومان</b> برای هر دانشجو در یک ترم؛ {% endif %}مبلغ نهایی به تعداد دانشجو و حجم داده بستگی دارد.</p></header>
+
+    <div class="cls-req">
+      {% if sent %}
+      <div class="cls-done" role="status" id="cls-done">
+        <span class="done-ic">{% icon "check" 28 %}</span>
+        <h3>درخواست شما ثبت شد</h3>
+        <p>در یکی دو روز کاری با شماره‌ای که نوشتید تماس می‌گیریم.</p>
+        <ol class="cls-next">
+          <li>درباره‌ی تعداد دانشجو و ترم هماهنگ می‌کنیم.</li>
+          <li>فاکتور رسمی صادر می‌شود و قرارداد فعال می‌شود.</li>
+          <li>صفحه‌ی «کلاس‌های من» با همین شماره‌ی موبایل برای شما باز می‌شود.</li>
+        </ol>
+        <a class="btn ghost" href="{% url 'classroom:landing' %}">{% icon "back" 16 %}بازگشت به صفحه</a>
+      </div>
+      {% else %}
+      <form method="post" class="card cls-form" id="cls-form" novalidate>{% csrf_token %}
+        <div class="hp" aria-hidden="true"><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
+        {% if errors %}<div class="msg error" role="alert">لطفاً موارد مشخص‌شده را اصلاح کنید.</div>{% endif %}
+
+        <fieldset class="fs"><legend>{% icon "book" 18 %}مؤسسه و درس</legend>
+          <div class="field"><label for="f-inst">دانشگاه یا آموزشگاه</label><input id="f-inst" type="text" name="institution" value="{{ data.institution }}" required autocomplete="organization" {% if errors.institution %}aria-invalid="true"{% endif %}>{% if errors.institution %}<p class="err">{{ errors.institution }}</p>{% endif %}</div>
+          <div class="bf-row">
+            <div class="field"><label for="f-course">درس</label><input id="f-course" type="text" name="course" value="{{ data.course }}" placeholder="مثلاً پایگاه داده مکانی"></div>
+            <div class="field"><label for="f-n">تعداد تقریبی دانشجو</label><input id="f-n" type="text" inputmode="numeric" name="students" value="{{ data.students|default:'30' }}">{% if errors.students %}<p class="err">{{ errors.students }}</p>{% endif %}</div>
+          </div>
+          <div class="field"><label for="f-term">ترم</label>
+            <input id="f-term" type="text" name="term" value="{{ data.term }}" placeholder="مثلاً نیم‌سال دوم ۱۴۰۵-۱۴۰۶">
+            <div class="chips" role="group" aria-label="انتخاب سریع ترم">{% for t in term_chips %}<button type="button" class="chip-btn" data-term="{{ t }}">{{ t }}</button>{% endfor %}</div>
+          </div>
+        </fieldset>
+
+        <fieldset class="fs"><legend>{% icon "user" 18 %}اطلاعات تماس</legend>
+          <div class="field"><label for="f-name">نام و سمت</label><input id="f-name" type="text" name="name" value="{{ data.name }}" required autocomplete="name" placeholder="مثلاً دکتر رضایی، استاد درس GIS" {% if errors.name %}aria-invalid="true"{% endif %}>{% if errors.name %}<p class="err">{{ errors.name }}</p>{% endif %}</div>
+          <div class="bf-row">
+            <div class="field"><label for="f-phone">موبایل</label><input id="f-phone" type="tel" name="phone" value="{{ data.phone }}" required class="ltr" autocomplete="tel" {% if errors.phone %}aria-invalid="true"{% endif %}>{% if errors.phone %}<p class="err">{{ errors.phone }}</p>{% endif %}<p class="help">قرارداد و پنل استاد به این شماره بسته می‌شود.</p></div>
+            <div class="field"><label for="f-email">ایمیل (اختیاری)</label><input id="f-email" type="email" name="email" value="{{ data.email }}" class="ltr" autocomplete="email"></div>
+          </div>
+          <div class="field"><label for="f-msg">توضیح (اختیاری)</label><textarea id="f-msg" name="message" rows="3" placeholder="مثلاً چند کلاس دارید یا چه داده‌ای لازم است">{{ data.message }}</textarea></div>
+        </fieldset>
+
+        <div class="cls-submit">
+          <button class="btn lg" type="submit">ثبت درخواست</button>
+          <p class="help">تعهدی ایجاد نمی‌شود؛ ابتدا تماس می‌گیریم و جزئیات را هماهنگ می‌کنیم.</p>
+        </div>
+      </form>
+      {% endif %}
+
+      <aside class="cls-aside" aria-label="برآورد و گام‌ها">
+        {% if price %}
+        <div class="card est" data-price="{{ price|unlocalize }}">
+          <h3>برآورد هزینه</h3>
+          <p class="est-sum"><b id="est-total">—</b> <span>تومان</span></p>
+          <p class="help"><span id="est-n">۳۰</span> دانشجو × {{ price|fanum }} تومان برای یک ترم؛ تقریبی و بدون تعهد.</p>
+        </div>
+        {% endif %}
+        <div class="card">
+          <h3>قرارداد شامل چیست؟</h3>
+          <ul class="cls-list">
+            <li>{% icon "check" 16 %}صندلی به تعداد دانشجو</li>
+            <li>{% icon "check" 16 %}پایگاه داده‌ی جدا برای هر دانشجو</li>
+            <li>{% icon "check" 16 %}پنل استاد، تمرین و نمره‌دهی</li>
+            <li>{% icon "check" 16 %}بکاپ پایان ترم تا ۱۸۰ روز</li>
+            <li>{% icon "check" 16 %}فاکتور رسمی به نام مؤسسه</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+{# ───── پرسش‌های رایج ───── #}
+<section class="cls-sec alt">
+  <div class="wrap narrow">
+    <header class="cls-head"><h2>پرسش‌های رایج</h2></header>
+    <div class="cls-faq">
+      {% for f in faqs %}<details><summary>{{ f.title }}</summary><p>{{ f.summary }}</p></details>{% endfor %}
+    </div>
+  </div>
+</section>
+</div>
+
+<script>
+(() => {
+  const f = document.getElementById("cls-form"), done = document.getElementById("cls-done");
+  const bad = f && f.querySelector("[aria-invalid=true]");
+  if (done) done.scrollIntoView({block: "center"});
+  else if (bad) { f.scrollIntoView({block: "start"}); bad.focus({preventScroll: true}); }
+  if (!f) return;
+  const term = document.getElementById("f-term");
+  f.querySelectorAll("[data-term]").forEach(b => b.addEventListener("click", () => { term.value = b.dataset.term + " "; term.focus(); }));
+  const est = document.querySelector(".est"), n = document.getElementById("f-n");
+  if (est) {
+    const d = {"۰":0,"۱":1,"۲":2,"۳":3,"۴":4,"۵":5,"۶":6,"۷":7,"۸":8,"۹":9};
+    const fa = v => Number(v).toLocaleString("fa-IR");
+    const sync = () => {
+      const k = parseInt(n.value.replace(/[۰-۹]/g, c => d[c]), 10);
+      const cnt = k > 0 ? Math.min(k, 5000) : 0;
+      document.getElementById("est-n").textContent = fa(cnt);
+      document.getElementById("est-total").textContent = cnt ? fa(cnt * Number(est.dataset.price)) : "—";
+    };
+    n.addEventListener("input", sync); sync();
+  }
+})();
+</script>
 {% endblock %}
