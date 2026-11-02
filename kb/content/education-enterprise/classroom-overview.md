@@ -6,7 +6,7 @@ keywords: پلن کلاس, دانشگاه, آموزشگاه, استاد, دان�
 related: classroom-create, classroom-assignments, classroom-student-join, classroom-grade, classroom-end-term, plans-overview
 featured: yes
 order: 10
-reviewed: 2026-11-01
+reviewed: 2026-11-02
 ---
 ## نقش‌ها
 
@@ -22,6 +22,6 @@ reviewed: 2026-11-01
 - داده آغازین: نمونه آماده یا [داده آماده ایران](kb:osm-data-overview) برای یک شهر.
 - ابزارها همان ابزارهای سایت‌اند ([مرورگر داده](kb:explorer-overview)، [QGIS](kb:connect-qgis)).
 
-برای شروع قرارداد، از صفحه «پلن کلاس» درخواست همکاری بدهید. مراحل: [ساخت کلاس](kb:classroom-create)، [ورود دانشجو](kb:classroom-student-join)، [پایان ترم](kb:classroom-end-term).
+برای شروع قرارداد، از صفحه «پلن کلاس» (`/class/`) فرم «درخواست قرارداد» را پر کنید؛ پس از تماس و ثبت قرارداد، صفحه «کلاس‌های من» با همان شماره موبایل برای استاد باز می‌شود. دانشجو از همان صفحه با «ورود با کد کلاس» وارد می‌شود. مراحل: [ساخت کلاس](kb:classroom-create)، [ورود دانشجو](kb:classroom-student-join)، [پایان ترم](kb:classroom-end-term).
 
 ویدیوها: [استاد](help:classroom-teacher) · [دانشجو](help:classroom-student) · [آموزش کامل](doc:classroom).

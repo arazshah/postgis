@@ -41,6 +41,23 @@ class LandingTests(TestCase):
                                                         "website": "spam"})
         self.assertEqual(ContractRequest.objects.count(), 1)
 
+    def test_landing_content(self):
+        r = self.client.get(reverse("classroom:landing"))
+        self.assertContains(r, "پنل استاد")
+        self.assertContains(r, "پرسش‌های رایج")
+        self.assertContains(r, reverse("classroom:enter"))
+        self.assertContains(r, "FAQPage")
+
+    def test_errors_keep_form_and_success_shows_next_steps(self):
+        r = self.client.post(reverse("classroom:landing"), {"institution": "دانشگاه", "name": "x", "phone": "123",
+                                                            "term": "نیم‌سال دوم"})
+        self.assertContains(r, "لطفاً موارد مشخص‌شده را اصلاح کنید")
+        self.assertContains(r, "نیم‌سال دوم")
+        r = self.client.post(reverse("classroom:landing"), {"institution": "دانشگاه", "name": "x",
+                                                            "phone": "09121112233"})
+        self.assertContains(r, "درخواست شما ثبت شد")
+        self.assertNotContains(r, 'id="cls-form"')
+
     def test_not_teacher(self):
         self.client.force_login(User.objects.create_user("09120000051"))
         self.assertContains(self.client.get(reverse("classroom:teach")), "قرارداد کلاسی")

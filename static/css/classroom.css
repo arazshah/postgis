@@ -1,0 +1,161 @@
+/* صفحه‌ی معرفی پلن کلاس (/class/) — فقط روی همین صفحه بارگذاری می‌شود. فقط توکن‌های سیستم طراحی. */
+.cls .btn.lg{min-height:52px;padding:0 var(--s6);font-size:1.05rem}
+.cls svg{flex:none}
+
+/* ---------- قهرمان ---------- */
+.cls-hero{position:relative;overflow:hidden;isolation:isolate;border-bottom:1px solid var(--line)}
+.cls-hero::before{content:"";position:absolute;inset:0;z-index:-2;background:url(../img/contours.svg) center/cover no-repeat}
+.cls-hero::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(55% 65% at 90% 10%,var(--ochre-soft),transparent 70%),radial-gradient(50% 60% at 8% 94%,var(--teal-soft),transparent 70%)}
+.cls-hero .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:var(--s7);align-items:center;padding-block:var(--s8)}
+.cls-eyebrow{display:inline-flex;align-items:center;gap:var(--s2);margin:0 0 var(--s4);padding:3px 14px 3px 12px;border-radius:99px;
+  background:var(--surface);border:1px solid var(--line);font-size:.86rem;font-weight:700;color:var(--teal-dark)}
+.cls-hero h1{font-size:clamp(1.9rem,1.1rem + 2.6vw,3rem);line-height:1.45;max-width:18ch;margin-bottom:var(--s4)}
+.cls-hero .lead{font-size:1.1rem;color:var(--ink-2);max-width:50ch}
+.cls-hero .actions{display:flex;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s5)}
+.cls-hero .actions .btn{display:inline-flex;align-items:center;gap:var(--s2)}
+.cls-student{margin:var(--s4) 0 0;font-size:.95rem;color:var(--ink-2)}
+.cls-student a{display:inline-flex;align-items:center;gap:4px;font-weight:700}
+.cls-assure{list-style:none;margin:var(--s4) 0 0;padding:0;display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5);font-size:.9rem;color:var(--ink-2)}
+.cls-assure li{display:flex;align-items:center;gap:var(--s2)}
+.cls-assure svg{color:var(--green)}
+
+/* پیش‌نمایش پنل استاد */
+.cls-preview{margin:0;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;
+  box-shadow:0 18px 48px -18px rgba(14,59,58,.35)}
+.pv-bar{display:flex;align-items:center;gap:var(--s3);padding:10px var(--s4);background:var(--surface);border-bottom:1px solid var(--line)}
+.pv-dots{display:flex;gap:6px}.pv-dots i{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.pv-title{font-size:.8rem;color:var(--ink-3)}
+.pv-body{padding:var(--s4) var(--s5) var(--s5)}
+.pv-head{display:flex;justify-content:space-between;gap:var(--s4);align-items:flex-start;margin-bottom:var(--s4)}
+.pv-head b{display:block;font-family:var(--f-display);font-size:1rem}
+.pv-head small{color:var(--ink-3);font-size:.8rem}
+.pv-code{text-align:center;background:var(--teal-soft);border:1px dashed var(--teal);border-radius:var(--r-md);padding:4px var(--s4)}
+.pv-code small{display:block;line-height:1.5}
+.pv-code b{font-family:var(--f-mono);letter-spacing:.12em;color:var(--teal-dark);direction:ltr}
+.pv-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s3)}
+.pv-stats>div{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3)}
+.pv-stats b{display:block;font-family:var(--f-display);font-size:1.4rem;line-height:1.3;color:var(--teal-dark)}
+.pv-stats em{font-style:normal;font-size:.85rem;color:var(--ink-3)}
+.pv-stats small{display:block;font-size:.76rem;color:var(--ink-2);line-height:1.5}
+.pv-meter{height:8px;border-radius:99px;background:var(--line);margin:var(--s4) 0}
+.pv-meter i{display:block;height:100%;border-radius:99px;background:var(--teal)}
+.pv-rows{list-style:none;margin:0;padding:0}
+.pv-rows li{display:flex;align-items:center;gap:var(--s3);padding:var(--s2) 0;border-top:1px solid var(--line);font-size:.92rem}
+.pv-rows li>span:nth-child(2){flex:1}
+.pv-av{width:30px;height:30px;border-radius:50%;background:var(--teal-soft);color:var(--teal-dark);display:grid;place-items:center;font-weight:800;font-size:.85rem}
+
+/* ---------- بخش‌ها ---------- */
+.cls-sec{padding-block:var(--s8)}
+.cls-sec.alt{background:var(--paper-2);border-block:1px solid var(--line)}
+.cls-head{max-width:640px;margin-bottom:var(--s6)}
+.cls-head h2{font-size:clamp(1.4rem,1rem + 1.4vw,1.9rem);margin-bottom:var(--s2)}
+.cls-head p{color:var(--ink-2);margin:0}
+.cls-sub{font-size:1.05rem;margin-bottom:var(--s3)}
+
+/* مقایسه */
+.cls-vs{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5)}
+.vs-col{border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s5);background:var(--surface)}
+.vs-col.new{background:var(--card);border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+.vs-col h3{font-size:1.05rem}
+.vs-col.old h3{color:var(--ink-2)}.vs-col.new h3{color:var(--teal-dark)}
+.vs-col ul{list-style:none;margin:0;padding:0}
+.vs-col li{position:relative;padding:var(--s2) 0;padding-inline-start:26px;border-top:1px dashed var(--line);font-size:.95rem}
+.vs-col li:first-child{border-top:0}
+.vs-col li::before{content:"";position:absolute;inset-inline-start:0;top:calc(var(--s2) + 9px);width:10px;height:10px;border-radius:50%}
+.vs-col.old li::before{background:var(--line)}
+.vs-col.new li::before{background:var(--teal)}
+
+/* خط زمانی */
+.cls-timeline{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s5);counter-reset:t;position:relative}
+.cls-timeline li{counter-increment:t;position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s5)}
+.cls-timeline li::after{content:counter(t,persian);position:absolute;top:var(--s4);inset-inline-end:var(--s4);font-family:var(--f-display);
+  font-weight:800;font-size:1.6rem;color:var(--line)}
+.tl-ic{display:grid;place-items:center;width:44px;height:44px;border-radius:var(--r-md);background:var(--teal-soft);color:var(--teal-dark);margin-bottom:var(--s3)}
+.cls-timeline h3{font-size:1.05rem;margin-bottom:var(--s2)}
+.cls-timeline p{margin:0;font-size:.92rem;color:var(--ink-2)}
+
+/* کارت امکانات */
+.cls-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s4)}
+.cls-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s5)}
+.cls-card>svg{color:var(--teal);margin-bottom:var(--s3)}
+.cls-card h3{font-size:1.02rem;margin-bottom:var(--s2)}
+.cls-card p{margin:0;font-size:.92rem;color:var(--ink-2)}
+
+/* دانشجو */
+.cls-split{display:grid;grid-template-columns:1.2fr 1fr;gap:var(--s7)}
+.cls-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s3)}
+.tile{display:flex;flex-direction:column;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s4)}
+.tile>svg{color:var(--teal)}
+.tile span{font-size:.85rem;color:var(--ink-2);line-height:1.7}
+.cls-tools{list-style:none;margin:0;padding:0}
+.cls-tools li{display:grid;grid-template-columns:auto auto 1fr;gap:var(--s3);align-items:center;padding:var(--s3) 0;border-bottom:1px dashed var(--line)}
+.cls-tools li>svg{color:var(--teal)}
+.cls-tools span{color:var(--ink-2);font-size:.88rem}
+
+/* قرارداد */
+.cls-req{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:var(--s5);align-items:start}
+.cls-form{padding:var(--s5)}
+.cls-form .fs{border:0;margin:0 0 var(--s5);padding:0;min-width:0}
+.cls-form legend{display:flex;align-items:center;gap:var(--s2);font-family:var(--f-display);font-weight:800;font-size:1rem;
+  color:var(--teal-dark);padding:0;margin-bottom:var(--s3)}
+.cls-form .chips{margin-top:var(--s2)}
+.chip-btn{border:1px solid var(--line);background:var(--card);color:var(--ink-2);border-radius:99px;padding:2px 14px;font:inherit;font-size:.85rem;
+  cursor:pointer;min-height:var(--ctl-h-sm)}
+.chip-btn:hover{border-color:var(--teal);color:var(--teal-dark);background:var(--teal-soft)}
+.cls-form [aria-invalid=true]{border-color:var(--red)}
+.cls-submit{display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap}
+.cls-submit .help{margin:0}
+.cls-aside{display:grid;gap:var(--s4);position:sticky;top:84px}
+.cls-aside .card{padding:var(--s5)}
+.cls-aside h3{font-size:1rem}
+.est-sum{margin:0;display:flex;align-items:baseline;gap:var(--s2)}
+.est-sum b{font-family:var(--f-display);font-size:1.9rem;color:var(--teal-dark);line-height:1.4}
+.est .help{margin:var(--s2) 0 0}
+.cls-list{list-style:none;margin:0;padding:0}
+.cls-list li{display:flex;gap:var(--s2);align-items:center;padding:var(--s1) 0;font-size:.93rem}
+.cls-list svg{color:var(--green)}
+.cls-done{background:var(--card);border:1px solid var(--green);border-radius:var(--r-lg);padding:var(--s6);text-align:center}
+.done-ic{display:inline-grid;place-items:center;width:56px;height:56px;border-radius:50%;background:var(--green-soft);color:var(--green);margin-bottom:var(--s3)}
+.cls-next{text-align:start;max-width:420px;margin:var(--s4) auto var(--s5);padding-inline-start:1.6em;list-style:persian;color:var(--ink-2)}
+.cls-done .btn{display:inline-flex;align-items:center;gap:var(--s2)}
+
+/* پرسش‌ها */
+.cls-faq{display:grid;gap:var(--s3)}
+.cls-faq details{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:0 var(--s4)}
+.cls-faq summary{cursor:pointer;font-weight:700;padding:var(--s3) 0;list-style:none;display:flex;justify-content:space-between;gap:var(--s3)}
+.cls-faq summary::-webkit-details-marker{display:none}
+.cls-faq summary::after{content:"+";font-family:var(--f-mono);color:var(--teal);font-size:1.3rem;line-height:1.5}
+.cls-faq details[open] summary::after{content:"−"}
+.cls-faq p{margin:0 0 var(--s3);color:var(--ink-2);font-size:.95rem}
+
+/* ---------- واکنش‌گرا ---------- */
+@media (max-width:980px){
+  .cls-hero .wrap{grid-template-columns:1fr;gap:var(--s6);padding-block:var(--s7)}
+  .cls-timeline{grid-template-columns:1fr 1fr}
+  .cls-cards{grid-template-columns:1fr 1fr}
+  .cls-split,.cls-req{grid-template-columns:1fr}
+  .cls-aside{position:static}
+}
+@media (max-width:640px){
+  .cls-sec{padding-block:var(--s7)}
+  .cls-vs,.cls-timeline,.cls-cards,.cls-tiles{grid-template-columns:1fr}
+  .cls-form .bf-row{grid-template-columns:1fr}
+  .pv-stats{gap:var(--s2)}.pv-stats>div{padding:var(--s2)}.pv-stats b{font-size:1.15rem}
+  .pv-head{flex-wrap:wrap}
+  .cls-hero .actions .btn,.cls-submit .btn{width:100%;justify-content:center}
+  .cls-form{padding:var(--s4)}
+}
+
+/* ---------- صفحه‌های کوچک کلاس (ورود دانشجو، بدون قرارداد) ---------- */
+.cls .empty svg{color:var(--teal);margin-bottom:var(--s3)}
+.cls .cls-role{display:flex;text-align:start;align-items:center;gap:var(--s4);margin-top:var(--s5);padding:var(--s5);flex-wrap:wrap}
+.cls-role>div{flex:1;min-width:220px}.cls-role h3{margin-bottom:2px;font-size:1rem}.cls-role p{margin:0;font-size:.9rem}
+.cls-role .tl-ic{margin:0}
+.enter-steps{list-style:none;display:flex;gap:var(--s3);flex-wrap:wrap;margin:var(--s4) 0 0;padding:0;font-size:.88rem;color:var(--ink-2)}
+.enter-steps li{display:flex;align-items:center;gap:var(--s2)}
+.enter-steps i{font-style:normal;width:22px;height:22px;border-radius:50%;background:var(--teal-soft);color:var(--teal-dark);display:grid;place-items:center;font-weight:800;font-size:.8rem}
+.enter-card{padding:var(--s5)}
+.enter-card .btn{width:100%;display:inline-flex;justify-content:center;align-items:center;gap:var(--s2)}
+.cls .class-code-in{font-size:1.6rem;text-align:center;letter-spacing:.3em;text-transform:uppercase;min-height:56px;font-family:var(--f-mono)}
+@media(min-width:641px){.enter-card .btn{width:auto}}
