@@ -31,7 +31,7 @@ def home_faqs() -> list[dict]:
     if not arts:
         return FALLBACK
     vals = tokens.values()
-    return [{"title": a.title, "summary": fa.plain_text(tokens.resolve(a.summary, vals)),
+    return [{"title": tokens.resolve(a.title, vals), "summary": fa.plain_text(tokens.resolve(a.summary, vals)),
              "url": a.get_absolute_url()} for a in arts]
 
 
