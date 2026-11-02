@@ -4,7 +4,7 @@ import re
 from django.test import TestCase, override_settings
 
 
-@override_settings(ALLOWED_HOSTS=["testserver", "postgis.ir", "postgis.araz.me", "www.postgis.ir"])
+@override_settings(ALLOWED_HOSTS=["testserver", "postgis.ir", "www.postgis.ir"])
 class SEOTests(TestCase):
     def jsonld(self, html):
         blocks = re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)
@@ -58,10 +58,10 @@ class SEOTests(TestCase):
         self.assertIn('content="noindex, nofollow"', html)
 
     def test_secondary_domains_redirect(self):
-        for host in ("postgis.araz.me", "www.postgis.ir"):
+        for host in ("www.postgis.ir",):
             r = self.client.get("/docs/qgis/?x=1", HTTP_HOST=host)
             self.assertEqual(r.status_code, 301)
             self.assertEqual(r["Location"], "https://postgis.ir/docs/qgis/?x=1")
         self.assertEqual(self.client.get("/", HTTP_HOST="postgis.ir").status_code, 200)
         # فرم‌ها (POST) دست نمی‌خورند
-        self.assertNotEqual(self.client.post("/accounts/login/", {}, HTTP_HOST="postgis.araz.me").status_code, 301)
+        self.assertNotEqual(self.client.post("/accounts/login/", {}, HTTP_HOST="www.postgis.ir").status_code, 301)

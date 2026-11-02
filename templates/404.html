@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}صفحه پیدا نشد — {{ SITE_NAME }}{% endblock %}
+{% block description %}آدرسی که وارد کردید وجود ندارد. می‌توانید در پایگاه دانش جست‌وجو کنید یا از صفحه اصلی شروع کنید.{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+{% block canonical %}{{ CANONICAL_URL }}{{ request.path }}{% endblock %}
+{% block content %}
+<div class="wrap page err-page">
+  <p class="err-code" aria-hidden="true">۴۰۴</p>
+  <h1>این صفحه پیدا نشد</h1>
+  <p class="muted">شاید آدرس تغییر کرده یا اشتباه تایپ شده است. موضوع موردنظرتان را در پایگاه دانش جست‌وجو کنید.</p>
+  <form class="err-search" role="search" action="{% url 'kb:search' %}" method="get">
+    <input type="search" name="q" placeholder="مثلاً اتصال به QGIS یا ورود Shapefile" aria-label="جست‌وجو در پایگاه دانش" autocomplete="off">
+    <button class="btn" type="submit">جست‌وجو</button>
+  </form>
+  <h2>از اینجا شروع کنید</h2>
+  <ul class="err-links">
+    <li><a href="{% url 'core:home' %}">صفحه اصلی</a></li>
+    <li><a href="{% url 'kb:index' %}">پایگاه دانش</a></li>
+    <li><a href="{% url 'core:help' %}">راهنمای تصویری</a></li>
+    <li><a href="{% url 'core:docs' %}">آموزش‌های نوشتاری</a></li>
+    <li><a href="{% url 'accounts:login' %}">ورود و ساخت حساب رایگان</a></li>
+  </ul>
+</div>
+{% endblock %}

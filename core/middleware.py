@@ -26,7 +26,7 @@ class HealthCheckMiddleware:
 
 class CanonicalHostMiddleware:
     """
-    درخواست‌های GET روی دامنه‌های فرعی (www.postgis.ir، postgis.araz.me) با 301 به دامنه اصلی می‌روند.
+    درخواست‌های GET روی دامنه‌های فرعی (مثل www.postgis.ir) با 301 به دامنه اصلی می‌روند.
     هر دو دامنه کار می‌کنند، ولی گوگل فقط یک نسخه از هر صفحه را می‌بیند.
     """
 

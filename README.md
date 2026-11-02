@@ -146,7 +146,7 @@ ruff check .
 روش پیشنهادی **Docker Compose** است: برنامه و دیتابیس خود پنل با هم بالا می‌آیند و رمز دیتابیس را Coolify خودکار می‌سازد.
 
 1. **ساخت برنامه:** New Resource ← ریپو `arazshah/postgis`، شاخه `main`، Build Pack: **Docker Compose**، Docker Compose Location: **`/docker-compose.yml`** (نه `compose.local.yml`).
-2. **دامنه:** در تنظیمات سرویس `web` همه دامنه‌ها را با کاما جدا کنید، مثلاً `https://postgis.ir,https://www.postgis.ir,https://postgis.araz.me`. رکورد A هر دامنه باید به IP سرور اشاره کند. دامنه‌هایی که در Coolify تعریف می‌کنید خودکار در جنگو مجاز می‌شوند.
+2. **دامنه:** در تنظیمات سرویس `web` همه دامنه‌ها را با کاما جدا کنید، مثلاً `https://postgis.ir,https://www.postgis.ir`. رکورد A هر دامنه باید به IP سرور اشاره کند. دامنه‌هایی که در Coolify تعریف می‌کنید خودکار در جنگو مجاز می‌شوند.
 3. **متغیرهای محیطی (تب Environment Variables):**
    - `DJANGO_SECRET_KEY`
    - `CREDENTIALS_ENCRYPTION_KEY` — یک بار بسازید و هرگز عوض نکنید
