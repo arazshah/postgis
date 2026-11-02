@@ -13,6 +13,7 @@ urlpatterns = [
     path("docs/<slug:slug>/", views.docs_page, name="doc"),
     path("terms/", views.terms, name="terms"),
     path("healthz", views.healthz, name="healthz"),
+    path("csp-report/", views.csp_report, name="csp_report"),
     path("robots.txt", views.robots_txt, name="robots"),
     path("sitemap.xml", views.sitemap_xml, name="sitemap"),
 ]
