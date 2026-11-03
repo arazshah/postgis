@@ -43,6 +43,7 @@ def _plan_values(plan) -> dict[str, str]:
         "plan_map_charts": fanum(g("map_charts", 4)),
         "plan_survey_projects": fanum(g("survey_projects", 1)),
         "plan_survey_points": fanum(g("survey_max_points", 200)),
+        "plan_find_credits": fanum(g("find_layer_credits", 50)),
     }
 
 

@@ -197,6 +197,10 @@ class Plan(models.Model):
         help_text="مجموع نقطه‌های همه پروژه‌های برداشت این پایگاه داده.")
     gnss_external = models.BooleanField(
         "اتصال گیرنده GNSS خارجی", default=False, help_text="گیرنده دقیق با RTK؛ پیش‌فرض خاموش.")
+    find_layer_credits = models.PositiveIntegerField(
+        "اعتبار یافتن عارضه با شرط مکانی بین لایه‌ها (۳۰ روز)", default=50,
+        help_text="تعداد جست‌وجوی «یافتن عارضه» که شرط مکانی آن لایه‌ی دیگری از همین پایگاه است، در ۳۰ روز گذشته "
+                  "برای هر پایگاه داده. شرط توصیفی و شرط با شکل کشیده‌شده یا محدوده نقشه از اعتبار کم نمی‌کند. ۰ یعنی ندارد.")
     dedicated_geoserver = models.BooleanField("GeoServer اختصاصی", default=False)
     raster_mb = models.PositiveIntegerField("فضای رستر (مگابایت)", default=0, help_text="۰ یعنی سرویس رستر ندارد.")
     clone_enabled = models.BooleanField("کپی آزمایشی پایگاه داده از بکاپ", default=False)
@@ -483,3 +487,20 @@ class SizeSample(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["database", "day"], name="uniq_size_day")]
         ordering = ["day"]
+
+
+class FindLog(models.Model):
+    """یک جست‌وجوی «یافتن عارضه»؛ جست‌وجوهای دارای شرط مکانی بین لایه‌ها از اعتبار پلن کم می‌کنند."""
+
+    database = models.ForeignKey(UserDatabase, on_delete=models.CASCADE, related_name="find_logs")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    spec_hash = models.CharField(max_length=40)
+    layer = models.CharField(max_length=130, blank=True)
+    cross_layer = models.BooleanField("شرط مکانی بین لایه‌ها", default=False)
+    charged = models.BooleanField("از اعتبار کم شد", default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "جست‌وجوی عارضه"
+        verbose_name_plural = "جست‌وجوهای عارضه"
+        indexes = [models.Index(fields=["database", "charged", "created_at"], name="findlog_credit_idx")]

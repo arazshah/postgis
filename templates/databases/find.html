@@ -1,0 +1,93 @@
+{% extends "databases/_ws.html" %}{% load fa static ws %}
+{% block title %}یافتن عارضه — {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">
+<link rel="stylesheet" href="{% static 'css/find.css' %}">{% endblock %}
+{% block ws %}
+<div class="page-head">
+  <div><h1>یافتن عارضه</h1>
+    <p class="muted page-sub">عارضه‌ها را با ویژگی‌هایشان (مثلاً نوع = «دخترانه») و جایشان (داخل یک محله، تا ۵۰۰ متری خیابان، داخل شکلی که می‌کشید) پیدا کنید؛ نتیجه روی نقشه برجسته می‌شود.</p></div>
+  <div class="page-acts"><a class="ib" href="{% url 'kb:article' 'find-features' %}" target="_blank" rel="noopener" title="راهنمای یافتن عارضه" aria-label="راهنمای یافتن عارضه">{% icon "help" 20 %}</a></div>
+</div>
+
+{% if not has_layers %}
+<div class="card find-empty">
+  {% icon "table" 28 %}
+  <p>هنوز جدولی در این پایگاه داده نیست. اول یک فایل وارد کنید یا داده آماده بگیرید؛ بعد اینجا عارضه‌هایش را پیدا کنید.</p>
+  {% if db.can_edit %}<a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a>{% endif %}
+</div>
+{% else %}
+<div class="find" data-find>
+  <form class="find-q card" id="fq" novalidate aria-label="شرط‌های جست‌وجو">
+    <div class="fq-sec">
+      <label class="lbl" for="fq-layer">کدام لایه؟</label>
+      <select id="fq-layer" class="in ltr" required></select>
+      <p class="help" id="fq-layer-h"></p>
+    </div>
+
+    <div class="fq-sec">
+      <div class="fq-head"><span class="lbl">{% icon "filter" 16 %}شرط ویژگی‌ها</span>
+        <div class="seg sm" role="group" aria-label="ترکیب شرط‌ها" id="fq-match" hidden>
+          <button type="button" data-m="all" aria-pressed="true">همه شرط‌ها</button>
+          <button type="button" data-m="any" aria-pressed="false">یکی از آن‌ها</button>
+        </div></div>
+      <div id="fq-conds" class="fq-conds"></div>
+      <button type="button" class="btn ghost sm" id="fq-add">{% icon "plus" 16 %}افزودن شرط</button>
+    </div>
+
+    <div class="fq-sec" id="fq-sp-sec">
+      <label class="sw-row"><input type="checkbox" id="fq-sp"><span><b>شرط مکانی</b><small>جای عارضه نسبت به لایه‌ای دیگر یا شکلی روی نقشه</small></span></label>
+      <div id="fq-sp-body" class="fq-sp" hidden>
+        <span class="lbl">عارضه‌هایی که</span>
+        <div class="chips" id="fq-rel" role="group" aria-label="رابطه مکانی"></div>
+        <div class="field fq-dist" id="fq-dist-w" hidden><label for="fq-dist">فاصله (متر)</label><input id="fq-dist" class="in ltr" type="number" min="1" max="200000" value="500" inputmode="numeric"></div>
+        <span class="lbl">نسبت به</span>
+        <div class="tiles" id="fq-tgt" role="group" aria-label="هدف شرط مکانی">
+          <button type="button" class="tile" data-t="layer" aria-pressed="true">{% icon "layers" 18 %}<b>لایه‌ای دیگر</b><small id="fq-credit-chip"></small></button>
+          <button type="button" class="tile" data-t="draw" aria-pressed="false">{% icon "polygon" 18 %}<b>شکل روی نقشه</b><small>آزاد</small></button>
+          <button type="button" class="tile" data-t="extent" aria-pressed="false">{% icon "frame" 18 %}<b>محدوده فعلی نقشه</b><small>آزاد</small></button>
+        </div>
+        <div id="fq-tgt-layer" class="fq-tl">
+          <select id="fq-blayer" class="in ltr" aria-label="لایه هدف"></select>
+          <details id="fq-bcond-w"><summary>{% icon "filter" 16 %}فقط بعضی از عارضه‌های این لایه <span class="muted small" id="fq-bcond-n"></span></summary>
+            <div id="fq-bconds" class="fq-conds"></div>
+            <button type="button" class="btn ghost sm" id="fq-badd">{% icon "plus" 16 %}افزودن شرط</button>
+          </details>
+        </div>
+        <div id="fq-tgt-draw" class="fq-tl" hidden>
+          <div class="seg sm" role="group" aria-label="نوع شکل" id="fq-shape">
+            <button type="button" data-s="Polygon" aria-pressed="false">{% icon "polygon" 16 %}چندضلعی</button>
+            <button type="button" data-s="Rectangle" aria-pressed="false">{% icon "frame" 16 %}مستطیل</button>
+            <button type="button" data-s="Circle" aria-pressed="false">{% icon "point" 16 %}دایره</button>
+          </div>
+          <p class="help" id="fq-shape-h">نوع شکل را بزنید و روی نقشه بکشید.</p>
+        </div>
+        <p class="help" id="fq-tgt-extent" hidden>نقشه را روی محدوده دلخواه ببرید و «یافتن» را بزنید.</p>
+      </div>
+    </div>
+
+    <div class="fq-credit small muted" id="fq-credit"></div>
+    <div class="fq-acts">
+      <button type="submit" class="btn" id="fq-go">{% icon "search" 18 %}یافتن</button>
+      <button type="button" class="btn ghost" id="fq-reset">پاک کردن</button>
+    </div>
+  </form>
+
+  <section class="find-out" aria-label="نتیجه">
+    <div class="find-map-w card">
+      <div id="find-map" class="find-map" data-tiles="{{ SITE.map_tile_url }}" data-attr="{{ SITE.map_tile_attribution }}" role="region" aria-label="نقشه نتیجه"></div>
+      <div class="find-legend small" id="find-legend" hidden><span><i class="lg base"></i>همه عارضه‌ها</span><span><i class="lg hit"></i>نتیجه</span><span><i class="lg tgt"></i>هدف مکانی</span></div>
+    </div>
+    <div class="find-res card" id="find-res" aria-live="polite">
+      <div class="find-state" id="find-state">{% icon "search" 28 %}<p>شرط‌ها را بگذارید و «یافتن» را بزنید. نتیجه اینجا و روی نقشه می‌آید.</p></div>
+    </div>
+  </section>
+</div>
+{{ cfg|json_script:"find-cfg" }}
+{% endif %}
+{% endblock %}
+{% block ws_scripts %}{% if has_layers %}
+<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>
+<script src="{% static 'vendor/leaflet-geoman/leaflet-geoman.min.js' %}" defer></script>
+<script src="{% static 'js/studio-ui.js' %}" defer></script>
+<script src="{% static 'js/find.js' %}" defer></script>{% endif %}{% endblock %}

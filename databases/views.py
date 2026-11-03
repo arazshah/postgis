@@ -1091,3 +1091,104 @@ def explore_edit_undo(request, pk, schema, table):
     services.logevent("table_edit_undo", f"ذخیره‌ی {batch.created_at:%H:%M} برگردانده شد: {t.qualified}",
                       user=request.user, database=db)
     return JsonResponse({"ok": True})
+
+
+# ---------------------------------------------------------------------- یافتن عارضه
+def _find_json(view):
+    from .find import FindError
+
+    def wrapper(request, pk):
+        try:
+            return view(request, pk)
+        except FindError as exc:
+            return JsonResponse({"ok": False, "error": str(exc), "detail": exc.detail}, status=400)
+        except ExplorerError as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    wrapper.__name__ = view.__name__
+    return site_user_required(wrapper)
+
+
+def _finder(request, pk):
+    from .find import Finder, FindError
+
+    db = _user_db(request, pk, "viewer")
+    if not db.is_live:
+        raise FindError("یافتن عارضه فقط برای پایگاه داده فعال در دسترس است.")
+    return db, Finder(Explorer(db))
+
+
+@site_user_required
+def find(request, pk):
+    from . import find_credits
+    from .find import OPS, RELS, Finder, layer_catalog
+
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        return redirect("databases:detail", pk=db.pk)
+    try:
+        layers = layer_catalog(Finder(ex))
+    except ExplorerError as exc:
+        messages.error(request, str(exc))
+        return redirect("databases:detail", pk=db.pk)
+    layers.sort(key=lambda x: (not x["geom"], x["key"]))
+    start = request.GET.get("t", "")
+    cfg = {
+        "layers": layers, "start": start if any(x["key"] == start for x in layers) else "",
+        "ops": {k: [[o, t, n] for o, t, n in v] for k, v in OPS.items()}, "rels": RELS,
+        "credits": find_credits.status(db),
+        "urls": {"cols": reverse("databases:find_columns", args=[db.pk]),
+                 "values": reverse("databases:find_values", args=[db.pk]),
+                 "run": reverse("databases:find_run", args=[db.pk]),
+                 "plans": reverse("billing:plans"),
+                 "geojson": reverse("databases:explore_geojson", args=[db.pk, "__s__", "__t__"])},
+        "csrf": get_token(request),
+    }
+    return render(request, "databases/find.html", {"db": db, "section": "find", "cfg": cfg,
+                                                   "has_layers": bool(layers)})
+
+
+@_find_json
+def find_columns(request, pk):
+    from .find import column_catalog
+
+    _db, finder = _finder(request, pk)
+    return JsonResponse({"ok": True, "columns": column_catalog(finder, request.GET.get("t", ""))})
+
+
+@_find_json
+def find_values(request, pk):
+    _db, finder = _finder(request, pk)
+    return JsonResponse({"ok": True, **finder.values(request.GET.get("t", ""), request.GET.get("col", ""))})
+
+
+@_find_json
+@require_POST
+def find_run(request, pk):
+    from . import find_credits
+    from .find import FindError, spec_hash, uses_other_layer
+
+    if len(request.body) > 512 * 1024:
+        raise FindError("شکل کشیده‌شده بیش از حد بزرگ است.")
+    try:
+        data = json.loads(request.body or b"{}")
+    except ValueError as exc:
+        raise FindError("درخواست نامعتبر است.") from exc
+    spec = data.get("spec") if isinstance(data, dict) else None
+    if not isinstance(spec, dict):
+        raise FindError("درخواست نامعتبر است.")
+    db, finder = _finder(request, pk)
+    cross = uses_other_layer(spec)
+    h = spec_hash(spec)
+    if not find_credits.check(db, h, cross):
+        st = find_credits.status(db)
+        msg = ("پلن این پایگاه داده شرط مکانی بین لایه‌ها را ندارد." if not st["cap"] else
+               f"اعتبار شرط مکانی بین لایه‌ها ({st['cap']} بار در ۳۰ روز) تمام شده است.")
+        return JsonResponse({"ok": False, "error": msg + " شرط توصیفی و شکل کشیده‌شده همچنان آزاد است.",
+                             "credits": st, "upgrade": True}, status=402)
+    try:
+        page = int(data.get("page") or 1)
+    except (TypeError, ValueError):
+        page = 1
+    result = finder.run(spec, page)
+    charged = find_credits.record(db, request.user, h, result["layer"], cross)
+    return JsonResponse({"ok": True, **result, "charged": charged, "credits": find_credits.status(db)})

@@ -36,6 +36,7 @@ GROUPS = [
     ("", [("نمای کلی و اتصال", "databases:detail", ("databases:detail",), "home", "viewer")]),
     ("داده", [
         ("جدول‌ها", "databases:explore", ("databases:explore", "databases:explore_table"), "table", "viewer"),
+        ("یافتن عارضه", "databases:find", ("databases:find",), "search", "viewer"),
         ("اجرای SQL", "databases:explore_sql", ("databases:explore_sql",), "code", "viewer"),
         ("ورود فایل", "databases:import", ("databases:import", "databases:import_review"), "upload", "editor"),
         ("داده آماده ایران", "iranmap:ready", ("iranmap:ready",), "pin", "editor"),
