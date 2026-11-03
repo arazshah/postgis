@@ -3,10 +3,10 @@ title: کنسول SQL چیست و چه محدودیت‌هایی دارد؟
 summary: در مرورگر داده می‌توانید SQL بنویسید و اجرا کنید. به‌طور پیش‌فرض فقط‌خواندنی است، حداکثر ۵۰۰ ردیف نتیجه نشان می‌دهد و اجرای هر کوئری پس از زمان مجاز متوقف می‌شود. نتیجه مکانی روی نقشه نمایش داده می‌شود.
 kind: concept
 keywords: کنسول sql, sql console, کوئری, اجرای sql, select, ۵۰۰ ردیف, timeout, فقط خواندنی, نوشتن sql
-related: sql-persian-question, sql-nearest-features, sql-buffer, err-statement-timeout, explorer-overview, edit-table-data
+related: find-features, sql-persian-question, sql-nearest-features, sql-buffer, err-statement-timeout, explorer-overview, edit-table-data
 featured: yes
 order: 150
-reviewed: 2026-11-01
+reviewed: 2026-11-03
 ---
 🎬 **[ویدیوی راهنما: اجرای SQL و تحلیل مکانی در سایت](help:sql)** را ببینید (۱ دقیقه و ۲ ثانیه، بدون نیاز به صدا).
 
@@ -30,3 +30,5 @@ SELECT * FROM roads LIMIT 10;
 
 !!! tip
     برای کار طولانی (ساخت جدول بزرگ، ورود حجیم) از ابزار دسکتاپ مثل [psql یا pgAdmin](kb:connect-psql-pgadmin) استفاده کنید.
+
+برای پیدا کردن عارضه با شرط ویژگی یا جای آن (داخل یک محله، تا فاصله‌ای از لایه دیگر) لازم نیست SQL بنویسید؛ از [یافتن عارضه](kb:find-features) استفاده کنید.
