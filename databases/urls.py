@@ -33,6 +33,10 @@ urlpatterns = [
     path("<int:pk>/explore/t/<str:schema>/<str:table>/csv/", views.explore_csv, name="explore_csv"),
     path("<int:pk>/explore/t/<str:schema>/<str:table>/export/<str:fmt>/", views.explore_export, name="explore_export"),
     path("<int:pk>/explore/health/", views.explore_health, name="explore_health"),
+    path("<int:pk>/find/", views.find, name="find"),
+    path("<int:pk>/find/columns/", views.find_columns, name="find_columns"),
+    path("<int:pk>/find/values/", views.find_values, name="find_values"),
+    path("<int:pk>/find/run/", views.find_run, name="find_run"),
     path("<int:pk>/import/", views.import_start, name="import"),
     path("<int:pk>/import/<int:job_id>/", views.import_review, name="import_review"),
 ]

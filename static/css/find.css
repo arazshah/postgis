@@ -1,0 +1,89 @@
+/* یافتن عارضه (شرط توصیفی و مکانی) — فقط توکن‌های ds.css و app.css */
+.find [hidden]{display:none!important}
+.find{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:14px;align-items:start}
+.find-q{padding:14px;display:flex;flex-direction:column;gap:14px;position:sticky;top:calc(var(--top-h, 56px) + 10px);
+  max-height:calc(100vh - var(--top-h, 56px) - 24px);overflow:auto}
+.find-out{display:flex;flex-direction:column;gap:14px;min-width:0}
+.find .lbl{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;color:var(--ink-2);margin-bottom:6px}
+.find .help{font-size:12px;color:var(--ink-3);margin:4px 0 0}
+.find .in{width:100%;height:var(--ctl-h);border:1px solid var(--line);border-radius:var(--r-ctl);padding:0 10px;
+  background:var(--card);color:var(--ink);font:inherit;font-size:13.5px;min-width:0}
+.find .in:focus-visible,.find button:focus-visible,.find summary:focus-visible{outline:3px solid var(--ochre);outline-offset:1px}
+.fq-sec{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line-2, var(--line));padding-top:12px}
+.fq-sec:first-child{border-top:0;padding-top:0}
+.fq-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.fq-head .lbl{margin:0}
+.fq-conds{display:flex;flex-direction:column;gap:8px}
+.fq-cond{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;padding:8px;border:1px solid var(--line);
+  border-radius:var(--r-ctl);background:var(--surface)}
+.fq-cond .fq-v{grid-column:1 / -1;display:flex;gap:6px}
+.fq-cond .fq-top{grid-column:1 / -1}
+.fq-top .chip{border:0;cursor:pointer;font:inherit;font-size:12px;padding:2px 10px}
+.fq-top .chip small{color:var(--ink-3);margin-inline-start:4px}
+.fq-empty{font-size:12.5px;color:var(--ink-3);margin:0}
+
+/* انتخاب‌گر قطعه‌ای و چیپ‌های رابطه */
+.find .seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-ctl);overflow:hidden;background:var(--card)}
+.find .seg button{border:0;background:none;padding:5px 10px;font:inherit;font-size:12.5px;color:var(--ink-2);cursor:pointer;
+  display:inline-flex;align-items:center;gap:4px;min-height:var(--ctl-h-sm)}
+.find .seg button+button{border-inline-start:1px solid var(--line)}
+.find .seg button[aria-pressed=true]{background:var(--teal);color:var(--on-accent, #fff)}
+.find .chips .opt{border:1px solid var(--line);background:var(--card);color:var(--ink-2);border-radius:99px;padding:4px 12px;
+  font:inherit;font-size:12.5px;cursor:pointer;min-height:var(--ctl-h-sm)}
+.find .chips .opt[aria-pressed=true]{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-dark, var(--teal))}
+.fq-sp{display:flex;flex-direction:column;gap:8px}
+.fq-dist{max-width:180px}
+.find .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.find .tile{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border:1px solid var(--line);
+  border-radius:var(--r-ctl);background:var(--card);color:var(--ink-2);cursor:pointer;font:inherit;font-size:12px;text-align:center}
+.find .tile b{font-weight:600}
+.find .tile small{color:var(--ink-3);font-size:11px}
+.find .tile[aria-pressed=true]{border-color:var(--teal);background:var(--teal-soft);color:var(--teal-dark, var(--teal))}
+.fq-tl{display:flex;flex-direction:column;gap:8px}
+.fq-tl details{border:1px dashed var(--line);border-radius:var(--r-ctl);padding:6px 8px}
+.fq-tl summary{cursor:pointer;font-size:12.5px;display:flex;align-items:center;gap:6px}
+.fq-tl details[open] summary{margin-bottom:8px}
+.fq-credit{padding:8px 10px;border-radius:var(--r-ctl);background:var(--surface)}
+.fq-credit.low{background:var(--ochre-soft);color:var(--ink)}
+.fq-acts{display:flex;gap:8px}
+.fq-acts .btn{flex:1;justify-content:center}
+
+/* نقشه */
+.find-map-w{padding:0;overflow:hidden;position:relative;isolation:isolate}
+.find-map{height:min(58vh,520px);min-height:300px}
+.find-legend{position:absolute;bottom:8px;inset-inline-start:8px;z-index:500;display:flex;gap:10px;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--r-ctl);padding:4px 10px;color:var(--ink-2)}
+.find-legend span{display:inline-flex;align-items:center;gap:4px}
+.lg{display:inline-block;width:12px;height:12px;border-radius:3px;border:2px solid}
+.lg.base{border-color:var(--ink-3);background:var(--line)}
+.lg.hit{border-color:var(--teal);background:var(--ochre)}
+.lg.tgt{border-color:var(--blue, var(--teal));border-style:dashed}
+
+/* نتیجه */
+.find-res{padding:12px;min-height:120px}
+.find-state{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;color:var(--ink-3);padding:18px 8px}
+.find-state p{margin:0;max-width:44ch}
+.find-state.err{color:var(--ink)}
+.find-state.err .i{color:var(--red)}
+.find-sum{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.find-sum b{font-family:var(--f-display);font-size:15px}
+.find-sum .small{color:var(--ink-3)}
+.find-res .table-scroll{overflow-x:auto;max-height:420px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--r-ctl)}
+.find-res .data-table tbody tr{cursor:pointer}
+.find-res .data-table tbody tr:hover,.find-res .data-table tbody tr.on{background:var(--teal-soft)}
+.find-res .data-table tbody tr:focus-visible{outline:3px solid var(--ochre);outline-offset:-3px}
+.find-pg{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;font-size:13px}
+.find-res details.tech{margin-top:8px;font-size:12px;color:var(--ink-3)}
+.find-empty{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:32px 16px;color:var(--ink-2)}
+
+@media (max-width:900px){
+  .find{grid-template-columns:1fr}
+  .find-q{position:static;max-height:none}
+  .find-map{height:320px}
+}
+@media (max-width:420px){
+  .find .tiles{grid-template-columns:1fr 1fr 1fr}
+  .fq-cond{grid-template-columns:1fr auto}
+  .fq-cond .fq-op{grid-column:1 / 2}
+  .find-legend{gap:6px;font-size:11px}
+}
