@@ -67,7 +67,7 @@ SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
 # دامنه اصلی برای سئو: لینک canonical، نقشه سایت و تصویر اشتراک‌گذاری
 CANONICAL_URL = os.environ.get("CANONICAL_URL", "https://postgis.ir").rstrip("/")
 # دامنه‌های دیگر با 301 به دامنه اصلی می‌روند تا گوگل محتوای تکراری نبیند (خالی = خاموش)
-CANONICAL_REDIRECT_HOSTS = env_list("CANONICAL_REDIRECT_HOSTS", "www.postgis.ir,postgis.araz.me")
+CANONICAL_REDIRECT_HOSTS = env_list("CANONICAL_REDIRECT_HOSTS", "www.postgis.ir")
 SUPPORT_TELEGRAM = os.environ.get("SUPPORT_TELEGRAM", "")
 SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "")
 
@@ -103,7 +103,9 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "core.middleware.HealthCheckMiddleware",
     "core.middleware.CanonicalHostMiddleware",
+    "core.middleware.SafeGZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "core.middleware.SecurityHeadersMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -232,11 +234,22 @@ USE_X_FORWARDED_HOST = True
 # در انتقال امن به درگاه خارجی فقط مبدأ سایت فرستاده شود تا دامنهٔ پذیرنده
 # قابل بررسی باشد، بدون اینکه مسیر فاکتور یا اطلاعات صفحه افشا شود.
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+# سیاست محتوای امن (CSP): report = فقط گزارش به /csp-report/ (پیش‌فرض)، enforce = مسدودسازی، off = خاموش.
+# بعد از چند روز بی‌گزارش‌ماندن، CSP_MODE=enforce را در Coolify بگذارید.
+CSP_MODE = os.environ.get("CSP_MODE", "report").strip().lower()
+# میزبان‌های بیرونی مجاز برای اسکریپت: Leaflet، آمار Umami و نماد اینماد
+CSP_SCRIPT_HOSTS = env_list(
+    "CSP_SCRIPT_HOSTS", "https://unpkg.com,https://stats.araz.me,https://enamad.ir,https://trustseal.enamad.ir")
 if not DEBUG and not os.environ.get("DJANGO_TESTING"):
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = "DENY"
+    X_FRAME_OPTIONS = "DENY"  # صفحه‌های embed نقشه با xframe_options_exempt مستثنا هستند
+    # HSTS با شروع محتاطانه (یک هفته)؛ بعد از اطمینان HSTS_SECONDS=31536000 بگذارید.
+    # includeSubDomains عمداً خاموش است: زیردامنه‌هایی مثل db.postgis.ir فقط TCP هستند.
+    SECURE_HSTS_SECONDS = int(os.environ.get("HSTS_SECONDS", "604800"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("HSTS_INCLUDE_SUBDOMAINS", False)
+    SECURE_HSTS_PRELOAD = False
 
 LOGGING = {
     "version": 1,

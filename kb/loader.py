@@ -132,12 +132,14 @@ def validate(root: Path = CONTENT_DIR) -> list[str]:
             problems.append(f"{where}: عنوان بیش از ۲۰۰ نویسه است.")
         if len(f.body) < 80:
             problems.append(f"{where}: متن مقاله بسیار کوتاه است.")
+        if tokens.TOKEN_RE.search(f.keywords if isinstance(f.keywords, str) else " ".join(f.keywords)):
+            problems.append(f"{where}: کلیدواژه‌ها نباید توکن پویا داشته باشند.")
         for r in f.related:
             if r not in known:
                 problems.append(f"{where}: مقاله مرتبط ناموجود: {r}")
             if r == f.slug:
                 problems.append(f"{where}: مقاله با خودش مرتبط شده است.")
-        for tok in sorted(tokens.unknown_tokens(f.summary + "\n" + f.body)):
+        for tok in sorted(tokens.unknown_tokens(f.title + "\n" + f.summary + "\n" + f.body)):
             problems.append(f"{where}: توکن ناشناس {{{{{tok}}}}}")
         for kind, target in tokens.link_targets(f.summary + "\n" + f.body):
             ok = (target in known) if kind == "kb" else (target in GUIDE_MAP) if kind == "help" else (target in DOC_SLUGS)

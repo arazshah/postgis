@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from django.conf import settings
 
+from . import text as fa
 from . import tokens
 from .models import Article, ArticleChunk
 
@@ -26,7 +27,7 @@ def article_rows(audience: str = "public"):
         yield {
             "id": a.slug,
             "url": f"{base}{a.get_absolute_url()}",
-            "title": a.title,
+            "title": tokens.resolve(a.title, vals),
             "summary": tokens.resolve(a.summary, vals),
             "kind": a.kind,
             "audience": a.audience,
@@ -45,19 +46,24 @@ def chunk_rows(audience: str = "public"):
     arts = {a.pk: a for a in _queryset(audience)}
     for c in ArticleChunk.objects.filter(article_id__in=arts).order_by("article_id", "ordinal"):
         a = arts[c.article_id]
-        url = f"{base}{a.get_absolute_url()}" + (f"#{c.anchor}" if c.anchor else "")
+        title = tokens.resolve(a.title, vals)
+        heading, anchor = c.heading, c.anchor
+        if "{{" in heading:  # سرفصل دارای توکن: متن و لنگر مطابق صفحه‌ی رندرشده
+            heading = tokens.resolve(heading, vals)
+            anchor = fa.slugify(heading) if anchor and " / " not in heading else anchor
+        url = f"{base}{a.get_absolute_url()}" + (f"#{anchor}" if anchor else "")
         text = tokens.expand_links(tokens.resolve(c.text, vals), base)
         yield {
             "id": f"{a.slug}#{c.ordinal}",
             "article": a.slug,
             "url": url,
-            "title": a.title,
-            "heading": c.heading,
+            "title": title,
+            "heading": heading,
             "category": a.category.title,
             "kind": a.kind,
             "audience": a.audience,
             "updated_at": a.updated_at.isoformat(),
             "hash": c.text_hash,
             "text": text,
-            "embedding_text": f"{a.title}\n{c.heading}\n{text}" if c.heading != a.title else f"{a.title}\n{text}",
+            "embedding_text": f"{title}\n{heading}\n{text}" if heading != title else f"{title}\n{text}",
         }

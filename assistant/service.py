@@ -206,8 +206,8 @@ def retrieve(conf, user, query: str, previous: str = "") -> tuple[list[Source], 
         if budget - len(body) < 0 and sources:
             break
         budget -= len(body)
-        sources.append(Source(n=len(sources) + 1, chunk_id=c.pk, slug=c.article.slug, title=c.article.title,
-                              heading=c.heading, url=_chunk_url(c), text=body))
+        sources.append(Source(n=len(sources) + 1, chunk_id=c.pk, slug=c.article.slug, title=tokens.resolve(c.article.title, vals),
+                              heading=tokens.resolve(c.heading, vals), url=_chunk_url(c), text=body))
     return sources, ("vector" if vec_ids else "keyword")
 
 
@@ -231,7 +231,8 @@ def _noanswer_event(user, message: str) -> dict:
     # فقط مقاله‌هایی که همه واژه‌های پرسش را دارند؛ پیشنهاد بی‌ربط بدتر از نبودن پیشنهاد است
     toks = list(dict.fromkeys(fa.tokens(message)))[:8]
     found = [a for a, _ in kb_search.search(message, user, limit=6) if toks and all(t in a.search_text for t in toks)]
-    suggest = [{"title": a.title, "url": a.get_absolute_url()} for a in found[:3]]
+    vals = tokens.values()
+    suggest = [{"title": tokens.resolve(a.title, vals), "url": a.get_absolute_url()} for a in found[:3]]
     return {"type": "noanswer", "suggest": suggest, "support_url": reverse("support:new"),
             "text": "در راهنماهای سایت پاسخ دقیقی برای این سؤال پیدا نکردم. سؤال را کامل‌تر بنویسید یا با پشتیبانی در میان بگذارید."}
 

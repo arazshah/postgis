@@ -1,12 +1,17 @@
 import datetime
+import json
+import logging
 import os
 from xml.sax.saxutils import escape
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import connection
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 from databases.models import Plan
 
@@ -107,6 +112,27 @@ def healthz(request):
         return JsonResponse({"status": "db-error"}, status=503)
 
 
+@csrf_exempt
+@require_POST
+def csp_report(request):
+    """دریافت گزارش نقض CSP (حالت report-only)؛ فقط فیلدهای مهم در لاگ می‌ماند. پاسخ همیشه 204 است."""
+    cache_key = "csp-report-minute"
+    cache.add(cache_key, 0, 60)
+    try:
+        count = cache.incr(cache_key)
+    except ValueError:
+        count = 1
+    if count <= 60 and len(request.body) <= 8192:
+        try:
+            raw = json.loads(request.body or b"{}")
+            rep = raw.get("csp-report", raw) if isinstance(raw, dict) else {}
+            fields = ("document-uri", "violated-directive", "blocked-uri", "source-file", "line-number")
+            logging.getLogger("csp").warning("CSP: %s", {k: str(rep.get(k, ""))[:200] for k in fields})
+        except ValueError:
+            pass
+    return HttpResponse(status=204)
+
+
 def robots_txt(request):
     lines = [
         "User-agent: *",
@@ -119,6 +145,7 @@ def robots_txt(request):
         "Disallow: /support/",
         "Disallow: /assistant/",
         "Disallow: /kb/search/",
+        "Disallow: /csp-report/",
         "",
         f"Sitemap: {settings.CANONICAL_URL}/sitemap.xml",
         "",

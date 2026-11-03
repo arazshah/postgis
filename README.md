@@ -146,7 +146,7 @@ ruff check .
 روش پیشنهادی **Docker Compose** است: برنامه و دیتابیس خود پنل با هم بالا می‌آیند و رمز دیتابیس را Coolify خودکار می‌سازد.
 
 1. **ساخت برنامه:** New Resource ← ریپو `arazshah/postgis`، شاخه `main`، Build Pack: **Docker Compose**، Docker Compose Location: **`/docker-compose.yml`** (نه `compose.local.yml`).
-2. **دامنه:** در تنظیمات سرویس `web` همه دامنه‌ها را با کاما جدا کنید، مثلاً `https://postgis.ir,https://www.postgis.ir,https://postgis.araz.me`. رکورد A هر دامنه باید به IP سرور اشاره کند. دامنه‌هایی که در Coolify تعریف می‌کنید خودکار در جنگو مجاز می‌شوند.
+2. **دامنه:** در تنظیمات سرویس `web` همه دامنه‌ها را با کاما جدا کنید، مثلاً `https://postgis.ir,https://www.postgis.ir`. رکورد A هر دامنه باید به IP سرور اشاره کند. دامنه‌هایی که در Coolify تعریف می‌کنید خودکار در جنگو مجاز می‌شوند.
 3. **متغیرهای محیطی (تب Environment Variables):**
    - `DJANGO_SECRET_KEY`
    - `CREDENTIALS_ENCRYPTION_KEY` — یک بار بسازید و هرگز عوض نکنید
@@ -163,6 +163,13 @@ ruff check .
 روش جایگزین: Build Pack **Dockerfile** با پورت 8000. در این روش دیتابیس پنل را جدا در Coolify بسازید و `DATABASE_URL` را دستی وارد کنید.
 
 مایگریشن‌ها در هر دیپلوی خودکار اجرا می‌شوند (`docker/entrypoint.sh`).
+
+## هدرهای امنیتی و CSP
+
+- **HSTS:** در تولید با `max-age` یک‌هفته‌ای ارسال می‌شود. بعد از چند روز بی‌مشکلی `HSTS_SECONDS=31536000` بگذارید. `includeSubDomains` خاموش است (`HSTS_INCLUDE_SUBDOMAINS=1` برای روشن کردن)؛ preload ارسال نمی‌شود.
+- **CSP:** پیش‌فرض `CSP_MODE=report` است: چیزی مسدود نمی‌شود و نقض‌ها در لاگ برنامه (logger `csp`) ثبت می‌شود. بعد از چند روز بدون گزارش مهم، `CSP_MODE=enforce` را در Coolify بگذارید. اسکریپت‌های بیرونی مجاز با `CSP_SCRIPT_HOSTS` (فهرست با کاما) تنظیم می‌شود؛ پیش‌فرض Leaflet، آمار Umami و نماد اینماد.
+- **قاب‌گذاری:** کل سایت `X-Frame-Options: DENY` دارد؛ فقط صفحه‌های embed نقشه (`/maps/<slug>/embed/` و `/m/<slug>/embed/`) و نمای رستر مستثنا هستند.
+- **gzip:** پاسخ‌های متنی و کاشی برداری فشرده می‌شوند؛ پاسخ‌های استریم (دستیار، NTRIP) و فایل‌های از پیش فشرده نه.
 
 ## پیامک (sms.ir)
 
