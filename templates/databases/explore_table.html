@@ -25,6 +25,7 @@
         <a role="menuitem" href="{% url 'databases:explore_export' db.pk t.schema t.name 'xlsx' %}">{% icon "table" 18 %}<span>اکسل{% if t.geometry %} (هندسه به WKT){% endif %}</span></a>
       </div>
     </div>
+    {% if db.can_edit and db.status == 'active' and t.kind in 'rp' %}<a class="btn ghost sm" href="{% url 'databases:import' db.pk %}?into={{ t.schema }}.{{ t.name }}">{% icon "upload" 16 %}ورود فایل به این جدول</a>{% endif %}
     {% if edit_cfg %}<a class="ib" href="{% url 'core:help_page' 'edittable' %}" target="_blank" rel="noopener" title="ویدیوی آموزشی ویرایش جدول" aria-label="آموزش تصویری ویرایش جدول">{% icon "help" 20 %}</a>{% endif %}
   </div>
 </div>
@@ -102,7 +103,7 @@
     </span>
   </div>
   {% else %}
-  <div class="empty" style="padding:48px 24px">{% icon "table" 28 %}<h2>این جدول خالی است</h2>{% if edit_cfg.capable %}<p class="muted">«ویرایش جدول» را روشن کنید؛ بعد سطر را دستی بسازید، چند سطر را از Excel بچسبانید یا از «ورود فایل» داده وارد کنید. هندسه را می‌توانید با مختصات، WKT/GeoJSON یا کلیک روی نقشه بدهید.</p><button type="button" class="btn" id="edit-empty-start" data-edit-start>{% icon "edit" 18 %}شروع ویرایش و افزودن سطر</button>{% elif db.can_edit and db.status == 'active' %}<p class="muted">این جدول کلید اصلی ندارد و در مرورگر ویرایش نمی‌شود؛ از «ورود فایل» داده وارد کنید.</p>{% endif %}</div>
+  <div class="empty" style="padding:48px 24px">{% icon "table" 28 %}<h2>این جدول خالی است</h2>{% if edit_cfg.capable %}<p class="muted">«ویرایش جدول» را روشن کنید؛ بعد سطر را دستی بسازید، چند سطر را از Excel بچسبانید یا از «ورود فایل» داده وارد کنید. هندسه را می‌توانید با مختصات، WKT/GeoJSON یا کلیک روی نقشه بدهید.</p><button type="button" class="btn" id="edit-empty-start" data-edit-start>{% icon "edit" 18 %}شروع ویرایش و افزودن سطر</button> <a class="btn ghost" href="{% url 'databases:import' db.pk %}?into={{ t.schema }}.{{ t.name }}">{% icon "upload" 18 %}ورود فایل به این جدول</a>{% elif db.can_edit and db.status == 'active' %}<p class="muted">این جدول کلید اصلی ندارد و در مرورگر ویرایش نمی‌شود؛ از «ورود فایل» داده وارد کنید.</p>{% endif %}</div>
   {% endif %}
 {% endif %}
 {% if edit_cfg.capable %}<script src="{% static 'js/studio-ui.js' %}" defer></script><script src="{% static 'js/table-geom.js' %}" defer></script><script src="{% static 'js/table-edit.js' %}" defer></script><script src="{% static 'js/table-grid.js' %}" defer></script>{% endif %}

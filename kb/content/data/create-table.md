@@ -3,7 +3,7 @@ title: چطور خودم یک جدول مکانی بسازم و ستون‌ها�
 summary: از صفحه‌ی «جدول‌ها» روی «جدول جدید» بزنید؛ نام، نوع هندسه، سامانه‌ی مختصات و ستون‌ها را تعریف کنید و جدول را بدون نوشتن SQL بسازید. بعد از ساخت، ردیف‌ها را دستی اضافه کنید یا فایل وارد کنید.
 kind: howto
 keywords: ساخت جدول, جدول جدید, create table, تعریف ستون, نوع ستون, geometry, ستون مکانی, کلید اصلی, ایندکس, قالب جدول
-related: edit-table-data, import-formats, what-is-srid, spatial-index-gist, sql-console, drop-table
+related: import-into-table, edit-table-data, import-formats, what-is-srid, spatial-index-gist, sql-console, drop-table
 featured: yes
 order: 105
 reviewed: 2026-11-04
@@ -31,4 +31,4 @@ reviewed: 2026-11-04
 - نوع geography فقط با SRID ‏۴۳۲۶ در دسترس است؛ برای کار معمول در ایران ۴۳۲۶ یا UTM ناحیه ۳۹ تا ۴۱ مناسب است.
 - هر جدول حداکثر ۲۰۰ ستون دارد. ساخت جدول از سهمیه‌ی حجم پایگاه داده مصرف می‌کند و اگر سهمیه پر باشد ممکن نیست.
 - ساخت همه‌یاهیچ است؛ اگر خطایی رخ دهد چیزی ساخته نمی‌شود.
-- بعد از ساخت، سطرها را در [حالت ویرایش](kb:edit-table-data) اضافه کنید (فرم سطر با هندسه از مختصات، WKT/GeoJSON یا نقشه، یا «چندسطر» با چسباندن از Excel) یا [فایل وارد کنید](kb:import-formats). برای حذف جدول: [حذف جدول](kb:drop-table).
+- بعد از ساخت، سطرها را در [حالت ویرایش](kb:edit-table-data) اضافه کنید (فرم سطر با هندسه از مختصات، WKT/GeoJSON یا نقشه، یا «چندسطر» با چسباندن از Excel) یا [فایل را به همین جدول وارد کنید](kb:import-into-table). برای حذف جدول: [حذف جدول](kb:drop-table).
