@@ -6,6 +6,7 @@ from django.views.decorators.http import require_http_methods
 from accounts.decorators import site_user_required
 from databases import team
 from databases.explorer import Explorer, ExplorerError
+from publish import access
 from publish.models import Service
 
 from . import engine
@@ -64,8 +65,11 @@ def manage(request, pk):
             f.delete()
             messages.success(request, "فرم حذف شد؛ داده‌های ثبت‌شده در جدول می‌مانند.")
         return here
+    pks = set()
     try:
-        tables = [t for t in Explorer(db).tables() if t.kind in ("r", "p")]
+        ex = Explorer(db)
+        tables = [t for t in ex.tables() if t.kind in ("r", "p")]
+        pks = ex.single_pk_tables()
     except ExplorerError as exc:
         messages.error(request, str(exc))
         tables = []
@@ -74,17 +78,21 @@ def manage(request, pk):
     for t in tables:
         if t.schema in ("routing",) and t.name in ("configuration", "pointsofinterest"):
             continue
-        rows.append({"t": t, "api": api.get((t.schema, t.name))})
-    form_cols = {}
+        rows.append({"t": t, "api": api.get((t.schema, t.name)), "has_pk": (t.schema, t.name) in pks})
+    rows.sort(key=lambda r: (r["api"] is None, r["t"].schema, r["t"].name))  # جدول‌های فعال اول
+    form_cols, pk_of = {}, {}
     for a in api.values():
         try:
             m = engine.describe(db, a.schema, a.table)
             form_cols[a.pk] = [c["name"] for c in m["columns"] if c is not m["geom"] and c["name"] != m["pk"]]
+            pk_of[a.pk] = m["pk"] or "id"
         except engine.RestError:
             form_cols[a.pk] = []
+            pk_of[a.pk] = "id"
     base = request.build_absolute_uri("/")[:-1]
     return render(request, "restapi/manage.html", {
         "db": db, "service": service, "rows": rows, "apis": list(api.values()), "form_cols": form_cols,
+        "pk_of": pk_of, "n_active": len(api), "used": access.usage_today(db), "cap": db.plan.publish_daily_requests,
         "base": base, "sample": next(iter(api.values()), None), "forms": FieldForm.objects.filter(
             api_table__service=service).select_related("api_table"),
     })

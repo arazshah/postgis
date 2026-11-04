@@ -461,6 +461,14 @@ class Explorer:
                 break
         return done, failed
 
+    def single_pk_tables(self) -> set[tuple[str, str]]:
+        """جدول‌هایی که کلید اصلی تک‌ستونی دارند (شرط ویرایش و حذف در REST API)."""
+        with self.connect() as conn:
+            return {(n, r) for n, r in conn.execute("""
+                SELECT n.nspname, c.relname FROM pg_index i
+                JOIN pg_class c ON c.oid = i.indrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE i.indisprimary AND i.indnkeyatts = 1 AND c.relkind IN ('r','p')""")}
+
     def fix_group(self, kind: str) -> tuple[list[str], list[str]]:
         """یک نوع مشکل را روی همه‌ی جدول‌هایی که دارند اصلاح می‌کند (تعیین SRID به انتخاب کاربر نیاز دارد و شامل نیست)."""
         if kind not in self.FIXES or kind == "set_srid":

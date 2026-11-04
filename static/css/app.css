@@ -1358,3 +1358,26 @@ body.app .hg-t h2{margin:0;font:800 15px/1.6 var(--f-display);display:flex;gap:8
 
 .choice b{text-align:start;unicode-bidi:plaintext}
 .hl-reset[aria-pressed=true]{display:none}
+
+/* ── REST API: زبانه‌ها، نشان‌های دسترسی، کارت فرم، مودال دسترسی (rest-manage.js) ── */
+.tab-n{font-size:.72rem;font-weight:600;background:var(--paper-2);color:var(--ink-2);border-radius:99px;padding:0 8px;margin-inline-start:6px}
+.c-acc{width:auto}
+.acc-row{display:inline-flex;gap:6px;flex-wrap:wrap}
+.acc{font-size:.74rem;padding:1px 9px;border-radius:99px;background:var(--teal-soft);color:var(--teal-dark);white-space:nowrap}
+.acc.w{background:var(--ochre-soft);color:#7a5200}
+.row-btns{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end}
+.c-act{width:1%;white-space:nowrap}
+.choice-3{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.choice input:checked+span{border-color:var(--teal);background:var(--teal-soft)}
+.choice input:focus-visible+span{outline:2px solid var(--ochre);outline-offset:2px}
+.choice.disabled{opacity:.5;cursor:not-allowed}
+.rd-adv summary{cursor:pointer;font-size:.88rem;color:var(--ink-2)}
+.rd-checks{display:grid;gap:8px;margin-top:var(--s2)}
+.ff-list{list-style:none;margin:var(--s3) 0 0;padding:0;display:grid;gap:var(--s3)}
+.ff-card{display:flex;align-items:center;gap:var(--s3);padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-card);background:var(--card);flex-wrap:wrap}
+.ff-main{display:flex;flex-direction:column;gap:2px;flex:1 1 220px;min-width:0}
+.ff-badges{display:flex;gap:6px;margin-top:4px}
+.ff-link{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;overflow:hidden}
+.ff-link code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rc-pick{margin:var(--s3) 0}
+@media (max-width:640px){.c-name{width:auto}.c-acc,.c-x{display:none!important}.row-btns .btn{padding-inline:10px}.ff-link{flex:1 1 100%}}
