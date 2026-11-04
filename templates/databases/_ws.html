@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load fa ws static %}
 {% block app_burger %}<button class="ib app-burger" type="button" data-ws-open aria-controls="ws-side" aria-expanded="false" aria-label="منوی پایگاه داده">{% icon "menu" 20 %}</button>{% endblock %}
 {% block app_dbchip %}<a class="app-dbchip ltr" href="{% url 'databases:detail' db.pk %}" title="{{ db.db_name }}"><span class="st {{ db.status }}"></span><b>{{ db.db_name }}</b></a>{% endblock %}
-{% block app_search %}<button class="app-search" type="button" data-ws-jump title="جستجوی سریع بخش‌ها و پایگاه‌ها (Ctrl+K)">{% icon "search" 16 %}<span class="app-search-t">جستجو در بخش‌ها و پایگاه‌ها…</span><kbd>Ctrl K</kbd></button>{% endblock %}
+{% block app_search %}<button class="app-search" type="button" data-ws-jump title="جستجوی سریع بخش‌ها، جدول‌ها و پایگاه‌ها (Ctrl+K)">{% icon "search" 16 %}<span class="app-search-t">جستجو در بخش‌ها، جدول‌ها و پایگاه‌ها…</span><kbd>Ctrl K</kbd></button>{% endblock %}
 {% block content %}
 <script>try{var d=document.documentElement,s=localStorage;if(s.getItem("gp.ws.c")==="1")d.dataset.wsC="1";}catch(e){}</script>
 <div class="ws" data-ws>

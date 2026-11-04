@@ -45,3 +45,4 @@
   <button class="ws-collapse" type="button" data-ws-collapse aria-pressed="false" title="جمع کردن منو به نوار آیکون (کلید [ )">{% icon "panelc" 20 %}<span class="ws-lbl">جمع کردن منو</span></button>
 </div>
 {{ jump|json_script:"ws-jump" }}
+{% if db.is_live %}<span hidden data-ws-tables="{% url 'databases:tables_json' db.pk %}"></span>{% endif %}

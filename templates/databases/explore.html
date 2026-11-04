@@ -2,44 +2,94 @@
 {% block head %}{% if builder_cfg %}<link rel="stylesheet" href="{% static 'css/table-builder.css' %}">{% endif %}{% endblock %}
 {% block ex %}
 {% if tables %}
-<form class="panel" method="get" action="{% url 'maps:quick' db.pk %}" id="compare">
-  <div class="ex-head"><h2>خلاصه جدول‌ها</h2>{% if builder_cfg %}<button type="button" class="btn" data-tb-open="">{% icon "plus" 18 %}جدول جدید</button>{% endif %}</div>
-  {% if spatial_count > 1 %}
-  <div class="ex-compare">
-    <span class="small muted">چند جدول مکانی را تیک بزنید تا کنار هم روی یک نقشه ببینید.</span>
-    <button class="btn sm" type="submit" data-compare-btn disabled>نمایش با هم روی نقشه</button>
-    <a class="small" href="{% url 'maps:index' db.pk %}">نقشه‌های ذخیره‌شده</a>
+<form class="panel tl" method="get" action="{% url 'maps:quick' db.pk %}" id="compare" data-tl data-total="{{ tables|length }}">
+  <div class="ex-head">
+    <div>
+      <h2>جدول‌ها</h2>
+      <p class="small muted tl-sum">{{ tables|length|fanum }} جدول{% if geo_count %} · {{ geo_count|fanum }} مکانی{% endif %}{% if view_count %} · {{ view_count|fanum }} نما{% endif %} · {{ total_size|fasize }}</p>
+    </div>
+    {% if builder_cfg %}<button type="button" class="btn" data-tb-open="">{% icon "plus" 18 %}جدول جدید</button>{% endif %}
   </div>
-  {% endif %}
-  <div class="table-scroll">
-  <table class="data-table">
-    <thead><tr>{% if spatial_count > 1 %}<th><span class="sr-label">انتخاب</span></th>{% endif %}<th>نام</th><th>نوع</th><th>تعداد تقریبی سطر</th><th>حجم</th><th>ستون مکانی</th></tr></thead>
+  <div class="tl-bar" data-tl-bar>
+    <div class="tl-search">
+      {% icon "search" 16 %}
+      <input type="search" class="ltr" placeholder="جست‌وجوی جدول، schema یا نوع هندسه…" aria-label="جست‌وجوی جدول" autocomplete="off" data-tl-q>
+      <kbd aria-hidden="true">/</kbd>
+    </div>
+    <div class="tl-chips" role="group" aria-label="فیلتر نوع">
+      <button type="button" class="tl-chip" data-f="all" aria-pressed="true">همه <b>{{ tables|length|fanum }}</b></button>
+      {% if geo_count %}<button type="button" class="tl-chip" data-f="geo" aria-pressed="false">مکانی <b>{{ geo_count|fanum }}</b></button>{% endif %}
+      {% if geo_count != tables|length %}<button type="button" class="tl-chip" data-f="plain" aria-pressed="false">غیرمکانی</button>{% endif %}
+      {% if view_count %}<button type="button" class="tl-chip" data-f="view" aria-pressed="false">نما <b>{{ view_count|fanum }}</b></button>{% endif %}
+      {% for sc in schemas %}<button type="button" class="tl-chip ltr" data-f="s:{{ sc }}" aria-pressed="false">{{ sc }}</button>{% endfor %}
+    </div>
+    <div class="pop-wrap tl-sortwrap">
+      <button type="button" class="btn ghost sm" data-pop="tl-sort" aria-haspopup="menu" aria-expanded="false">{% icon "sort" 16 %}مرتب‌سازی</button>
+      <div class="pop-m" id="tl-sort" role="menu" hidden>
+        <button type="button" role="menuitem" data-sort="name">نام</button>
+        <button type="button" role="menuitem" data-sort="rows">تعداد سطر</button>
+        <button type="button" role="menuitem" data-sort="size">حجم</button>
+      </div>
+    </div>
+    <span class="small muted tl-count" aria-live="polite" data-tl-count></span>
+  </div>
+  <table class="tl-table" data-tl-table>
+    <thead><tr>
+      {% if spatial_count > 1 %}<th class="c-sel"><span class="sr-label">انتخاب</span></th>{% endif %}
+      <th class="c-name"><button type="button" class="tl-sort" data-sort="name">نام</button></th>
+      <th class="c-num"><button type="button" class="tl-sort" data-sort="rows">سطر</button></th>
+      <th class="c-size"><button type="button" class="tl-sort" data-sort="size">حجم</button></th>
+      <th class="c-srid">SRID</th>
+      <th class="c-act"><span class="sr-label">عملیات</span></th>
+    </tr></thead>
     <tbody>
     {% for x in tables %}
-      <tr>
-        {% if spatial_count > 1 %}<td>{% if x.mappable %}<input type="checkbox" name="t" value="{{ x.schema }}.{{ x.name }}" aria-label="انتخاب {{ x.name }} برای نمایش روی نقشه" data-compare>{% endif %}</td>{% endif %}
-        <td><a class="ltr" href="{% url 'databases:explore_table' db.pk x.schema x.name %}">{% if x.schema != 'public' %}{{ x.schema }}.{% endif %}{{ x.name }}</a></td>
-        <td>{{ x.kind_label }}</td>
-        <td>{{ x.rows_estimate|fanum }}</td>
-        <td>{% if x.size_bytes %}{{ x.size_bytes|fasize }}{% else %}—{% endif %}</td>
-        <td>{% for g in x.geometry %}<span class="chip ltr">{{ g.column }} · {{ g.type }} · {{ g.srid }}</span> {% empty %}—{% endfor %}</td>
+      <tr data-name="{{ x.name|lower }}" data-schema="{{ x.schema }}" data-view="{% if x.kind in 'vmf' %}1{% endif %}" data-geo="{{ x.geo_kind }}"
+          data-rows="{{ x.rows_estimate }}" data-size="{{ x.size_bytes }}" data-q="{{ x.schema|lower }} {{ x.name|lower }} {% for g in x.geometry %}{{ g.type|lower }} {{ g.srid }} {% endfor %}{{ x.kind_label }}">
+        {% if spatial_count > 1 %}<td class="c-sel">{% if x.mappable %}<input type="checkbox" name="t" value="{{ x.schema }}.{{ x.name }}" aria-label="انتخاب {{ x.name }} برای نمایش روی نقشه" data-compare>{% endif %}</td>{% endif %}
+        <td class="c-name">
+          <a class="tl-link" href="{% url 'databases:explore_table' db.pk x.schema x.name %}">
+            <span class="tl-ic {% if x.geo_kind %}geo{% endif %}" {% if x.geometry %}title="{{ x.geo_title }}"{% else %}title="{{ x.kind_label }}"{% endif %}>
+              {% if x.geo_kind == 'point' %}{% icon "point" 18 %}{% elif x.geo_kind == 'line' %}{% icon "line" 18 %}{% elif x.geo_kind == 'polygon' %}{% icon "polygon" 18 %}{% elif x.geo_kind %}{% icon "frame" 18 %}{% else %}{% icon "table" 18 %}{% endif %}
+            </span>
+            <span class="tl-nm"><span class="ltr">{% if x.schema != 'public' %}<i class="tl-sc">{{ x.schema }}.</i>{% endif %}<span class="tl-n">{{ x.name }}</span></span>
+            {% if x.kind in 'vmf' %}<small class="tl-badge">{{ x.kind_label }}</small>{% endif %}</span>
+          </a>
+          <span class="tl-meta small muted">{{ x.rows_estimate|farows }} سطر · {% if x.size_bytes %}{{ x.size_bytes|fasize }}{% else %}—{% endif %}{% if x.srid %} · <span class="ltr">{{ x.srid }}</span>{% endif %}</span>
+        </td>
+        <td class="c-num">{{ x.rows_estimate|farows }}</td>
+        <td class="c-size">{% if x.size_bytes %}<span class="tl-sz">{{ x.size_bytes|fasize }}</span><i class="tl-bar-fill" style="--w:{{ x.size_pct }}"></i>{% else %}—{% endif %}</td>
+        <td class="c-srid ltr">{% if x.srid %}{{ x.srid }}{% else %}—{% endif %}</td>
+        <td class="c-act">
+          <div class="pop-wrap">
+            <button type="button" class="ib sm" data-pop="tm-{{ forloop.counter }}" aria-haspopup="menu" aria-expanded="false" aria-label="عملیات {{ x.name }}">{% icon "more" 16 %}</button>
+            <div class="pop-m" id="tm-{{ forloop.counter }}" role="menu" hidden>
+              <a role="menuitem" href="{% url 'databases:explore_table' db.pk x.schema x.name %}"><span class="i">{% icon "table" 16 %}</span>مشاهده داده</a>
+              <a role="menuitem" href="{% url 'databases:explore_table' db.pk x.schema x.name %}?tab=columns"><span class="i">{% icon "braces" 16 %}</span>ستون‌ها و ایندکس‌ها</a>
+              {% if x.mappable %}<a role="menuitem" href="{% url 'databases:explore_table' db.pk x.schema x.name %}?tab=map"><span class="i">{% icon "globe" 16 %}</span>نمایش روی نقشه</a>{% endif %}
+              <a role="menuitem" href="{% url 'databases:explore_csv' db.pk x.schema x.name %}"><span class="i">{% icon "download" 16 %}</span>خروجی CSV</a>
+            </div>
+          </div>
+        </td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
+  <div class="tl-none" hidden data-tl-none>
+    {% icon "search" 28 %}
+    <p><b>جدولی با این جست‌وجو پیدا نشد.</b></p>
+    <button type="button" class="btn ghost sm" data-tl-clear>پاک کردن جست‌وجو و فیلتر</button>
   </div>
-  <p class="small muted" style="margin-top:12px">جدول‌های سیستمی PostGIS (مثل spatial_ref_sys) نمایش داده نمی‌شوند. تعداد سطرها تقریبی است و بعد از VACUUM/ANALYZE دقیق‌تر می‌شود.</p>
+  <div class="tl-more" hidden data-tl-more><button type="button" class="btn ghost sm" data-tl-more-btn>نمایش بقیه</button></div>
+  <p class="small muted tl-foot">{% icon "info" 16 %}<span>تعداد سطرها تقریبی است و بعد از VACUUM/ANALYZE دقیق‌تر می‌شود. جدول‌های سیستمی PostGIS (مثل spatial_ref_sys) نمایش داده نمی‌شوند.</span></p>
+  {% if spatial_count > 1 %}
+  <div class="tl-sel" data-tl-sel hidden>
+    <span data-tl-sel-n></span>
+    <button class="btn sm" type="submit">{% icon "globe" 16 %}نمایش با هم روی نقشه</button>
+    <button class="btn ghost sm" type="button" data-tl-sel-clear>پاک کردن</button>
+  </div>
+  {% endif %}
 </form>
-{% if spatial_count > 1 %}
-<script>
-(() => {
-  const f = document.getElementById("compare"), btn = f.querySelector("[data-compare-btn]");
-  const sync = () => { const n = f.querySelectorAll("[data-compare]:checked").length; btn.disabled = n < 1;
-    btn.textContent = n > 1 ? `نمایش ${n.toLocaleString("fa-IR")} جدول با هم روی نقشه` : "نمایش با هم روی نقشه"; };
-  f.addEventListener("change", sync); sync();
-})();
-</script>
-{% endif %}
 {% else %}
 <div class="empty">
   {% icon "table" 28 %}
@@ -49,4 +99,4 @@
 </div>
 {% endif %}
 {% endblock %}
-{% block scripts %}{{ block.super }}{% if builder_cfg %}{% include "databases/_table_builder.html" %}<script src="{% static 'js/studio-ui.js' %}" defer></script><script src="{% static 'js/table-builder.js' %}" defer></script>{% endif %}{% endblock %}
+{% block scripts %}{{ block.super }}{% if tables %}<script src="{% static 'js/tables-list.js' %}" defer></script>{% endif %}{% if builder_cfg %}{% include "databases/_table_builder.html" %}<script src="{% static 'js/studio-ui.js' %}" defer></script><script src="{% static 'js/table-builder.js' %}" defer></script>{% endif %}{% endblock %}

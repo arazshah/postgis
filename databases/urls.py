@@ -22,6 +22,7 @@ urlpatterns = [
     path("<int:pk>/explore/new/", views.table_new, name="table_new"),
     path("<int:pk>/explore/new/preview/", views.table_preview, name="table_preview"),
     path("<int:pk>/explore/new/srid/", views.table_srid, name="table_srid"),
+    path("<int:pk>/explore/tables.json", views.tables_json, name="tables_json"),
     path("<int:pk>/explore/sql/", views.explore_sql, name="explore_sql"),
     path("<int:pk>/explore/sql/ask/", views.explore_sql_ask, name="explore_sql_ask"),
     path("<int:pk>/explore/sql/why/", views.explore_sql_why, name="explore_sql_why"),
