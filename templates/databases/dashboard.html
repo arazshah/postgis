@@ -2,12 +2,12 @@
 {% block title %}پایگاه‌های داده من — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page dash">
-  <header class="home-hero">
-    <div class="home-hello">
-      <span class="home-av" aria-hidden="true">{% if user.initial %}{{ user.initial }}{% else %}{% icon "user" 24 %}{% endif %}</span>
+  <header class="dh-head">
+    <div class="dh-hello">
+      <span class="dh-av" aria-hidden="true">{% if user.initial %}{{ user.initial }}{% else %}{% icon "user" 20 %}{% endif %}</span>
       <div>
         <h1>{{ hello }}{% if user.full_name %}، {{ user.full_name }}{% endif %}</h1>
-        <p class="muted dash-sub">{% if user.organization %}{{ user.organization }} · {% endif %}{% if stats.count %}{{ stats.count|fanum }} پایگاه داده{% if stats.running %} · {{ stats.running|fanum }} کار در حال انجام{% endif %}{% else %}به ژئوپایگاه خوش آمدید؛ اولین پایگاه داده‌ات را بساز.{% endif %}</p>
+        <p class="muted dash-sub">{% if user.organization %}{{ user.organization }}{% else %}<a href="{% url 'accounts:profile' %}">دانشگاه / شرکت را در پروفایل بنویسید</a>{% endif %}</p>
       </div>
     </div>
     <div class="dash-head-actions">
@@ -15,6 +15,15 @@
       {% if is_teacher %}<a class="btn ghost" href="{% url 'classroom:teach' %}">{% icon "home" 18 %} کلاس‌های من</a>{% endif %}
       {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">{% icon "plus" 18 %} پایگاه داده جدید</a>{% endif %}
     </div>
+    {% if dbs %}
+    <ul class="dh-stats" aria-label="خلاصه حساب">
+      <li><b>{{ stats.count|fanum }}</b> پایگاه داده</li>
+      <li class="dh-use"><span><b>{{ stats.size|fasize }}</b>{% if stats.quota %} از {{ stats.quota|fasize }}{% endif %}</span>{% if stats.quota %}<span class="meter {% if total_pct >= 90 %}full{% elif total_pct >= 75 %}warn{% endif %}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ total_pct }}" aria-label="مصرف کل"><i style="width:{{ total_pct }}%"></i></span>{% endif %}</li>
+      <li><b>{{ stats.backups|fanum }}</b> از {{ stats.count|fanum }} دارای بکاپ</li>
+      {% if attn_count %}<li class="dh-attn">{% icon "alert" 16 %}<b>{{ attn_count|fanum }}</b> نیاز به توجه</li>{% endif %}
+      {% if stats.running %}<li class="dh-live"><b>{{ stats.running|fanum }}</b> کار در حال انجام</li>{% endif %}
+    </ul>
+    {% endif %}
   </header>
 
   {% for v in vouchers %}
@@ -23,64 +32,10 @@
     <a class="btn sm" href="{% url 'databases:create' %}?voucher={{ v.pk }}">ساخت پایگاه داده</a>
   </div>
   {% endfor %}
+  <div class="dh-layout">
+  <div class="dh-main">
   {% if dbs %}
     {% if not can_create and reason %}<p class="muted small dash-reason">{{ reason }}</p>{% endif %}
-    <div class="stat-row home-stats" aria-label="خلاصه حساب">
-      <div class="stat"><span class="stat-n">{{ stats.count|fanum }}</span><span class="stat-l">پایگاه داده</span></div>
-      <div class="stat"><span class="stat-n">{{ stats.size|fasize }}</span><span class="stat-l">مصرف کل{% if stats.quota %} از {{ stats.quota|fasize }}{% endif %}</span>
-        {% if stats.quota %}<div class="meter {% if total_pct >= 90 %}full{% elif total_pct >= 75 %}warn{% endif %}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ total_pct }}" aria-label="مصرف کل"><i style="width:{{ total_pct }}%"></i></div>{% endif %}</div>
-      <div class="stat"><span class="stat-n">{{ stats.backups|fanum }}<small> از {{ stats.count|fanum }}</small></span><span class="stat-l">دارای بکاپ</span></div>
-      <div class="stat {% if stats.running %}live{% endif %}"><span class="stat-n">{{ stats.running|fanum }}</span><span class="stat-l">کار در حال انجام</span></div>
-    </div>
-
-    {% if quick %}
-    <section class="home-sec" aria-labelledby="h-quick">
-      <h2 class="home-h" id="h-quick">کارهای سریع <small class="muted">روی <span class="ltr">{{ target.db_name }}</span></small></h2>
-      <div class="home-quick">
-        {% for q in quick %}<a class="home-q" href="{{ q.url }}"><span class="dash-ico">{% icon q.icon 20 %}</span><span class="dash-txt"><b>{{ q.title }}</b><small>{{ q.hint }}</small></span></a>{% endfor %}
-      </div>
-    </section>
-    {% endif %}
-
-    <div class="home-grid">
-      <div class="home-col">
-        <section class="home-sec card" aria-labelledby="h-attn">
-          <h2 class="home-h" id="h-attn">{% icon "alert" 18 %}نیاز به توجه</h2>
-          {% if attention %}
-          <ul class="dash-alerts">
-            {% for a in attention %}<li class="al-{{ a.level }}"><span>{% if a.level == "info" %}{% icon "clock" 18 %}{% else %}{% icon "alert" 18 %}{% endif %} <b class="ltr">{{ a.db }}</b> — {{ a.text }}</span><a href="{{ a.url }}">{{ a.cta }}</a></li>{% endfor %}
-          </ul>
-          {% if attention_more %}<p class="small muted home-more">و {{ attention_more|fanum }} مورد دیگر در کارت پایگاه‌ها</p>{% endif %}
-          {% else %}
-          <p class="home-ok">{% icon "check" 20 %}<span>همه‌چیز مرتب است؛ موردی نیاز به توجه ندارد.</span></p>
-          {% endif %}
-        </section>
-        <section class="home-sec card" aria-labelledby="h-feed">
-          <h2 class="home-h" id="h-feed">{% icon "pulse" 18 %}ادامه‌ی کار</h2>
-          {% if feed %}
-          <ul class="home-feed">
-            {% for f in feed %}<li><a href="{{ f.url }}"><span class="dash-ico">{% icon f.icon 18 %}</span><span class="dash-txt"><b>{{ f.text|truncatechars:70 }}</b><small>{{ f.kind }} · <span class="ltr">{{ f.db }}</span> · {{ f.when|jdate:"%m/%d %H:%M" }}</small></span></a></li>{% endfor %}
-          </ul>
-          {% else %}
-          <p class="home-ok muted">{% icon "info" 20 %}<span>هنوز فعالیتی ثبت نشده. با «ورود فایل» یا «پرسش فارسی» شروع کنید.</span></p>
-          {% endif %}
-        </section>
-      </div>
-      {% if onboarding %}
-      <aside class="home-sec card home-steps" aria-labelledby="h-steps">
-        <h2 class="home-h" id="h-steps">{% icon "target" 18 %}شروع سریع <small class="muted">{{ steps_done|fanum }} از {{ steps|length|fanum }}</small></h2>
-        <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ steps_pct }}" aria-label="پیشرفت شروع"><i style="width:{{ steps_pct }}%"></i></div>
-        <ol class="home-checks">
-          {% for st in steps %}<li class="{% if st.done %}done{% endif %}">
-            {% if st.done or not st.url %}<span class="chk">{% if st.done %}{% icon "check" 16 %}{% endif %}</span><span class="dash-txt"><b>{{ st.label }}</b></span>
-            {% else %}<a href="{{ st.url }}"><span class="chk"></span><span class="dash-txt"><b>{{ st.label }}</b><small>{{ st.hint }}</small></span></a>{% endif %}
-          </li>{% endfor %}
-        </ol>
-      </aside>
-      {% endif %}
-    </div>
-
-    <h2 class="home-h home-list-h">{% icon "db" 18 %}پایگاه‌های داده من</h2>
     {% if dbs|length >= 2 or shared %}
     <div class="dash-bar" role="toolbar" aria-label="ابزار فهرست پایگاه‌ها" data-dash-bar hidden>
       {% if shared %}
@@ -209,6 +164,30 @@
   </div>
   </section>
   {% endif %}
+  </div>{# dh-main #}
+
+  <aside class="dh-side" aria-label="شروع و فعالیت اخیر">
+    {% if onboarding %}
+    <details class="card dh-box dh-steps" {% if steps_done < 2 or not dbs %}open{% endif %}>
+      <summary><span class="dh-h">{% icon "target" 18 %}شروع سریع</span><span class="dh-prog"><span class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ steps_pct }}" aria-label="پیشرفت شروع"><i style="width:{{ steps_pct }}%"></i></span><small>{{ steps_done|fanum }} از {{ steps|length|fanum }}</small></span></summary>
+      <ol class="dh-checks">
+        {% for st in steps %}<li class="{% if st.done %}done{% endif %}">
+          {% if st.done or not st.url %}<span class="chk">{% if st.done %}{% icon "check" 14 %}{% endif %}</span><span>{{ st.label }}</span>
+          {% else %}<a href="{{ st.url }}"><span class="chk"></span><span>{{ st.label }}<small>{{ st.hint }}</small></span></a>{% endif %}
+        </li>{% endfor %}
+      </ol>
+    </details>
+    {% endif %}
+    {% if feed %}
+    <section class="card dh-box" aria-labelledby="h-feed">
+      <h2 class="dh-h" id="h-feed">{% icon "pulse" 18 %}ادامه‌ی کار</h2>
+      <ul class="dh-feed">
+        {% for f in feed %}<li><a href="{{ f.url }}"><span class="dash-ico">{% icon f.icon 16 %}</span><span class="dh-ft"><b>{{ f.text|truncatechars:56 }}</b><small>{{ f.kind }} · <span class="ltr">{{ f.db }}</span> · {{ f.when|jdate:"%m/%d %H:%M" }}</small></span></a></li>{% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
+  </div>{# dh-layout #}
 </div>
 {% endblock %}
 {% block scripts %}{{ block.super }}<script src="{% static 'js/dashboard.js' %}" defer></script>{% endblock %}

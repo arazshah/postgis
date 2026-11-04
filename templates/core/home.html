@@ -19,7 +19,7 @@
     <div class="hero-copy">
       <p class="eyebrow"><span class="dot" aria-hidden="true"></span>PostGIS به‌صورت سرویس</p>
       <h1 id="hero-h">پایگاه داده مکانی PostGIS شما، <span class="hl">سه دقیقه</span> دیگر آماده است</h1>
-      <p class="lead">بدون نصب، بدون سرور و بدون درگیری با تنظیمات. یک نام انتخاب کنید، افزونه‌ها را تیک بزنید و اطلاعات اتصال را در QGIS، GeoServer یا کد خودتان بگذارید.</p>
+      <p class="lead">بدون نصب و نگهداری سرور. پایگاه داده را بسازید، فایل‌هایتان را وارد کنید و از QGIS، GeoServer یا کد خودتان وصل شوید.</p>
       <div class="actions" data-hero-cta>
         {% if user.is_authenticated %}
           <a class="btn lg" href="{{ create_url }}">ساخت پایگاه داده</a>
@@ -32,7 +32,7 @@
       <ul class="assure" aria-label="چرا شروع آسان است">
         <li>ورود فقط با شماره موبایل</li>
         <li>شروع رایگان برای دانشجوها و تازه‌کارها</li>
-        <li>اتصال رمزنگاری‌شده SSL</li>
+        <li>اتصال SSL و بکاپ شبانه</li>
       </ul>
     </div>
 
@@ -90,121 +90,75 @@ WHERE ST_DWithin(
   </div>
 </section>
 
-{# ───────────── نوار اطمینان ───────────── #}
-<section class="facts" aria-label="چرا {{ SITE_NAME }}">
-  <ul class="wrap">
-    <li><svg class="hicon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="11" cy="6" rx="7" ry="3"/><path d="M4 6v6c0 1.7 3.1 3 7 3M4 12v6c0 1.7 3.1 3 7 3"/><path d="M18 14v6M15 17h6"/></svg><div><b>پایگاه داده جدا برای هر کاربر</b><span>کاربران به داده یکدیگر دسترسی ندارند</span></div></li>
-    <li><svg class="hicon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><div><b>اتصال رمزنگاری‌شده SSL</b><span>رمز و داده‌ها بی‌دغدغه جابه‌جا می‌شوند</span></div></li>
-    <li><svg class="hicon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg><div><b>بکاپ شبانه و بازگردانی امن</b><span>پیش از بازگردانی، بکاپ ایمنی ساخته می‌شود</span></div></li>
-    <li><svg class="hicon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H4zM20 4h-5a2 2 0 0 0-2 2"/><path d="M20 4v13.5h-6.5"/></svg><div><b>{{ guides_count|fanum }} راهنمای تصویری</b><span>ویدیوی بی‌کلام و مراحل نوشتاری فارسی</span></div></li>
-  </ul>
+{# ───────────── در سه قدم + ویدیو ───────────── #}
+<section class="section" id="intro" aria-labelledby="intro-h">
+  <div class="wrap start-grid">
+    <div>
+      <div class="section-head">
+        <p class="kicker">چطور کار می‌کند</p>
+        <h2 id="intro-h">در سه قدم، از صفر تا نقشه</h2>
+      </div>
+      <ol class="help-steps">
+        <li><h3>پایگاه داده را بسازید</h3><p>با شماره موبایل وارد شوید، یک نام بدهید؛ PostGIS در کمتر از یک دقیقه آماده است.</p></li>
+        <li><h3>داده‌تان را بیاورید</h3><p>Shapefile، GeoPackage، GeoJSON، KML یا CSV را آپلود کنید؛ هندسه و نمایه‌ی مکانی خودکار درست می‌شود.</p></li>
+        <li><h3>تحلیل کنید و منتشر کنید</h3><p>از QGIS وصل شوید، فارسی بپرسید، نقشه بسازید و با لینک یا WMS/WFS به اشتراک بگذارید.</p></li>
+      </ol>
+      <a class="btn" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">{% if user.is_authenticated %}ساخت پایگاه داده{% else %}شروع رایگان{% endif %}</a>
+    </div>
+    <figure class="vplayer intro-video">
+      <video controls playsinline preload="none" poster="{% static 'help/video/intro.jpg' %}" aria-label="ویدیوی معرفی {{ SITE_NAME }} در حدود یک دقیقه">
+        <source src="{% static 'help/video/intro.mp4' %}" type="video/mp4">
+      </video>
+      <figcaption class="small muted">معرفی در حدود یک دقیقه · <a href="{% url 'core:help' %}">همه‌ی {{ guides_count|fanum }} ویدیوی راهنما</a></figcaption>
+    </figure>
+  </div>
 </section>
 
-{# ───────────── امکانات (بنتو) ───────────── #}
-<section class="section cv" id="features" aria-labelledby="features-h">
+{# ───────────── امکانات ───────────── #}
+<section class="section alt cv" id="features" aria-labelledby="features-h">
   <div class="wrap">
     <div class="section-head">
       <p class="kicker">همه‌چیز در یک جا</p>
-      <h2 id="features-h">از اولین فایل تا نقشه منتشرشده، بدون نصب هیچ‌چیز</h2>
-      <p class="muted">پایگاه داده فقط شروع کار است. ورود داده، تحلیل، انتشار و اشتراک هم کنارش آماده‌اند.</p>
+      <h2 id="features-h">پایگاه داده فقط شروع کار است</h2>
     </div>
     <div class="bento">
-      <a class="tile hot w2" href="{% url 'core:help_page' 'import' %}">
+      <a class="tile hot" href="{% url 'core:help_page' 'import' %}">
         <span class="tile-ico">{% include "help/_icon.html" with name="upload" %}</span>
         <h3>ورود فایل و سلامت داده</h3>
-        <p>فایل خود را آپلود کنید، پیش‌نمایش ببینید و وارد پایگاه داده کنید. هندسه نامعتبر، کلید اصلی و نمایه مکانی هم با یک کلیک اصلاح می‌شود.</p>
-        <span class="fmt" dir="ltr"><span>Shapefile</span><span>GeoPackage</span><span>GeoJSON</span><span>KML</span><span>CSV</span><span>DXF</span></span>
-        <span class="tile-go">راهنمای ورود فایل ←</span>
+        <p>پیش‌نمایش، ورود و اصلاح هندسه‌ی نامعتبر با یک کلیک.</p>
+        <span class="fmt" dir="ltr"><span>Shapefile</span><span>GeoPackage</span><span>GeoJSON</span><span>CSV</span></span>
       </a>
-      <a class="tile" href="{% url 'core:help_page' 'explore' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="stack" %}</span>
-        <h3>مرورگر داده و SQL</h3>
-        <p>جدول‌ها، نقشه و کنسول SQL مکانی، همه در مرورگر.</p>
-        <span class="tile-go">ببینید ←</span>
+      <a class="tile" href="{% url 'core:help_page' 'analysis' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="spark" %}</span>
+        <h3>تحلیل بدون SQL و پرسش فارسی</h3>
+        <p>بافر، نزدیک‌ترین و شمارش با چند کلیک؛ یا سؤالتان را فارسی بنویسید.</p>
+      </a>
+      <a class="tile" href="{% url 'core:help_page' 'maps' %}">
+        <span class="tile-ico">{% include "help/_icon.html" with name="brush" %}</span>
+        <h3>نقشه، ارائه و اشتراک</h3>
+        <p>نقشه‌ی چندلایه با نمودار و اسلاید؛ لینک عمومی، iframe یا PDF.</p>
       </a>
       <a class="tile" href="{% url 'core:help_page' 'publish' %}">
         <span class="tile-ico">{% include "help/_icon.html" with name="layers" %}</span>
-        <h3>انتشار لایه</h3>
-        <p>کاشی برداری، OGC API Features، WMS/WFS و کلید API.</p>
-        <span class="tile-go">ببینید ←</span>
-      </a>
-      <a class="tile w2" href="{% url 'core:help_page' 'mapbuilder' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="brush" %}</span>
-        <h3>طراحی نقشه و اشتراک</h3>
-        <p>طبقه‌بندی، برچسب و پاپ‌آپ را تنظیم کنید و نقشه را با لینک عمومی یا iframe در سایت خودتان بگذارید.</p>
-        <span class="tile-go">راهنمای نقشه‌ساز ←</span>
-      </a>
-      <a class="tile w2" href="{% url 'core:help_page' 'maps' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="layers" %}</span>
-        <h3>نقشه چندلایه، ارائه و چاپ</h3>
-        <p>چند جدول را روی یک نقشه بیاورید، با نمودار روی داده‌ها تحلیل کنید، اسلاید و ارائه بسازید، PDF بگیرید و پروژه QGIS یا WMS/WFS منتشر کنید.</p>
-        <span class="tile-go">راهنمای نقشه چندلایه ←</span>
-      </a>
-      <a class="tile w2" href="{% url 'core:help_page' 'analysis' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="spark" %}</span>
-        <h3>تحلیل بدون SQL و پرسش فارسی</h3>
-        <p>بافر، نزدیک‌ترین، شمارش، شش‌ضلعی و حوزه دسترسی با چند کلیک؛ یا پرسش خود را فارسی بنویسید.</p>
-        <span class="tile-go">راهنمای تحلیل ←</span>
+        <h3>انتشار برای برنامه‌ها</h3>
+        <p>کاشی برداری، OGC API Features، WMS/WFS و REST API با کلید.</p>
       </a>
     </div>
-  </div>
-</section>
-
-{# ───────────── ویدیوی معرفی ───────────── #}
-<section class="section intro" id="intro" aria-labelledby="intro-h">
-  <div class="wrap">
-    <div class="section-head">
-      <p class="kicker">در حدود یک دقیقه</p>
-      <h2 id="intro-h">{{ SITE_NAME }} را ببینید</h2>
-      <p class="muted">از ثبت‌نام و ورود فایل تا نقشه قابل اشتراک و WMS؛ همه چیز همان‌طور که در سایت می‌بینید.</p>
-    </div>
-    <figure class="vplayer intro-video">
-      <video controls playsinline preload="none" poster="{% static 'help/video/intro.jpg' %}" aria-label="ویدیوی معرفی {{ SITE_NAME }}">
-        <source src="{% static 'help/video/intro.mp4' %}" type="video/mp4">
-      </video>
-    </figure>
-    <p class="intro-more"><a class="btn ghost" href="{% url 'core:help' %}">همه ویدیوهای راهنما</a></p>
-  </div>
-</section>
-
-{# ───────────── مخاطب‌ها ───────────── #}
-<section class="section alt cv" aria-labelledby="who-h">
-  <div class="wrap">
-    <div class="section-head">
-      <h2 id="who-h">برای چه کسی ساخته شده؟</h2>
-      <p class="muted">هر کسی که با داده مکانی کار می‌کند و نمی‌خواهد وقتش را صرف نگهداری سرور کند.</p>
-    </div>
-    <div class="who">
-      <article>
-        <h3>دانشجو و پایان‌نامه</h3>
-        <p>پایگاه داده‌ای که همان روز اول کار می‌کند؛ با داده تمرینی، آموزش فارسی و تمدید رایگان.</p>
-        <a href="{% url 'core:doc' 'start' %}">شروع سریع در ۳ دقیقه ←</a>
-      </article>
-      <article>
-        <h3>توسعه‌دهنده WebGIS</h3>
-        <p>PostGIS آماده با PgBouncer، REST API، کاشی برداری و کلید API برای برنامه‌ی شما.</p>
-        <a href="{% url 'core:doc' 'code' %}">اتصال از Python و Node.js ←</a>
-      </article>
-      <article>
-        <h3>مشاور و شرکت GIS</h3>
-        <p>یک پایگاه داده برای هر پروژه، بکاپ خودکار، تیم با نقش‌ها و امکان GeoServer اختصاصی.</p>
-        <a href="{% url 'core:help_page' 'enterprise' %}">امکانات سازمانی ←</a>
-      </article>
-      <article>
-        <h3>استاد و دانشگاه</h3>
-        <p>کلاس با کد ورود؛ هر دانشجو پایگاه داده جدا و داده تمرینی دارد و در پایان ترم بایگانی می‌شود.</p>
-        <a href="{% url 'classroom:landing' %}">پلن کلاس و دانشگاه ←</a>
-      </article>
-    </div>
+    <ul class="who-links" aria-label="ویژه‌ی">
+      <li><a href="{% url 'core:doc' 'start' %}">دانشجو و پایان‌نامه</a></li>
+      <li><a href="{% url 'core:doc' 'code' %}">توسعه‌دهنده WebGIS</a></li>
+      <li><a href="{% url 'core:help_page' 'enterprise' %}">شرکت و سازمان</a></li>
+      <li><a href="{% url 'classroom:landing' %}">استاد و دانشگاه</a></li>
+    </ul>
   </div>
 </section>
 
 {# ───────────── پلن‌ها ───────────── #}
-<section class="section alt cv" id="plans" aria-labelledby="plans-h">
+<section class="section cv" id="plans" aria-labelledby="plans-h">
   <div class="wrap">
     <div class="section-head">
       <h2 id="plans-h">پلن‌ها</h2>
-      <p class="muted">محدودیت‌ها از اول مشخص‌اند تا سرور برای همه سریع بماند. بکاپ روزانه گرفته می‌شود، اما برای داده‌های مهم همیشه نسخه‌ای هم نزد خودتان نگه دارید.</p>
+      <p class="muted">با پلن رایگان شروع کنید؛ محدودیت‌ها از اول روشن‌اند.</p>
     </div>
     <div class="plans">
     {% for p in plans %}
@@ -234,7 +188,7 @@ WHERE ST_DWithin(
 </section>
 
 {# ───────────── آموزش و پرسش‌های متداول ───────────── #}
-<section class="section cv" id="faq" aria-labelledby="faq-h">
+<section class="section alt cv" id="faq" aria-labelledby="faq-h">
   <div class="wrap learn one">
     <div>
       <div class="section-head">
@@ -242,7 +196,7 @@ WHERE ST_DWithin(
         <p class="muted">تازه با پایگاه داده مکانی آشنا شده‌اید؟ از <a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی و PostGIS چیست؟</a> شروع کنید؛ بقیه آموزش‌ها در <a href="{% url 'core:docs' %}">بخش آموزش</a> و پاسخ همه پرسش‌ها در <a href="{% url 'kb:index' %}">پایگاه دانش</a> است.</p>
       </div>
       <div class="faq">
-        {% for f in faqs %}<details><summary>{{ f.title }}</summary><p>{{ f.summary }}{% if f.url %} <a href="{{ f.url }}">ادامه مطلب</a>{% endif %}</p></details>
+        {% for f in faqs|slice:":6" %}<details><summary>{{ f.title }}</summary><p>{{ f.summary }}{% if f.url %} <a href="{{ f.url }}">ادامه مطلب</a>{% endif %}</p></details>
         {% endfor %}
       </div>
       <p class="muted" style="margin-top:var(--s4)"><a href="{% url 'kb:index' %}">همه پرسش‌ها و راهنماها در پایگاه دانش ←</a></p>
