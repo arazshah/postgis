@@ -20,3 +20,24 @@
 .tgr-cell:focus{border-color:var(--teal);outline:2px solid var(--ochre);outline-offset:-1px}
 .tgr-cell.bad{border-color:var(--red);background:var(--red-soft)}
 @media (max-width:700px){.tg-xy{grid-template-columns:1fr}}
+
+/* تغییر ساختار جدول (تب ستون‌ها: table-structure.js) */
+.tbs-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);flex-wrap:wrap;margin:0 0 var(--s3)}
+.tbs-head p{margin:0}
+.tbs-acts{display:flex;gap:8px;flex-wrap:wrap}
+.tbs-idx-head{margin-top:var(--s5)}
+.tbs-h{margin:0;font:800 14.5px var(--f-display)}
+.tbs-table .tbs-act{width:1%;white-space:nowrap}
+.tbs-form{display:flex;flex-direction:column;gap:var(--s3)}
+.tbs-form .field{margin-bottom:0}
+.tbs-form input[type=text],.tbs-form select{width:100%;min-height:var(--ctl-h);border:1px solid var(--line);border-radius:var(--r-ctl);padding:0 10px;font:inherit;background:var(--card);color:var(--ink)}
+.tbs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--s3)}
+.tbs-sql{margin:0;padding:10px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--paper);font:12px/1.7 var(--f-mono);max-height:200px;overflow:auto;white-space:pre;direction:ltr;unicode-bidi:isolate;text-align:left}
+.tbs-warn{margin:0}
+.tbs-checks{display:flex;flex-direction:column;gap:6px}
+.tbs-wrap{border:1px solid var(--line);border-radius:var(--r-card);background:var(--card)}
+.tbs-wrap .tbs-table{width:100%;margin:0}
+.tbs-wrap .tbs-table td,.tbs-wrap .tbs-table th{overflow-wrap:anywhere}
+.tbs-table td{text-decoration:none}
+.tbs-table td.tbs-act{overflow:visible}
+@media (max-width:700px){.tbs-opt{display:none}}

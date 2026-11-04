@@ -454,6 +454,34 @@ class Explorer:
                 conn.rollback()
                 raise ExplorerError(f"خطا: {getattr(exc.diag, 'message_primary', None) or exc}") from exc
 
+    def indexes(self, table: TableRef) -> list[dict]:
+        """ایندکس‌های جدول: نام، ستون‌ها، روش، یکتا، کلید اصلی، پشتوانه‌ی قید و حجم."""
+        with self.connect() as conn:
+            rows = conn.execute("""
+                SELECT i.relname, ix.indisunique, ix.indisprimary, am.amname, pg_get_indexdef(ix.indexrelid),
+                       pg_relation_size(ix.indexrelid),
+                       EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conindid = ix.indexrelid),
+                       ARRAY(SELECT a.attname FROM unnest(ix.indkey) WITH ORDINALITY k(attnum, ord)
+                             JOIN pg_attribute a ON a.attrelid = ix.indrelid AND a.attnum = k.attnum ORDER BY k.ord)
+                FROM pg_index ix JOIN pg_class i ON i.oid = ix.indexrelid JOIN pg_am am ON am.oid = i.relam
+                WHERE ix.indrelid = %s ORDER BY i.relname""", (table.oid,)).fetchall()
+        return [{"name": n, "unique": u, "primary": pk, "method": m, "definition": d, "size": sz, "constraint": con,
+                 "columns": list(cols)} for n, u, pk, m, d, sz, con, cols in rows]
+
+    def alter_table(self, plan) -> None:
+        """دستورهای تغییر ساختار را با نقش خود کاربر و در یک تراکنش اجرا می‌کند (همه‌یاهیچ)."""
+        with self.connect(read_only=False) as conn:
+            try:
+                conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(self.db.role_name)))
+                conn.execute(sql.SQL("SET LOCAL lock_timeout = '10s'"))
+                conn.execute(sql.SQL("SET LOCAL statement_timeout = '120s'"))
+                for stmt in plan.statements:
+                    conn.execute(stmt)
+                conn.commit()
+            except psycopg.Error as exc:
+                conn.rollback()
+                raise ExplorerError(_alter_message(exc)) from exc
+
     def writable_schemas(self) -> list[str]:
         """schemaهایی که نقش خود کاربر در آن‌ها اجازه‌ی ساخت جدول دارد (public همیشه اول)."""
         with self.connect() as conn:
@@ -618,3 +646,31 @@ class Explorer:
                 raise ExplorerError(f"خطا: {msg}") from exc
         result["elapsed_ms"] = int((time.monotonic() - started) * 1000)
         return result
+
+
+def _alter_message(exc: psycopg.Error) -> str:
+    """پیام فارسی و کوتاه برای خطاهای رایج تغییر ساختار؛ متن PostgreSQL در پایان می‌آید."""
+    E = psycopg.errors
+    raw = getattr(exc.diag, "message_primary", None) or str(exc)
+    for cls, msg in (
+        (E.DuplicateColumn, "ستونی با این نام از قبل هست."),
+        (E.DuplicateTable, "جدول یا ایندکسی با این نام از قبل هست."),
+        (E.DuplicateObject, "شیئی با این نام از قبل هست."),
+        (E.NotNullViolation, "برخی سطرها در این ستون خالی‌اند؛ اول آن‌ها را پر کنید (یا مقدار پیش‌فرض بدهید)."),
+        (E.UniqueViolation, "مقدار تکراری در داده‌ها هست؛ ایندکس یکتا ساخته نشد."),
+        (E.DependentObjectsStillExist, "نما یا شیء دیگری به این ستون یا جدول وابسته است؛ اول آن را حذف کنید."),
+        (E.InsufficientPrivilege, "اجازه‌ی تغییر این جدول را ندارید."),
+        (E.LockNotAvailable, "جدول در حال استفاده است؛ چند لحظه بعد دوباره تلاش کنید."),
+        (E.QueryCanceled, "تغییر بیش از حد طول کشید و لغو شد؛ برای جدول‌های بزرگ از کنسول SQL در ساعت کم‌کار استفاده کنید."),
+        (E.InvalidTextRepresentation, "برخی مقدارها به نوع تازه تبدیل نمی‌شوند"),
+        (E.DatatypeMismatch, "این تبدیل نوع ممکن نیست"),
+        (E.CannotCoerce, "این تبدیل نوع ممکن نیست"),
+        (E.NumericValueOutOfRange, "برخی مقدارها در بازه‌ی نوع تازه نمی‌گنجند"),
+        (E.StringDataRightTruncation, "برخی متن‌ها از سقف طول تازه بلندترند"),
+        (E.InvalidDatetimeFormat, "برخی مقدارها به تاریخ یا زمان تبدیل نمی‌شوند"),
+        (E.DatetimeFieldOverflow, "برخی مقدارها به تاریخ یا زمان تبدیل نمی‌شوند"),
+        (E.CheckViolation, "برخی سطرها قید جدول را رعایت نمی‌کنند"),
+    ):
+        if isinstance(exc, cls):
+            return f"{msg}" + ("" if msg.endswith(".") else f" ({raw})")
+    return f"خطا: {raw}"

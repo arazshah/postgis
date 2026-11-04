@@ -333,6 +333,22 @@ def _default_sql(col: dict) -> sql.Composable | None:
     return lit
 
 
+def column_sql(c: dict) -> sql.Composable:
+    """تعریف یک ستون (نام، نوع، پیش‌فرض، قیدها) برای CREATE TABLE و ADD COLUMN."""
+    bits: list[sql.Composable] = [sql.Identifier(c["name"]), _type_sql(c)]
+    default = _default_sql(c)
+    if default is not None:
+        bits += [sql.SQL("DEFAULT"), default]
+    if c["not_null"]:
+        bits.append(sql.SQL("NOT NULL"))
+    if c["unique"]:
+        bits.append(sql.SQL("UNIQUE"))
+    if c["type"] == "choice":
+        bits.append(sql.SQL("CHECK ({} IN ({}))").format(
+            sql.Identifier(c["name"]), sql.SQL(", ").join(sql.Literal(x) for x in c["choices"])))
+    return sql.SQL(" ").join(bits)
+
+
 def build(raw) -> Plan:
     """دستورهای ساخت جدول (CREATE TABLE، ایندکس‌ها، توضیح) را از مشخصات می‌سازد."""
     spec = validate(raw)
@@ -343,18 +359,7 @@ def build(raw) -> Plan:
         parts.append(sql.SQL("{} {} GENERATED ALWAYS AS IDENTITY PRIMARY KEY").format(
             sql.Identifier(pk["name"]), sql.SQL("bigint" if pk["big"] else "integer")))
     for c in spec["columns"]:
-        bits: list[sql.Composable] = [sql.Identifier(c["name"]), _type_sql(c)]
-        default = _default_sql(c)
-        if default is not None:
-            bits += [sql.SQL("DEFAULT"), default]
-        if c["not_null"]:
-            bits.append(sql.SQL("NOT NULL"))
-        if c["unique"]:
-            bits.append(sql.SQL("UNIQUE"))
-        if c["type"] == "choice":
-            bits.append(sql.SQL("CHECK ({} IN ({}))").format(
-                sql.Identifier(c["name"]), sql.SQL(", ").join(sql.Literal(x) for x in c["choices"])))
-        parts.append(sql.SQL(" ").join(bits))
+        parts.append(column_sql(c))
     g = spec["geometry"]
     if g:
         parts.append(sql.SQL("{} {}{}").format(sql.Identifier(g["name"]), _geom_type_sql(g),

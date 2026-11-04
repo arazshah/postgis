@@ -15,7 +15,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
 
-from . import csvgeo, editor, importinto, services, tablebuilder
+from . import csvgeo, editor, importinto, services, tablealter, tablebuilder
 from .crypto import generate_password
 from .editor import EDIT_TTL, EditError, Editor
 from .explorer import EXPORT_LIMIT, MAP_LIMIT, SQL_MAX_ROWS, Explorer, ExplorerError
@@ -401,6 +401,9 @@ def explore_table(request, pk, schema, table):
             ctx["edit_cfg"] = _edit_config(request, db, ex, t)
         if tab == "columns":
             ctx["columns"] = ex.columns(t)
+            ctx["indexes"] = ex.indexes(t)
+            if editing and t.kind in editor.EDITABLE_KINDS:
+                ctx["structure_cfg"] = _structure_config(request, db, t, ctx["columns"], ctx["indexes"])
         elif tab == "map":
             from maps.models import WebMap
 
@@ -878,6 +881,70 @@ def import_review(request, pk, job_id):
         "into": into_ctx,
         "srid_choices": gdal.SRID_CHOICES, "csv": csv_info, "csv_modes": CSV_MODES,
         "csv_encodings": list(csvgeo.ENCODINGS)})
+
+
+# ---------------------------------------------------------------------- تغییر ساختار جدول (ستون، ایندکس، SRID)
+def _table_usage(db, t) -> dict:
+    """لایه‌ها و APIهای منتشرشده یا نقشه‌هایی که از این جدول استفاده می‌کنند (برای هشدار قبل از تغییر ساختار)."""
+    from maps.models import MapLayer
+    from publish.models import Layer
+    from restapi.models import ApiTable
+
+    return {"maps": MapLayer.objects.filter(webmap__database=db, schema=t.schema, table=t.name).count(),
+            "published": Layer.objects.filter(service__database=db, schema=t.schema, table=t.name).count(),
+            "api": ApiTable.objects.filter(service__database=db, schema=t.schema, table=t.name).count()}
+
+
+def _structure_config(request, db, t, cols, indexes) -> dict:
+    cfg = tablebuilder.client_config()
+    geo = next(iter(t.geometry), None)
+    return {
+        "csrf": get_token(request), "url": reverse("databases:table_structure", args=[db.pk, t.schema, t.name]),
+        "table": t.name, "schema": t.schema, "types": cfg["types"], "geometry_types": cfg["geometry_types"],
+        "columns": [{"name": c["name"], "type": c["type"], "base": c["base"], "pk": c["pk"], "spatial": c["spatial"],
+                     "not_null": c["not_null"], "default": c["default"], "identity": c["identity"],
+                     "generated": c["generated"]} for c in cols],
+        "indexes": [{"name": i["name"], "columns": i["columns"], "unique": i["unique"]} for i in indexes],
+        "geometry": geo, "usage": _table_usage(db, t),
+    }
+
+
+@site_user_required
+@require_POST
+def table_structure(request, pk, schema, table):
+    try:
+        db, ex = _explorer_db(request, pk, "editor")
+        if ex is None:
+            raise ExplorerError("مرورگر فقط برای پایگاه داده فعال در دسترس است.")
+        if db.status != db.Status.ACTIVE:
+            raise ExplorerError("پایگاه داده فقط‌خواندنی یا غیرفعال است؛ تغییر ساختار ممکن نیست.")
+        t = ex.find(schema, table)
+        if t.kind not in editor.EDITABLE_KINDS:
+            raise ExplorerError("ساختار نما یا جدول خارجی از این‌جا تغییر نمی‌کند.")
+        data = _body(request)
+        plan = tablealter.build(t, ex.columns(t), ex.indexes(t), data.get("op"), data.get("params") or {})
+        usage = _table_usage(db, t)
+        if data.get("dry_run"):
+            return JsonResponse({"ok": True, "sql": plan.script(), "summary": plan.summary, "danger": plan.danger,
+                                 "usage": usage})
+        if plan.danger and str(data.get("confirm", "")).strip() != plan.danger:
+            raise ExplorerError(f"برای تأیید، «{plan.danger}» را دقیقاً بنویسید.")
+        ex.alter_table(plan)
+    except (tablebuilder.BuildError, EditError, ExplorerError) as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    if plan.touches_columns:
+        EditBatch.objects.filter(database=db, schema=t.schema, table=t.name).delete()  # بازگردانی‌ها دیگر معنا ندارند
+    final = plan.renamed_table or t.name
+    if plan.renamed_table:
+        from maps.models import MapLayer
+        from publish.models import Layer
+        from restapi.models import ApiTable
+
+        MapLayer.objects.filter(webmap__database=db, schema=t.schema, table=t.name).update(table=final)
+        Layer.objects.filter(service__database=db, schema=t.schema, table=t.name).update(table=final)
+        ApiTable.objects.filter(service__database=db, schema=t.schema, table=t.name).update(table=final)
+    services.logevent("table_alter", f"{t.qualified}: {plan.summary}", user=request.user, database=db)
+    return JsonResponse({"ok": True, "url": reverse("databases:explore_table", args=[db.pk, t.schema, final]) + "?tab=columns"})
 
 
 # ---------------------------------------------------------------------- ورود فایل به جدول موجود (نگاشت ستون‌ها)

@@ -3,7 +3,7 @@ title: چطور داده‌ها و شکل (هندسه) یک جدول را مست
 summary: در صفحه جدول دکمه «ویرایش جدول» را بزنید و ریسک‌ها را تأیید کنید؛ سطر اضافه، ویرایش یا حذف کنید و شکل‌ها را روی نقشه بکشید یا جابه‌جا کنید. همه‌چیز اول پیش‌نویس است و فقط بعد از «بازبینی و ذخیره» نوشته می‌شود؛ آخرین ذخیره قابل بازگردانی است.
 kind: howto
 keywords: ویرایش جدول, ویرایش هندسه, افزودن سطر, حذف سطر, ویرایش مشخصات عارضه, ویرایش نقشه, بازگردانی ویرایش, حالت ویرایش, edit table
-related: create-table, explorer-overview, edit-table-safety, err-edit-table, backup-manual, invalid-geometry-fix, drop-table, sql-console, team-roles
+related: alter-table-structure, create-table, explorer-overview, edit-table-safety, err-edit-table, backup-manual, invalid-geometry-fix, drop-table, sql-console, team-roles
 order: 45
 reviewed: 2026-11-04
 ---
@@ -33,5 +33,5 @@ reviewed: 2026-11-04
 - ستون‌های محاسباتی و شماره‌ی خودکار (IDENTITY ALWAYS) و خود کلید اصلی قابل ویرایش نیستند.
 - هر ذخیره حداکثر ۵۰۰ تغییر دارد؛ روی نقشه ۲٬۰۰۰ عارضه‌ی اول بارگذاری می‌شود ([توضیح](kb:explorer-map-limit)).
 - «بازگردانی آخرین ذخیره» فقط وقتی کار می‌کند که ردیف‌ها بعد از آن ذخیره دوباره تغییر نکرده باشند. برای کارهای بزرگ، پیش از شروع [بکاپ بگیرید](kb:backup-manual).
-- برای تغییر ساختار جدول (ستون جدید، نوع ستون) از [کنسول SQL](kb:sql-console) استفاده کنید؛ جدول تازه را هم می‌توانید [با سازنده‌ی جدول](kb:create-table) بسازید.
+- ساختار جدول (ستون جدید، نوع ستون، ایندکس، SRID) را از [تب ستون‌ها](kb:alter-table-structure) عوض کنید؛ جدول تازه را هم می‌توانید [با سازنده‌ی جدول](kb:create-table) بسازید.
 - اگر خطایی دیدید، [فهرست خطاهای ویرایش](kb:err-edit-table) را ببینید؛ درباره‌ی ایمنی هم [این پرسش](kb:edit-table-safety) را بخوانید.
