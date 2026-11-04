@@ -307,6 +307,17 @@ class Explorer:
         "fix_owner": "برگرداندن مالکیت به شما",
     }
 
+    # عنوان کوتاه و پیامد هر نوع مشکل برای گروه‌بندی صفحه‌ی سلامت داده
+    FIX_INFO = {
+        "fix_owner": ("مالکیت جدول با شما نیست", "در QGIS و پایتون خطای دسترسی می‌دهد."),
+        "set_srid": ("سیستم مختصات (SRID) مشخص نیست", "روی نقشه نمایش داده نمی‌شود؛ خودتان باید سیستم درست را انتخاب کنید."),
+        "add_pk": ("کلید اصلی ندارد", "QGIS نمی‌تواند ویرایش کند، ویرایش و حذف در REST API ممکن نیست و GeoServer کند می‌شود."),
+        "add_index": ("نمایه‌ی مکانی ندارد", "نقشه و کوئری‌های مکانی کند می‌شوند."),
+        "make_valid": ("هندسه‌ی نامعتبر دارد", "تحلیل‌هایی مثل تقاطع و مساحت خطا می‌دهند."),
+        "analyze": ("آمار جدول به‌روز نیست", "تعداد سطرها تقریبی و برنامه‌ریزی کوئری‌ها ضعیف است."),
+    }
+    LEVEL_RANK = {"error": 0, "warning": 1, "info": 2}
+
     def health(self) -> list[dict]:
         """مشکلات رایج جدول‌ها که QGIS، GeoServer یا سرعت کوئری را خراب می‌کنند."""
         issues = []
@@ -448,6 +459,20 @@ class Explorer:
                     failed.append(f"{i['table']}: {exc}")
             if not again:
                 break
+        return done, failed
+
+    def fix_group(self, kind: str) -> tuple[list[str], list[str]]:
+        """یک نوع مشکل را روی همه‌ی جدول‌هایی که دارند اصلاح می‌کند (تعیین SRID به انتخاب کاربر نیاز دارد و شامل نیست)."""
+        if kind not in self.FIXES or kind == "set_srid":
+            raise ExplorerError("این نوع اصلاح گروهی ندارد.")
+        done, failed = [], []
+        for i in [x for x in self.health() if x["fix"] == kind]:
+            try:
+                done.append(f"{i['table']}: {self.fix(kind, i['schema'], i['table'], i.get('column'))}")
+            except ExplorerError as exc:
+                failed.append(f"{i['table']}: {exc}")
+            if kind == "fix_owner":
+                break  # یک‌بار مالکیت همه‌ی جدول‌ها را برمی‌گرداند
         return done, failed
 
     # ------------------------------------------------------------------ حذف جدول

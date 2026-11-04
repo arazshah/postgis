@@ -1304,3 +1304,57 @@ body.is-editing .data-table .rowact,body.is-editing .data-table th.rowact{displa
 .ex-recent{border-bottom:1px solid var(--line);margin-bottom:var(--s2);padding-bottom:var(--s2)}
 .ex-recent[hidden]{display:none}
 .ex-recent .ex-schema{font-family:var(--f-body)}
+
+/* ── سلامت داده: کاشی‌های خلاصه، کارت مشکل، فیلتر (list-filter.js، health.js) ── */
+.hk-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s3);margin-bottom:var(--s4)}
+.hk{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid var(--line);border-radius:var(--r-card);background:var(--card);font:inherit;color:var(--ink);text-align:start}
+button.hk{cursor:pointer}
+button.hk:hover{border-color:var(--teal)}
+button.hk[aria-pressed=true]{border-color:var(--teal);background:var(--teal-soft)}
+button.hk:focus-visible{outline:2px solid var(--ochre);outline-offset:2px}
+.hk b{font:800 22px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.hk>span:last-child{font-size:.85rem;color:var(--ink-2)}
+.hk-i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none}
+.hk-error .hk-i{background:var(--red-soft);color:var(--red)}
+.hk-warning .hk-i{background:var(--ochre-soft);color:#7a5200}
+.hk-info .hk-i{background:var(--teal-soft);color:var(--teal-dark)}
+.hk-ok .hk-i{background:var(--green-soft);color:var(--green)}
+.hl{margin-top:var(--s2)}
+.hl .tl-bar{position:sticky;top:var(--top-h);background:var(--paper);padding-inline:0}
+.hl-view{display:flex;flex-direction:column;gap:var(--s3);margin-top:var(--s3)}
+.hl-view[hidden],.hg[hidden],.hg-row[hidden],.hl .tl-none[hidden]{display:none}
+.hg{padding:0;gap:0;overflow:hidden;border-inline-start:4px solid var(--ochre)}
+.hg-error{border-inline-start-color:var(--red)}.hg-info{border-inline-start-color:var(--teal)}
+.hg-head{display:flex;align-items:center;gap:var(--s3);padding:14px 16px;flex-wrap:wrap}
+.hg-ic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:none;background:var(--ochre-soft);color:#7a5200}
+.hg-error .hg-ic{background:var(--red-soft);color:var(--red)}.hg-info .hg-ic{background:var(--teal-soft);color:var(--teal-dark)}
+.hg-t{flex:1 1 180px;min-width:0}
+body.app .hg-t h2{margin:0;font:800 15px/1.6 var(--f-display);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.hg-t p{margin:2px 0 0}
+.hg-t h2 a{color:inherit;text-decoration:none}.hg-t h2 a:hover{text-decoration:underline;color:var(--teal-dark)}
+.hg-badge{font:600 11px var(--f-body);padding:1px 9px;border-radius:99px;background:var(--ochre-soft);color:#7a5200}
+.hg-error .hg-badge{background:var(--red-soft);color:var(--red)}.hg-info .hg-badge{background:var(--teal-soft);color:var(--teal-dark)}
+.hg-n{white-space:nowrap}
+.hg-head form{margin:0}
+.hg-list summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 16px;border-top:1px solid var(--line-2,var(--line));
+  font-size:.82rem;color:var(--ink-2);background:var(--paper)}
+.hg-list summary::-webkit-details-marker{display:none}
+.hg-list summary:focus-visible{outline:2px solid var(--ochre);outline-offset:-2px}
+.hg-list summary i{margin-inline-start:auto;border:5px solid transparent;border-top-color:currentColor;border-bottom-width:0;transition:transform .15s}
+.hg-list[open] summary i{transform:rotate(180deg)}
+.hg-list .hg-close,.hg-list[open] .hg-open{display:none}.hg-list[open] .hg-close{display:inline}
+.hg-list ul,.hg-list-flat{list-style:none;margin:0;padding:0}
+.hg-row{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:8px 16px;border-top:1px solid var(--line-2,var(--line))}
+.hg-row p{margin:0;flex:1;min-width:160px}
+.hg-tn{font-family:var(--f-mono);font-size:.86rem;font-weight:600;color:var(--ink);text-decoration:none}
+.hg-tn:hover{color:var(--teal-dark);text-decoration:underline}
+.hg-row>.btn,.hg-fix{margin-inline-start:auto}
+.hg-fix{margin-bottom:0;display:flex}
+.hg-lv{flex:none;display:grid;place-items:center;color:#7a5200}.hg-row.h-error .hg-lv{color:var(--red)}.hg-row.h-info .hg-lv{color:var(--teal-dark)}
+.hg-list-flat .hg-row:first-child{border-top:1px solid var(--line-2,var(--line))}
+.hg-row:not(.h-error):not(.h-info):not(.h-warning){background:transparent}
+.hl .hg .h-row{display:flex}
+@media (max-width:640px){.hg-row>.btn,.hg-fix{margin-inline-start:0}.hg-head{padding:12px}.hg-row{padding:8px 12px}.hl .tl-bar{position:static}}
+
+.choice b{text-align:start;unicode-bidi:plaintext}
+.hl-reset[aria-pressed=true]{display:none}

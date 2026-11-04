@@ -1,36 +1,136 @@
-{% extends "databases/_explore_base.html" %}{% load fa ws %}
+{% extends "databases/_explore_base.html" %}{% load fa static ws %}
+{% block title %}سلامت داده {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ex %}
-<div class="page-head"><div><h1>{% icon "pulse" 22 %} سلامت داده</h1><p class="muted page-sub">بررسی کیفیت هندسه، نمایه‌ها و ساختار جدول‌ها.</p></div></div>
-<p class="muted">مشکلات رایجی که اتصال QGIS، انتشار نقشه یا سرعت کوئری را خراب می‌کنند. هر کدام با یک کلیک اصلاح می‌شود.</p>
+{% with can_fix=db.can_edit %}
+<div class="page-head">
+  <div>
+    <h1>سلامت داده</h1>
+    <p class="muted page-sub">مشکلات رایجی که اتصال QGIS، انتشار نقشه یا سرعت کوئری را خراب می‌کنند. هر کدام با یک کلیک اصلاح می‌شود.</p>
+  </div>
+  {% if issues and db.status == 'active' and can_fix and n_auto %}
+  <div class="page-acts">
+    <form method="post" data-confirm="{{ n_auto|fanum }} مورد اصلاح خودکار شود؟ تعیین سیستم مختصات باید دستی انجام شود." data-confirm-title="اصلاح خودکار" data-confirm-text="اصلاح کن">{% csrf_token %}<input type="hidden" name="fix" value="all">
+      <button class="btn" type="submit">{% icon "bolt" 18 %}اصلاح خودکار {{ n_auto|fanum }} مورد</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
 {% if issues %}
-{% if db.status == 'active' %}
-{% if db.can_edit %}<form method="post" style="margin-bottom:var(--s4)">{% csrf_token %}<input type="hidden" name="fix" value="all">
-  <button class="btn sm" type="submit">اصلاح خودکار همه موارد</button>
-  <span class="small muted">کلید اصلی، نمایه مکانی، آمار و هندسه نامعتبر. سیستم مختصات را باید خودتان انتخاب کنید.</span>
-</form>{% endif %}
-{% endif %}
-{% regroup issues by table as groups %}
-<ul class="health">
-  {% for g in groups %}
-  <li>
-    <b class="ltr h-table">{{ g.grouper }}</b>
-    {% for i in g.list %}
-    <div class="h-row h-{{ i.level }}">
-      <p class="small">{% if i.column %}<span class="muted ltr">{{ i.column }}</span> · {% endif %}{{ i.text }}</p>
-      {% if db.status == 'active' %}
-      {% if db.can_edit %}<form method="post">{% csrf_token %}
-        <input type="hidden" name="fix" value="{{ i.fix }}"><input type="hidden" name="schema" value="{{ i.schema }}">
-        <input type="hidden" name="table" value="{{ i.table }}"><input type="hidden" name="column" value="{{ i.column|default:'' }}">
-        {% if i.fix == 'set_srid' %}<select name="srid" required aria-label="SRID">{% for code, label in srid_choices %}<option value="{{ code }}">{{ code }} · {{ label }}</option>{% endfor %}</select>{% endif %}
-        <button class="btn ghost sm" type="submit">{% for k, v in fixes.items %}{% if k == i.fix %}{{ v }}{% endif %}{% endfor %}</button>
-      </form>{% endif %}
+<div class="hk-row" role="group" aria-label="فیلتر شدت">
+  <button type="button" class="hk hk-error" data-lf-chip="error" aria-pressed="false"><span class="hk-i">{% icon "warn" 18 %}</span><b>{{ n_error|fanum }}</b><span>خطا</span></button>
+  <button type="button" class="hk hk-warning" data-lf-chip="warning" aria-pressed="false"><span class="hk-i">{% icon "warn" 18 %}</span><b>{{ n_warning|fanum }}</b><span>هشدار</span></button>
+  <button type="button" class="hk hk-info" data-lf-chip="info" aria-pressed="false"><span class="hk-i">{% icon "info" 18 %}</span><b>{{ n_info|fanum }}</b><span>اطلاع</span></button>
+  <div class="hk hk-ok" role="status"><span class="hk-i">{% icon "check" 18 %}</span><b>{{ n_healthy|fanum }}</b><span>جدول سالم</span></div>
+</div>
+
+<div class="tl hl" data-lf data-hl>
+  <div class="tl-bar" data-lf-bar>
+    <div class="tl-search">
+      {% icon "search" 16 %}
+      <input type="search" class="ltr" placeholder="جست‌وجوی جدول، ستون یا مشکل…" aria-label="جست‌وجو در مشکل‌ها" autocomplete="off" data-lf-q>
+      <kbd aria-hidden="true">/</kbd>
+    </div>
+    <div class="tl-chips" role="group" aria-label="نحوه‌ی نمایش">
+      <button type="button" class="tl-chip" data-hl-view="problem" aria-pressed="true">{% icon "layers" 16 %}بر اساس مشکل</button>
+      <button type="button" class="tl-chip" data-hl-view="table" aria-pressed="false">{% icon "table" 16 %}بر اساس جدول</button>
+    </div>
+    <button type="button" class="tl-chip hl-reset" data-lf-chip="all" aria-pressed="true">همه‌ی شدت‌ها</button>
+    <span class="small muted tl-count" aria-live="polite" data-lf-count></span>
+  </div>
+
+  {# نمای بر اساس مشکل: هر نوع مشکل یک کارت، با اصلاح گروهی #}
+  <div class="hl-view" data-hl-pane="problem" data-lf-pane>
+  {% for g in problems %}
+  <section class="card hg hg-{{ g.level }}" data-lf-group>
+    <div class="hg-head">
+      <span class="hg-ic">{% if g.level == 'info' %}{% icon "info" 20 %}{% else %}{% icon "warn" 20 %}{% endif %}</span>
+      <div class="hg-t">
+        <h2>{{ g.title }} <span class="hg-badge">{% if g.level == 'error' %}خطا{% elif g.level == 'warning' %}هشدار{% else %}اطلاع{% endif %}</span></h2>
+        <p class="small muted">{{ g.why }}</p>
+      </div>
+      <span class="small muted hg-n">{{ g.tables|fanum }} جدول</span>
+      {% if db.status == 'active' and can_fix and g.bulk and g.items|length > 1 %}
+      <form method="post" data-confirm="{{ g.title }}: برای هر {{ g.tables|fanum }} جدول اصلاح شود؟" data-confirm-title="اصلاح گروهی" data-confirm-text="اصلاح کن">{% csrf_token %}
+        <input type="hidden" name="fix" value="group"><input type="hidden" name="kind" value="{{ g.fix }}">
+        <button class="btn sm" type="submit">{% icon "bolt" 16 %}اصلاح هر {{ g.items|length|fanum }} مورد</button>
+      </form>
       {% endif %}
     </div>
-    {% endfor %}
-  </li>
+    <details class="hg-list"{% if g.items|length <= 5 %} open{% endif %}>
+      <summary><span class="hg-open">نمایش جدول‌ها</span><span class="hg-close">پنهان کردن جدول‌ها</span><i aria-hidden="true"></i></summary>
+      <ul>
+      {% for i in g.items %}
+        <li class="hg-row" data-lf-row data-tags="{{ i.level }}" data-q="{{ i.qualified|lower }} {{ i.column|default:''|lower }} {{ g.title }}">
+          <a class="ltr hg-tn" href="{% url 'databases:explore_table' db.pk i.schema i.table %}?tab=columns">{{ i.qualified }}</a>
+          {% if i.column %}<span class="muted ltr small">{{ i.column }}</span>{% endif %}
+          {% if i.count %}<span class="small muted">{{ i.count|fanum }} مورد</span>{% endif %}
+          {% if db.status == 'active' and can_fix %}
+            {% include "databases/_health_fix.html" with i=i %}
+          {% endif %}
+        </li>
+      {% endfor %}
+      </ul>
+    </details>
+  </section>
   {% endfor %}
-</ul>
-{% else %}
-<div class="msg success" role="status">مشکلی پیدا نشد؛ جدول‌ها کلید اصلی، نمایه مکانی و سیستم مختصات درست دارند.</div>
+  </div>
+
+  {# نمای بر اساس جدول #}
+  <div class="hl-view" data-hl-pane="table" data-lf-pane hidden>
+  {% for g in bad_tables %}
+  <section class="card hg hg-{{ g.level }}" data-lf-group>
+    <div class="hg-head">
+      <span class="hg-ic">{% if g.level == 'info' %}{% icon "info" 20 %}{% else %}{% icon "warn" 20 %}{% endif %}</span>
+      <div class="hg-t"><h2><a class="ltr" href="{% url 'databases:explore_table' db.pk g.schema g.table %}?tab=columns">{{ g.qualified }}</a></h2></div>
+      <span class="small muted hg-n">{{ g.items|length|fanum }} مشکل</span>
+    </div>
+    <ul class="hg-list-flat">
+    {% for i in g.items %}
+      <li class="hg-row h-{{ i.level }}" data-lf-row data-tags="{{ i.level }}" data-q="{{ i.qualified|lower }} {{ i.column|default:''|lower }} {{ i.label }} {{ i.text }}">
+        <span class="hg-lv" title="{% if i.level == 'error' %}خطا{% elif i.level == 'warning' %}هشدار{% else %}اطلاع{% endif %}">{% if i.level == 'info' %}{% icon "info" 16 %}{% else %}{% icon "warn" 16 %}{% endif %}</span>
+        <p class="small">{% if i.column %}<span class="muted ltr">{{ i.column }}</span> · {% endif %}{{ i.text }}</p>
+        {% if db.status == 'active' and can_fix %}{% include "databases/_health_fix.html" with i=i %}{% endif %}
+      </li>
+    {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+  </div>
+
+  <div class="tl-none" hidden data-lf-none>
+    {% icon "search" 28 %}
+    <p><b>موردی با این جست‌وجو پیدا نشد.</b></p>
+    <button type="button" class="btn ghost sm" data-lf-clear>پاک کردن جست‌وجو و فیلتر</button>
+  </div>
+</div>
+
+{% if can_fix and db.status == 'active' %}
+<dialog class="dlg" id="srid-dlg" aria-labelledby="srid-dlg-t">
+  <form method="post">{% csrf_token %}
+    <input type="hidden" name="fix" value="set_srid"><input type="hidden" name="schema" data-srid-f="schema">
+    <input type="hidden" name="table" data-srid-f="table"><input type="hidden" name="column" data-srid-f="column">
+    <div class="dlg-h"><span class="dlg-i">{% icon "globe" 22 %}</span><h2 id="srid-dlg-t">تعیین سیستم مختصات <span class="ltr" data-srid-title></span></h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+    <div class="dlg-b">
+      <p class="small muted" style="margin:0">مختصات فعلی داده‌ها را با سیستم درست مشخص کنید؛ داده جابه‌جا یا تبدیل نمی‌شود، فقط برچسب SRID تعیین می‌شود.</p>
+      <div class="choice-grid">
+        {% for code, label in srid_common %}<label class="choice"><input type="radio" name="srid" value="{{ code }}"{% if forloop.first %} checked{% endif %}><span><b>{{ code }}</b><small>{{ label }}</small></span></label>{% endfor %}
+      </div>
+      <div class="field" style="margin:0"><label for="srid-other">سیستم دیگر</label>
+        <select id="srid-other" name="srid_other"><option value="">انتخاب نشده</option>{% for code, label in srid_other %}<option value="{{ code }}">{{ code }} · {{ label }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}تعیین سیستم مختصات</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
+  </form>
+</dialog>
 {% endif %}
+{% else %}
+<div class="empty">
+  {% icon "check" 28 %}
+  <h2>مشکلی پیدا نشد</h2>
+  <p class="muted">جدول‌های شما کلید اصلی، نمایه‌ی مکانی و سیستم مختصات درست دارند{% if n_healthy %} ({{ n_healthy|fanum }} جدول بررسی شد){% endif %}.</p>
+  <a class="btn ghost" href="{% url 'databases:explore' db.pk %}">{% icon "table" 18 %}رفتن به جدول‌ها</a>
+</div>
+{% endif %}
+{% endwith %}
 {% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'js/list-filter.js' %}" defer></script><script src="{% static 'js/health.js' %}" defer></script>{% endblock %}

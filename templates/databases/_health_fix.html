@@ -1,0 +1,10 @@
+{% load fa %}
+{% if i.fix == 'set_srid' %}
+<button class="btn ghost sm" type="button" data-srid-open data-schema="{{ i.schema }}" data-table="{{ i.table }}" data-column="{{ i.column|default:'' }}" data-name="{{ i.qualified }}">{{ i.label }}</button>
+{% else %}
+<form method="post" class="hg-fix">{% csrf_token %}
+  <input type="hidden" name="fix" value="{{ i.fix }}"><input type="hidden" name="schema" value="{{ i.schema }}">
+  <input type="hidden" name="table" value="{{ i.table }}"><input type="hidden" name="column" value="{{ i.column|default:'' }}">
+  <button class="btn ghost sm" type="submit">{{ i.label }}</button>
+</form>
+{% endif %}
