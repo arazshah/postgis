@@ -7,11 +7,13 @@ from django.contrib import messages
 from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404, redirect, render
+from django.templatetags.static import static
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
+from core.models import SiteSettings
 
 from . import csvgeo, editor, services, tablebuilder
 from .crypto import generate_password
@@ -1044,6 +1046,10 @@ def _edit_config(request, db, ex, t) -> dict:
                      "writable": c["name"] in writable, "identity": c["identity"], "generated": c["generated"]}
                     for c in cols],
         "geometry": t.geometry,
+        "tiles": SiteSettings.get().map_tile_url, "attr": SiteSettings.get().map_tile_attribution,
+        "vendor": {"leaflet_js": static("vendor/leaflet/leaflet.js"), "leaflet_css": static("vendor/leaflet/leaflet.css"),
+                   "pm_js": static("vendor/leaflet-geoman/leaflet-geoman.min.js"),
+                   "pm_css": static("vendor/leaflet-geoman/leaflet-geoman.css")},
         "urls": {k: reverse(f"databases:explore_edit_{k}", args=args) for k in ("mode", "row", "apply", "undo")},
         "geojson": reverse("databases:explore_geojson", args=args) + "?keys=1",
         "last": ({"id": last.pk, "inserted": last.inserted, "updated": last.updated, "deleted": last.deleted,

@@ -1,5 +1,5 @@
 {% extends "databases/_explore_base.html" %}{% load fa static ws %}
-{% block head %}{% if tab == 'map' %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% if edit_cfg.capable %}<link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">{% endif %}{% endif %}{% endblock %}
+{% block head %}{% if tab == 'map' %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% if edit_cfg.capable %}<link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">{% endif %}{% endif %}{% if edit_cfg.capable %}<link rel="stylesheet" href="{% static 'css/table-geom.css' %}">{% endif %}{% endblock %}
 {% block ex %}
 <div class="ex-title">
   <div class="ex-ti">
@@ -36,6 +36,7 @@
   <span class="edit-count" id="edit-count" aria-live="polite">بدون تغییر</span>
   <div class="dock-acts">
     {% if tab == 'data' %}<button type="button" class="btn ghost sm" id="edit-add-row">{% icon "plus" 16 %}سطر تازه</button>
+    <button type="button" class="btn ghost sm" id="edit-add-rows">{% icon "table" 16 %}چندسطر</button>
     <button type="button" class="btn ghost sm danger-ghost" id="edit-del-sel" hidden>حذف انتخاب‌شده‌ها</button>{% endif %}
     <button type="button" class="btn ghost sm" id="edit-undo-last" hidden></button>
     <button type="button" class="btn ghost sm" id="edit-discard" hidden>دور ریختن تغییرها</button>
@@ -101,10 +102,10 @@
     </span>
   </div>
   {% else %}
-  <div class="empty" style="padding:48px 24px"><h2>این جدول خالی است</h2></div>
+  <div class="empty" style="padding:48px 24px">{% icon "table" 28 %}<h2>این جدول خالی است</h2>{% if edit_cfg.capable %}<p class="muted">«ویرایش جدول» را روشن کنید؛ بعد سطر را دستی بسازید، چند سطر را از Excel بچسبانید یا از «ورود فایل» داده وارد کنید. هندسه را می‌توانید با مختصات، WKT/GeoJSON یا کلیک روی نقشه بدهید.</p><button type="button" class="btn" id="edit-empty-start" data-edit-start>{% icon "edit" 18 %}شروع ویرایش و افزودن سطر</button>{% elif db.can_edit and db.status == 'active' %}<p class="muted">این جدول کلید اصلی ندارد و در مرورگر ویرایش نمی‌شود؛ از «ورود فایل» داده وارد کنید.</p>{% endif %}</div>
   {% endif %}
 {% endif %}
-{% if edit_cfg.capable %}<script src="{% static 'js/table-edit.js' %}" defer></script>{% endif %}
+{% if edit_cfg.capable %}<script src="{% static 'js/studio-ui.js' %}" defer></script><script src="{% static 'js/table-geom.js' %}" defer></script><script src="{% static 'js/table-edit.js' %}" defer></script><script src="{% static 'js/table-grid.js' %}" defer></script>{% endif %}
 {% if db.can_edit and db.status == 'active' %}
 <details class="danger-zone drop-zone">
   <summary>حذف {{ t.kind_label }}</summary>

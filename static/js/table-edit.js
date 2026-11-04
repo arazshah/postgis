@@ -291,7 +291,7 @@
   }
 
   // mode: update | insert. values: مقدارهای فعلی. base: مقدارهای پایگاه داده (برای تشخیص تغییر). نتیجه: {values} یا null
-  function openRowForm({ mode, values, base, title, subtitle }) {
+  function openRowForm({ mode, values, base, title, subtitle, geom }) {
     const update = mode === "update";
     const fields = [];
     const body = el("div", { class: "rf-form" });
@@ -304,9 +304,14 @@
       grid.append(f.wrap);
     }
     body.append(grid);
-    if (hasGeom) {
-      body.append(el("p", { class: "rf-geo small" }, "شکل (هندسه) از تب ",
-        el("a", { href: "?tab=map" }, "نقشه"), update ? " ویرایش می‌شود." : " قابل کشیدن است؛ برای سطر تازه‌ی بدون هندسه، شکل را از نقشه بکشید."));
+    let gfield = null;
+    if (hasGeom && window.TableGeom) {
+      const g = cfg.geometry[0];
+      const gcol = colByName[g.column];
+      gfield = TableGeom.field(cfg, g, { mode, initial: geom || undefined, nullable: !(gcol && gcol.not_null) });
+      body.append(gfield.wrap);
+    } else if (hasGeom) {
+      body.append(el("p", { class: "rf-geo small" }, "شکل (هندسه) از تب ", el("a", { href: "?tab=map" }, "نقشه"), " ویرایش می‌شود."));
     }
     let out = null;
     return Ui.dialog({
@@ -332,9 +337,15 @@
               if (r.value === undefined || (!update && r.value === null && !r.touched)) continue;
               changes[c.name] = r.value === null ? null : (INTS.has(c.base) || NUMS.has(c.base) ? unfa(r.value).trim() : r.value);
             }
+            let newGeom;
+            if (gfield) {
+              const gr = gfield.read();
+              if (gr.state === "error") { gfield.focus(); return false; }
+              if (gr.state === "set") newGeom = gr.geom;
+            }
             if (bad) { bad.focus(); return false; }
-            if (update && !Object.keys(changes).length) { Ui.toast("چیزی تغییر نکرده است.", "info"); out = null; return true; }
-            out = changes;
+            if (update && !Object.keys(changes).length && !newGeom) { Ui.toast("چیزی تغییر نکرده است.", "info"); out = null; return true; }
+            out = { values: changes, geom: newGeom };
             return true;
           },
         },
@@ -350,25 +361,26 @@
     if (prev && prev.op === "delete") { Ui.toast("این سطر برای حذف علامت خورده است؛ اول آن را از فهرست تغییرها برگردانید.", "info"); return false; }
     const base = { ...r.values };
     const current = { ...base, ...(prev ? prev.values : {}) };
-    const changes = await openRowForm({ mode: "update", values: current, base, title: `ویرایش سطر ${pkLabel(pk)}`,
+    const res = await openRowForm({ mode: "update", values: current, base, geom: prev ? prev.geom : undefined, title: `ویرایش سطر ${pkLabel(pk)}`,
       subtitle: "تغییر شما فقط به فهرست تغییرها اضافه می‌شود و تا ذخیره‌ی نهایی روی پایگاه داده نوشته نمی‌شود." });
-    if (!changes) return false;
+    if (!res) return false;
     // فرم نسبت به مقدار پایگاه داده سنجیده شده؛ پس مقدارهای قبلیِ پیش‌نویس با نتیجه‌ی فرم جایگزین می‌شوند
-    if (prev) prev.values = {};
-    draftApi.upsertUpdate({ pk, v: prev ? prev.v : r.v, old: base, values: changes });
+    if (prev) { prev.values = {}; if (res.geom && !res.geom.same) delete prev.geom; }
+    draftApi.upsertUpdate({ pk, v: prev ? prev.v : r.v, old: base, values: res.values, geom: res.geom && !res.geom.same ? res.geom : undefined });
     return true;
   }
 
   async function addRow() {
-    const changes = await openRowForm({ mode: "insert", title: "افزودن سطر تازه", base: null,
+    const res = await openRowForm({ mode: "insert", title: "افزودن سطر تازه", base: null,
       subtitle: "ستون‌های خالی‌مانده مقدار پیش‌فرض می‌گیرند. سطر تا ذخیره‌ی نهایی در پایگاه داده ساخته نمی‌شود." });
-    if (changes) draftApi.addInsert({ values: changes });
+    if (res) draftApi.addInsert({ values: res.values, geom: res.geom });
   }
 
   async function editInsert(d) {
-    const changes = await openRowForm({ mode: "insert", values: d.values, title: "ویرایش سطر تازه", base: null });
-    if (!changes) return;
-    d.values = changes;
+    const res = await openRowForm({ mode: "insert", values: d.values, geom: d.geom, title: "ویرایش سطر تازه", base: null });
+    if (!res) return;
+    d.values = res.values;
+    if (res.geom && !res.geom.same) d.geom = res.geom;
     notify();
   }
 
@@ -462,11 +474,11 @@
     }
     if (d.op === "update") {
       const rows = Object.keys(d.values).map((k) => el("tr", {}, el("th", { class: "ltr" }, k), el("td", { class: "ltr rv-old" }, show(d.old[k])), el("td", { class: "ltr rv-newv" }, show(d.values[k]))));
-      if (d.geom) rows.push(el("tr", {}, el("th", { class: "ltr" }, d.geom.column), el("td", { class: "rv-old" }, "هندسه‌ی قبلی"), el("td", { class: "rv-newv" }, "هندسه‌ی ویرایش‌شده")));
+      if (d.geom) rows.push(el("tr", {}, el("th", { class: "ltr" }, d.geom.column), el("td", { class: "rv-old" }, "هندسه‌ی قبلی"), el("td", { class: "rv-newv" }, d.geom.null ? "خالی (NULL)" : "هندسه‌ی جدید" + (d.geom.label ? ` (${d.geom.label})` : ""))));
       item.append(el("table", { class: "rv-diff" }, el("thead", {}, el("tr", {}, el("th", {}, "ستون"), el("th", {}, "قبلی"), el("th", {}, "جدید"))), el("tbody", {}, rows)));
     } else if (d.op === "insert") {
       const rows = Object.keys(d.values).map((k) => el("tr", {}, el("th", { class: "ltr" }, k), el("td", { class: "ltr rv-newv" }, show(d.values[k]))));
-      if (d.geom) rows.push(el("tr", {}, el("th", { class: "ltr" }, d.geom.column), el("td", { class: "rv-newv" }, "هندسه‌ی رسم‌شده")));
+      if (d.geom) rows.push(el("tr", {}, el("th", { class: "ltr" }, d.geom.column), el("td", { class: "rv-newv" }, "هندسه" + (d.geom.label ? ` (${d.geom.label})` : " (رسم‌شده)"))));
       if (!rows.length) rows.push(el("tr", {}, el("td", { colspan: "2", class: "muted" }, "همه‌ی ستون‌ها مقدار پیش‌فرض می‌گیرند")));
       item.append(el("table", { class: "rv-diff" }, el("tbody", {}, rows)));
     }
@@ -605,6 +617,8 @@
   on("edit-enter", () => enter());
   on("edit-exit", () => exit());
   on("edit-add-row", addRow);
+  on("edit-empty-start", async () => { if (await enter()) addRow(); });
+  on("edit-add-rows", () => (window.TableGrid ? TableGrid.open() : null));
   on("edit-review", review);
   on("edit-discard", async () => {
     const ok = await Ui.confirm({ title: "دور ریختن تغییرها", kind: "danger", message: `همه‌ی ${fa(state.drafts.length)} تغییر ذخیره‌نشده دور ریخته شود؟ پایگاه داده دست‌نخورده می‌ماند.`, confirmText: "دور بریز", cancelText: "نه، نگه دار" });
@@ -693,13 +707,13 @@
         const d = active.find((x) => x.op !== "insert" && pkKey(x.pk) === key);
         if (d && d.op === "delete") { if (em.group.hasLayer(ent.layer)) em.group.removeLayer(ent.layer); return; }
         if (!em.group.hasLayer(ent.layer)) em.group.addLayer(ent.layer);
-        const want = d && d.geom ? JSON.stringify(d.geom.geojson) : null;
+        const want = d && d.geom && d.geom.geojson ? JSON.stringify(d.geom.geojson) : null;
         if (want !== ent.cur) { replaceGeometry(ent, want ? d.geom.geojson : ent.orig); ent.cur = want; }
         style(ent.layer, want ? STYLE.upd : STYLE.base);
       });
-      const ids = new Set(active.filter((d) => d.op === "insert" && d.geom).map((d) => d.id));
+      const ids = new Set(active.filter((d) => d.op === "insert" && d.geom && d.geom.geojson).map((d) => d.id));
       drawn.forEach((layer, id) => { if (!ids.has(id)) { em.group.removeLayer(layer); drawn.delete(id); } });
-      active.filter((d) => d.op === "insert" && d.geom && !drawn.has(d.id)).forEach((d) => {
+      active.filter((d) => d.op === "insert" && d.geom && d.geom.geojson && !drawn.has(d.id)).forEach((d) => {
         const layer = em.makeLayer({ type: "Feature", properties: d.values, geometry: d.geom.geojson });
         layer._gpDraft = d;
         em.group.addLayer(layer);
@@ -782,6 +796,9 @@
   document.addEventListener("explore-map-ready", bootMap);
   bootMap();
 
+  // رابط برای افزونه‌ها (جدول چندسطری)
+  window.TableEdit = { cfg, state, drafts: draftApi, draftApi, validateType, fa, unfa, TEXTUAL, INTS, NUMS, MAX: 500 };
+
   // ------------------------------------------------------------------ شروع
   async function boot() {
     const enterBtn = $("edit-enter");
@@ -804,5 +821,4 @@
   renderData();
   boot();
 
-  window.TableEdit = { cfg, state, drafts: draftApi };
 })();

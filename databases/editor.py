@@ -26,6 +26,8 @@ EDIT_TTL = 15 * 60  # مهلت بی‌کاری حالت ویرایش (ثانیه
 VERSION_RE = re.compile(r"^[0-9a-f]{32}$")
 GEOJSON_TYPES = {"Point", "MultiPoint", "LineString", "MultiLineString", "Polygon", "MultiPolygon"}
 EWKB_RE = re.compile(r"^[0-9a-fA-F]{10,}$")
+WKT_RE = re.compile(r"^[A-Za-z0-9 .,()+\-\r\n\t]+$")  # فقط نویسه‌های WKT؛ نه SRID=... و نه چیز دیگر
+WKT_MAX = 1_000_000
 EDITABLE_KINDS = {"r", "p"}
 
 
@@ -88,6 +90,13 @@ def _clean_geom(spec, cols: list[dict]):
         if not isinstance(g, dict) or g.get("type") not in GEOJSON_TYPES or not isinstance(g.get("coordinates"), list):
             raise EditError("هندسه‌ی GeoJSON نامعتبر است.")
         return {"column": col, "geojson": g}
+    if "wkt" in spec:
+        w, srid = spec["wkt"], spec.get("srid")
+        if not isinstance(w, str) or not w.strip() or len(w) > WKT_MAX or not WKT_RE.match(w):
+            raise EditError("متن WKT نامعتبر است.")
+        if isinstance(srid, bool) or not isinstance(srid, int) or not 1 <= srid <= 998999:
+            raise EditError("SRID مختصات نامعتبر است.")
+        return {"column": col, "wkt": w.strip(), "srid": srid}
     if "ewkb" in spec:
         if not isinstance(spec["ewkb"], str) or not EWKB_RE.match(spec["ewkb"]):
             raise EditError("هندسه نامعتبر است.")
@@ -150,6 +159,16 @@ def _geom_expr(col: dict, geo: dict, spec: dict, repair: bool):
         params = [json.dumps(spec["geojson"])]
         if srid not in (0, 4326) and not col["base"] == "geography":
             base = sql.SQL("ST_Transform({}, {})").format(base, sql.Literal(int(srid)))
+    elif "wkt" in spec:
+        # مختصات به SRID خود کاربر خوانده و در صورت لزوم به SRID ستون تبدیل می‌شود
+        base = sql.SQL("ST_GeomFromText(CAST({} AS text), {})").format(sql.Placeholder(), sql.Literal(int(spec["srid"])))
+        params = [spec["wkt"]]
+        if srid not in (0, int(spec["srid"])):
+            base = sql.SQL("ST_Transform({}, {})").format(base, sql.Literal(int(srid)))
+        elif srid == 0 and col["base"] != "geography":
+            base = sql.SQL("ST_SetSRID({}, 0)").format(base)
+        if (geo.get("type") or "").upper().startswith("MULTI"):
+            base = sql.SQL("ST_Multi({})").format(base)
     else:
         base = sql.SQL("ST_GeomFromEWKB(decode(CAST({} AS text), 'hex'))").format(sql.Placeholder())
         params = [spec["ewkb"]]
