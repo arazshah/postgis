@@ -195,7 +195,7 @@ class AnalysisTests(TestCase):
     def test_page_and_access(self):
         url = reverse("analysis:page", args=[self.db.pk])
         r = self.client.get(url)
-        self.assertContains(r, "تنظیم کلید مدل زبانی")
+        self.assertContains(r, "تنظیم مدل زبانی")
         tools_url = reverse("tools:page", args=[self.db.pk])
         self.assertContains(self.client.get(tools_url), "حریم (بافر)")
         durl = reverse("tools:detail", args=[self.db.pk, "buffer"])
@@ -204,19 +204,21 @@ class AnalysisTests(TestCase):
         r = self.client.post(durl, {"layer": "public.parks", "distance": "100", "output": "park_100"})
         self.assertRedirects(r, durl + "#history", fetch_redirect_response=False)
         self.assertEqual(self._sql("SELECT to_regclass('public.park_100') IS NULL")[0][0], True)  # هنوز ساخته نشده
-        # کلید: فقط https، رمزنگاری‌شده، دوباره نمایش داده نمی‌شود
-        self.client.post(url, {"action": "llm_save", "base_url": "http://evil.example/v1", "api_key": "sk-1"})
+        # کلید: فقط https، رمزنگاری‌شده، دوباره نمایش داده نمی‌شود (تنظیم در پروفایل)
+        prof = reverse("accounts:profile")
+        self.client.post(prof, {"action": "llm_save", "base_url": "http://evil.example/v1", "api_key": "sk-1"})
         self.assertFalse(LlmConfig.objects.exists())
-        self.client.post(url, {"action": "llm_save", "base_url": "https://api.avalai.ir/v1/", "model": "gpt-4o-mini",
+        self.client.post(prof, {"action": "llm_save", "base_url": "https://api.avalai.ir/v1/", "model": "gpt-4o-mini",
                                "api_key": "sk-secret-123456789"})
         cfg = LlmConfig.objects.get()
         self.assertNotIn("secret", cfg.api_key_encrypted)
         self.assertEqual(cfg.get_key(), "sk-secret-123456789")
         self.assertEqual(cfg.base_url, "https://api.avalai.ir/v1")
-        r = self.client.get(url)
-        self.assertNotContains(r, "sk-secret-123456789")
-        self.assertContains(r, "…6789")
-        self.client.post(url, {"action": "llm_save", "base_url": "https://api.openai.com/v1", "model": "gpt-4.1"})
+        for page in (url, prof):
+            r = self.client.get(page)
+            self.assertNotContains(r, "sk-secret-123456789")
+        self.assertContains(self.client.get(prof), "…6789")
+        self.client.post(prof, {"action": "llm_save", "base_url": "https://api.openai.com/v1", "model": "gpt-4.1"})
         self.assertEqual(LlmConfig.objects.get().get_key(), "sk-secret-123456789")  # کلید خالی = بدون تغییر
         other = User.objects.create_user("09120000042")
         self.client.force_login(other)

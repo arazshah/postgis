@@ -1,14 +1,71 @@
-{% extends "base.html" %}{% load fa ws %}
-{% block title %}حساب کاربری — {{ SITE_NAME }}{% endblock %}
+{% extends "base.html" %}{% load fa ws static %}
+{% block title %}پروفایل — {{ SITE_NAME }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/profile.css' %}">{% endblock %}
 {% block content %}
-<div class="wrap page narrow">
-  <div class="page-head"><div><h1>{% icon "users" 22 %} حساب کاربری</h1>
-  <p class="muted page-sub">موبایل <span class="ltr mono">{{ user.phone }}</span> · عضو از {{ user.date_joined|jdate }}</p></div></div>
-  <form method="post" class="card">
-    {% csrf_token %}
-    {% for field in form %}{% include "partials/field.html" %}{% endfor %}
-    <p class="small muted">ایمیل اختیاری است؛ اگر وارد کنید، هشدارهای حجم و انقضا به ایمیل هم ارسال می‌شود.</p>
-    <button class="btn" type="submit">ذخیره تغییرات</button>
-  </form>
+<div class="wrap page narrow prof">
+  <header class="prof-head">
+    <span class="prof-av" aria-hidden="true">{% if user.initial %}{{ user.initial }}{% else %}{% icon "user" 28 %}{% endif %}</span>
+    <div>
+      <h1>{{ user.full_name|default:"پروفایل من" }}</h1>
+      <p class="muted page-sub">{% if user.organization %}{{ user.organization }} · {% endif %}عضو از {{ user.date_joined|jdate }}</p>
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="بخش‌های پروفایل" data-hash-tabs>
+    <button type="button" role="tab" id="t-info" aria-selected="true" aria-controls="p-info">مشخصات</button>
+    <button type="button" role="tab" id="t-ai" aria-selected="false" aria-controls="p-ai" tabindex="-1">مدل زبانی{% if cfg %} <span class="prof-ok" title="کلید ثبت شده">{% icon "check" 16 %}</span>{% endif %}</button>
+    <button type="button" role="tab" id="t-account" aria-selected="false" aria-controls="p-account" tabindex="-1">حساب و امنیت</button>
+  </div>
+
+  <section class="tabpanel" id="p-info" role="tabpanel" aria-labelledby="t-info">
+    <form method="post" class="card">
+      {% csrf_token %}<input type="hidden" name="action" value="profile">
+      {% for field in form %}{% include "partials/field.html" %}{% endfor %}
+      <p class="small muted">نام و دانشگاه/شرکت در منوی حساب و برای هم‌تیمی‌ها نمایش داده می‌شود. ایمیل اختیاری است؛ اگر وارد کنید، هشدارهای حجم و انقضا به ایمیل هم ارسال می‌شود.</p>
+      <button class="btn" type="submit">{% icon "check" 18 %}ذخیره تغییرات</button>
+    </form>
+  </section>
+
+  <section class="tabpanel" id="p-ai" role="tabpanel" aria-labelledby="t-ai" hidden>
+    <div class="card">
+      <h2 class="prof-h">{% icon "spark" 20 %}مدل زبانی برای پرسش فارسی</h2>
+      <p class="small muted">یک بار اینجا تنظیم کنید؛ در «تحلیل» و «کنسول SQL» همه‌ی پایگاه‌ها استفاده می‌شود. هزینه‌ی مدل با حساب خود شماست. کلید رمزنگاری‌شده ذخیره می‌شود و دیگر نمایش داده نمی‌شود.</p>
+      {% if cfg %}<p class="msg success small">{% icon "check" 16 %} فعال: مدل <span class="ltr">{{ cfg.model }}</span> · کلید <span class="ltr">{{ cfg.key_hint }}</span></p>
+      {% elif SITE.llm_partner_enabled and SITE.llm_partner_url %}
+      <details class="llm-guide" open>
+        <summary>حساب مدل زبانی ندارید؟ در سه قدم بسازید</summary>
+        <ol class="llm-steps">
+          <li><b>ساخت حساب</b><span class="small muted">در {{ SITE.llm_partner_name }} ثبت‌نام کنید (چند دقیقه).</span></li>
+          <li><b>شارژ اعتبار</b><span class="small muted">مبلغ کم هم کافی است؛ هر پرسش معمولاً چند تومان هزینه دارد.</span></li>
+          <li><b>ساخت کلید API</b><span class="small muted">کلید را کپی کنید و در کادر زیر بچسبانید.</span></li>
+        </ol>
+        <a class="btn ghost sm" href="{{ SITE.llm_partner_url }}" target="_blank" rel="sponsored noopener noreferrer" data-llm-guide>ساخت حساب در {{ SITE.llm_partner_name }}</a>
+      </details>
+      {% endif %}
+      <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="llm_save"><input type="hidden" name="next" value="{{ next }}">
+        <div class="field"><label for="l-url">آدرس سرویس سازگار با OpenAI</label><input id="l-url" type="text" name="base_url" class="ltr" value="{{ cfg.base_url|default:'https://api.avalai.ir/v1' }}"></div>
+        <div class="field"><label for="l-model">مدل</label><input id="l-model" type="text" name="model" class="ltr" maxlength="100" value="{{ cfg.model|default:'gpt-4o' }}"></div>
+        <div class="field"><label for="l-key">کلید API {% if cfg %}(خالی بگذارید تا تغییر نکند){% endif %}</label><input id="l-key" type="password" name="api_key" class="ltr" autocomplete="off" {% if not cfg %}required{% endif %}></div>
+        <div class="prof-acts"><button class="btn" type="submit">{% icon "check" 18 %}ذخیره</button></div>
+      </form>
+      {% if cfg %}<form method="post" class="prof-del" data-confirm="کلید مدل زبانی حذف شود؟">{% csrf_token %}<input type="hidden" name="action" value="llm_delete"><button class="btn ghost sm danger" type="submit">{% icon "trash" 16 %}حذف کلید</button></form>{% endif %}
+    </div>
+  </section>
+
+  <section class="tabpanel" id="p-account" role="tabpanel" aria-labelledby="t-account" hidden>
+    <div class="card">
+      <h2 class="prof-h">{% icon "lock" 20 %}حساب و امنیت</h2>
+      <table class="kv"><tbody>
+        <tr><th>شماره‌ی ورود</th><td>{{ user.phone }}</td></tr>
+        <tr><th>عضو از</th><td style="direction:rtl;text-align:right">{{ user.date_joined|jdate }}</td></tr>
+      </tbody></table>
+      <p class="small muted">ورود فقط با رمز یک‌بارمصرفی است که به همین شماره پیامک می‌شود؛ رمز عبوری برای نگهداری ندارید.</p>
+      <div class="prof-acts">
+        <a class="btn ghost" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}صورتحساب‌ها و پلن</a>
+        <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="btn ghost" type="submit">{% icon "logout" 18 %}خروج</button></form>
+      </div>
+    </div>
+  </section>
 </div>
 {% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'js/hash-tabs.js' %}" defer></script>{% endblock %}

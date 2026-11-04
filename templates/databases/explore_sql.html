@@ -27,19 +27,13 @@
     </form>
     <div class="nl-meta small muted">
         <span>به مدل فقط نام جدول‌ها و ستون‌ها (و در صورت انتخاب، چند مقدار نمونه) می‌رود، نه خود داده. پرس‌وجوی خواندنی بی‌درنگ اجرا می‌شود؛ دستوری که چیزی می‌سازد یا تغییر می‌دهد اول به شما نشان داده می‌شود.</span>
-        <div class="pop-wrap">
-          <button class="ib sm" type="button" data-pop="nl-cfg-menu" aria-haspopup="menu" aria-expanded="false" aria-label="تنظیم مدل زبانی">{% icon "more" 16 %}</button>
-          <div class="pop-m" id="nl-cfg-menu" role="menu" hidden>
-            <button type="button" role="menuitem" data-dialog-open="nl-key">{% icon "settings" 18 %}تنظیم مدل زبانی (<span class="ltr">{{ llm_cfg.model }}</span>)</button>
-            <form method="post" action="{% url 'databases:explore_sql_key' db.pk %}" data-confirm="کلید مدل زبانی حذف شود؟ پرسش فارسی در تحلیل هم از کار می‌افتد.">{% csrf_token %}<input type="hidden" name="action" value="delete"><button type="submit" role="menuitem" class="danger">{% icon "trash" 18 %}حذف کلید</button></form>
-          </div>
-        </div>
+        <a class="small" href="{% url 'accounts:profile' %}?next={{ request.get_full_path|urlencode }}#ai">{% icon "settings" 16 %}مدل: <span class="ltr">{{ llm_cfg.model }}</span></a>
       </div>
     {% else %}
     <div class="empty nl-empty">
       {% icon "spark" 28 %}
       <p>خواسته‌تان را فارسی بنویسید تا دستور SQL آن ساخته و اجرا شود. برای این کار کلید API یک سرویس مدل زبانی سازگار با OpenAI (مثل AvalAI) لازم است و هزینه‌اش با حساب خود شماست.</p>
-      <button class="btn" type="button" data-dialog-open="nl-key">{% icon "lock" 18 %}تنظیم کلید مدل زبانی</button>
+      <a class="btn" href="{% url 'accounts:profile' %}?next={{ request.get_full_path|urlencode }}#ai">{% icon "settings" 18 %}تنظیم مدل زبانی در پروفایل</a>
       {% if SITE.llm_partner_enabled and SITE.llm_partner_url %}<a class="small" href="{{ SITE.llm_partner_url }}" target="_blank" rel="sponsored noopener noreferrer">حساب ندارید؟ ساخت حساب در {{ SITE.llm_partner_name }}</a>{% endif %}
     </div>
     {% endif %}
@@ -96,7 +90,7 @@
       <span>{% icon "info" 16 %} این پرس‌وجو هیچ ردیفی برنگرداند.</span>
       {% if llm_cfg %}<button type="button" class="btn ghost sm" data-why-btn>{% icon "search" 16 %}چرا خالی است؟</button>{% endif %}
     </div>
-    {% if not llm_cfg %}<p class="small" style="margin:6px 0 0">با <button type="button" class="linkish" data-dialog-open="nl-key">تنظیم کلید مدل زبانی</button> می‌توانید دلیل خالی بودن و کوئری اصلاح‌شده را بپرسید.</p>{% endif %}
+    {% if not llm_cfg %}<p class="small" style="margin:6px 0 0">با <a href="{% url 'accounts:profile' %}?next={{ request.get_full_path|urlencode }}#ai">تنظیم کلید مدل زبانی</a> می‌توانید دلیل خالی بودن و کوئری اصلاح‌شده را بپرسید.</p>{% endif %}
     <div class="sql-why-out" data-why-out role="status" aria-live="polite" hidden>
       <p data-why-reason></p>
       <div data-why-fix hidden>
@@ -118,18 +112,6 @@
 {% endif %}
 </div>
 
-<dialog class="dlg" id="nl-key" aria-labelledby="nl-key-t">
-  <form method="post" action="{% url 'databases:explore_sql_key' db.pk %}">{% csrf_token %}
-    <div class="dlg-h"><span class="dlg-i">{% icon "lock" 22 %}</span><h2 id="nl-key-t">کلید مدل زبانی</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
-    <div class="dlg-b">
-      <div class="field"><label for="nl-url">آدرس سرویس سازگار با OpenAI</label><input id="nl-url" type="url" name="base_url" class="ltr" value="{{ llm_cfg.base_url|default:'https://api.avalai.ir/v1' }}" required></div>
-      <div class="field"><label for="nl-model">مدل</label><input id="nl-model" type="text" name="model" class="ltr" value="{{ llm_cfg.model|default:'gpt-4o' }}" maxlength="100" required></div>
-      <div class="field"><label for="nl-key-in">کلید API {% if llm_cfg %}(خالی بگذارید تا تغییر نکند){% endif %}</label><input id="nl-key-in" type="password" name="api_key" class="ltr" autocomplete="off" {% if not llm_cfg %}required{% endif %}></div>
-      <p class="help">همان کلیدی است که در «تحلیل» استفاده می‌شود؛ رمزنگاری‌شده ذخیره می‌شود و دیگر نمایش داده نمی‌شود.</p>
-    </div>
-    <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}ذخیره</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
-  </form>
-</dialog>
 {% endblock %}
 {% block head %}{% if result.geojson %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endif %}{% endblock %}
 {% block ws_scripts %}{% if result.geojson %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script><script src="{% static 'js/sql-map.js' %}" defer></script>{% endif %}<script src="{% static 'js/sql-nl.js' %}" defer></script>{% endblock %}

@@ -3,6 +3,7 @@ import re
 from django.contrib import messages
 from django.contrib.auth import login
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods, require_POST
@@ -129,9 +130,31 @@ def resend(request):
 @site_user_required
 @require_http_methods(["GET", "POST"])
 def profile(request):
-    form = ProfileForm(request.POST or None, instance=request.user)
-    if request.method == "POST" and form.is_valid():
-        form.save()
-        messages.success(request, "اطلاعات حساب ذخیره شد.")
-        return redirect("accounts:profile")
-    return render(request, "accounts/profile.html", {"form": form})
+    """پروفایل: مشخصات، تنظیم مدل زبانی (برای پرسش فارسی در همه‌ی پایگاه‌ها) و اطلاعات حساب."""
+    from analysis.models import LlmConfig
+    from databases import nl2sql
+
+    cfg = LlmConfig.objects.filter(user=request.user).first()
+    nxt = _safe_next(request, request.POST.get("next") or request.GET.get("next"))
+    action = request.POST.get("action", "profile") if request.method == "POST" else ""
+    form = ProfileForm(request.POST if action == "profile" else None, instance=request.user)
+    if request.method == "POST":
+        if action == "profile" and form.is_valid():
+            form.save()
+            messages.success(request, "اطلاعات حساب ذخیره شد.")
+            return redirect("accounts:profile")
+        if action == "llm_save":
+            try:
+                nl2sql.save_config(request.user, request.POST.get("base_url", ""), request.POST.get("model", ""),
+                                   request.POST.get("api_key", ""))
+            except nl2sql.NLError as exc:
+                messages.error(request, str(exc))
+                return redirect(f"{reverse('accounts:profile')}#ai")
+            messages.success(request, "تنظیم مدل زبانی ذخیره شد.")
+            return redirect(nxt or f"{reverse('accounts:profile')}#ai")
+        if action == "llm_delete":
+            if cfg:
+                cfg.delete()
+                messages.success(request, "کلید مدل زبانی حذف شد.")
+            return redirect(f"{reverse('accounts:profile')}#ai")
+    return render(request, "accounts/profile.html", {"form": form, "cfg": cfg, "next": nxt or ""})

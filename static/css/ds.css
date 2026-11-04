@@ -26,6 +26,7 @@ body.app{font-size:14.5px;line-height:1.75}
 .ib.sm{width:var(--ctl-h-sm);height:var(--ctl-h-sm);border-radius:8px}
 .app-burger{display:none!important}
 .app-av{width:34px;height:34px;border-radius:50%;border:0;background:var(--ochre-soft);color:#7a5200;display:grid;place-items:center;cursor:pointer}
+.app-av-i{font:800 15px/1 var(--f-display)}
 .app-av:hover,.app-av[aria-expanded=true]{box-shadow:0 0 0 3px var(--teal-soft)}
 .app-dbchip{display:none;align-items:center;gap:7px;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--card);
   text-decoration:none;color:var(--ink);max-width:200px;min-width:0}

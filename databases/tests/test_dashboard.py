@@ -42,3 +42,23 @@ class DashboardTests(BaseCase):
         self.client.force_login(self.user)
         r = self.client.get(reverse("databases:dashboard"))
         self.assertNotContains(r, reverse("databases:explore_sql", args=[db.pk]))
+
+    def test_home_greets_by_name_and_shows_attention_and_steps(self):
+        self.user.full_name = "سارا احمدی"
+        self.user.organization = "دانشگاه تهران"
+        self.user.save()
+        db = services.create_database(self.user, "tehran", "Abcdefgh123", ["postgis"])
+        self.client.force_login(self.user)
+        r = self.client.get(reverse("databases:dashboard"))
+        self.assertContains(r, "سارا احمدی")
+        self.assertContains(r, "دانشگاه تهران")
+        self.assertContains(r, "نیاز به توجه")
+        self.assertContains(r, "هنوز بکاپی نگرفته")
+        self.assertContains(r, "شروع سریع")
+        self.assertContains(r, reverse("databases:import", args=[db.pk]))  # کار سریع
+        self.assertContains(r, reverse("accounts:profile") + "#ai")  # گام مدل زبانی
+
+    def test_home_hides_quick_actions_without_live_database(self):
+        self.client.force_login(self.user)
+        r = self.client.get(reverse("databases:dashboard"))
+        self.assertNotContains(r, "کارهای سریع")

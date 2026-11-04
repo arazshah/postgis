@@ -116,6 +116,11 @@ class User(AbstractUser):
     def display_name(self):
         return self.full_name or self.phone or self.username
 
+    @property
+    def initial(self) -> str:
+        """حرف اول نام برای دایره‌ی حساب؛ بدون نام، آیکون عمومی نشان داده می‌شود."""
+        return (self.full_name or "").strip()[:1]
+
 
 def _hash_code(phone: str, code: str) -> str:
     return hmac.new(settings.SECRET_KEY.encode(), f"{phone}:{code}".encode(), hashlib.sha256).hexdigest()
