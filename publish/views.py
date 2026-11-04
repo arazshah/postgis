@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
+from django.urls import reverse
 from django.views.decorators.clickjacking import xframe_options_exempt
 from django.views.decorators.http import require_POST
 
@@ -46,17 +47,30 @@ def manage(request, pk):
         if not geoms:
             continue
         rows.append({"t": t, "geom": geoms[0], "layer": layers.get((t.schema, t.name))})
+    rows.sort(key=lambda r: (r["layer"] is None, r["t"].schema, r["t"].name))  # منتشرشده‌ها اول
     published = [r["layer"] for r in rows if r["layer"]]
+    layer_data = {}
+    base = request.build_absolute_uri("/")[:-1]
     for layer in published:
         try:
             layer.meta = engine.describe(layer)
         except engine.EngineError:
             layer.meta = {"columns": [], "pk": ""}
+        layer_data[layer.pk] = {
+            "table": layer.table, "title": layer.title, "public": layer.is_public, "slug": layer.slug,
+            "coll": layer.collection_id,
+            "urls": {"tj": f"{base}/tiles/{layer.slug}.json", "xyz": f"{base}/tiles/{layer.slug}/{{z}}/{{x}}/{{y}}.mvt",
+                     "gj": f"{base}/ogc/{service.slug}/collections/{layer.collection_id}/items"},
+            "columns": [{"name": n, "on": not layer.columns or n in layer.columns}
+                        for n, _ in layer.meta["columns"] if n != layer.geom_column],
+            "save": reverse("publish:update_layer", args=[db.pk, layer.pk]),
+        }
     return render(request, "publish/manage.html", {
-        "db": db, "service": service, "rows": rows, "published": published,
+        "db": db, "service": service, "rows": rows, "published": published, "layer_data": layer_data,
+        "n_public": sum(1 for x in published if x.is_public),
         "keys": db.api_keys.all(), "new_key": request.session.pop(SESSION_KEY.format(db.pk), None),
         "used": access.usage_today(db), "cap": db.plan.publish_daily_requests, "max_layers": db.plan.publish_layers,
-        "base": request.build_absolute_uri("/")[:-1], "section": "publish", "iran_basemap": _iran_basemap(),
+        "base": base, "section": "publish", "iran_basemap": _iran_basemap(),
     })
 
 
@@ -64,6 +78,29 @@ def _iran_basemap() -> bool:
     from iranmap import basemap
 
     return basemap.available()
+
+
+def _publish_one(db, service, t, public: bool) -> tuple[str, str]:
+    """یک جدول را منتشر می‌کند؛ (وضعیت، پیام) برمی‌گرداند: ok | exists | error."""
+    geoms = [g for g in t.geometry if not g["geography"]]
+    if not geoms:
+        return "error", f"{t.name}: ستون هندسه (geometry) ندارد."
+    if not geoms[0]["srid"]:
+        return "error", f"{t.name}: سیستم مختصات مشخص نیست (SRID 0). از «سلامت داده» آن را تعیین کنید."
+    if service.layers.count() >= db.plan.publish_layers:
+        return "limit", (f"پلن شما حداکثر {db.plan.publish_layers} لایه منتشرشده دارد. "
+                         "یک لایه را لغو انتشار کنید یا پلن را ارتقا دهید.")
+    layer, created = Layer.objects.get_or_create(
+        service=service, schema=t.schema, table=t.name,
+        defaults={"geom_column": geoms[0]["column"], "srid": geoms[0]["srid"], "geom_type": geoms[0]["type"],
+                  "is_public": public})
+    try:
+        layer.pk_column = engine.describe(layer)["pk"]
+        layer.bbox = engine.extent(layer)
+        layer.save(update_fields=["pk_column", "bbox"])
+    except engine.EngineError:
+        pass
+    return ("ok", f"لایه {t.name} منتشر شد.") if created else ("exists", "این لایه قبلاً منتشر شده است.")
 
 
 @site_user_required
@@ -76,27 +113,45 @@ def publish_table(request, pk):
     except ExplorerError as exc:
         messages.error(request, str(exc))
         return redirect("publish:manage", pk=db.pk)
-    geoms = [g for g in t.geometry if not g["geography"]]
     service, _ = Service.objects.get_or_create(database=db)
-    if not geoms:
-        messages.error(request, "این جدول ستون هندسه (geometry) ندارد.")
-    elif not geoms[0]["srid"]:
-        messages.error(request, "سیستم مختصات ستون هندسه مشخص نیست (SRID 0). از «سلامت داده» آن را تعیین کنید.")
-    elif service.layers.count() >= db.plan.publish_layers:
-        messages.error(request, f"پلن شما حداکثر {db.plan.publish_layers} لایه منتشرشده دارد. "
-                                "یک لایه را لغو انتشار کنید یا پلن را ارتقا دهید.")
-    else:
-        layer, created = Layer.objects.get_or_create(
-            service=service, schema=t.schema, table=t.name,
-            defaults={"geom_column": geoms[0]["column"], "srid": geoms[0]["srid"], "geom_type": geoms[0]["type"],
-                      "is_public": request.POST.get("public") == "on"})
-        try:
-            layer.pk_column = engine.describe(layer)["pk"]
-            layer.bbox = engine.extent(layer)
-            layer.save(update_fields=["pk_column", "bbox"])
-        except engine.EngineError:
-            pass
-        messages.success(request, f"لایه {t.name} منتشر شد." if created else "این لایه قبلاً منتشر شده است.")
+    state, msg = _publish_one(db, service, t, request.POST.get("public") == "on")
+    (messages.success if state in ("ok", "exists") else messages.error)(request, msg)
+    return redirect("publish:manage", pk=db.pk)
+
+
+@site_user_required
+@require_POST
+def publish_bulk(request, pk):
+    """انتشار چند جدول با هم (انتخاب در فهرست)؛ همه با یک سطح دسترسی."""
+    db = _db(request, pk)
+    wanted = [x for x in request.POST.getlist("tables") if "." in x][:100]
+    if not wanted:
+        messages.error(request, "جدولی انتخاب نشده است.")
+        return redirect("publish:manage", pk=db.pk)
+    try:
+        by_name = {f"{t.schema}.{t.name}": t for t in Explorer(db).tables()}
+    except ExplorerError as exc:
+        messages.error(request, str(exc))
+        return redirect("publish:manage", pk=db.pk)
+    service, _ = Service.objects.get_or_create(database=db)
+    public = request.POST.get("public") == "on"
+    done, errors = 0, []
+    for name in wanted:
+        t = by_name.get(name)
+        if t is None:
+            errors.append(f"{name}: جدول پیدا نشد.")
+            continue
+        state, msg = _publish_one(db, service, t, public)
+        if state == "ok":
+            done += 1
+        elif state != "exists":
+            errors.append(msg)
+            if state == "limit":
+                break
+    if done:
+        messages.success(request, f"{done} لایه منتشر شد.".translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")))
+    for e in errors[:5]:
+        messages.error(request, e)
     return redirect("publish:manage", pk=db.pk)
 
 

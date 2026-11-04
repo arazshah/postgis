@@ -1,77 +1,186 @@
-{% extends "databases/_ws.html" %}{% load fa ws %}
-{% block title %}REST API و فرم میدانی — {{ SITE_NAME }}{% endblock %}
+{% extends "databases/_ws.html" %}{% load fa static ws %}
+{% block title %}REST API و فرم میدانی {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 <div class="wrap page">
-  <a class="back-link" href="{% url 'publish:manage' db.pk %}">{% icon "back" 16 %}انتشار نقشه و API</a>
   <div class="page-head">
-    <div><h1>REST API و فرم جمع‌آوری میدانی</h1>
-      <p class="muted page-sub">هر جدولی را که باز کنید، از اپلیکیشن وب، موبایل یا اسکریپت با HTTP خوانده و نوشته می‌شود؛ بدون نوشتن بک‌اند. نوشتن فقط با کلید API دارای «اجازه نوشتن» ممکن است و درخواست‌ها از سهمیه روزانه پایگاه داده کم می‌کنند.</p></div>
+    <div><h1>REST API و فرم میدانی</h1>
+      <p class="muted page-sub">هر جدولی را که باز کنید، از اپلیکیشن وب، موبایل یا اسکریپت با HTTP خوانده و نوشته می‌شود؛ بدون نوشتن بک‌اند. نوشتن فقط با کلید API دارای «اجازه نوشتن» ممکن است و درخواست‌ها از سهمیه‌ی روزانه کم می‌کنند.</p>
+      <p class="small muted" style="margin:4px 0 0">سهمیه‌ی امروز: {{ used|fanum }} از {{ cap|fanum }} درخواست</p></div>
   </div>
 
-  <section class="card">
-    <div class="ch"><h2>جدول‌ها</h2></div>
-    <div class="table-scroll"><table class="data-table rest-tbl">
-      <thead><tr><th>جدول</th><th>فعال</th><th>خواندن بدون کلید</th><th>افزودن</th><th>ویرایش</th><th>حذف</th><th><span class="sr-label">ذخیره</span></th></tr></thead>
-      <tbody>{% for r in rows %}
-      <tr>
-        <td><span class="ltr">{% if r.t.schema != 'public' %}{{ r.t.schema }}.{% endif %}{{ r.t.name }}</span>{% if r.t.geometry %} <span class="geo-dot" title="مکانی"></span>{% endif %}
-          <form method="post" id="rf-{{ forloop.counter }}">{% csrf_token %}<input type="hidden" name="action" value="save_table"><input type="hidden" name="table" value="{{ r.t.schema }}.{{ r.t.name }}"></form></td>
-        <td><label class="sw-i"><input form="rf-{{ forloop.counter }}" type="checkbox" name="enabled" aria-label="فعال" {% if r.api %}checked{% endif %}></label></td>
-        <td><label class="sw-i"><input form="rf-{{ forloop.counter }}" type="checkbox" name="public_read" aria-label="خواندن بدون کلید" {% if r.api.public_read %}checked{% endif %}></label></td>
-        <td><label class="sw-i"><input form="rf-{{ forloop.counter }}" type="checkbox" name="can_insert" aria-label="افزودن" {% if r.api.can_insert %}checked{% endif %}></label></td>
-        <td><label class="sw-i"><input form="rf-{{ forloop.counter }}" type="checkbox" name="can_update" aria-label="ویرایش" {% if r.api.can_update %}checked{% endif %}></label></td>
-        <td><label class="sw-i"><input form="rf-{{ forloop.counter }}" type="checkbox" name="can_delete" aria-label="حذف" {% if r.api.can_delete %}checked{% endif %}></label></td>
-        <td class="row-acts"><button class="btn ghost sm" type="submit" form="rf-{{ forloop.counter }}">{% icon "check" 16 %}ذخیره</button></td>
-      </tr>
-      {% empty %}<tr><td colspan="7"><div class="empty">{% icon "table" 28 %}<h2>جدولی ندارید</h2><a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a></div></td></tr>{% endfor %}</tbody>
-    </table></div>
+  <div class="tabs" role="tablist" aria-label="بخش‌های REST API" data-hash-tabs>
+    <button role="tab" id="t-tables" aria-controls="p-tables" aria-selected="true">جدول‌ها <span class="tab-n">{{ n_active|fanum }} فعال</span></button>
+    <button role="tab" id="t-forms" aria-controls="p-forms" aria-selected="false" tabindex="-1">فرم‌های میدانی <span class="tab-n">{{ forms|length|fanum }}</span></button>
+    <button role="tab" id="t-code" aria-controls="p-code" aria-selected="false" tabindex="-1">نمونه کد</button>
+  </div>
+
+  {# ───────── جدول‌ها ───────── #}
+  <div class="tabpanel" role="tabpanel" id="p-tables" aria-labelledby="t-tables">
+  {% if rows %}
+  <section class="panel tl" data-lf data-lf-url>
+    <div class="tl-bar" data-lf-bar>
+      <div class="tl-search">
+        {% icon "search" 16 %}
+        <input type="search" class="ltr" placeholder="جست‌وجوی جدول…" aria-label="جست‌وجوی جدول" autocomplete="off" data-lf-q>
+        <kbd aria-hidden="true">/</kbd>
+      </div>
+      <div class="tl-chips" role="group" aria-label="فیلتر">
+        <button type="button" class="tl-chip" data-lf-chip="all" aria-pressed="true">همه <b>{{ rows|length|fanum }}</b></button>
+        <button type="button" class="tl-chip" data-lf-chip="on" aria-pressed="false">فعال <b>{{ n_active|fanum }}</b></button>
+        <button type="button" class="tl-chip" data-lf-chip="off" aria-pressed="false">غیرفعال</button>
+        <button type="button" class="tl-chip" data-lf-chip="geo" aria-pressed="false">مکانی</button>
+      </div>
+      <span class="small muted tl-count" aria-live="polite" data-lf-count></span>
+    </div>
+    <table class="tl-table">
+      <thead><tr>
+        <th class="c-name"><button type="button" class="tl-sort" data-lf-sort="name">جدول</button></th>
+        <th class="c-acc">دسترسی</th>
+        <th class="c-num"><button type="button" class="tl-sort" data-lf-sort="rows" data-lf-first="desc">سطر</button></th>
+        <th class="c-act"><span class="sr-label">عملیات</span></th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        {% with a=r.api t=r.t %}
+        <tr data-lf-row data-tags="{% if a %}on{% else %}off{% endif %}{% if t.geometry %} geo{% endif %}" data-q="{{ t.schema|lower }} {{ t.name|lower }}" data-sort-name="{{ t.name|lower }}" data-sort-rows="{{ t.rows_estimate }}">
+          <td class="c-name">
+            <span class="tl-link">
+              <span class="tl-ic {% if t.geometry %}geo{% endif %}">{% if t.geo_kind == 'point' %}{% icon "point" 18 %}{% elif t.geo_kind == 'line' %}{% icon "line" 18 %}{% elif t.geo_kind == 'polygon' %}{% icon "polygon" 18 %}{% elif t.geo_kind %}{% icon "frame" 18 %}{% else %}{% icon "table" 18 %}{% endif %}</span>
+              <span class="tl-nm"><span class="ltr">{% if t.schema != 'public' %}<i class="tl-sc">{{ t.schema }}.</i>{% endif %}<span class="tl-n">{{ t.name }}</span></span></span>
+            </span>
+            <span class="tl-meta small">{% include "restapi/_access_badges.html" %}</span>
+          </td>
+          <td class="c-acc">{% include "restapi/_access_badges.html" %}</td>
+          <td class="c-num">{{ t.rows_estimate|farows }}</td>
+          <td class="c-act">
+            <div class="row-btns">
+              <button type="button" class="btn ghost sm" data-rest-access data-table="{{ t.schema }}.{{ t.name }}" data-on="{% if a %}1{% endif %}" data-pub="{% if a.public_read %}1{% endif %}" data-ins="{% if a.can_insert %}1{% endif %}" data-upd="{% if a.can_update %}1{% endif %}" data-del="{% if a.can_delete %}1{% endif %}" data-pk="{% if r.has_pk %}1{% endif %}">{% if a %}دسترسی‌ها{% else %}فعال‌سازی{% endif %}</button>
+              {% if a %}
+              <div class="pop-wrap">
+                <button type="button" class="ib sm" data-pop="rm-{{ forloop.counter }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های {{ t.name }}">{% icon "more" 16 %}</button>
+                <div class="pop-m" id="rm-{{ forloop.counter }}" role="menu" hidden>
+                  <button type="button" role="menuitem" data-rest-sample="{{ a.pk }}"><span class="i">{% icon "code" 16 %}</span>نمونه کد این جدول</button>
+                  <button type="button" role="menuitem" data-rest-form="{{ a.pk }}"><span class="i">{% icon "pin" 16 %}</span>ساخت فرم میدانی</button>
+                  <a role="menuitem" href="{% url 'databases:explore_table' db.pk t.schema t.name %}"><span class="i">{% icon "table" 16 %}</span>مشاهده داده</a>
+                  <div class="msep"></div>
+                  <form method="post" data-confirm="جدول «{{ t.name }}» از REST API برداشته شود؟ برنامه‌هایی که از آن استفاده می‌کنند دیگر کار نمی‌کنند." data-confirm-title="برداشتن از REST API" data-confirm-text="برداشتن">{% csrf_token %}<input type="hidden" name="action" value="save_table"><input type="hidden" name="table" value="{{ t.schema }}.{{ t.name }}"><button role="menuitem" class="danger" type="submit"><span class="i">{% icon "trash" 16 %}</span>برداشتن از REST API</button></form>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endwith %}
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="tl-none" hidden data-lf-none>
+      {% icon "search" 28 %}
+      <p><b>جدولی با این جست‌وجو پیدا نشد.</b></p>
+      <button type="button" class="btn ghost sm" data-lf-clear>پاک کردن جست‌وجو و فیلتر</button>
+    </div>
   </section>
 
+  <dialog class="dlg" id="rest-dlg" aria-labelledby="rest-dlg-t">
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="action" value="save_table"><input type="hidden" name="table" data-rd="table">
+      <div class="dlg-h"><span class="dlg-i">{% icon "braces" 22 %}</span><h2 id="rest-dlg-t">دسترسی <span class="ltr" data-rd="title"></span></h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+      <div class="dlg-b">
+        <div class="choice-grid choice-3" role="radiogroup" aria-label="سطح دسترسی">
+          <label class="choice"><input type="radio" name="preset" value="off"><span>{% icon "lock" 20 %}<b>غیرفعال</b><small>از REST API برداشته می‌شود.</small></span></label>
+          <label class="choice"><input type="radio" name="preset" value="key"><span>{% icon "eye" 20 %}<b>خواندن با کلید</b><small>فقط با کلید API.</small></span></label>
+          <label class="choice"><input type="radio" name="preset" value="public"><span>{% icon "globe" 20 %}<b>خواندن عمومی</b><small>هر کسی بدون کلید می‌خواند.</small></span></label>
+          <label class="choice"><input type="radio" name="preset" value="collect"><span>{% icon "pin" 20 %}<b>خواندن و افزودن</b><small>مناسب فرم میدانی.</small></span></label>
+          <label class="choice" data-rd-full><input type="radio" name="preset" value="full"><span>{% icon "edit" 20 %}<b>دسترسی کامل</b><small>خواندن، افزودن، ویرایش و حذف.</small></span></label>
+        </div>
+        <p class="msg warning small" data-rd-nopk hidden style="margin:0">این جدول کلید اصلی تک‌ستونی ندارد؛ ویرایش و حذف فعال نمی‌شود. از «<a href="{% url 'databases:explore_health' db.pk %}">سلامت داده</a>» کلید اصلی بسازید.</p>
+        <details class="rd-adv"><summary>تنظیم دقیق</summary>
+          <div class="rd-checks">
+            <label class="sw-row"><input type="checkbox" name="enabled" data-rd="enabled"><span><b>فعال در REST API</b></span></label>
+            <label class="sw-row"><input type="checkbox" name="public_read" data-rd="pub"><span><b>خواندن بدون کلید</b></span></label>
+            <label class="sw-row"><input type="checkbox" name="can_insert" data-rd="ins"><span><b>افزودن سطر</b></span></label>
+            <label class="sw-row"><input type="checkbox" name="can_update" data-rd="upd"><span><b>ویرایش سطر</b></span></label>
+            <label class="sw-row"><input type="checkbox" name="can_delete" data-rd="del"><span><b>حذف سطر</b></span></label>
+          </div>
+        </details>
+        <p class="small muted" style="margin:0">نوشتن (افزودن، ویرایش، حذف) فقط با کلید API دارای «اجازه نوشتن» انجام می‌شود، مگر از طریق فرم میدانی.</p>
+      </div>
+      <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}ذخیره</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
+    </form>
+  </dialog>
+  {% else %}
+  <div class="empty">{% icon "table" 28 %}<h2>هنوز جدولی ندارید</h2><p class="muted">یک جدول بسازید یا فایل وارد کنید تا اینجا برای API فعال شود.</p><a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a></div>
+  {% endif %}
+  </div>
+
+  {# ───────── فرم‌ها ───────── #}
+  <div class="tabpanel" role="tabpanel" id="p-forms" aria-labelledby="t-forms" hidden>
+    <section class="panel">
+      <div class="ex-head"><div><h2>فرم‌های جمع‌آوری میدانی</h2>
+        <p class="small muted" style="margin:2px 0 0">فرم موبایلی با نقشه و دکمه‌ی «موقعیت من» (GPS) که هر ثبت را یک سطر در جدول می‌کند. بدون اینترنت هم باز می‌شود و ثبت‌ها را نگه می‌دارد تا اتصال برگردد.</p></div>
+        {% if apis %}<button class="btn" type="button" data-dialog-open="ff-dlg">{% icon "plus" 18 %}فرم تازه</button>{% endif %}</div>
+      {% if forms %}
+      <ul class="fc-list">
+      {% for f in forms %}
+        <li class="fc-card">
+          <span class="tl-ic geo">{% icon "pin" 20 %}</span>
+          <div class="fc-main">
+            <b>{{ f.title }}</b>
+            <span class="small muted"><span class="ltr">{{ f.api_table.path }}</span> · {{ f.submissions|fanum }} ثبت</span>
+            <span class="fc-badges"><span class="badge {% if f.is_open %}active{% else %}pending{% endif %}">{% if f.is_open %}باز{% else %}بسته{% endif %}</span><span class="badge">{{ f.get_access_display }}</span></span>
+          </div>
+          <div class="fc-link"><code class="ltr small" id="fl-{{ f.pk }}">{{ base }}/f/{{ f.slug }}/</code> <button class="copy" data-copy-target="#fl-{{ f.pk }}">کپی</button></div>
+          <div class="pop-wrap"><button class="ib sm" type="button" data-pop="fm-{{ f.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های فرم {{ f.title }}">{% icon "more" 16 %}</button>
+            <div class="pop-m" id="fm-{{ f.pk }}" role="menu" hidden>
+              <a role="menuitem" href="{{ base }}/f/{{ f.slug }}/" target="_blank" rel="noopener"><span class="i">{% icon "eye" 16 %}</span>باز کردن فرم</a>
+              <form method="post">{% csrf_token %}<input type="hidden" name="form" value="{{ f.pk }}"><input type="hidden" name="action" value="form_toggle"><button role="menuitem" type="submit"><span class="i">{% icon "lock" 16 %}</span>{% if f.is_open %}بستن فرم{% else %}باز کردن برای ثبت{% endif %}</button></form>
+              <div class="msep"></div>
+              <form method="post" data-confirm="فرم حذف شود؟ داده‌های ثبت‌شده می‌مانند." data-confirm-title="حذف فرم" data-confirm-text="حذف فرم">{% csrf_token %}<input type="hidden" name="form" value="{{ f.pk }}"><input type="hidden" name="action" value="form_delete"><button role="menuitem" class="danger" type="submit"><span class="i">{% icon "trash" 16 %}</span>حذف فرم</button></form>
+            </div></div>
+        </li>
+      {% endfor %}
+      </ul>
+      {% elif apis %}<div class="empty">{% icon "pin" 28 %}<h2>هنوز فرمی نساخته‌اید</h2><p class="muted">برای ثبت نقطه در میدان یک فرم بسازید.</p><button class="btn" type="button" data-dialog-open="ff-dlg">{% icon "plus" 18 %}ساخت اولین فرم</button></div>
+      {% else %}<div class="empty">{% icon "table" 28 %}<h2>اول یک جدول را فعال کنید</h2><p class="muted">فرم میدانی روی جدولی ساخته می‌شود که در REST API فعال باشد.</p><button class="btn ghost" type="button" data-rest-goto="tables">{% icon "braces" 18 %}رفتن به جدول‌ها</button></div>{% endif %}
+    </section>
+  </div>
+
+  {# ───────── نمونه کد ───────── #}
+  <div class="tabpanel" role="tabpanel" id="p-code" aria-labelledby="t-code" hidden>
   {% if sample %}
-  <section class="card">
-    <div class="ch"><h2>نمونه استفاده</h2></div>
-    <p class="small muted">آدرس پایه: <code class="ltr">{{ base }}/rest/{{ service.slug }}/</code> — کلید را با هدر <span class="ltr">Authorization: Bearer</span> بفرستید. خروجی جدول مکانی GeoJSON است.</p>
+  <section class="panel">
+    <div class="ex-head"><h2>نمونه استفاده</h2></div>
+    <p class="small muted">جدول را انتخاب کنید تا نمونه‌ها با نام و کلید اصلی همان جدول عوض شود. آدرس پایه: <code class="ltr">{{ base }}/rest/{{ service.slug }}/</code>. کلید را با هدر <span class="ltr">Authorization: Bearer</span> بفرستید؛ خروجی جدول مکانی GeoJSON است.</p>
+    <div class="chips rc-pick" role="group" aria-label="جدول نمونه">
+      {% for a in apis %}<button type="button" class="tl-chip ltr" data-rest-chip="{{ a.pk }}" data-path="{{ a.path }}" data-pk="{{ pk_of|get_item:a.pk }}" aria-pressed="{% if a.pk == sample.pk %}true{% else %}false{% endif %}">{{ a.path }}</button>{% endfor %}
+    </div>
 <pre class="code ltr"><button class="copy" data-copy>کپی</button><code># فهرست با فیلتر، مرتب‌سازی و محدوده
 curl -H "Authorization: Bearer $KEY" \
-  "{{ base }}/rest/{{ service.slug }}/{{ sample.path }}/?limit=20&amp;order=-{% if form_cols|length %}gid{% else %}id{% endif %}&amp;bbox=51.2,35.6,51.6,35.8"
+  "{{ base }}/rest/{{ service.slug }}/<span data-rest-path>{{ sample.path }}</span>/?limit=20&amp;order=-<span data-rest-pk>{{ pk_of|get_item:sample.pk }}</span>&amp;bbox=51.2,35.6,51.6,35.8"
 
 # فیلترها: ستون=مقدار، ستون__gt، __gte، __lt، __lte، __ne، __like (با *)، __in (با ویرگول)، __null
-curl -H "Authorization: Bearer $KEY" "{{ base }}/rest/{{ service.slug }}/{{ sample.path }}/?name__like=*پارک*"
+curl -H "Authorization: Bearer $KEY" "{{ base }}/rest/{{ service.slug }}/<span data-rest-path>{{ sample.path }}</span>/?name__like=*پارک*"
 
 # افزودن سطر (GeoJSON Feature یا JSON ساده)
 curl -X POST -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
   -d '{"type":"Feature","geometry":{"type":"Point","coordinates":[51.39,35.70]},"properties":{"name":"نمونه"}}' \
-  "{{ base }}/rest/{{ service.slug }}/{{ sample.path }}/"
+  "{{ base }}/rest/{{ service.slug }}/<span data-rest-path>{{ sample.path }}</span>/"
 
 # خواندن، ویرایش و حذف یک سطر با کلید اصلی
 curl -X PATCH -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-  -d '{"name":"نام جدید"}' "{{ base }}/rest/{{ service.slug }}/{{ sample.path }}/12/"
-curl -X DELETE -H "Authorization: Bearer $KEY" "{{ base }}/rest/{{ service.slug }}/{{ sample.path }}/12/"</code></pre>
+  -d '{"name":"نام جدید"}' "{{ base }}/rest/{{ service.slug }}/<span data-rest-path>{{ sample.path }}</span>/12/"
+curl -X DELETE -H "Authorization: Bearer $KEY" "{{ base }}/rest/{{ service.slug }}/<span data-rest-path>{{ sample.path }}</span>/12/"</code></pre>
 <pre class="code ltr"><button class="copy" data-copy>کپی</button><code>// JavaScript در مرورگر یا اپلیکیشن
-const r = await fetch("{{ base }}/rest/{{ service.slug }}/{{ sample.path }}/?limit=100",
+const r = await fetch("{{ base }}/rest/{{ service.slug }}/<span data-rest-path>{{ sample.path }}</span>/?limit=100",
                       {headers: {Authorization: "Bearer " + KEY}});
 const data = await r.json();</code></pre>
-    <p class="small muted">کلید دارای اجازه نوشتن را فقط در سرور یا اپلیکیشنی بگذارید که در اختیار خودتان است، نه در کد صفحه‌ای که همه می‌بینند؛ برای جمع‌آوری داده از عموم، فرم میدانی پایین را بسازید.</p>
+    <p class="small muted">کلید دارای اجازه‌ی نوشتن را فقط در سرور یا اپلیکیشنی بگذارید که در اختیار خودتان است، نه در کد صفحه‌ای که همه می‌بینند؛ برای جمع‌آوری داده از عموم، فرم میدانی بسازید.</p>
   </section>
+  {% else %}
+  <div class="empty">{% icon "code" 28 %}<h2>اول یک جدول را فعال کنید</h2><p class="muted">بعد از فعال‌سازی، نمونه‌ی کد همان جدول اینجا می‌آید.</p><button class="btn ghost" type="button" data-rest-goto="tables">{% icon "braces" 18 %}رفتن به جدول‌ها</button></div>
   {% endif %}
+  </div>
 
-  <section class="card">
-    <div class="ch"><h2>فرم‌های جمع‌آوری میدانی</h2>{% if apis %}<button class="btn sm" type="button" data-dialog-open="ff-dlg">{% icon "plus" 16 %}فرم تازه</button>{% endif %}</div>
-    <p class="small muted" style="margin:0">فرم موبایلی با نقشه و دکمه «موقعیت من» (GPS) که هر ثبت را یک سطر در جدول می‌کند. بدون اینترنت هم باز می‌شود و ثبت‌ها را نگه می‌دارد تا اتصال برگردد. می‌توانید آن را به صفحه اصلی گوشی اضافه کنید.</p>
-    {% if forms %}
-    <div class="table-scroll"><table class="data-table"><thead><tr><th>فرم</th><th>جدول</th><th>ثبت‌ها</th><th>لینک</th><th><span class="sr-label">عملیات</span></th></tr></thead>
-      <tbody>{% for f in forms %}<tr><td>{{ f.title }}<div class="small muted">{{ f.get_access_display }}{% if not f.is_open %} · بسته{% endif %}</div></td><td><span class="ltr">{{ f.api_table.path }}</span></td><td>{{ f.submissions|fanum }}</td>
-        <td><code class="ltr small" id="fl-{{ f.pk }}">{{ base }}/f/{{ f.slug }}/</code> <button class="copy" data-copy-target="#fl-{{ f.pk }}">کپی</button></td>
-        <td class="row-acts"><div class="pop-wrap"><button class="ib sm" type="button" data-pop="fm-{{ f.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های فرم">{% icon "more" 16 %}</button>
-          <div class="pop-m" id="fm-{{ f.pk }}" role="menu" hidden>
-            <a role="menuitem" href="{{ base }}/f/{{ f.slug }}/" target="_blank" rel="noopener">{% icon "eye" 18 %}<span>باز کردن فرم</span></a>
-            <form method="post">{% csrf_token %}<input type="hidden" name="form" value="{{ f.pk }}"><input type="hidden" name="action" value="form_toggle"><button role="menuitem" type="submit">{% icon "lock" 18 %}<span>{% if f.is_open %}بستن فرم{% else %}باز کردن برای ثبت{% endif %}</span></button></form>
-            <div class="msep"></div>
-            <form method="post" data-confirm="فرم حذف شود؟ داده‌های ثبت‌شده می‌مانند." data-confirm-title="حذف فرم" data-confirm-text="حذف فرم">{% csrf_token %}<input type="hidden" name="form" value="{{ f.pk }}"><input type="hidden" name="action" value="form_delete"><button role="menuitem" class="danger" type="submit">{% icon "trash" 18 %}<span>حذف فرم</span></button></form>
-          </div></div></td></tr>{% endfor %}</tbody></table></div>
-    {% elif apis %}<div class="empty">{% icon "pin" 28 %}<h2>هنوز فرمی نساخته‌اید</h2><p class="muted">برای ثبت نقطه در میدان یک فرم بسازید.</p><button class="btn" type="button" data-dialog-open="ff-dlg">{% icon "plus" 18 %}ساخت اولین فرم</button></div>
-    {% else %}<div class="empty">{% icon "table" 28 %}<h2>اول یک جدول را در بالا فعال کنید</h2></div>{% endif %}
-  </section>
   {% if apis %}
   <dialog class="dlg" id="ff-dlg" aria-labelledby="ff-dlg-t">
     <form method="post" id="fform">{% csrf_token %}<input type="hidden" name="action" value="form_create">
@@ -92,10 +201,5 @@ const data = await r.json();</code></pre>
   </dialog>
   {% endif %}
 </div>
-<script>
-(() => { const sel = document.getElementById("ff-t"); if (!sel) return;
-  const sync = () => document.querySelectorAll(".ff-cols").forEach((fs) => {
-    const on = fs.dataset.for === sel.value; fs.hidden = !on; fs.querySelectorAll("input").forEach((i) => { i.disabled = !on; }); });
-  sel.addEventListener("change", sync); sync(); })();
-</script>
 {% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'js/list-filter.js' %}" defer></script><script src="{% static 'js/hash-tabs.js' %}" defer></script><script src="{% static 'js/rest-manage.js' %}" defer></script>{% endblock %}
