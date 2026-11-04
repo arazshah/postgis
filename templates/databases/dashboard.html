@@ -182,7 +182,7 @@
     <section class="card dh-box" aria-labelledby="h-feed">
       <h2 class="dh-h" id="h-feed">{% icon "pulse" 18 %}ادامه‌ی کار</h2>
       <ul class="dh-feed">
-        {% for f in feed %}<li><a href="{{ f.url }}"><span class="dash-ico">{% icon f.icon 16 %}</span><span class="dh-ft"><b>{{ f.text|truncatechars:56 }}</b><small>{{ f.kind }} · <span class="ltr">{{ f.db }}</span> · {{ f.when|jdate:"%m/%d %H:%M" }}</small></span></a></li>{% endfor %}
+        {% for f in feed %}<li><a href="{{ f.url }}"><span class="dash-ico">{% icon f.icon 16 %}</span><span class="dh-ft"><b title="{{ f.text }}">{{ f.text|truncatechars:120 }}</b><small>{{ f.kind }} · <span class="ltr">{{ f.db }}</span> · {{ f.when|jdate:"%m/%d %H:%M" }}</small></span></a></li>{% endfor %}
       </ul>
     </section>
     {% endif %}
