@@ -137,7 +137,7 @@
       const a = document.createElement("a");
       a.href = x.u; a.tabIndex = -1;
       const b = document.createElement("b"); b.textContent = x.t;
-      if (x.k === "d") b.className = "ltr";
+      if (x.k === "d" || x.k === "t") b.className = "ltr";
       const g = document.createElement("small"); g.textContent = x.g;
       a.append(b, g); li.appendChild(a);
       li.addEventListener("mousemove", () => { if (active !== i) { active = i; mark(); } });
@@ -150,6 +150,21 @@
     const el = palList.children[active];
     palInput.setAttribute("aria-activedescendant", el && el.id ? el.id : "");
     if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+  }
+  // جدول‌های همین پایگاه: یک‌بار و تنبل هنگام اولین باز شدن پالت
+  let tablesState = "";
+  function loadTables() {
+    const holder = $("[data-ws-tables]");
+    if (!holder || tablesState) return;
+    tablesState = "loading";
+    fetch(holder.getAttribute("data-ws-tables"), { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => {
+        entries = entries.concat((d.items || []).slice(0, 2000));
+        tablesState = "done";
+        if (pal && !pal.hidden) paint();
+      })
+      .catch(() => { tablesState = "done"; });
   }
   function closePal() {
     if (!pal || pal.hidden) return;
@@ -164,7 +179,7 @@
       pal.className = "ws-pal"; pal.hidden = true;
       pal.innerHTML = '<div class="ws-pal-box" role="dialog" aria-modal="true" aria-label="جست‌وجوی سریع">' +
         '<input class="ws-pal-q" type="search" role="combobox" aria-expanded="true" aria-controls="ws-pal-list" ' +
-        'placeholder="نام بخش یا پایگاه داده را بنویسید…" autocomplete="off" aria-label="جست‌وجوی سریع">' +
+        'placeholder="نام بخش، جدول یا پایگاه داده را بنویسید…" autocomplete="off" aria-label="جست‌وجوی سریع">' +
         '<ul id="ws-pal-list" role="listbox"></ul>' +
         '<p class="ws-pal-help small muted">↑ ↓ برای انتخاب · Enter برای رفتن · Esc برای بستن</p></div>';
       document.body.appendChild(pal);
@@ -180,6 +195,7 @@
       });
     }
     palFocus = document.activeElement;
+    loadTables();
     palInput.value = ""; active = 0; paint();
     pal.hidden = false;
     document.body.classList.add("ws-lock");

@@ -20,14 +20,16 @@
         </button>
       </div>
       <div class="ex-scroll">
+      <div class="ex-recent" data-ex-recent hidden><div class="ex-schema">اخیر</div><ul></ul></div>
       {% regroup tables by schema as groups %}
       {% for g in groups %}
         {% if groups|length > 1 or g.grouper != 'public' %}<div class="ex-schema ltr">{{ g.grouper }}</div>{% endif %}
         <ul>
         {% for x in g.list %}
-          <li data-name="{{ x.name|lower }}"><a href="{% url 'databases:explore_table' db.pk x.schema x.name %}" {% if t and t.oid == x.oid %}aria-current="page"{% endif %}>
+          <li data-name="{{ x.name|lower }}" data-q="{{ x.schema|lower }} {{ x.name|lower }} {% for g in x.geometry %}{{ g.type|lower }} {% endfor %}" data-rows="{{ x.rows_estimate|farows }}" data-geo="{{ x.geo_kind }}"><a href="{% url 'databases:explore_table' db.pk x.schema x.name %}" {% if t and t.oid == x.oid %}aria-current="page"{% endif %}>
+            <span class="tl-ic {% if x.geo_kind %}geo{% endif %}"{% if x.geometry %} title="{{ x.geo_title }}"{% endif %}>{% if x.geo_kind == 'point' %}{% icon "point" 16 %}{% elif x.geo_kind == 'line' %}{% icon "line" 16 %}{% elif x.geo_kind == 'polygon' %}{% icon "polygon" 16 %}{% elif x.geo_kind %}{% icon "frame" 16 %}{% else %}{% icon "table" 16 %}{% endif %}</span>
             <span class="ltr ex-tname">{{ x.name }}</span>
-            {% if x.geometry %}<span class="geo-dot" title="{{ x.geometry.0.type }} · SRID {{ x.geometry.0.srid }}" aria-label="مکانی"></span>{% endif %}
+            <small class="ex-rows muted">{{ x.rows_estimate|farows }}</small>
           </a></li>
         {% endfor %}
         </ul>

@@ -79,3 +79,20 @@ def get_item(mapping, key):
         return mapping.get(key)
     except AttributeError:
         return None
+
+
+@register.filter
+def farows(num):
+    """تعداد سطر فشرده: ۷۷۵ هزار، ۱٫۲ میلیون."""
+    try:
+        n = int(num)
+    except (TypeError, ValueError):
+        return "—"
+    if n < 10_000:
+        return str(n).translate(_FA_DIGITS)
+    for div, unit in ((1_000_000_000, "میلیارد"), (1_000_000, "میلیون"), (1_000, "هزار")):
+        if n >= div:
+            v = n / div
+            text = f"{v:.0f}" if v >= 100 else f"{v:.1f}".rstrip("0").rstrip(".")
+            return f"{text} {unit}".translate(_FA_DIGITS).replace(".", "٫")
+    return str(n).translate(_FA_DIGITS)

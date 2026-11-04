@@ -314,12 +314,33 @@ def explore(request, pk):
     except ExplorerError as exc:
         messages.error(request, str(exc))
         return redirect("databases:detail", pk=db.pk)
+    biggest = max((t.size_bytes for t in tables), default=0) or 1
     for t in tables:
         t.mappable = any(not g["geography"] and g["srid"] for g in t.geometry)
-    ctx = {"db": db, "tables": tables, "section": "tables", "spatial_count": sum(t.mappable for t in tables)}
+        t.size_pct = round(t.size_bytes * 100 / biggest) if t.size_bytes else 0
+    schemas = sorted({t.schema for t in tables})
+    ctx = {"db": db, "tables": tables, "section": "tables", "spatial_count": sum(t.mappable for t in tables),
+           "geo_count": sum(1 for t in tables if t.geometry), "view_count": sum(1 for t in tables if t.kind in "vmf"),
+           "total_size": sum(t.size_bytes for t in tables), "schemas": schemas if len(schemas) > 1 else []}
     if db.can_edit and db.status == db.Status.ACTIVE:
         ctx["builder_cfg"] = _builder_config(request, db, ex)
     return render(request, "databases/explore.html", ctx)
+
+
+@site_user_required
+def tables_json(request, pk):
+    """فهرست جدول‌ها برای جست‌وجوی سریع Ctrl+K (بارگذاری تنبل، فقط هنگام باز شدن پالت)."""
+    db, ex = _explorer_db(request, pk)
+    if ex is None:
+        return JsonResponse({"items": []})
+    try:
+        tables = ex.tables()
+    except ExplorerError:
+        return JsonResponse({"items": []})
+    return JsonResponse({"items": [
+        {"t": (f"{x.schema}." if x.schema != "public" else "") + x.name,
+         "u": reverse("databases:explore_table", args=[db.pk, x.schema, x.name]),
+         "g": "جدول" + (" مکانی" if x.geometry else ""), "k": "t"} for x in tables]})
 
 
 def _builder_config(request, db, ex) -> dict:

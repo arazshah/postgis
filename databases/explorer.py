@@ -47,6 +47,28 @@ class TableRef:
     geometry: list[dict] = field(default_factory=list)
 
     @property
+    def geo_kind(self) -> str:
+        """نوع هندسه برای آیکون: point | line | polygon | geo (نامشخص) | '' (غیرمکانی)."""
+        if not self.geometry:
+            return ""
+        t = (self.geometry[0].get("type") or "").upper()
+        if "POINT" in t:
+            return "point"
+        if "LINE" in t:
+            return "line"
+        if "POLYGON" in t or "SURFACE" in t:
+            return "polygon"
+        return "geo"
+
+    @property
+    def geo_title(self) -> str:
+        return " · ".join(f"{g['column']} {g['type']} {g['srid']}" for g in self.geometry)
+
+    @property
+    def srid(self):
+        return self.geometry[0]["srid"] if self.geometry and self.geometry[0].get("srid") else None
+
+    @property
     def kind_label(self) -> str:
         return {"r": "جدول", "p": "جدول", "v": "نما (view)", "m": "نمای ذخیره‌شده", "f": "جدول خارجی"}.get(
             self.kind, self.kind)

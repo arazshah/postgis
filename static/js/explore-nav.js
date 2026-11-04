@@ -55,33 +55,80 @@
     if (e.key === "Escape" && open && !isDocked()) { setOpen(false); toggle.focus(); }
   });
 
-  // جست‌وجوی زنده؛ Enter اولین نتیجه را باز می‌کند
+  // ── جدول‌های اخیر همین پایگاه (در مرورگر ذخیره می‌شود) ──
+  const dbKey = "gp.ex.recent." + (location.pathname.match(/dashboard\/(\d+)\//) || [0, "x"])[1];
+  const recentBox = list.querySelector("[data-ex-recent]");
+  const cur = list.querySelector("[aria-current=page]");
+  let recent = [];
+  try { recent = JSON.parse(store.get(dbKey) || "[]"); } catch (e) { recent = []; }
+  if (cur) {
+    recent = [cur.getAttribute("href")].concat(recent.filter((h) => h !== cur.getAttribute("href"))).slice(0, 6);
+    store.set(dbKey, JSON.stringify(recent));
+  }
+  const byHref = {};
+  list.querySelectorAll("li[data-name] a").forEach((a) => { byHref[a.getAttribute("href")] = a.parentElement; });
+  const recentItems = recent.filter((h) => byHref[h] && !(cur && h === cur.getAttribute("href"))).slice(0, 5);
+  if (recentBox && recentItems.length) {
+    const ul = recentBox.querySelector("ul");
+    recentItems.forEach((h) => { const c = byHref[h].cloneNode(true); c.dataset.recent = "1"; ul.appendChild(c); });
+    recentBox.hidden = false;
+  }
+
+  // ── جست‌وجوی زنده با پررنگ‌شدن بخش منطبق؛ ↑ ↓ و Enter ──
+  const norm = (v) => String(v || "").toLowerCase().trim();
+  const items = () => Array.from(list.querySelectorAll("li[data-name]:not([hidden]):not([data-recent])"));
+  let hot = -1;
+  function paintName(li, words) {
+    const n = li.querySelector(".ex-tname");
+    if (!n) return;
+    const text = n.dataset.raw || (n.dataset.raw = n.textContent);
+    n.textContent = "";
+    const low = text.toLowerCase();
+    let at = -1, len = 0;
+    for (const w of words) { const i = low.indexOf(w); if (i >= 0) { at = i; len = w.length; break; } }
+    if (at < 0) { n.textContent = text; return; }
+    n.append(text.slice(0, at));
+    const m = document.createElement("mark"); m.textContent = text.slice(at, at + len); n.append(m);
+    n.append(text.slice(at + len));
+  }
+  function setHot(i) {
+    const all = items();
+    all.forEach((li) => li.classList.remove("hot"));
+    hot = all.length ? Math.max(0, Math.min(i, all.length - 1)) : -1;
+    if (hot >= 0) { all[hot].classList.add("hot"); all[hot].scrollIntoView({ block: "nearest" }); }
+  }
   if (filter) {
     filter.addEventListener("input", () => {
-      const q = filter.value.trim().toLowerCase();
+      const words = norm(filter.value).split(/\s+/).filter(Boolean);
       let shown = 0;
       list.querySelectorAll("li[data-name]").forEach((li) => {
-        const ok = !q || li.dataset.name.includes(q);
+        const ok = !words.length || words.every((w) => li.dataset.q.includes(w));
         li.hidden = !ok;
         if (ok) shown += 1;
+        paintName(li, ok ? words : []);
       });
-      list.querySelectorAll("ul").forEach((ul) => {
+      list.querySelectorAll(".ex-scroll ul").forEach((ul) => {
         const prev = ul.previousElementSibling;
         const any = ul.querySelector("li:not([hidden])");
         ul.hidden = !any;
         if (prev && prev.classList.contains("ex-schema")) prev.hidden = !any;
       });
+      if (recentBox) recentBox.hidden = !recentItems.length || words.length > 0;
       if (none) none.hidden = shown > 0;
+      setHot(words.length ? 0 : -1);
     });
     filter.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter") return;
-      const a = list.querySelector("li:not([hidden]) a");
-      if (a) { e.preventDefault(); location.href = a.href; }
+      if (e.key === "ArrowDown") { e.preventDefault(); setHot(hot + 1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setHot(hot - 1); }
+      else if (e.key === "Enter") {
+        const all = items();
+        const a = (all[hot >= 0 ? hot : 0] || {}).querySelector ? all[hot >= 0 ? hot : 0].querySelector("a") : null;
+        if (a) { e.preventDefault(); location.href = a.href; }
+      }
     });
   }
 
   render();
   // جدول فعلی همیشه در دید باشد
-  const cur = list.querySelector("[aria-current=page]");
   if (cur && layout.classList.contains("docked")) cur.scrollIntoView({ block: "nearest" });
 })();
