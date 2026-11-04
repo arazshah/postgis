@@ -53,6 +53,9 @@
 - **فهرست بلند با جست‌وجو** (جدول‌های پایگاه، `.tl` و `static/js/tables-list.js`): نوار ابزار چسبان (جست‌وجو + چیپ فیلتر + مرتب‌سازی)، ردیف فشرده با آیکون نوع، منوی ⋯، نوار انتخاب پایین؛ روی گوشی هر ردیف کارت دوخطی. فهرست‌های بلند تازه همین الگو را بگیرند.
 - **هشدار:** `.msg.success|warning|error|info`.
 - **فرم:** `.field` + برچسب؛ فیلد ۳۸px؛ توضیح زیر فیلد `.help`.
+- **زبانه‌ها** (صفحه‌ی چندبخشی): `.tabs` با `role=tablist data-hash-tabs` و `.tabpanel`؛ زبانه‌ی فعال در hash آدرس می‌ماند (`static/js/hash-tabs.js`). شمارنده‌ی زبانه `.tab-n`.
+- **فیلتر فهرست عمومی** (`static/js/list-filter.js`): ریشه `data-lf`، جست‌وجو `data-lf-q`، چیپ `data-lf-chip`، ردیف `data-lf-row` با `data-q` و `data-tags`، مرتب‌سازی `data-lf-sort`، گروه‌ها `data-lf-group`، انتخاب گروهی `data-lf-pick` و `data-lf-sel`. نوار ابزار `.tl-bar` و ردیف‌های `.tl-table` را از صفحه‌ی جدول‌ها بگیرید.
+- **مودال مشترک برای ردیف‌ها:** به‌جای یک دیالوگ برای هر ردیف، یک `<dialog>` با داده‌ی `data-*` یا `json_script` که JS پر می‌کند (انتشار، دسترسی REST، SRID).
 - **منو و مودال:** `Ui.dialog/confirm/prompt` (ui.js)؛ مودال بزرگ کارگاهی `StudioUI.modal` با `size: "xl"`؛ منو `StudioUI.menu`.
 - **سازنده‌های بزرگ** (چند مرحله + پیش‌نمایش): الگوی `static/js/map-composer.js` (سازنده‌ی نمودار).
 

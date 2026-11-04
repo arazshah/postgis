@@ -120,16 +120,16 @@
         <p class="small muted" style="margin:2px 0 0">فرم موبایلی با نقشه و دکمه‌ی «موقعیت من» (GPS) که هر ثبت را یک سطر در جدول می‌کند. بدون اینترنت هم باز می‌شود و ثبت‌ها را نگه می‌دارد تا اتصال برگردد.</p></div>
         {% if apis %}<button class="btn" type="button" data-dialog-open="ff-dlg">{% icon "plus" 18 %}فرم تازه</button>{% endif %}</div>
       {% if forms %}
-      <ul class="ff-list">
+      <ul class="fc-list">
       {% for f in forms %}
-        <li class="ff-card">
+        <li class="fc-card">
           <span class="tl-ic geo">{% icon "pin" 20 %}</span>
-          <div class="ff-main">
+          <div class="fc-main">
             <b>{{ f.title }}</b>
             <span class="small muted"><span class="ltr">{{ f.api_table.path }}</span> · {{ f.submissions|fanum }} ثبت</span>
-            <span class="ff-badges"><span class="badge {% if f.is_open %}active{% else %}pending{% endif %}">{% if f.is_open %}باز{% else %}بسته{% endif %}</span><span class="badge">{{ f.get_access_display }}</span></span>
+            <span class="fc-badges"><span class="badge {% if f.is_open %}active{% else %}pending{% endif %}">{% if f.is_open %}باز{% else %}بسته{% endif %}</span><span class="badge">{{ f.get_access_display }}</span></span>
           </div>
-          <div class="ff-link"><code class="ltr small" id="fl-{{ f.pk }}">{{ base }}/f/{{ f.slug }}/</code> <button class="copy" data-copy-target="#fl-{{ f.pk }}">کپی</button></div>
+          <div class="fc-link"><code class="ltr small" id="fl-{{ f.pk }}">{{ base }}/f/{{ f.slug }}/</code> <button class="copy" data-copy-target="#fl-{{ f.pk }}">کپی</button></div>
           <div class="pop-wrap"><button class="ib sm" type="button" data-pop="fm-{{ f.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های فرم {{ f.title }}">{% icon "more" 16 %}</button>
             <div class="pop-m" id="fm-{{ f.pk }}" role="menu" hidden>
               <a role="menuitem" href="{{ base }}/f/{{ f.slug }}/" target="_blank" rel="noopener"><span class="i">{% icon "eye" 16 %}</span>باز کردن فرم</a>

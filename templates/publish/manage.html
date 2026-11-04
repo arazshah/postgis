@@ -1,21 +1,19 @@
-{% extends "databases/_ws.html" %}{% load fa ws %}
-{% block title %}انتشار نقشه {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% extends "databases/_ws.html" %}{% load fa static ws %}
+{% block title %}نقشه و API {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 {% with sample=published.0 %}
 <div class="wrap page">
   <div class="page-head">
     <div>
-      <h1>انتشار نقشه و API</h1>
-      <p class="muted page-sub">هر جدول مکانی را با یک کلیک منتشر کنید تا بدون نصب GeoServer در صفحه وب (MapLibre، OpenLayers، Leaflet)، QGIS و ArcGIS دیده شود. لایه عمومی بدون کلید باز است؛ لایه خصوصی کلید API می‌خواهد.</p>
+      <h1>نقشه و API</h1>
+      <p class="muted page-sub">هر جدول مکانی را منتشر کنید تا بدون نصب GeoServer در صفحه وب (MapLibre، OpenLayers، Leaflet)، QGIS و ArcGIS دیده شود. لایه عمومی بدون کلید باز است؛ لایه خصوصی کلید API می‌خواهد.</p>
     </div>
     <div class="page-acts"><a class="btn ghost" href="{% url 'databases:explore' db.pk %}">{% icon "table" 18 %}مرورگر داده</a></div>
   </div>
 
-  <div class="kpis">
-    <div class="card kpi"><small>{% icon "globe" 16 %}لایه‌های منتشرشده</small><b>{{ published|length|fanum }}</b><span class="sub">از {{ max_layers|fanum }} لایه مجاز</span></div>
+  <div class="kpis kpis-2">
+    <div class="card kpi"><small>{% icon "globe" 16 %}لایه‌های منتشرشده</small><b>{{ published|length|fanum }}</b><div class="meter" aria-hidden="true"><i style="width:{% widthratio published|length max_layers 100 %}%"></i></div><span class="sub">از {{ max_layers|fanum }} لایه مجاز · {{ n_public|fanum }} عمومی</span></div>
     <div class="card kpi"><small>{% icon "bolt" 16 %}درخواست امروز</small><b>{{ used|fanum }}</b><div class="meter" aria-hidden="true"><i style="width:{% widthratio used cap 100 %}%"></i></div><span class="sub">از {{ cap|fanum }} درخواست روزانه</span></div>
-    <a class="card kpi kpi-link" href="{% url 'publish:ows' db.pk %}"><small>{% icon "cube" 16 %}WMS و WFS</small><b>QGIS Server</b><span class="sub">پروژه QGIS را با همان سبک منتشر کنید</span></a>
-    <a class="card kpi kpi-link" href="{% url 'restapi:manage' db.pk %}"><small>{% icon "braces" 16 %}REST API و فرم میدانی</small><b>مدیریت</b><span class="sub">خواندن و نوشتن سطرها بدون بک‌اند</span></a>
   </div>
 
   {% if new_key %}
@@ -26,93 +24,155 @@
   </section>
   {% endif %}
 
-  <section class="card">
-    <div class="ch"><h2>جدول‌های مکانی</h2></div>
-    {% if rows %}
-    <div class="table-scroll"><table class="data-table">
-      <thead><tr><th>جدول</th><th>هندسه</th><th>سطر</th><th>وضعیت</th><th><span class="sr-label">عملیات</span></th></tr></thead>
+  <div class="tabs" role="tablist" aria-label="بخش‌های انتشار" data-hash-tabs>
+    <button role="tab" id="t-layers" aria-controls="p-layers" aria-selected="true">لایه‌ها <span class="tab-n">{{ published|length|fanum }} از {{ rows|length|fanum }}</span></button>
+    <button role="tab" id="t-connect" aria-controls="p-connect" aria-selected="false" tabindex="-1">اتصال و کد</button>
+    {% if db.is_mine %}<button role="tab" id="t-keys" aria-controls="p-keys" aria-selected="false" tabindex="-1">کلیدهای API <span class="tab-n">{{ keys|length|fanum }}</span></button>{% endif %}
+  </div>
+
+  {# ───────── لایه‌ها ───────── #}
+  <div class="tabpanel" role="tabpanel" id="p-layers" aria-labelledby="t-layers">
+  {% if rows %}
+  <section class="panel tl" data-lf data-lf-url>
+    <div class="tl-bar" data-lf-bar>
+      <div class="tl-search">
+        {% icon "search" 16 %}
+        <input type="search" class="ltr" placeholder="جست‌وجوی جدول مکانی…" aria-label="جست‌وجوی جدول مکانی" autocomplete="off" data-lf-q>
+        <kbd aria-hidden="true">/</kbd>
+      </div>
+      <div class="tl-chips" role="group" aria-label="فیلتر وضعیت">
+        <button type="button" class="tl-chip" data-lf-chip="all" aria-pressed="true">همه <b>{{ rows|length|fanum }}</b></button>
+        <button type="button" class="tl-chip" data-lf-chip="pub" aria-pressed="false">منتشرشده <b>{{ published|length|fanum }}</b></button>
+        <button type="button" class="tl-chip" data-lf-chip="public" aria-pressed="false">عمومی</button>
+        <button type="button" class="tl-chip" data-lf-chip="private" aria-pressed="false">خصوصی</button>
+        <button type="button" class="tl-chip" data-lf-chip="unpub" aria-pressed="false">منتشرنشده</button>
+      </div>
+      <span class="small muted tl-count" aria-live="polite" data-lf-count></span>
+    </div>
+    <table class="tl-table">
+      <thead><tr>
+        <th class="c-sel"><span class="sr-label">انتخاب</span></th>
+        <th class="c-name"><button type="button" class="tl-sort" data-lf-sort="name">جدول</button></th>
+        <th class="c-num"><button type="button" class="tl-sort" data-lf-sort="rows" data-lf-first="desc">سطر</button></th>
+        <th class="c-srid">SRID</th>
+        <th class="c-st">وضعیت</th>
+        <th class="c-act"><span class="sr-label">عملیات</span></th>
+      </tr></thead>
       <tbody>
       {% for r in rows %}
-      <tr>
-        <td><span class="ltr">{% if r.t.schema != 'public' %}{{ r.t.schema }}.{% endif %}{{ r.t.name }}</span></td>
-        <td class="small"><span class="ltr">{{ r.geom.type }} · {{ r.geom.srid }}</span></td>
-        <td>{{ r.t.rows_estimate|fanum }}</td>
-        <td>{% if r.layer %}<span class="badge active">منتشرشده · {% if r.layer.is_public %}عمومی{% else %}خصوصی{% endif %}</span>{% else %}<span class="muted small">منتشر نشده</span>{% endif %}</td>
-        <td class="row-acts">{% if not r.layer %}
-          <button class="btn sm" type="button" data-dialog-open="pub-{{ forloop.counter }}" {% if not r.geom.srid %}disabled title="SRID مشخص نیست"{% endif %}>{% icon "globe" 16 %}انتشار</button>
-          {% else %}<a class="btn ghost sm" href="#layer-{{ r.layer.pk }}">{% icon "link" 16 %}تنظیمات و آدرس‌ها</a>{% endif %}</td>
-      </tr>
+        {% with t=r.t l=r.layer %}
+        <tr data-lf-row data-tags="{% if l %}pub {% if l.is_public %}public{% else %}private{% endif %}{% else %}unpub{% endif %}" data-q="{{ t.schema|lower }} {{ t.name|lower }} {{ r.geom.type|lower }}" data-sort-name="{{ t.name|lower }}" data-sort-rows="{{ t.rows_estimate }}">
+          <td class="c-sel">{% if not l and r.geom.srid %}<input type="checkbox" name="tables" value="{{ t.schema }}.{{ t.name }}" form="bulk-form" aria-label="انتخاب {{ t.name }} برای انتشار" data-lf-pick>{% endif %}</td>
+          <td class="c-name">
+            <span class="tl-link">
+              <span class="tl-ic geo" title="{{ r.geom.type }}">{% if t.geo_kind == 'point' %}{% icon "point" 18 %}{% elif t.geo_kind == 'line' %}{% icon "line" 18 %}{% elif t.geo_kind == 'polygon' %}{% icon "polygon" 18 %}{% else %}{% icon "frame" 18 %}{% endif %}</span>
+              <span class="tl-nm"><span class="ltr">{% if t.schema != 'public' %}<i class="tl-sc">{{ t.schema }}.</i>{% endif %}<span class="tl-n">{{ t.name }}</span></span></span>
+            </span>
+            <span class="tl-meta small">{% if l %}<span class="badge active">{% if l.is_public %}عمومی{% else %}خصوصی{% endif %}</span>{% else %}<span class="muted">منتشر نشده</span>{% endif %} · {{ t.rows_estimate|farows }} سطر</span>
+          </td>
+          <td class="c-num">{{ t.rows_estimate|farows }}</td>
+          <td class="c-srid ltr">{% if r.geom.srid %}{{ r.geom.srid }}{% else %}<span title="SRID مشخص نیست" class="srid-bad">۰</span>{% endif %}</td>
+          <td class="c-st">{% if l %}<span class="badge {% if l.is_public %}active{% else %}pending{% endif %}">{% icon "globe" 14 %}{% if l.is_public %}عمومی{% else %}خصوصی · با کلید{% endif %}</span>{% else %}<span class="muted small">منتشر نشده</span>{% endif %}</td>
+          <td class="c-act">
+            <div class="row-btns">
+            {% if not l %}
+              {% if r.geom.srid %}<button class="btn ghost sm" type="button" data-pub-open data-schema="{{ t.schema }}" data-table="{{ t.name }}">{% icon "globe" 16 %}انتشار</button>
+              {% else %}<a class="btn ghost sm" href="{% url 'databases:explore_health' db.pk %}" title="سیستم مختصات مشخص نیست">{% icon "pulse" 16 %}تعیین SRID</a>{% endif %}
+            {% else %}
+              <button class="btn ghost sm" type="button" data-pl-urls="{{ l.pk }}">{% icon "link" 16 %}آدرس‌ها</button>
+              <div class="pop-wrap">
+                <button class="ib sm" type="button" data-pop="pl-m{{ l.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های {{ l.table }}">{% icon "more" 16 %}</button>
+                <div class="pop-m" id="pl-m{{ l.pk }}" role="menu" hidden>
+                  <a role="menuitem" href="{% url 'publish:map_builder' db.pk l.pk %}"><span class="i">{% icon "edit" 16 %}</span>طراحی و اشتراک نقشه</a>
+                  {% if l.is_public %}<a role="menuitem" href="{% url 'publish:map' l.slug %}" target="_blank" rel="noopener"><span class="i">{% icon "eye" 16 %}</span>مشاهده نقشه عمومی</a>{% endif %}
+                  <button role="menuitem" type="button" data-pl-settings="{{ l.pk }}"><span class="i">{% icon "settings" 16 %}</span>تنظیمات لایه</button>
+                  <button role="menuitem" type="button" data-pl-sample="{{ l.pk }}"><span class="i">{% icon "code" 16 %}</span>نمونه کد این لایه</button>
+                  <div class="msep"></div>
+                  <form method="post" action="{% url 'publish:update_layer' db.pk l.pk %}" data-confirm="لایه «{{ l.table }}» از انتشار برداشته شود؟ آدرس‌ها و نقشه‌های عمومی آن از کار می‌افتد." data-confirm-title="لغو انتشار" data-confirm-text="لغو انتشار">{% csrf_token %}<input type="hidden" name="action" value="unpublish"><button role="menuitem" class="danger" type="submit"><span class="i">{% icon "trash" 16 %}</span>لغو انتشار</button></form>
+                </div>
+              </div>
+            {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endwith %}
       {% endfor %}
       </tbody>
-    </table></div>
-    {% else %}
-    <div class="empty">{% icon "table" 28 %}<h2>هنوز جدول مکانی ندارید</h2><p class="muted">یک لایه وارد کنید تا اینجا منتشر شود.</p><a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a></div>
-    {% endif %}
+    </table>
+    <div class="tl-none" hidden data-lf-none>
+      {% icon "search" 28 %}
+      <p><b>جدولی با این جست‌وجو پیدا نشد.</b></p>
+      <button type="button" class="btn ghost sm" data-lf-clear>پاک کردن جست‌وجو و فیلتر</button>
+    </div>
+    <div class="tl-sel" data-lf-sel hidden>
+      <span data-lf-sel-n></span>
+      <label class="pick-chip"><input type="radio" name="public" value="" form="bulk-form" checked><span>{% icon "lock" 16 %}خصوصی</span></label>
+      <label class="pick-chip"><input type="radio" name="public" value="on" form="bulk-form"><span>{% icon "globe" 16 %}عمومی</span></label>
+      <button class="btn sm" type="submit" form="bulk-form">{% icon "globe" 16 %}انتشار انتخاب‌شده‌ها</button>
+      <button class="btn ghost sm" type="button" data-lf-sel-clear>پاک کردن</button>
+    </div>
   </section>
-  {% for r in rows %}{% if not r.layer %}
-  <dialog class="dlg" id="pub-{{ forloop.counter }}" aria-labelledby="pub-t-{{ forloop.counter }}">
+  <form method="post" id="bulk-form" action="{% url 'publish:publish_bulk' db.pk %}">{% csrf_token %}</form>
+
+  <dialog class="dlg" id="pub-dlg" aria-labelledby="pub-dlg-t">
     <form method="post" action="{% url 'publish:publish_table' db.pk %}">{% csrf_token %}
-      <input type="hidden" name="schema" value="{{ r.t.schema }}"><input type="hidden" name="table" value="{{ r.t.name }}">
-      <div class="dlg-h"><span class="dlg-i">{% icon "globe" 22 %}</span><h2 id="pub-t-{{ forloop.counter }}">انتشار <span class="ltr">{{ r.t.name }}</span></h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+      <input type="hidden" name="schema" data-pd="schema"><input type="hidden" name="table" data-pd="table">
+      <div class="dlg-h"><span class="dlg-i">{% icon "globe" 22 %}</span><h2 id="pub-dlg-t">انتشار <span class="ltr" data-pd="title"></span></h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
       <div class="dlg-b">
         <div class="choice-grid">
           <label class="choice"><input type="radio" name="public" value="" checked><span>{% icon "lock" 20 %}<b>خصوصی</b><small>فقط با کلید API دیده می‌شود.</small></span></label>
           <label class="choice"><input type="radio" name="public" value="on"><span>{% icon "globe" 20 %}<b>عمومی</b><small>هر کسی با لینک می‌بیند؛ بدون کلید.</small></span></label>
         </div>
-        <p class="small muted" style="margin:0">بعد از انتشار، آدرس‌های TileJSON، کاشی برداری و OGC API همین‌جا می‌آید.</p>
+        <p class="small muted" style="margin:0">بعد از انتشار، آدرس‌های TileJSON، کاشی برداری و OGC API در «آدرس‌ها» می‌آید.</p>
       </div>
       <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}منتشر کن</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
     </form>
   </dialog>
-  {% endif %}{% endfor %}
 
-  {% for l in published %}
-  <section class="card pub-layer" id="layer-{{ l.pk }}">
-    <div class="ch">
-      <h2 class="ltr">{{ l.table }}</h2>
-      <span class="badge {% if l.is_public %}active{% else %}pending{% endif %}">{% if l.is_public %}عمومی{% else %}خصوصی · با کلید{% endif %}</span>
-      <div class="pop-wrap">
-        <button class="ib sm" type="button" data-pop="pl-m{{ l.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های {{ l.table }}">{% icon "more" 16 %}</button>
-        <div class="pop-m" id="pl-m{{ l.pk }}" role="menu" hidden>
-          <a role="menuitem" href="{% url 'publish:map_builder' db.pk l.pk %}">{% icon "edit" 18 %}<span>طراحی و اشتراک نقشه</span></a>
-          {% if l.is_public %}<a role="menuitem" href="{% url 'publish:map' l.slug %}" target="_blank" rel="noopener">{% icon "eye" 18 %}<span>مشاهده نقشه عمومی</span></a>{% endif %}
-          <button role="menuitem" type="button" data-dialog-open="ls-{{ l.pk }}">{% icon "settings" 18 %}<span>تنظیمات لایه</span></button>
-          <div class="msep"></div>
-          <form method="post" action="{% url 'publish:update_layer' db.pk l.pk %}" data-confirm="لایه «{{ l.table }}» از انتشار برداشته شود؟ آدرس‌ها و نقشه‌های عمومی آن از کار می‌افتد." data-confirm-title="لغو انتشار" data-confirm-text="لغو انتشار">{% csrf_token %}<input type="hidden" name="action" value="unpublish"><button role="menuitem" class="danger" type="submit">{% icon "trash" 18 %}<span>لغو انتشار</span></button></form>
-        </div>
+  <dialog class="dlg" id="urls-dlg" aria-labelledby="urls-dlg-t">
+    <div class="dlg-h"><span class="dlg-i">{% icon "link" 22 %}</span><h2 id="urls-dlg-t">آدرس‌های <span class="ltr" data-ud="title"></span></h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+    <div class="dlg-b">
+      <div class="url-rows">
+        <div class="fld"><label>TileJSON (MapLibre)</label><code id="ud-tj" data-ud="tj"></code><button class="copy" type="button" data-copy-target="#ud-tj">کپی</button></div>
+        <div class="fld"><label>کاشی برداری (XYZ)</label><code id="ud-xyz" data-ud="xyz"></code><button class="copy" type="button" data-copy-target="#ud-xyz">کپی</button></div>
+        <div class="fld"><label>GeoJSON (OGC API)</label><code id="ud-gj" data-ud="gj"></code><button class="copy" type="button" data-copy-target="#ud-gj">کپی</button></div>
       </div>
+      <p class="small muted" style="margin:0" data-ud="note"></p>
     </div>
-    <div class="url-rows">
-      <div class="fld"><label>TileJSON (MapLibre)</label><code id="tj-{{ l.pk }}">{{ base }}/tiles/{{ l.slug }}.json</code><button class="copy" data-copy-target="#tj-{{ l.pk }}">کپی</button></div>
-      <div class="fld"><label>کاشی برداری (XYZ)</label><code id="xyz-{{ l.pk }}">{{ base }}/tiles/{{ l.slug }}/{z}/{x}/{y}.mvt</code><button class="copy" data-copy-target="#xyz-{{ l.pk }}">کپی</button></div>
-      <div class="fld"><label>GeoJSON (OGC API)</label><code id="gj-{{ l.pk }}">{{ base }}/ogc/{{ service.slug }}/collections/{{ l.collection_id }}/items</code><button class="copy" data-copy-target="#gj-{{ l.pk }}">کپی</button></div>
-    </div>
-    <div class="page-acts"><a class="btn sm" href="{% url 'publish:map_builder' db.pk l.pk %}">{% icon "edit" 16 %}طراحی و اشتراک نقشه</a>
-      {% if l.is_public %}<a class="btn ghost sm" href="{% url 'publish:map' l.slug %}" target="_blank" rel="noopener">{% icon "eye" 16 %}نقشه عمومی</a>{% endif %}</div>
-  </section>
-  <dialog class="dlg" id="ls-{{ l.pk }}" aria-labelledby="ls-t-{{ l.pk }}">
-    <form method="post" action="{% url 'publish:update_layer' db.pk l.pk %}">{% csrf_token %}<input type="hidden" name="action" value="save">
-      <div class="dlg-h"><span class="dlg-i">{% icon "settings" 22 %}</span><h2 id="ls-t-{{ l.pk }}">تنظیمات <span class="ltr">{{ l.table }}</span></h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+    <div class="dlg-f"><button class="btn ghost" type="button" data-dialog-close>بستن</button></div>
+  </dialog>
+
+  <dialog class="dlg" id="ls-dlg" aria-labelledby="ls-dlg-t">
+    <form method="post" data-ld="form">{% csrf_token %}<input type="hidden" name="action" value="save">
+      <div class="dlg-h"><span class="dlg-i">{% icon "settings" 22 %}</span><h2 id="ls-dlg-t">تنظیمات <span class="ltr" data-ld="name"></span></h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
       <div class="dlg-b">
-        <div class="field"><label for="title-{{ l.pk }}">عنوان نمایشی</label><input id="title-{{ l.pk }}" type="text" name="title" value="{{ l.title }}" placeholder="{{ l.table }}"></div>
+        <div class="field"><label for="ld-title">عنوان نمایشی</label><input id="ld-title" type="text" name="title" data-ld="title"></div>
         <div class="choice-grid">
-          <label class="choice"><input type="radio" name="public" value="" {% if not l.is_public %}checked{% endif %}><span>{% icon "lock" 20 %}<b>خصوصی</b><small>فقط با کلید API.</small></span></label>
-          <label class="choice"><input type="radio" name="public" value="on" {% if l.is_public %}checked{% endif %}><span>{% icon "globe" 20 %}<b>عمومی</b><small>بدون کلید API.</small></span></label>
+          <label class="choice"><input type="radio" name="public" value="" data-ld="private"><span>{% icon "lock" 20 %}<b>خصوصی</b><small>فقط با کلید API.</small></span></label>
+          <label class="choice"><input type="radio" name="public" value="on" data-ld="public"><span>{% icon "globe" 20 %}<b>عمومی</b><small>بدون کلید API.</small></span></label>
         </div>
-        <fieldset class="wm-pick"><legend>ستون‌های منتشرشده</legend>
-          <div class="chips">{% for name, typ in l.meta.columns %}{% if name != l.geom_column %}<label class="pick-chip"><input type="checkbox" name="columns" value="{{ name }}" {% if not l.columns or name in l.columns %}checked{% endif %}><span class="ltr">{{ name }}</span></label>{% endif %}{% endfor %}</div>
-        </fieldset>
+        <fieldset class="wm-pick"><legend>ستون‌های منتشرشده</legend><div class="chips" data-ld="cols"></div></fieldset>
       </div>
       <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}ذخیره</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
     </form>
   </dialog>
-  {% endfor %}
+  {{ layer_data|json_script:"pl-data" }}
+  {% else %}
+  <div class="empty">{% icon "table" 28 %}<h2>هنوز جدول مکانی ندارید</h2><p class="muted">یک لایه وارد کنید تا اینجا منتشر شود.</p><a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a></div>
+  {% endif %}
+  </div>
 
+  {# ───────── اتصال و کد ───────── #}
+  <div class="tabpanel" role="tabpanel" id="p-connect" aria-labelledby="t-connect" hidden>
   {% if service and published %}
-  <section class="card">
-    <div class="ch"><h2>اتصال از نرم‌افزار و کد</h2></div>
-    <p class="small muted">آدرس سرویس OGC API این پایگاه داده (همه لایه‌ها):</p>
+  <section class="panel">
+    <div class="ex-head"><h2>اتصال از نرم‌افزار و کد</h2></div>
+    <p class="small muted">آدرس سرویس OGC API این پایگاه داده (همه‌ی لایه‌ها):</p>
     <div class="secret"><code id="ogc-base">{{ base }}/ogc/{{ service.slug }}/</code><button class="copy" data-copy-target="#ogc-base">کپی</button></div>
+    <p class="small muted" style="margin:var(--s4) 0 var(--s2)">لایه‌ی نمونه را انتخاب کنید تا نمونه‌ها با آدرس همان لایه عوض شود:</p>
+    <div class="chips rc-pick" role="group" aria-label="لایه‌ی نمونه">
+      {% for l in published %}<button type="button" class="tl-chip ltr" data-pl-chip="{{ l.pk }}" aria-pressed="{% if l.pk == sample.pk %}true{% else %}false{% endif %}">{{ l.table }}</button>{% endfor %}
+    </div>
     <div class="tabs" role="tablist" aria-label="نمونه کد" style="margin-top:var(--s4)">
       <button role="tab" id="t-ml" aria-controls="p-ml" aria-selected="true">MapLibre</button>
       <button role="tab" id="t-ol" aria-controls="p-ol" aria-selected="false" tabindex="-1">OpenLayers</button>
@@ -131,9 +191,9 @@ const map = new maplibregl.Map({
   center: [51.39, 35.69], zoom: 10
 });
 map.on("load", () =&gt; {
-  map.addSource("{{ sample.table }}", {type: "vector", url: "{{ base }}/tiles/{{ sample.slug }}.json"});
-  map.addLayer({id: "{{ sample.table }}", type: "circle", source: "{{ sample.table }}",
-                "source-layer": "{{ sample.collection_id }}", paint: {"circle-color": "#0F5C59"}});
+  map.addSource("<span data-pl="table">{{ sample.table }}</span>", {type: "vector", url: "{{ base }}/tiles/<span data-pl="slug">{{ sample.slug }}</span>.json"});
+  map.addLayer({id: "<span data-pl="table">{{ sample.table }}</span>", type: "circle", source: "<span data-pl="table">{{ sample.table }}</span>",
+                "source-layer": "<span data-pl="coll">{{ sample.collection_id }}</span>", paint: {"circle-color": "#0F5C59"}});
 });
 &lt;/script&gt;</code></pre>
       <p class="small muted">برای خط از <span class="ltr">type: "line"</span> و برای چندضلعی از <span class="ltr">"fill"</span> استفاده کنید.</p>
@@ -146,13 +206,13 @@ import MVT from "ol/format/MVT";
 const layer = new VectorTileLayer({
   source: new VectorTileSource({
     format: new MVT(),
-    url: "{{ base }}/tiles/{{ sample.slug }}/{z}/{x}/{y}.mvt",
+    url: "{{ base }}/tiles/<span data-pl="slug">{{ sample.slug }}</span>/{z}/{x}/{y}.mvt",
   }),
 });
 map.addLayer(layer);</code></pre>
     </div>
     <div class="tabpanel" role="tabpanel" id="p-lf" aria-labelledby="t-lf" hidden>
-<pre class="code"><button class="copy" data-copy>کپی</button><code>fetch("{{ base }}/ogc/{{ service.slug }}/collections/{{ sample.collection_id }}/items?limit=1000")
+<pre class="code"><button class="copy" data-copy>کپی</button><code>fetch("{{ base }}/ogc/{{ service.slug }}/collections/<span data-pl="coll">{{ sample.collection_id }}</span>/items?limit=1000")
   .then(r =&gt; r.json())
   .then(data =&gt; L.geoJSON(data, {
     onEachFeature: (f, l) =&gt; l.bindPopup(JSON.stringify(f.properties))
@@ -168,13 +228,14 @@ map.addLayer(layer);</code></pre>
     <div class="tabpanel" role="tabpanel" id="p-py" aria-labelledby="t-py" hidden>
 <pre class="code"><button class="copy" data-copy>کپی</button><code>import geopandas as gpd
 
-url = "{{ base }}/ogc/{{ service.slug }}/collections/{{ sample.collection_id }}/items?limit=5000"
+url = "{{ base }}/ogc/{{ service.slug }}/collections/<span data-pl="coll">{{ sample.collection_id }}</span>/items?limit=5000"
 gdf = gpd.read_file(url)   # برای لایه خصوصی: url + "&amp;key=کلید_شما"
 print(gdf.head())</code></pre>
     </div>
   </section>
+  {% else %}
+  <div class="empty">{% icon "link" 28 %}<h2>هنوز لایه‌ای منتشر نکرده‌اید</h2><p class="muted">بعد از انتشار اولین لایه، آدرس‌ها و نمونه کد اینجا می‌آید.</p><button class="btn ghost" type="button" data-pl-goto="layers">{% icon "globe" 18 %}رفتن به لایه‌ها</button></div>
   {% endif %}
-
   {% if iran_basemap %}
   <section class="card" id="basemap">
     <div class="ch"><h2>نقشه پایه ایران برای سایت شما</h2></div>
@@ -194,22 +255,37 @@ const map = new maplibregl.Map({
   </section>
   {% endif %}
 
+  </div>
+
+  {# ───────── کلیدهای API ───────── #}
 {% if db.is_mine %}
-  <section class="card">
-    <div class="ch"><h2>کلیدهای API</h2><button class="btn sm" type="button" data-dialog-open="key-new">{% icon "plus" 16 %}کلید تازه</button></div>
-    <p class="small muted" style="margin:0">برای لایه‌های خصوصی. کلید را با هدر <span class="ltr">Authorization: Bearer …</span>، هدر <span class="ltr">X-API-Key</span>، رمز Basic در QGIS یا پارامتر <span class="ltr">?key=</span> بفرستید.</p>
+  <div class="tabpanel" role="tabpanel" id="p-keys" aria-labelledby="t-keys" hidden>
+  <section class="panel">
+    <div class="ex-head"><div><h2>کلیدهای API</h2>
+      <p class="small muted" style="margin:2px 0 0">برای لایه‌های خصوصی. کلید را با هدر <span class="ltr">Authorization: Bearer …</span>، هدر <span class="ltr">X-API-Key</span>، رمز Basic در QGIS یا پارامتر <span class="ltr">?key=</span> بفرستید.</p></div>
+      <button class="btn" type="button" data-dialog-open="key-new">{% icon "plus" 18 %}کلید تازه</button></div>
     {% if keys %}
-    <div class="table-scroll"><table class="data-table">
-      <thead><tr><th>نام</th><th>شروع کلید</th><th>دسترسی</th><th>ساخت</th><th>آخرین استفاده</th><th><span class="sr-label">عملیات</span></th></tr></thead>
-      <tbody>{% for k in keys %}
-        <tr>
-          <td>{{ k.name }}</td><td><span class="ltr">{{ k.prefix }}…</span></td><td class="small">{% if k.can_write %}خواندن و نوشتن{% else %}فقط خواندن{% endif %}</td><td>{{ k.created_at|jdate }}</td>
-          <td>{{ k.last_used_at|jdate }}</td>
-          <td class="row-acts">{% if k.active %}<form method="post" action="{% url 'publish:revoke_key' db.pk k.pk %}" data-confirm="این کلید باطل شود؟ برنامه‌هایی که از آن استفاده می‌کنند دیگر کار نمی‌کنند." data-confirm-title="باطل کردن کلید API" data-confirm-text="باطل کن">{% csrf_token %}<button class="btn ghost sm danger" type="submit">{% icon "trash" 16 %}باطل کردن</button></form>{% else %}<span class="badge expired">باطل‌شده</span>{% endif %}</td>
-        </tr>{% endfor %}</tbody>
-    </table></div>
-    {% else %}<div class="empty">{% icon "lock" 28 %}<h2>هنوز کلیدی نساخته‌اید</h2><p class="muted">لایه‌ی عمومی کلید نمی‌خواهد؛ برای لایه‌ی خصوصی کلید بسازید.</p></div>{% endif %}
+    <ul class="fc-list">
+      {% for k in keys %}
+      <li class="fc-card">
+        <span class="tl-ic geo">{% icon "lock" 20 %}</span>
+        <div class="fc-main">
+          <b>{{ k.name }}</b>
+          <span class="small muted"><span class="ltr">{{ k.prefix }}…</span> · ساخت {{ k.created_at|jdate }} · آخرین استفاده {{ k.last_used_at|jdate }}</span>
+          <span class="fc-badges">{% if k.active %}<span class="badge {% if k.can_write %}pending{% else %}active{% endif %}">{% if k.can_write %}خواندن و نوشتن{% else %}فقط خواندن{% endif %}</span>{% else %}<span class="badge expired">باطل‌شده</span>{% endif %}</span>
+        </div>
+        {% if k.active %}
+        <div class="pop-wrap"><button class="ib sm" type="button" data-pop="km-{{ k.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های کلید {{ k.name }}">{% icon "more" 16 %}</button>
+          <div class="pop-m" id="km-{{ k.pk }}" role="menu" hidden>
+            <form method="post" action="{% url 'publish:revoke_key' db.pk k.pk %}" data-confirm="این کلید باطل شود؟ برنامه‌هایی که از آن استفاده می‌کنند دیگر کار نمی‌کنند." data-confirm-title="باطل کردن کلید API" data-confirm-text="باطل کن">{% csrf_token %}<button role="menuitem" class="danger" type="submit"><span class="i">{% icon "trash" 16 %}</span>باطل کردن کلید</button></form>
+          </div></div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<div class="empty">{% icon "lock" 28 %}<h2>هنوز کلیدی نساخته‌اید</h2><p class="muted">لایه‌ی عمومی کلید نمی‌خواهد؛ برای لایه‌ی خصوصی کلید بسازید.</p><button class="btn" type="button" data-dialog-open="key-new">{% icon "plus" 18 %}ساخت اولین کلید</button></div>{% endif %}
   </section>
+  </div>
   <dialog class="dlg" id="key-new" aria-labelledby="key-new-t">
     <form method="post" action="{% url 'publish:create_key' db.pk %}">{% csrf_token %}
       <div class="dlg-h"><span class="dlg-i">{% icon "lock" 22 %}</span><h2 id="key-new-t">کلید API تازه</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
@@ -220,7 +296,8 @@ const map = new maplibregl.Map({
       <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}ساخت کلید</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
     </form>
   </dialog>
-  {% endif %}
+{% endif %}
 </div>
 {% endwith %}
 {% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'js/list-filter.js' %}" defer></script><script src="{% static 'js/hash-tabs.js' %}" defer></script><script src="{% static 'js/publish-manage.js' %}" defer></script>{% endblock %}
