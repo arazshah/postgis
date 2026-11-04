@@ -76,15 +76,14 @@ def _greeting(now=None) -> str:
 
 
 def _home(user, dbs, stats) -> dict:
-    """داده‌ی «خانه»: خوشامد، نیاز به توجه، ادامه‌ی کار، کارهای سریع و چک‌لیست شروع. چند پرس‌وجوی تجمیعی، نه یکی برای هر پایگاه."""
+    """داده‌ی «خانه»: خوشامد، شمار پایگاه‌های نیازمند توجه، ادامه‌ی کار و چک‌لیست شروع. چند پرس‌وجوی تجمیعی، نه یکی برای هر پایگاه."""
     from analysis.models import LlmConfig, Question, ToolRun
     from jobs.models import Job
     from maps.models import WebMap
     from tools.catalog import INFO
 
     live = [d for d in dbs if d.is_live]
-    attention = [{**a, "db": d.db_name} for d in dbs for a in d.alerts]
-    attention.sort(key=lambda a: {"bad": 0, "warn": 1, "info": 2}[a["level"]])
+    attn_count = sum(1 for d in dbs if d.attn)
 
     feed = []
     if dbs:
@@ -106,16 +105,6 @@ def _home(user, dbs, stats) -> dict:
     feed.sort(key=lambda f: f["when"], reverse=True)
 
     target = live[0] if live else None
-    quick = []
-    if target:
-        quick = [
-            {"icon": "upload", "title": "ورود فایل", "hint": "Shapefile، GeoJSON، CSV…", "url": reverse("databases:import", args=[target.pk])},
-            {"icon": "spark", "title": "پرسش فارسی", "hint": "تحلیل با زبان ساده", "url": reverse("analysis:page", args=[target.pk])},
-            {"icon": "globe", "title": "استودیوی نقشه", "hint": "ساخت و انتشار نقشه", "url": reverse("maps:index", args=[target.pk])},
-            {"icon": "code", "title": "کنسول SQL", "hint": "اجرای کوئری مکانی", "url": reverse("databases:explore_sql", args=[target.pk])},
-            {"icon": "link", "title": "اتصال QGIS", "hint": "آدرس و رمز اتصال", "url": reverse("databases:detail", args=[target.pk])},
-        ]
-
     has_llm = LlmConfig.objects.filter(user=user).exists()
     has_data = bool(dbs) and Job.objects.filter(database__in=dbs, kind=Job.Kind.IMPORT, status=Job.Status.DONE).exists()
     has_map = bool(dbs) and WebMap.objects.filter(database__in=dbs).exists()
@@ -132,8 +121,7 @@ def _home(user, dbs, stats) -> dict:
     ]
     done = sum(1 for s in steps if s["done"])
     quota = stats["quota"]
-    return {"hello": _greeting(), "attention": attention[:6], "attention_more": max(0, len(attention) - 6),
-            "feed": feed[:6], "quick": quick, "target": target, "steps": steps,
+    return {"hello": _greeting(), "attn_count": attn_count, "feed": feed[:5], "steps": steps,
             "steps_done": done, "steps_pct": round(done * 100 / len(steps)),
             "onboarding": done < len(steps), "total_pct": min(100, round(stats["size"] * 100 / quota)) if quota else 0}
 

@@ -78,6 +78,11 @@
 /* ---------- بنتو: امکانات ---------- */
 .cv{content-visibility:auto;contain-intrinsic-size:auto 640px}
 .bento{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s4)}
+.who-links{list-style:none;margin:var(--s5) 0 0;padding:0;display:flex;flex-wrap:wrap;justify-content:center;gap:var(--s2)}
+.who-links a{display:inline-block;padding:4px 14px;border:1px solid var(--line);border-radius:99px;background:var(--surface);font-size:.88rem;font-weight:700;text-decoration:none}
+.who-links a:hover{border-color:var(--teal)}
+.intro-video{margin:0}
+.intro-video figcaption{margin-top:var(--s2);text-align:center}
 .tile{position:relative;display:flex;flex-direction:column;gap:var(--s2);background:var(--surface);border:1px solid var(--line);
   border-radius:var(--r-lg);padding:var(--s5);text-decoration:none;color:var(--ink);
   transition:transform .25s cubic-bezier(.2,.7,.2,1),box-shadow .25s,border-color .25s}
@@ -135,7 +140,6 @@
   .facts li:nth-child(3){border-inline-start:0;padding-inline-start:0}
   .facts li:nth-child(n+3){border-top:1px solid var(--line)}
   .bento{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .who{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (max-width:900px){
   .home-hero .wrap,.start-grid,.learn{grid-template-columns:1fr}
