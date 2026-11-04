@@ -1,16 +1,18 @@
-{% load ws %}
-<div class="dash-groups">
+{% load ws fa %}
+{# لانچر بخش‌های پایگاه: سه مرحله‌ی کار (داده ← تحلیل و انتشار ← نگهداری)، ردیف‌های فشرده؛ توضیح هر بخش در title و متن صفحه‌خوان #}
+<nav class="dl" aria-label="بخش‌های پایگاه داده">
 {% for g in groups %}
-  <section class="dash-group dg-{{ g.key }}" aria-labelledby="dg-{{ g.key }}-{{ forloop.counter }}">
-    <h3 id="dg-{{ g.key }}-{{ forloop.counter }}">{{ g.title }}</h3>
+  <section class="dl-g dl-{{ g.key }}" aria-labelledby="dl-{{ g.key }}-{{ forloop.counter }}">
+    <h3 class="dl-h" id="dl-{{ g.key }}-{{ forloop.counter }}"><span class="dl-n" aria-hidden="true">{{ forloop.counter|fanum }}</span>{{ g.title }}</h3>
     <ul>
     {% for a in g.items %}
-      <li><a class="dash-tile" href="{{ a.url }}">
-        <span class="dash-ico">{% icon a.icon 20 %}</span>
-        <span class="dash-txt"><b>{{ a.label }}</b><small>{{ a.hint }}</small></span>
+      <li><a class="dl-i" href="{{ a.url }}" title="{{ a.hint }}">
+        <span class="dl-ico" aria-hidden="true">{% icon a.icon 18 %}</span>
+        <span class="dl-t">{{ a.label }}<span class="dl-hint"> — {{ a.hint }}</span></span>
+        <span class="dl-go" aria-hidden="true">{% icon "next" 16 %}</span>
       </a></li>
     {% endfor %}
     </ul>
   </section>
 {% endfor %}
-</div>
+</nav>
