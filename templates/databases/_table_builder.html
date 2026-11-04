@@ -1,0 +1,8 @@
+{% load ws %}
+{# سازنده‌ی جدول: دیالوگ بزرگ؛ محتوای مرحله‌ها را static/js/table-builder.js می‌سازد. #}
+<dialog class="dlg dlg-xl" id="tb-dlg" aria-labelledby="tb-title">
+  <div class="dlg-h"><span class="dlg-i">{% icon "table" 22 %}</span><h2 id="tb-title">جدول جدید</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+  <div class="dlg-b"><noscript><p class="msg error">برای ساخت جدول، جاوااسکریپت باید فعال باشد.</p></noscript></div>
+  <div class="dlg-f"></div>
+</dialog>
+{{ builder_cfg|json_script:"builder-config" }}

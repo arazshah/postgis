@@ -38,6 +38,9 @@ const ICONS={
   "k-radar":P("M12 3l8.5 6.2-3.2 10H6.7L3.5 9.2z")+'<path d="M12 8l4 3-1.6 4.6H9.6L8 11z" fill="currentColor" fill-opacity=".25"/>',
   "k-sankey":P("M3 6h3c6 0 6 6 12 6h3|M3 18h3c6 0 6-6 12-6|M3 4v4|M3 16v4|M21 10v4"), "k-profile":P("M3 19l5-8 3 4 4-8 6 12z"),
   "k-kpi":'<rect x="3" y="5" width="18" height="14" rx="3"/>'+P("M7 15V9l-1.5 1|M11 9h3l-3 6|M16.5 9h2.5l-2.5 3c1.8 0 2.5.8 2.5 1.6 0 .9-.8 1.4-1.8 1.4-.6 0-1.1-.2-1.4-.5"),
+  line:'<path d="M3 18l6-7 5 4 7-10"/>', polygon:'<path d="M5 7l7-4 7 5-2 10H7z"/>',
+  table:'<path d="M3 5h18v14H3z"/><path d="M3 10h18"/><path d="M3 15h18"/><path d="M10 5v14"/>',
+  trash:'<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6"/><path d="M14 11v6"/>',
 };
 
   const icon = (n, c) => `<svg class="i ${c || ""}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ""}</svg>`;

@@ -454,6 +454,69 @@ class Explorer:
                 conn.rollback()
                 raise ExplorerError(f"خطا: {getattr(exc.diag, 'message_primary', None) or exc}") from exc
 
+    def writable_schemas(self) -> list[str]:
+        """schemaهایی که نقش خود کاربر در آن‌ها اجازه‌ی ساخت جدول دارد (public همیشه اول)."""
+        with self.connect() as conn:
+            rows = conn.execute("""
+                SELECT nspname FROM pg_namespace
+                WHERE nspname NOT LIKE 'pg\\_%%' AND nspname <> ALL(%s)
+                  AND has_schema_privilege(%s, oid, 'CREATE')
+                ORDER BY nspname <> 'public', nspname""", (sorted(HIDDEN_SCHEMAS), self.db.role_name)).fetchall()
+        return [r[0] for r in rows]
+
+    def search_srid(self, query: str, limit: int = 20) -> list[dict]:
+        """جستجوی سامانه‌ی مختصات در spatial_ref_sys (با کد یا بخشی از نام)."""
+        q = (query or "").strip()[:60]
+        if not q:
+            return []
+        with self.connect() as conn:
+            if q.isdigit():
+                cond, args = sql.SQL("srid = %s"), (int(q),)
+            else:
+                cond, args = sql.SQL("srtext ILIKE %s"), ("%" + q.replace("%", "").replace("_", r"\_") + "%",)
+            rows = conn.execute(sql.SQL(
+                "SELECT srid, auth_name, split_part(srtext, '\"', 2) FROM spatial_ref_sys WHERE {} "
+                "ORDER BY srid LIMIT %s").format(cond), (*args, limit)).fetchall()
+        return [{"srid": r[0], "auth": r[1], "name": r[2]} for r in rows]
+
+    def create_table(self, plan) -> None:
+        """جدول را با نقش خود کاربر و در یک تراکنش می‌سازد؛ یا همه‌چیز ساخته می‌شود یا هیچ."""
+        spec = plan.spec
+        with self.connect(read_only=False) as conn:
+            try:
+                conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(self.db.role_name)))
+                conn.execute(sql.SQL("SET LOCAL lock_timeout = '5s'"))
+                conn.execute(sql.SQL("SET LOCAL statement_timeout = '30s'"))
+                if not conn.execute("SELECT 1 FROM pg_namespace WHERE nspname = %s", (spec["schema"],)).fetchone():
+                    raise ExplorerError("این schema وجود ندارد.")
+                g = spec["geometry"]
+                if g and not conn.execute("SELECT 1 FROM spatial_ref_sys WHERE srid = %s", (g["srid"],)).fetchone():
+                    raise ExplorerError(f"سامانه‌ی مختصات با کد {g['srid']} پیدا نشد.")
+                for stmt in plan.statements:
+                    conn.execute(stmt)
+                conn.commit()
+            except psycopg.errors.DuplicateTable as exc:
+                conn.rollback()
+                raise ExplorerError("جدولی با این نام از قبل وجود دارد؛ نام دیگری انتخاب کنید.") from exc
+            except psycopg.errors.InsufficientPrivilege as exc:
+                conn.rollback()
+                raise ExplorerError("اجازه ساخت جدول در این schema را ندارید.") from exc
+            except psycopg.errors.UndefinedObject as exc:
+                conn.rollback()
+                raise ExplorerError("امکانات مورد نیاز (مثل PostGIS) روی این پایگاه داده فعال نیست.") from exc
+            except psycopg.errors.QueryCanceled as exc:
+                conn.rollback()
+                raise ExplorerError("ساخت جدول بیش از حد طول کشید؛ دوباره تلاش کنید.") from exc
+            except psycopg.errors.LockNotAvailable as exc:
+                conn.rollback()
+                raise ExplorerError("پایگاه داده در حال استفاده است؛ چند لحظه بعد دوباره تلاش کنید.") from exc
+            except ExplorerError:
+                conn.rollback()
+                raise
+            except psycopg.Error as exc:
+                conn.rollback()
+                raise ExplorerError(f"خطا: {getattr(exc.diag, 'message_primary', None) or exc}") from exc
+
     # ------------------------------------------------------------------ کنسول SQL
     @staticmethod
     def _geo_columns(conn, description) -> list[int]:

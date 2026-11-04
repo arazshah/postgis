@@ -13,7 +13,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
 
-from . import csvgeo, editor, services
+from . import csvgeo, editor, services, tablebuilder
 from .crypto import generate_password
 from .editor import EDIT_TTL, EditError, Editor
 from .explorer import EXPORT_LIMIT, MAP_LIMIT, SQL_MAX_ROWS, Explorer, ExplorerError
@@ -314,8 +314,72 @@ def explore(request, pk):
         return redirect("databases:detail", pk=db.pk)
     for t in tables:
         t.mappable = any(not g["geography"] and g["srid"] for g in t.geometry)
-    return render(request, "databases/explore.html", {"db": db, "tables": tables, "section": "tables",
-                                                      "spatial_count": sum(t.mappable for t in tables)})
+    ctx = {"db": db, "tables": tables, "section": "tables", "spatial_count": sum(t.mappable for t in tables)}
+    if db.can_edit and db.status == db.Status.ACTIVE:
+        ctx["builder_cfg"] = _builder_config(request, db, ex)
+    return render(request, "databases/explore.html", ctx)
+
+
+def _builder_config(request, db, ex) -> dict:
+    try:
+        schemas = ex.writable_schemas() or ["public"]
+    except ExplorerError:
+        schemas = ["public"]
+    return {**tablebuilder.client_config(), "schemas": schemas, "csrf": get_token(request),
+            "urls": {"preview": reverse("databases:table_preview", args=[db.pk]),
+                     "create": reverse("databases:table_new", args=[db.pk]),
+                     "srid": reverse("databases:table_srid", args=[db.pk])}}
+
+
+def _builder_json(view):
+    def wrapper(request, pk):
+        try:
+            return view(request, pk)
+        except (tablebuilder.BuildError, EditError, ExplorerError) as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    wrapper.__name__ = view.__name__
+    return site_user_required(wrapper)
+
+
+def _builder_guard(request, pk):
+    db, ex = _explorer_db(request, pk, "editor")
+    if ex is None:
+        raise ExplorerError("مرورگر فقط برای پایگاه داده فعال در دسترس است.")
+    if db.status != db.Status.ACTIVE:
+        raise ExplorerError("پایگاه داده فقط‌خواندنی یا غیرفعال است؛ ساخت جدول ممکن نیست.")
+    return db, ex
+
+
+@_builder_json
+@require_POST
+def table_preview(request, pk):
+    _builder_guard(request, pk)
+    plan = tablebuilder.build(_body(request).get("spec"))
+    return JsonResponse({"ok": True, "sql": plan.script()})
+
+
+@_builder_json
+@require_POST
+def table_new(request, pk):
+    db, ex = _builder_guard(request, pk)
+    if db.size_bytes >= db.quota_bytes:
+        raise ExplorerError("سهمیه‌ی حجم پایگاه داده پر شده است؛ پلن را ارتقا دهید یا داده‌های اضافه را حذف کنید.")
+    plan = tablebuilder.build(_body(request).get("spec"))
+    spec = plan.spec
+    if spec["schema"] not in ex.writable_schemas():
+        raise ExplorerError("اجازه ساخت جدول در این schema را ندارید.")
+    ex.create_table(plan)
+    qualified = f"{spec['schema']}.{spec['name']}"
+    services.logevent("table_create", f"جدول {qualified} ساخته شد ({len(spec['columns'])} ستون)",
+                      user=request.user, database=db)
+    return JsonResponse({"ok": True, "url": reverse("databases:explore_table",
+                                                    args=[db.pk, spec["schema"], spec["name"]])})
+
+
+@_builder_json
+def table_srid(request, pk):
+    _, ex = _builder_guard(request, pk)
+    return JsonResponse({"ok": True, "items": ex.search_srid(request.GET.get("q", ""))})
 
 
 @site_user_required

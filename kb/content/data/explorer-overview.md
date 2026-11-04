@@ -3,10 +3,10 @@ title: مرورگر داده چیست و چه کارهایی با آن می‌ت
 summary: مرورگر داده بخش وب پایگاه داده است: جدول‌ها و ستون‌ها را ببینید، ردیف‌ها را مرور کنید، جدول مکانی را روی نقشه ببینید، فایل وارد کنید، خروجی بگیرید، سلامت داده را بسنجید و SQL اجرا کنید؛ بدون نصب هیچ نرم‌افزاری.
 kind: concept
 keywords: مرورگر داده, explorer, جدول ها, نمایش روی نقشه, دیدن داده, ستون ها, ردیف ها, مرور جدول
-related: find-features, edit-table-data, explorer-map-limit, import-formats, export-formats, data-health, sql-console
+related: create-table, find-features, edit-table-data, explorer-map-limit, import-formats, export-formats, data-health, sql-console
 featured: yes
 order: 100
-reviewed: 2026-11-03
+reviewed: 2026-11-04
 ---
 🎬 **[ویدیوی راهنما: مرورگر داده: جدول‌ها، نقشه و دانلود](help:explore)** را ببینید (۰ دقیقه و ۴۸ ثانیه، بدون نیاز به صدا).
 
@@ -18,6 +18,7 @@ reviewed: 2026-11-03
 | ساختار | ستون‌ها، نوع‌ها و نمایه‌ها |
 | داده | مرور ردیف‌ها با صفحه‌بندی |
 | نقشه | نمایش لایه روی نقشه ([محدودیت](kb:explorer-map-limit)) |
+| جدول جدید (ویرایشگر و مالک) | [ساخت جدول با تعریف ستون‌ها و هندسه](kb:create-table)، بدون SQL |
 | ورود فایل | [آپلود داده](kb:import-formats) |
 | خروجی | [دانلود جدول](kb:export-formats) |
 | سلامت داده | [بررسی و رفع مشکل](kb:data-health) |
