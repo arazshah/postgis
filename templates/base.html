@@ -60,13 +60,13 @@
     </div>
   </div>
   <div class="pop-wrap">
-    <button class="app-av" type="button" data-pop="pop-acct" aria-haspopup="menu" aria-expanded="false" aria-label="حساب کاربری" title="حساب کاربری">{% icon "user" 18 %}</button>
+    <button class="app-av" type="button" data-pop="pop-acct" aria-haspopup="menu" aria-expanded="false" aria-label="حساب کاربری" title="{{ user.display_name }}">{% if user.initial %}<span class="app-av-i" aria-hidden="true">{{ user.initial }}</span>{% else %}{% icon "user" 18 %}{% endif %}</button>
     <div class="pop-m" id="pop-acct" role="menu" hidden>
-      <div class="pop-who"><b class="ltr">{{ user.phone|default:user.get_username }}</b><span class="small muted">حساب کاربری</span></div>
+      <div class="pop-who">{% if user.full_name %}<b>{{ user.full_name }}</b><span class="small muted">{{ user.organization|default:"دانشگاه / شرکت را در پروفایل بنویسید" }}</span>{% else %}<b class="ltr">{{ user.phone|default:user.get_username }}</b><a class="small" href="{% url 'accounts:profile' %}">نام و دانشگاه / شرکت را کامل کنید</a>{% endif %}</div>
       <div class="msep"></div>
       <a role="menuitem" href="{% url 'databases:dashboard' %}">{% icon "db" 18 %}<span>پایگاه‌های داده من</span></a>
       <a role="menuitem" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}<span>صورتحساب‌ها و پلن</span></a>
-      <a role="menuitem" href="{% url 'accounts:profile' %}">{% icon "user" 18 %}<span>حساب من</span></a>
+      <a role="menuitem" href="{% url 'accounts:profile' %}">{% icon "user" 18 %}<span>پروفایل و تنظیمات</span></a>
       <div class="msep"></div>
       <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button role="menuitem" class="danger" type="submit">{% icon "logout" 18 %}<span>خروج</span></button></form>
     </div>
@@ -88,7 +88,7 @@
         <a href="{% url 'databases:dashboard' %}" {% if ns == 'databases' %}aria-current="page"{% endif %}>پایگاه‌های داده من</a>
         <a href="{% url 'billing:invoices' %}" {% if ns == 'billing' %}aria-current="page"{% endif %}>صورتحساب‌ها</a>
         <a href="{% url 'support:list' %}" {% if ns == 'support' %}aria-current="page"{% endif %}>پشتیبانی</a>
-        <a href="{% url 'accounts:profile' %}" {% if u == 'profile' %}aria-current="page"{% endif %}>حساب</a>
+        <a href="{% url 'accounts:profile' %}" {% if u == 'profile' %}aria-current="page"{% endif %}>پروفایل</a>
         <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="linkbtn" type="submit">خروج</button></form>
       {% else %}
         <a class="btn sm" href="{% url 'accounts:login' %}">ورود / ثبت‌نام</a>

@@ -1397,3 +1397,50 @@ body.app .hg-t h2{margin:0;font:800 15px/1.6 var(--f-display);display:flex;gap:8
 .tl-sel .pick-chip span{background:transparent;color:#fff}
 #urls-dlg .fld code{flex:1;min-width:0;overflow-wrap:anywhere;white-space:normal;direction:ltr;text-align:left}
 @media (max-width:640px){.kpis-2{grid-template-columns:1fr 1fr;gap:10px}.kpis-2 .kpi{padding:12px}.kpis-2 .kpi b{font-size:20px}}
+
+/* ---- خانه‌ی داشبورد (فقط توکن‌ها) ---- */
+.home-hero{display:flex;justify-content:space-between;align-items:center;gap:var(--s4);flex-wrap:wrap;margin-bottom:var(--s5);padding:var(--s5);border-radius:var(--r-lg);color:#fff;
+  background:radial-gradient(120% 140% at 100% 0,var(--teal) 0,var(--teal-dark) 70%);position:relative;overflow:hidden}
+.home-hero::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.12;
+  background:repeating-radial-gradient(circle at 12% 120%,transparent 0 22px,#fff 22px 23px)}
+.home-hero>*{position:relative;z-index:1}
+.home-hello{display:flex;align-items:center;gap:var(--s4);min-width:0}
+.home-hello h1{color:#fff;font-size:clamp(1.3rem,1rem + 1.4vw,1.8rem);margin:0 0 var(--s1)}
+.home-hero .dash-sub{color:var(--teal-soft)}
+.home-av{flex:none;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:var(--ochre);color:var(--ink);font:800 1.35rem/1 var(--f-display)}
+.home-hero .btn.ghost{background:transparent;color:#fff;border-color:var(--teal-soft)}
+.home-hero .btn.ghost:hover{background:var(--teal-dark)}
+.home-hero .btn:not(.ghost){background:var(--ochre);color:var(--ink);border-color:var(--ochre)}
+.home-stats .stat .meter{width:100%;margin-top:var(--s2);height:6px}
+.home-sec{margin-bottom:var(--s4)}
+.home-h{display:flex;align-items:center;gap:var(--s2);font-size:1.02rem;margin:0 0 var(--s3)}
+.home-h small{font-family:var(--f-body);font-weight:500;font-size:.82rem}
+.home-quick{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:var(--s3)}
+.home-q{display:flex;gap:var(--s3);align-items:center;padding:var(--s3);border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);text-decoration:none;color:var(--ink);transition:transform .15s,border-color .15s}
+.home-q:hover{border-color:var(--teal);transform:translateY(-2px)}
+.home-q:hover .dash-ico{background:var(--teal);color:#fff}
+.home-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:var(--s4);align-items:start;margin-bottom:var(--s5)}
+.home-col{display:grid;gap:var(--s4)}
+.home-col .home-sec,.home-grid>.home-sec{margin-bottom:0}
+.home-ok{display:flex;align-items:center;gap:var(--s2);margin:0;color:var(--green)}
+.home-ok.muted{color:var(--ink-2)}
+.home-more{margin:var(--s2) 0 0}
+.home-feed{list-style:none;margin:0;padding:0;display:grid;gap:var(--s1)}
+.home-feed a{display:flex;gap:var(--s3);align-items:center;padding:var(--s2);border-radius:var(--r-md);text-decoration:none;color:var(--ink)}
+.home-feed a:hover{background:var(--paper)}
+.home-feed .dash-txt{min-width:0}
+.home-checks{list-style:none;margin:var(--s3) 0 0;padding:0;display:grid;gap:var(--s1)}
+.home-checks li>a,.home-checks li>.chk,.home-checks li{display:flex;align-items:center;gap:var(--s3)}
+.home-checks li>a{text-decoration:none;color:var(--ink);padding:var(--s2);border-radius:var(--r-md);width:100%}
+.home-checks li>a:hover{background:var(--paper)}
+.home-checks .chk{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;color:#fff}
+.home-checks li.done .chk{background:var(--green);border-color:var(--green)}
+.home-checks li.done .dash-txt b{color:var(--ink-2);text-decoration:line-through;font-weight:500}
+.home-list-h{margin-top:var(--s2)}
+@media (max-width:900px){.home-grid{grid-template-columns:1fr}.home-steps{order:-1}}
+@media (max-width:480px){.home-hero{padding:var(--s4)}.home-av{width:44px;height:44px}.home-hero .dash-head-actions{width:100%}.home-hero .dash-head-actions .btn{flex:1;justify-content:center}}
+@media (prefers-reduced-motion:reduce){.home-q{transition:none}.home-q:hover{transform:none}}
+.home-hero .dash-head-actions .btn.ghost{background:transparent;color:#fff;border:1.5px solid var(--teal-soft);opacity:1}
+.home-hero .dash-head-actions .btn.ghost:hover{background:var(--teal-dark);color:#fff}
+.home-hero .dash-head-actions .btn:not(.ghost){background:var(--ochre);color:var(--ink);border-color:var(--ochre)}
+.home-steps .meter{width:100%;margin:0}

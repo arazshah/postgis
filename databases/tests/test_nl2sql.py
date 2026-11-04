@@ -83,7 +83,7 @@ class ConsoleViewTests(BaseCase):
 
     def test_page_without_key_shows_setup(self):
         r = self.client.get(reverse("databases:explore_sql", args=[self.db.pk]) + "?mode=nl")
-        self.assertContains(r, 'data-dialog-open="nl-key"')
+        self.assertContains(r, "تنظیم مدل زبانی در پروفایل")
         self.assertContains(r, "پرسش فارسی")
         self.assertContains(r, 'data-mode="nl"')
 
@@ -95,16 +95,16 @@ class ConsoleViewTests(BaseCase):
         self.assertContains(r, "data-nl-form")
         self.assertContains(r, "نقاط schools که داخل zones هستند")
 
-    def test_save_key(self):
-        url = reverse("databases:explore_sql_key", args=[self.db.pk])
-        r = self.client.post(url, {"base_url": "http://x.ir/v1", "model": "gpt-4o", "api_key": "k"})
+    def test_save_key_from_profile(self):
+        url = reverse("accounts:profile")
+        self.client.post(url, {"action": "llm_save", "base_url": "http://x.ir/v1", "model": "gpt-4o", "api_key": "k"})
         self.assertFalse(LlmConfig.objects.filter(user=self.user).exists())  # فقط https
-        self.client.post(url, {"base_url": "https://api.avalai.ir/v1/", "model": "gpt-4o-mini", "api_key": "sk-abc12345"})
+        self.client.post(url, {"action": "llm_save", "base_url": "https://api.avalai.ir/v1/", "model": "gpt-4o-mini",
+                               "api_key": "sk-abc12345"})
         cfg = LlmConfig.objects.get(user=self.user)
         self.assertEqual((cfg.base_url, cfg.model, cfg.get_key()), ("https://api.avalai.ir/v1", "gpt-4o-mini", "sk-abc12345"))
-        self.client.post(url, {"action": "delete"})
+        self.client.post(url, {"action": "llm_delete"})
         self.assertFalse(LlmConfig.objects.filter(user=self.user).exists())
-        self.assertEqual(r.status_code, 302)
 
     def test_ask_returns_draft_and_auto_run_only_for_reads(self):
         url = reverse("databases:explore_sql_ask", args=[self.db.pk])

@@ -1,5 +1,4 @@
 """صفحه «تحلیل»: پرسش فارسی (s3geo با کلید خود کاربر). ابزارهای آماده بدون SQL در اپ tools هستند."""
-from urllib.parse import urlsplit
 
 from django.contrib import messages
 from django.http import Http404, JsonResponse
@@ -76,28 +75,6 @@ def page(request, pk):
     if request.method == "POST":
         action = request.POST.get("action", "")
         here = redirect("analysis:page", pk=db.pk)
-        if action == "llm_save":
-            url = (request.POST.get("base_url") or "").strip().rstrip("/")
-            key = (request.POST.get("api_key") or "").strip()
-            parts = urlsplit(url)
-            if parts.scheme != "https" or not parts.netloc:
-                messages.error(request, "آدرس سرویس باید با https شروع شود؛ مثلاً https://api.avalai.ir/v1")
-                return here
-            if not key and cfg is None:
-                messages.error(request, "کلید API را وارد کنید.")
-                return here
-            cfg = cfg or LlmConfig(user=request.user)
-            cfg.base_url = url
-            cfg.model = (request.POST.get("model") or "gpt-4o").strip()[:100]
-            if key:
-                cfg.set_key(key)
-            cfg.save()
-            messages.success(request, "تنظیم مدل زبانی ذخیره شد.")
-            return here
-        if action == "llm_delete" and cfg:
-            cfg.delete()
-            messages.success(request, "کلید مدل زبانی حذف شد.")
-            return here
         if action == "ask":
             if _busy(db):
                 messages.error(request, "یک تحلیل در حال اجراست؛ صبر کنید تمام شود.")

@@ -91,3 +91,7 @@ dialog.dlg.dlg-xl{width:min(820px,calc(100vw - 32px))}
 @media (max-width:860px){.tl-layout{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:560px){.hc-grid,.tl-grid{grid-template-columns:minmax(0,1fr)}}
 @media (prefers-reduced-motion:reduce){.tl-card,.hc{transition:none}.tl-card:hover{transform:none}}
+.llm-line{display:flex;align-items:center;gap:var(--s2);margin:var(--s2) 0 var(--s3)}
+.llm-need{padding:var(--s5);margin:var(--s3) 0;display:flex;flex-direction:column;align-items:center;gap:var(--s3)}
+.llm-need p{margin:0;max-width:46ch}
+.empty-i{display:inline-flex;width:52px;height:52px;border-radius:50%;background:var(--teal-soft);color:var(--teal-dark);align-items:center;justify-content:center}

@@ -66,7 +66,76 @@ def dashboard(request):
     return render(request, "databases/dashboard.html", {"dbs": dbs, "shared": shared, "can_create": can_create, "stats": stats,
                                                         "is_teacher": is_teacher,
                                                         "reason": reason,
-                                                        "vouchers": unused_vouchers(request.user)})
+                                                        "vouchers": unused_vouchers(request.user),
+                                                        **_home(request.user, dbs, stats)})
+
+
+def _greeting(now=None) -> str:
+    h = timezone.localtime(now).hour
+    return "صبح بخیر" if 5 <= h < 12 else "ظهر بخیر" if 12 <= h < 16 else "عصر بخیر" if 16 <= h < 20 else "شب بخیر"
+
+
+def _home(user, dbs, stats) -> dict:
+    """داده‌ی «خانه»: خوشامد، نیاز به توجه، ادامه‌ی کار، کارهای سریع و چک‌لیست شروع. چند پرس‌وجوی تجمیعی، نه یکی برای هر پایگاه."""
+    from analysis.models import LlmConfig, Question, ToolRun
+    from jobs.models import Job
+    from maps.models import WebMap
+    from tools.catalog import INFO
+
+    live = [d for d in dbs if d.is_live]
+    attention = [{**a, "db": d.db_name} for d in dbs for a in d.alerts]
+    attention.sort(key=lambda a: {"bad": 0, "warn": 1, "info": 2}[a["level"]])
+
+    feed = []
+    if dbs:
+        for q in Question.objects.filter(database__in=dbs).select_related("database").order_by("-created_at")[:4]:
+            feed.append({"icon": "spark", "kind": "پرسش فارسی", "text": q.text, "db": q.database.db_name, "when": q.created_at,
+                         "url": reverse("analysis:page", args=[q.database_id]) + "#history"})
+        for t in ToolRun.objects.filter(database__in=dbs).select_related("database").order_by("-created_at")[:4]:
+            info = INFO.get(t.tool)
+            feed.append({"icon": "toolbox", "kind": "ابزار تحلیل", "text": getattr(info, "title", t.tool) + (f" — {t.summary}" if t.summary else ""),
+                         "db": t.database.db_name, "when": t.created_at, "url": reverse("tools:page", args=[t.database_id])})
+        for m in WebMap.objects.filter(database__in=dbs).select_related("database").order_by("-updated_at")[:4]:
+            feed.append({"icon": "globe", "kind": "نقشه", "text": m.title, "db": m.database.db_name, "when": m.updated_at,
+                         "url": reverse("maps:composer", args=[m.database_id, m.pk])})
+        for j in Job.objects.filter(database__in=dbs, status=Job.Status.DONE,
+                                    kind__in=[Job.Kind.IMPORT, Job.Kind.BACKUP]).select_related("database").order_by("-created_at")[:4]:
+            feed.append({"icon": "upload" if j.kind == Job.Kind.IMPORT else "save", "kind": j.get_kind_display(),
+                         "text": j.get_kind_display() + " انجام شد", "db": j.database.db_name, "when": j.created_at,
+                         "url": reverse("databases:explore" if j.kind == Job.Kind.IMPORT else "databases:backups", args=[j.database_id])})
+    feed.sort(key=lambda f: f["when"], reverse=True)
+
+    target = live[0] if live else None
+    quick = []
+    if target:
+        quick = [
+            {"icon": "upload", "title": "ورود فایل", "hint": "Shapefile، GeoJSON، CSV…", "url": reverse("databases:import", args=[target.pk])},
+            {"icon": "spark", "title": "پرسش فارسی", "hint": "تحلیل با زبان ساده", "url": reverse("analysis:page", args=[target.pk])},
+            {"icon": "globe", "title": "استودیوی نقشه", "hint": "ساخت و انتشار نقشه", "url": reverse("maps:index", args=[target.pk])},
+            {"icon": "code", "title": "کنسول SQL", "hint": "اجرای کوئری مکانی", "url": reverse("databases:explore_sql", args=[target.pk])},
+            {"icon": "link", "title": "اتصال QGIS", "hint": "آدرس و رمز اتصال", "url": reverse("databases:detail", args=[target.pk])},
+        ]
+
+    has_llm = LlmConfig.objects.filter(user=user).exists()
+    has_data = bool(dbs) and Job.objects.filter(database__in=dbs, kind=Job.Kind.IMPORT, status=Job.Status.DONE).exists()
+    has_map = bool(dbs) and WebMap.objects.filter(database__in=dbs).exists()
+    steps = [
+        {"label": "پروفایل را کامل کنید", "hint": "نام و دانشگاه / شرکت", "done": bool(user.full_name and user.organization),
+         "url": reverse("accounts:profile"), "icon": "user"},
+        {"label": "پایگاه داده بسازید", "hint": "کمتر از یک دقیقه", "done": bool(dbs), "url": reverse("databases:create"), "icon": "db"},
+        {"label": "اولین داده را وارد کنید", "hint": "فایل مکانی آپلود کنید",
+         "done": has_data, "url": reverse("databases:import", args=[target.pk]) if target else "", "icon": "upload"},
+        {"label": "اولین نقشه را بسازید", "hint": "لایه‌ها را روی نقشه ببینید",
+         "done": has_map, "url": reverse("maps:index", args=[target.pk]) if target else "", "icon": "globe"},
+        {"label": "مدل زبانی را وصل کنید", "hint": "برای پرسش فارسی", "done": has_llm,
+         "url": reverse("accounts:profile") + "#ai", "icon": "spark"},
+    ]
+    done = sum(1 for s in steps if s["done"])
+    quota = stats["quota"]
+    return {"hello": _greeting(), "attention": attention[:6], "attention_more": max(0, len(attention) - 6),
+            "feed": feed[:6], "quick": quick, "target": target, "steps": steps,
+            "steps_done": done, "steps_pct": round(done * 100 / len(steps)),
+            "onboarding": done < len(steps), "total_pct": min(100, round(stats["size"] * 100 / quota)) if quota else 0}
 
 
 def _db_alerts(db) -> list[dict]:
@@ -610,29 +679,6 @@ def explore_sql_why(request, pk):
     except nl2sql.NLError as exc:
         return JsonResponse({"ok": False, "error": str(exc)}, status=400)
     return JsonResponse({"ok": True, **data})
-
-
-@site_user_required
-@require_POST
-def explore_sql_key(request, pk):
-    from . import nl2sql
-
-    db = _user_db(request, pk, "viewer")
-    here = reverse("databases:explore_sql", args=[db.pk]) + "?mode=nl"
-    if request.POST.get("action") == "delete":
-        cfg = nl2sql.user_config(request.user)
-        if cfg:
-            cfg.delete()
-            messages.success(request, "کلید مدل زبانی حذف شد.")
-        return redirect(here)
-    try:
-        nl2sql.save_config(request.user, request.POST.get("base_url", ""), request.POST.get("model", ""),
-                           request.POST.get("api_key", ""))
-    except nl2sql.NLError as exc:
-        messages.error(request, str(exc))
-    else:
-        messages.success(request, "کلید مدل زبانی ذخیره شد؛ حالا درخواست خود را به فارسی بنویسید.")
-    return redirect(here)
 
 
 # ---------------------------------------------------------------------- خروجی چندقالبی

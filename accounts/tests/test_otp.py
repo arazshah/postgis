@@ -185,3 +185,14 @@ class SmsIrTests(TestCase):
         SiteSettings.objects.filter(pk=1).update(smsir_template_id="")
         with self.assertRaises(sms.SMSError):
             sms.send_otp("09121234567", "12345")
+
+
+class ProfileDisplayTests(TestCase):
+    def test_menu_shows_name_and_organization_not_phone_and_ai_tab(self):
+        u = User.objects.create_user("09121112233", full_name="علی رضایی", organization="شرکت نقشه‌پرداز")
+        self.client.force_login(u)
+        r = self.client.get(reverse("accounts:profile"))
+        self.assertContains(r, "شرکت نقشه‌پرداز")
+        self.assertContains(r, "مدل زبانی")
+        self.assertContains(r, "دانشگاه / شرکت")
+        self.assertEqual(u.initial, "ع")

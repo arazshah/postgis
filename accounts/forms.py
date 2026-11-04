@@ -36,7 +36,7 @@ class VerifyForm(forms.Form):
         self.new_user = new_user
         if new_user:
             self.fields["full_name"] = forms.CharField(label="نام و نام خانوادگی", max_length=150)
-            self.fields["organization"] = forms.CharField(label="دانشگاه / سازمان (اختیاری)", max_length=200,
+            self.fields["organization"] = forms.CharField(label="دانشگاه / شرکت (اختیاری)", max_length=200,
                                                           required=False)
             self.fields["accept_terms"] = forms.BooleanField(
                 label="قوانین استفاده را خوانده‌ام و می‌پذیرم", required=True,
@@ -53,7 +53,7 @@ class ProfileForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ["full_name", "email", "organization"]
-        labels = {"full_name": "نام و نام خانوادگی", "email": "ایمیل (اختیاری)", "organization": "دانشگاه / سازمان"}
+        labels = {"full_name": "نام و نام خانوادگی", "email": "ایمیل (اختیاری)", "organization": "دانشگاه / شرکت"}
         widgets = {"email": forms.EmailInput(attrs={"dir": "ltr"})}
 
     def clean_email(self):
