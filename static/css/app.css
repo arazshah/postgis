@@ -1200,3 +1200,12 @@ body.is-editing .data-table .rowact,body.is-editing .data-table th.rowact{displa
 .err-search input{flex:1;min-width:0;min-height:44px;padding:0 var(--s3);border:1px solid var(--line);border-radius:8px;font:inherit}
 .err-links{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:var(--s2) var(--s4);justify-content:center}
 @media(max-width:480px){.err-search{flex-direction:column}}
+
+/* ورود فایل به جدول موجود: نگاشت ستون‌ها (_import_into.html) */
+.into-map{margin-top:var(--s5);display:flex;flex-direction:column;gap:var(--s3)}
+.into-map .table-scroll{margin:0}
+.into-h{margin:0;font:800 14.5px var(--f-display)}
+.into-table select{min-height:var(--ctl-h-sm);min-width:160px;max-width:100%;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--card);color:var(--ink);padding:0 8px}
+.into-table td{vertical-align:middle}
+.into-geo td{background:var(--paper)}
+.into-mode .chips{margin-top:var(--s2)}

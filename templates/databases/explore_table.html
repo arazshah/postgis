@@ -1,5 +1,5 @@
 {% extends "databases/_explore_base.html" %}{% load fa static ws %}
-{% block head %}{% if tab == 'map' %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% if edit_cfg.capable %}<link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">{% endif %}{% endif %}{% endblock %}
+{% block head %}{% if tab == 'map' %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% if edit_cfg.capable %}<link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">{% endif %}{% endif %}{% if edit_cfg.capable or structure_cfg %}<link rel="stylesheet" href="{% static 'css/table-geom.css' %}">{% endif %}{% endblock %}
 {% block ex %}
 <div class="ex-title">
   <div class="ex-ti">
@@ -25,6 +25,7 @@
         <a role="menuitem" href="{% url 'databases:explore_export' db.pk t.schema t.name 'xlsx' %}">{% icon "table" 18 %}<span>اکسل{% if t.geometry %} (هندسه به WKT){% endif %}</span></a>
       </div>
     </div>
+    {% if db.can_edit and db.status == 'active' and t.kind in 'rp' %}<a class="btn ghost sm" href="{% url 'databases:import' db.pk %}?into={{ t.schema }}.{{ t.name }}">{% icon "upload" 16 %}ورود فایل به این جدول</a>{% endif %}
     {% if edit_cfg %}<a class="ib" href="{% url 'core:help_page' 'edittable' %}" target="_blank" rel="noopener" title="ویدیوی آموزشی ویرایش جدول" aria-label="آموزش تصویری ویرایش جدول">{% icon "help" 20 %}</a>{% endif %}
   </div>
 </div>
@@ -36,6 +37,7 @@
   <span class="edit-count" id="edit-count" aria-live="polite">بدون تغییر</span>
   <div class="dock-acts">
     {% if tab == 'data' %}<button type="button" class="btn ghost sm" id="edit-add-row">{% icon "plus" 16 %}سطر تازه</button>
+    <button type="button" class="btn ghost sm" id="edit-add-rows">{% icon "table" 16 %}چندسطر</button>
     <button type="button" class="btn ghost sm danger-ghost" id="edit-del-sel" hidden>حذف انتخاب‌شده‌ها</button>{% endif %}
     <button type="button" class="btn ghost sm" id="edit-undo-last" hidden></button>
     <button type="button" class="btn ghost sm" id="edit-discard" hidden>دور ریختن تغییرها</button>
@@ -53,15 +55,48 @@
 </div>
 
 {% if tab == 'columns' %}
-  <div class="table-scroll ltr-table">
-  <table class="data-table">
-    <thead><tr><th>نام ستون</th><th>نوع</th><th>الزامی</th><th>پیش‌فرض</th></tr></thead>
+  {% if structure_cfg %}
+  <div class="tbs-head">
+    <p class="small muted">ساختار جدول را اینجا تغییر دهید؛ هر تغییر پیش از اجرا SQLش را نشان می‌دهد و همه‌یاهیچ است.</p>
+    <span class="tbs-acts"><button type="button" class="btn sm" data-st-op="add_column">{% icon "plus" 16 %}افزودن ستون</button>
+    <button type="button" class="btn ghost sm" data-st-op="rename_table">{% icon "edit" 16 %}تغییر نام جدول</button></span>
+  </div>
+  {% endif %}
+  <div class="tbs-wrap ltr-table">
+  <table class="data-table tbs-table">
+    <thead><tr><th>نام ستون</th><th>نوع</th><th class="tbs-opt">الزامی</th><th class="tbs-opt">پیش‌فرض</th>{% if structure_cfg %}<th><span class="sr-label">عملیات</span></th>{% endif %}</tr></thead>
     <tbody>{% for c in columns %}
       <tr><td class="ltr">{{ c.name }}{% if c.pk %} <span class="chip">کلید اصلی</span>{% endif %}{% if c.spatial %} <span class="chip geo">مکانی</span>{% endif %}</td>
-          <td class="ltr mono">{{ c.type }}</td><td>{% if c.not_null %}بله{% else %}—{% endif %}</td><td class="ltr mono small">{{ c.default|default:"—" }}</td></tr>
+          <td class="ltr mono">{{ c.type }}</td><td class="tbs-opt">{% if c.not_null %}بله{% else %}—{% endif %}</td><td class="ltr mono small tbs-opt">{{ c.default|default:"—" }}</td>
+          {% if structure_cfg %}<td class="tbs-act"><div class="pop-wrap"><button class="ib sm" type="button" data-pop="stm-{{ forloop.counter }}" aria-haspopup="menu" aria-expanded="false" aria-label="عملیات ستون {{ c.name }}">{% icon "more" 16 %}</button>
+            <div class="pop-m" id="stm-{{ forloop.counter }}" role="menu" hidden>
+              <button type="button" role="menuitem" data-st-op="rename_column" data-col="{{ c.name }}">{% icon "edit" 18 %}<span>تغییر نام</span></button>
+              {% if c.spatial %}<button type="button" role="menuitem" data-st-op="geometry" data-col="{{ c.name }}">{% icon "globe" 18 %}<span>نوع هندسه و SRID</span></button>
+              {% elif not c.generated %}{% if not c.identity %}<button type="button" role="menuitem" data-st-op="change_type" data-col="{{ c.name }}">{% icon "refresh" 18 %}<span>تغییر نوع</span></button>
+              <button type="button" role="menuitem" data-st-op="set_default" data-col="{{ c.name }}">{% icon "settings" 18 %}<span>مقدار پیش‌فرض</span></button>{% endif %}{% endif %}
+              {% if not c.pk %}<button type="button" role="menuitem" data-st-op="set_not_null" data-col="{{ c.name }}">{% icon "check" 18 %}<span>{% if c.not_null %}اختیاری کردن{% else %}اجباری کردن{% endif %}</span></button>{% endif %}
+              {% if not c.pk %}<button type="button" role="menuitem" class="danger" data-st-op="drop_column" data-col="{{ c.name }}">{% icon "trash" 18 %}<span>حذف ستون</span></button>{% endif %}
+            </div></div></td>{% endif %}</tr>
     {% endfor %}</tbody>
   </table>
   </div>
+  <div class="tbs-head tbs-idx-head">
+    <h3 class="tbs-h">ایندکس‌ها</h3>
+    {% if structure_cfg %}<button type="button" class="btn ghost sm" data-st-op="add_index">{% icon "plus" 16 %}ایندکس جدید</button>{% endif %}
+  </div>
+  {% if indexes %}
+  <div class="tbs-wrap ltr-table">
+  <table class="data-table tbs-table">
+    <thead><tr><th>نام</th><th>ستون‌ها</th><th class="tbs-opt">روش</th><th class="tbs-opt">حجم</th>{% if structure_cfg %}<th><span class="sr-label">عملیات</span></th>{% endif %}</tr></thead>
+    <tbody>{% for i in indexes %}
+      <tr><td class="ltr">{{ i.name }}{% if i.primary %} <span class="chip">کلید اصلی</span>{% elif i.unique %} <span class="chip">یکتا</span>{% endif %}</td>
+          <td class="ltr mono small">{{ i.columns|join:", "|default:i.definition }}</td><td class="ltr mono tbs-opt">{{ i.method }}</td><td class="tbs-opt">{{ i.size|fasize }}</td>
+          {% if structure_cfg %}<td class="tbs-act">{% if not i.primary and not i.constraint %}<button class="ib sm" type="button" data-st-op="drop_index" data-index="{{ i.name }}" aria-label="حذف ایندکس {{ i.name }}" title="حذف ایندکس">{% icon "trash" 16 %}</button>{% endif %}</td>{% endif %}</tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+  {% else %}<p class="muted small">این جدول ایندکسی ندارد؛ برای ستون‌هایی که زیاد جست‌وجو می‌کنید{% if t.geometry %} و ستون هندسه{% endif %} ایندکس بسازید تا کوئری‌ها سریع شود.</p>{% endif %}
+  {% if structure_cfg %}{{ structure_cfg|json_script:"structure-config" }}<script src="{% static 'js/studio-ui.js' %}" defer></script><script src="{% static 'js/table-structure.js' %}" defer></script>{% endif %}
 {% elif tab == 'map' %}
   <div id="map" class="ex-map" data-src="{% url 'databases:explore_geojson' db.pk t.schema t.name %}{% if edit_cfg.capable %}?keys=1{% endif %}"
        data-tiles="{{ SITE.map_tile_url }}" data-attr="{{ SITE.map_tile_attribution }}"></div>
@@ -101,10 +136,10 @@
     </span>
   </div>
   {% else %}
-  <div class="empty" style="padding:48px 24px"><h2>این جدول خالی است</h2></div>
+  <div class="empty" style="padding:48px 24px">{% icon "table" 28 %}<h2>این جدول خالی است</h2>{% if edit_cfg.capable %}<p class="muted">«ویرایش جدول» را روشن کنید؛ بعد سطر را دستی بسازید، چند سطر را از Excel بچسبانید یا از «ورود فایل» داده وارد کنید. هندسه را می‌توانید با مختصات، WKT/GeoJSON یا کلیک روی نقشه بدهید.</p><button type="button" class="btn" id="edit-empty-start" data-edit-start>{% icon "edit" 18 %}شروع ویرایش و افزودن سطر</button> <a class="btn ghost" href="{% url 'databases:import' db.pk %}?into={{ t.schema }}.{{ t.name }}">{% icon "upload" 18 %}ورود فایل به این جدول</a>{% elif db.can_edit and db.status == 'active' %}<p class="muted">این جدول کلید اصلی ندارد و در مرورگر ویرایش نمی‌شود؛ از «ورود فایل» داده وارد کنید.</p>{% endif %}</div>
   {% endif %}
 {% endif %}
-{% if edit_cfg.capable %}<script src="{% static 'js/table-edit.js' %}" defer></script>{% endif %}
+{% if edit_cfg.capable %}<script src="{% static 'js/studio-ui.js' %}" defer></script><script src="{% static 'js/table-geom.js' %}" defer></script><script src="{% static 'js/table-edit.js' %}" defer></script><script src="{% static 'js/table-grid.js' %}" defer></script>{% endif %}
 {% if db.can_edit and db.status == 'active' %}
 <details class="danger-zone drop-zone">
   <summary>حذف {{ t.kind_label }}</summary>

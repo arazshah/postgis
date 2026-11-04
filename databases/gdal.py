@@ -156,7 +156,7 @@ def inspect(path: Path) -> dict:
             "count": lyr.get("featureCount", -1),
             "geom_type": gfs[0].get("type", "") if gfs else "",
             "srid": _srid(gfs[0]) if gfs else None,
-            "fields": [f["name"] for f in lyr.get("fields", [])][:40],
+            "fields": [f["name"] for f in lyr.get("fields", [])][:200],
             "table": default_table_name(lyr["name"]),
         })
     if not layers:
@@ -208,7 +208,8 @@ def import_layer(db, path: Path, layer: dict, encoding: str | None) -> None:
            layer["name"], "-nln", f"public.{table}", "-gt", "20000"]
     gtype = (layer.get("geom_type") or "").lower()
     if layer.get("mode") != "append":
-        cmd += ["-lco", "GEOMETRY_NAME=geom", "-lco", "FID=gid", "-lco", "SPATIAL_INDEX=GIST",
+        cmd += ["-lco", f"GEOMETRY_NAME={layer.get('geom_name', 'geom')}", "-lco", f"FID={layer.get('fid', 'gid')}",
+                "-lco", "SPATIAL_INDEX=GIST",
                 "-lco", "LAUNDER=YES", "-lco", "PRECISION=NO"]
         mixed = gtype in ("", "unknown", "geometry", "geometrycollection") or "collection" in gtype
         cmd += ["-nlt", "GEOMETRY" if mixed else "PROMOTE_TO_MULTI"]

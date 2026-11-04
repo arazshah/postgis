@@ -59,7 +59,11 @@ class NormalizeTests(SimpleTestCase):
         self.assertEqual(normalize([ok], COLS)[0]["geoms"][0]["column"], "geom")
         for bad in ({"column": "name", "geojson": {"type": "Point", "coordinates": [1, 2]}},
                     {"column": "geom", "geojson": {"type": "GeometryCollection", "coordinates": []}},
-                    {"column": "geom", "ewkb": "zz"}, {"column": "geom"}):
+                    {"column": "geom", "ewkb": "zz"}, {"column": "geom"},
+                    {"column": "geom", "wkt": "", "srid": 4326}, {"column": "geom", "wkt": "POINT(1 2)"},
+                    {"column": "geom", "wkt": "POINT(1 2)", "srid": 0},
+                    {"column": "geom", "wkt": "SRID=4326;POINT(1 2)", "srid": 4326},
+                    {"column": "geom", "wkt": "POINT(1 2); DROP TABLE x", "srid": 4326}):
             with self.assertRaises(EditError, msg=bad):
                 normalize([{**ok, "geom": bad}], COLS)
 
@@ -188,6 +192,36 @@ class TableEditTests(TestCase):
         self.assertEqual(fixed["results"][0]["status"], "invalid")
         self.assertIn("چند تکه", fixed["results"][0]["message"])
         self.assertEqual(self.sql("SELECT count(*) FROM parcels WHERE ST_IsValid(geom)")[0][0], 5)
+
+    def test_wkt_input_in_other_srid_is_transformed_and_wrapped(self):
+        # نقطه‌ی WGS84 در ستون ۳۲۶۳۹: بعد از تبدیل باید دقیقاً همان مختصات UTM بشود
+        wkt = "POLYGON((51.4 35.7, 51.401 35.7, 51.401 35.701, 51.4 35.701, 51.4 35.7))"
+        out = self.ed.apply(self.t, [{"op": "insert", "values": {"name": "wkt"},
+                                      "geom": {"column": "geom", "wkt": wkt, "srid": 4326}}])
+        self.assertTrue(out["ok"], out)
+        row = self.sql("SELECT ST_SRID(geom), ST_X(ST_Centroid(ST_Transform(geom, 4326))) FROM parcels "
+                       "WHERE name='wkt'")[0]
+        self.assertEqual(row[0], 32639)
+        self.assertAlmostEqual(row[1], 51.4005, places=3)
+        # ورودی با همان SRID ستون دست‌نخورده می‌ماند
+        utm = "POLYGON((535000 3950000, 535100 3950000, 535100 3950100, 535000 3950000))"
+        self.assertTrue(self.ed.apply(self.t, [{"op": "insert", "values": {"name": "utm"},
+                                                "geom": {"column": "geom", "wkt": utm, "srid": 32639}}])["ok"])
+        self.assertEqual(self.sql("SELECT ST_XMin(geom) FROM parcels WHERE name='utm'")[0][0], 535000)
+        # ستون Multi: شکل ساده خودکار چندتکه می‌شود
+        with psycopg.connect(**self.conn_kwargs) as c:
+            c.execute("CREATE TABLE zones2(id serial PRIMARY KEY, geom geometry(MultiPoint, 4326))")
+        z = self.ex.find("public", "zones2")
+        self.assertTrue(self.ed.apply(z, [{"op": "insert", "values": {},
+                                           "geom": {"column": "geom", "wkt": "POINT(51 35)", "srid": 4326}}])["ok"])
+        self.assertEqual(self.sql("SELECT GeometryType(geom) FROM zones2")[0][0], "MULTIPOINT")
+
+    def test_bad_wkt_is_a_per_change_error(self):
+        out = self.ed.apply(self.t, [{"op": "insert", "values": {"name": "bad"},
+                                      "geom": {"column": "geom", "wkt": "POLYGON((1 1, 2 2", "srid": 4326}}])
+        self.assertFalse(out["ok"])
+        self.assertNotEqual(out["results"][0]["status"], "ok")
+        self.assertEqual(self.sql("SELECT count(*) FROM parcels WHERE name='bad'")[0][0], 0)
 
     def test_repair_on_multipolygon_column(self):
         with psycopg.connect(**self.conn_kwargs) as c:
@@ -320,6 +354,10 @@ class TableEditTests(TestCase):
         self.assertContains(page, "edit-config")
         self.assertContains(page, "data-key=")
         self.assertContains(page, "/help/edittable/")  # آموزش تصویری کنار دکمه‌ی ویرایش
+        # ورود هندسه (مختصات / WKT / نقشه) و جدول چندسطری
+        for needle in ("edit-add-rows", "js/table-geom.js", "js/table-grid.js", "css/table-geom.css",
+                       "leaflet-geoman.min.js"):
+            self.assertContains(page, needle)
 
     def test_mode_refused_for_table_without_pk_and_shown_reason(self):
         self.client.force_login(self.user)

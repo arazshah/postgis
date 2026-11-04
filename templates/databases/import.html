@@ -5,8 +5,9 @@
 <ol class="steps" aria-label="مراحل"><li class="on"><i>۱</i>انتخاب فایل</li><li><i>۲</i>بازبینی</li><li><i>۳</i>ورود به جدول</li></ol>
 {% if error %}<div class="msg error" role="alert">{{ error }}</div>{% endif %}
 {% if db.status != 'active' %}<div class="msg warning">این پایگاه داده فقط‌خواندنی یا غیرفعال است و فعلاً نمی‌توان داده وارد کرد.</div>{% endif %}
+{% if into %}<div class="msg info" role="status">فایل در جدول موجود <b class="ltr">{{ into.schema }}.{{ into.name }}</b> وارد می‌شود؛ در مرحله‌ی بعد ستون‌های فایل را به ستون‌های جدول وصل می‌کنید. <a href="{% url 'databases:import' db.pk %}">ورود به‌صورت جدول تازه</a></div>{% endif %}
 <form method="post" enctype="multipart/form-data" class="card upload-box">
-  {% csrf_token %}
+  {% csrf_token %}{% if into %}<input type="hidden" name="into" value="{{ into.schema }}.{{ into.name }}">{% endif %}
   <label class="drop" for="imp-file">
     <span class="drop-ico">{% icon "upload" 28 %}</span><span class="drop-title">فایل را اینجا بکشید یا کلیک کنید</span>
     <span class="small muted">Shapefile (همه فایل‌ها در یک zip)، GeoPackage، GeoJSON، KML/KMZ، CSV با ستون طول و عرض یا WKT، DXF · حداکثر {{ max_mb|fanum }} مگابایت</span>

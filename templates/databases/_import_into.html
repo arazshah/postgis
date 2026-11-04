@@ -1,0 +1,60 @@
+{% load fa ws %}
+{# نگاشت ستون‌های فایل به ستون‌های جدول موجود (ورود به جدول موجود). متغیرها: into، l (لایه‌ی انتخاب‌شده) #}
+<div class="into-map">
+  <h3 class="small into-h">هر ستون جدول <b class="ltr">{{ into.table.name }}</b> از کدام ستون فایل پر شود؟</h3>
+  <p class="small muted">ستون‌هایی که نام مشابه دارند خودکار وصل شده‌اند. ستونِ بدون انتخاب، مقدار پیش‌فرض (یا خالی) می‌گیرد.</p>
+  <div class="table-scroll"><table class="data-table into-table">
+    <thead><tr><th>ستون جدول</th><th>ستون فایل</th><th>نمونه از اولین سطر</th></tr></thead>
+    <tbody>
+    {% for r in into.rows %}
+      <tr>
+        <td><b class="ltr">{{ r.col.name }}</b> <span class="chip ltr">{{ r.col.type }}</span>{% if r.required %} <span class="chip req">الزامی</span>{% endif %}{% if r.col.pk %} <span class="chip key">کلید</span>{% endif %}</td>
+        <td><select name="map_{{ r.col.name }}" aria-label="ستون فایل برای {{ r.col.name }}" class="ltr">
+          <option value="">{% if r.col.default %}— پیش‌فرض: {{ r.col.default|truncatechars:30 }} —{% elif r.col.identity %}— شماره‌ی خودکار —{% else %}— خالی —{% endif %}</option>
+          {% for i, f in into.fields %}<option value="{{ i }}" {% if r.src == i %}selected{% endif %}>{{ f }}</option>{% endfor %}
+        </select></td>
+        <td class="small muted ltr">{{ r.sample|default_if_none:""|truncatechars:40 }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="3" class="muted small">این جدول ستون داده‌ای قابل نگاشت ندارد (فقط هندسه).</td></tr>
+    {% endfor %}
+    {% if into.geo %}
+      <tr class="into-geo">
+        <td><b class="ltr">{{ into.geo.column }}</b> <span class="chip geo ltr">{{ into.geo.type }} · {{ into.geo.srid }}</span>{% if into.geo_required %} <span class="chip req">الزامی</span>{% endif %}</td>
+        <td colspan="2" class="small">
+          {% if l.geom_type %}
+            هندسه‌ی فایل (<span class="ltr">{{ l.geom_type }}</span>{% if l.srid %} · SRID <span class="ltr">{{ l.srid }}</span>{% endif %}) وارد می‌شود{% if l.srid and not into.same_srid and into.geo.srid %} و خودکار به SRID <span class="ltr">{{ into.geo.srid }}</span> تبدیل می‌شود{% endif %}.
+            {% if not into.geom_ok %}<div class="msg warning small" role="alert">نوع هندسه‌ی فایل با ستون جدول نمی‌خواند؛ ورود با خطا برمی‌گردد.</div>{% endif %}
+          {% elif into.geo_required %}
+            <span class="imp-err">این فایل هندسه ندارد ولی ستون هندسه‌ی جدول الزامی است.</span>
+          {% else %}
+            این فایل هندسه ندارد؛ هندسه‌ی سطرهای تازه خالی می‌ماند.
+          {% endif %}
+        </td>
+      </tr>
+    {% endif %}
+    </tbody>
+  </table></div>
+  <div class="field into-mode">
+    <label>با داده‌های فعلی جدول چه شود؟</label>
+    <div class="chips">
+      <label class="pick-chip"><input type="radio" name="into_mode" value="append" {% if into.mode != 'replace' %}checked{% endif %} data-into-mode><span>{% icon "plus" 16 %}افزودن به سطرهای موجود</span></label>
+      <label class="pick-chip"><input type="radio" name="into_mode" value="replace" {% if into.mode == 'replace' %}checked{% endif %} data-into-mode><span>{% icon "refresh" 16 %}جایگزینی کل داده‌ها</span></label>
+    </div>
+    <p class="help">«افزودن» سطرهای تازه را به انتهای جدول می‌افزاید. هر دو حالت همه‌یاهیچ‌اند؛ اگر یک سطر خطا بدهد، چیزی تغییر نمی‌کند.</p>
+  </div>
+  <div class="field into-confirm" data-into-confirm hidden>
+    <div class="msg warning small">«جایگزینی» همه‌ی سطرهای فعلی جدول (حدود {{ into.table.rows_estimate|fanum }} سطر) را پاک می‌کند و بعد داده‌ی فایل را می‌ریزد. این کار برگشت‌پذیر نیست؛ پیشنهاد: اول <a href="{% url 'databases:backups' db.pk %}">بکاپ بگیرید</a>.</div>
+    <label for="into-confirm" class="small">برای تأیید، نام جدول را بنویسید: <b class="ltr">{{ into.table.name }}</b></label>
+    <input id="into-confirm" type="text" name="confirm" dir="ltr" autocomplete="off">
+  </div>
+</div>
+<script>
+(function () {
+  var box = document.querySelector("[data-into-confirm]");
+  if (!box) return;
+  function sync() { var r = document.querySelector("[data-into-mode]:checked"); box.hidden = !(r && r.value === "replace"); }
+  document.querySelectorAll("[data-into-mode]").forEach(function (i) { i.addEventListener("change", sync); });
+  sync();
+})();
+</script>

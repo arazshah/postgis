@@ -7,13 +7,15 @@ from django.contrib import messages
 from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404, redirect, render
+from django.templatetags.static import static
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
+from core.models import SiteSettings
 
-from . import csvgeo, editor, services
+from . import csvgeo, editor, importinto, services, tablealter, tablebuilder
 from .crypto import generate_password
 from .editor import EDIT_TTL, EditError, Editor
 from .explorer import EXPORT_LIMIT, MAP_LIMIT, SQL_MAX_ROWS, Explorer, ExplorerError
@@ -314,8 +316,72 @@ def explore(request, pk):
         return redirect("databases:detail", pk=db.pk)
     for t in tables:
         t.mappable = any(not g["geography"] and g["srid"] for g in t.geometry)
-    return render(request, "databases/explore.html", {"db": db, "tables": tables, "section": "tables",
-                                                      "spatial_count": sum(t.mappable for t in tables)})
+    ctx = {"db": db, "tables": tables, "section": "tables", "spatial_count": sum(t.mappable for t in tables)}
+    if db.can_edit and db.status == db.Status.ACTIVE:
+        ctx["builder_cfg"] = _builder_config(request, db, ex)
+    return render(request, "databases/explore.html", ctx)
+
+
+def _builder_config(request, db, ex) -> dict:
+    try:
+        schemas = ex.writable_schemas() or ["public"]
+    except ExplorerError:
+        schemas = ["public"]
+    return {**tablebuilder.client_config(), "schemas": schemas, "csrf": get_token(request),
+            "urls": {"preview": reverse("databases:table_preview", args=[db.pk]),
+                     "create": reverse("databases:table_new", args=[db.pk]),
+                     "srid": reverse("databases:table_srid", args=[db.pk])}}
+
+
+def _builder_json(view):
+    def wrapper(request, pk):
+        try:
+            return view(request, pk)
+        except (tablebuilder.BuildError, EditError, ExplorerError) as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    wrapper.__name__ = view.__name__
+    return site_user_required(wrapper)
+
+
+def _builder_guard(request, pk):
+    db, ex = _explorer_db(request, pk, "editor")
+    if ex is None:
+        raise ExplorerError("مرورگر فقط برای پایگاه داده فعال در دسترس است.")
+    if db.status != db.Status.ACTIVE:
+        raise ExplorerError("پایگاه داده فقط‌خواندنی یا غیرفعال است؛ ساخت جدول ممکن نیست.")
+    return db, ex
+
+
+@_builder_json
+@require_POST
+def table_preview(request, pk):
+    _builder_guard(request, pk)
+    plan = tablebuilder.build(_body(request).get("spec"))
+    return JsonResponse({"ok": True, "sql": plan.script()})
+
+
+@_builder_json
+@require_POST
+def table_new(request, pk):
+    db, ex = _builder_guard(request, pk)
+    if db.size_bytes >= db.quota_bytes:
+        raise ExplorerError("سهمیه‌ی حجم پایگاه داده پر شده است؛ پلن را ارتقا دهید یا داده‌های اضافه را حذف کنید.")
+    plan = tablebuilder.build(_body(request).get("spec"))
+    spec = plan.spec
+    if spec["schema"] not in ex.writable_schemas():
+        raise ExplorerError("اجازه ساخت جدول در این schema را ندارید.")
+    ex.create_table(plan)
+    qualified = f"{spec['schema']}.{spec['name']}"
+    services.logevent("table_create", f"جدول {qualified} ساخته شد ({len(spec['columns'])} ستون)",
+                      user=request.user, database=db)
+    return JsonResponse({"ok": True, "url": reverse("databases:explore_table",
+                                                    args=[db.pk, spec["schema"], spec["name"]])})
+
+
+@_builder_json
+def table_srid(request, pk):
+    _, ex = _builder_guard(request, pk)
+    return JsonResponse({"ok": True, "items": ex.search_srid(request.GET.get("q", ""))})
 
 
 @site_user_required
@@ -335,6 +401,9 @@ def explore_table(request, pk, schema, table):
             ctx["edit_cfg"] = _edit_config(request, db, ex, t)
         if tab == "columns":
             ctx["columns"] = ex.columns(t)
+            ctx["indexes"] = ex.indexes(t)
+            if editing and t.kind in editor.EDITABLE_KINDS:
+                ctx["structure_cfg"] = _structure_config(request, db, t, ctx["columns"], ctx["indexes"])
         elif tab == "map":
             from maps.models import WebMap
 
@@ -643,6 +712,18 @@ def import_start(request, pk):
         return redirect("databases:detail", pk=db.pk)
     max_mb = settings.IMPORT_MAX_MB
     error = None
+    into_ref = (request.POST.get("into") or request.GET.get("into") or "").strip()
+    into = None
+    if into_ref:
+        try:
+            schema, _, name = into_ref.partition(".")
+            into = ex.find(schema, name)
+            if into.kind not in editor.EDITABLE_KINDS:
+                raise ExplorerError("فقط در جدول معمولی می‌شود داده وارد کرد (نه نما).")
+        except ExplorerError as exc:
+            into, error = None, str(exc)
+            messages.error(request, str(exc))
+            return redirect("databases:explore", pk=db.pk)
     if request.method == "POST":
         f = request.FILES.get("file")
         ext = Path(f.name).suffix.lower() if f else ""
@@ -655,7 +736,7 @@ def import_start(request, pk):
             error = "این قالب پشتیبانی نمی‌شود. Shapefile را zip کنید؛ یا GeoPackage، GeoJSON، KML، CSV و DXF بفرستید."
         elif f.size > max_mb * 1024 * 1024:
             error = f"حجم فایل بیشتر از {max_mb} مگابایت است."
-        elif f.size * 1.3 > free:
+        elif f.size * (2.6 if into else 1.3) > free:
             error = "فضای خالی پایگاه داده برای این فایل کافی نیست. پلن را ارتقا دهید یا داده‌های اضافه را حذف کنید."
         else:
             job = Job.objects.create(kind=Job.Kind.IMPORT, status=Job.Status.DRAFT, database=db, user=request.user,
@@ -684,12 +765,14 @@ def import_start(request, pk):
                     lyr["mode"] = "create"
                     lyr["to4326"] = False
                 job.params = {**job.params, **info}
+                if into:
+                    _into_init(job, ex, into)
                 job.save(update_fields=["params"])
                 return redirect("databases:import_review", pk=db.pk, job_id=job.pk)
     recent = db.jobs.filter(kind="import").exclude(status="draft")[:10]
     return render(request, "databases/import.html", {
         "db": db, "tables": ex.tables(), "section": "import", "error": error, "max_mb": max_mb,
-        "accept": ",".join(sorted(gdal.ALLOWED_EXT)), "recent": recent})
+        "accept": ",".join(sorted(gdal.ALLOWED_EXT)), "recent": recent, "into": into})
 
 
 @site_user_required
@@ -713,6 +796,19 @@ def import_review(request, pk, job_id):
             shutil.rmtree(import_dir(job), ignore_errors=True)
             job.delete()
             return redirect("databases:import", pk=db.pk)
+        if request.POST.get("action") == "pick" and job.params.get("into"):
+            # لایه‌ی دیگری از فایل انتخاب شد: نگاشت خودکار از نو ساخته می‌شود
+            try:
+                idx = int(request.POST.get("layer_into", "0"))
+            except ValueError:
+                idx = 0
+            idx = idx if 0 <= idx < len(layers) else 0
+            for i, lyr in enumerate(layers):
+                lyr["selected"] = i == idx
+            job.params["layers"] = layers
+            job.params["into_map"] = importinto.auto_map(ex.columns(_into_table(ex, job)), layers[idx].get("fields", []))
+            job.save(update_fields=["params"])
+            return redirect("databases:import_review", pk=db.pk, job_id=job.pk)
         enc = request.POST.get("encoding") or None
         if job.params.get("csv"):
             try:
@@ -731,31 +827,35 @@ def import_review(request, pk, job_id):
             job.save(update_fields=["params"])
             if request.POST.get("action") == "resample":
                 return redirect("databases:import_review", pk=db.pk, job_id=job.pk)
-        existing = {t.name for t in ex.tables() if t.schema == "public"}
-        names = []
-        for i, lyr in enumerate(layers):
-            lyr["selected"] = request.POST.get(f"sel_{i}") == "on"
-            lyr["table"] = (request.POST.get(f"table_{i}") or lyr["table"]).strip().lower()
-            lyr["mode"] = request.POST.get(f"mode_{i}", "create")
-            lyr["to4326"] = request.POST.get(f"to4326_{i}") == "on"
-            srid = request.POST.get(f"srid_{i}") or ""
-            lyr["assign_srid"] = bool(srid) and (not lyr.get("srid") or int(srid) != lyr["srid"])
-            lyr["srid"] = int(srid) if srid.isdigit() else lyr.get("srid")
-            if not lyr["selected"]:
-                continue
-            if not gdal.TABLE_RE.match(lyr["table"]):
-                errors.append(f"نام جدول «{lyr['table']}» مجاز نیست: فقط حروف کوچک انگلیسی، عدد و _، شروع با حرف.")
-            elif lyr["table"] in names:
-                errors.append(f"نام جدول «{lyr['table']}» دو بار انتخاب شده است.")
-            elif lyr["table"] in existing and lyr["mode"] == "create":
-                errors.append(f"جدول «{lyr['table']}» از قبل وجود دارد؛ نام دیگری بدهید یا «جایگزینی» یا «افزودن» را انتخاب کنید.")
-            if lyr["geom_type"] and not lyr["srid"]:
-                errors.append(f"سیستم مختصات لایه «{lyr['name']}» مشخص نیست؛ آن را انتخاب کنید.")
-            if "csv_bad" in lyr:
-                errors += _csv_checks(lyr)
-            names.append(lyr["table"])
-        if not names:
-            errors.append("حداقل یک لایه را انتخاب کنید.")
+        into = job.params.get("into")
+        if into:
+            names = _into_post(request.POST, job, ex, layers, errors)
+        else:
+            existing = {t.name for t in ex.tables() if t.schema == "public"}
+            names = []
+            for i, lyr in enumerate(layers):
+                lyr["selected"] = request.POST.get(f"sel_{i}") == "on"
+                lyr["table"] = (request.POST.get(f"table_{i}") or lyr["table"]).strip().lower()
+                lyr["mode"] = request.POST.get(f"mode_{i}", "create")
+                lyr["to4326"] = request.POST.get(f"to4326_{i}") == "on"
+                srid = request.POST.get(f"srid_{i}") or ""
+                lyr["assign_srid"] = bool(srid) and (not lyr.get("srid") or int(srid) != lyr["srid"])
+                lyr["srid"] = int(srid) if srid.isdigit() else lyr.get("srid")
+                if not lyr["selected"]:
+                    continue
+                if not gdal.TABLE_RE.match(lyr["table"]):
+                    errors.append(f"نام جدول «{lyr['table']}» مجاز نیست: فقط حروف کوچک انگلیسی، عدد و _، شروع با حرف.")
+                elif lyr["table"] in names:
+                    errors.append(f"نام جدول «{lyr['table']}» دو بار انتخاب شده است.")
+                elif lyr["table"] in existing and lyr["mode"] == "create":
+                    errors.append(f"جدول «{lyr['table']}» از قبل وجود دارد؛ نام دیگری بدهید یا «جایگزینی» یا «افزودن» را انتخاب کنید.")
+                if lyr["geom_type"] and not lyr["srid"]:
+                    errors.append(f"سیستم مختصات لایه «{lyr['name']}» مشخص نیست؛ آن را انتخاب کنید.")
+                if "csv_bad" in lyr:
+                    errors += _csv_checks(lyr)
+                names.append(lyr["table"])
+            if not names:
+                errors.append("حداقل یک لایه را انتخاب کنید.")
         job.params["layers"] = layers
         if errors:
             job.save(update_fields=["params"])
@@ -775,10 +875,164 @@ def import_review(request, pk, job_id):
         if "csv_bad" in lyr:
             lyr["csv_warn"] = csvgeo.range_check(lyr.get("csv_stats") or {}, lyr.get("srid"))[1]
     csv_info = job.params.get("csv")
+    into_ctx = _into_context(ex, job, layers) if job.params.get("into") else None
     return render(request, "databases/import_review.html", {
         "db": db, "tables": ex.tables(), "section": "import", "job": job, "layers": layers, "errors": errors,
+        "into": into_ctx,
         "srid_choices": gdal.SRID_CHOICES, "csv": csv_info, "csv_modes": CSV_MODES,
         "csv_encodings": list(csvgeo.ENCODINGS)})
+
+
+# ---------------------------------------------------------------------- تغییر ساختار جدول (ستون، ایندکس، SRID)
+def _table_usage(db, t) -> dict:
+    """لایه‌ها و APIهای منتشرشده یا نقشه‌هایی که از این جدول استفاده می‌کنند (برای هشدار قبل از تغییر ساختار)."""
+    from maps.models import MapLayer
+    from publish.models import Layer
+    from restapi.models import ApiTable
+
+    return {"maps": MapLayer.objects.filter(webmap__database=db, schema=t.schema, table=t.name).count(),
+            "published": Layer.objects.filter(service__database=db, schema=t.schema, table=t.name).count(),
+            "api": ApiTable.objects.filter(service__database=db, schema=t.schema, table=t.name).count()}
+
+
+def _structure_config(request, db, t, cols, indexes) -> dict:
+    cfg = tablebuilder.client_config()
+    geo = next(iter(t.geometry), None)
+    return {
+        "csrf": get_token(request), "url": reverse("databases:table_structure", args=[db.pk, t.schema, t.name]),
+        "table": t.name, "schema": t.schema, "types": cfg["types"], "geometry_types": cfg["geometry_types"],
+        "columns": [{"name": c["name"], "type": c["type"], "base": c["base"], "pk": c["pk"], "spatial": c["spatial"],
+                     "not_null": c["not_null"], "default": c["default"], "identity": c["identity"],
+                     "generated": c["generated"]} for c in cols],
+        "indexes": [{"name": i["name"], "columns": i["columns"], "unique": i["unique"]} for i in indexes],
+        "geometry": geo, "usage": _table_usage(db, t),
+    }
+
+
+@site_user_required
+@require_POST
+def table_structure(request, pk, schema, table):
+    try:
+        db, ex = _explorer_db(request, pk, "editor")
+        if ex is None:
+            raise ExplorerError("مرورگر فقط برای پایگاه داده فعال در دسترس است.")
+        if db.status != db.Status.ACTIVE:
+            raise ExplorerError("پایگاه داده فقط‌خواندنی یا غیرفعال است؛ تغییر ساختار ممکن نیست.")
+        t = ex.find(schema, table)
+        if t.kind not in editor.EDITABLE_KINDS:
+            raise ExplorerError("ساختار نما یا جدول خارجی از این‌جا تغییر نمی‌کند.")
+        data = _body(request)
+        plan = tablealter.build(t, ex.columns(t), ex.indexes(t), data.get("op"), data.get("params") or {})
+        usage = _table_usage(db, t)
+        if data.get("dry_run"):
+            return JsonResponse({"ok": True, "sql": plan.script(), "summary": plan.summary, "danger": plan.danger,
+                                 "usage": usage})
+        if plan.danger and str(data.get("confirm", "")).strip() != plan.danger:
+            raise ExplorerError(f"برای تأیید، «{plan.danger}» را دقیقاً بنویسید.")
+        ex.alter_table(plan)
+    except (tablebuilder.BuildError, EditError, ExplorerError) as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    if plan.touches_columns:
+        EditBatch.objects.filter(database=db, schema=t.schema, table=t.name).delete()  # بازگردانی‌ها دیگر معنا ندارند
+    final = plan.renamed_table or t.name
+    if plan.renamed_table:
+        from maps.models import MapLayer
+        from publish.models import Layer
+        from restapi.models import ApiTable
+
+        MapLayer.objects.filter(webmap__database=db, schema=t.schema, table=t.name).update(table=final)
+        Layer.objects.filter(service__database=db, schema=t.schema, table=t.name).update(table=final)
+        ApiTable.objects.filter(service__database=db, schema=t.schema, table=t.name).update(table=final)
+    services.logevent("table_alter", f"{t.qualified}: {plan.summary}", user=request.user, database=db)
+    return JsonResponse({"ok": True, "url": reverse("databases:explore_table", args=[db.pk, t.schema, final]) + "?tab=columns"})
+
+
+# ---------------------------------------------------------------------- ورود فایل به جدول موجود (نگاشت ستون‌ها)
+def _into_init(job, ex, table) -> None:
+    layers = job.params["layers"]
+    pick = next((x for x in layers if x.get("geom_type")), layers[0])
+    for x in layers:
+        x["selected"] = x is pick
+    job.params["into"] = {"schema": table.schema, "table": table.name}
+    job.params["into_map"] = importinto.auto_map(ex.columns(table), pick.get("fields", []))
+    job.params["into_mode"] = "append"
+
+
+def _into_table(ex, job):
+    into = job.params["into"]
+    return ex.find(into["schema"], into["table"])
+
+
+def _into_context(ex, job, layers) -> dict:
+    t = _into_table(ex, job)
+    cols = ex.columns(t)
+    layer = next((x for x in layers if x.get("selected")), layers[0] if layers else {})
+    fields = layer.get("fields", [])
+    mapping = job.params.get("into_map") or {}
+    sample = (layer.get("sample") or [{}])[0]
+    rows = []
+    for c in importinto.target_columns(cols):
+        i = mapping.get(c["name"])
+        src = fields[i] if isinstance(i, int) and 0 <= i < len(fields) else None
+        rows.append({"col": c, "required": importinto.is_required(c), "src": i, "src_name": src,
+                     "sample": "" if src is None else sample.get(src, "")})
+    geo = next(iter(t.geometry), None)
+    gcol = next((c for c in cols if geo and c["name"] == geo["column"]), None)
+    compat = importinto.geom_compat(layer.get("geom_type") or "", (geo or {}).get("type") or "")
+    return {"table": t, "rows": rows, "fields": list(enumerate(fields)), "geo": geo,
+            "geo_required": bool(gcol and gcol["not_null"]), "geom_ok": compat,
+            "mode": job.params.get("into_mode", "append"), "layer": layer, "count": layer.get("count"),
+            "same_srid": bool(geo and layer.get("srid") and layer["srid"] == geo["srid"])}
+
+
+def _into_post(post, job, ex, layers, errors) -> list:
+    """فرم نگاشت ستون‌ها را اعتبارسنجی و در params ذخیره می‌کند؛ خطاها به errors اضافه می‌شوند."""
+    t = _into_table(ex, job)
+    cols = ex.columns(t)
+    try:
+        pick = int(post.get("layer_into", "0"))
+    except ValueError:
+        pick = 0
+    pick = pick if 0 <= pick < len(layers) else 0
+    for i, lyr in enumerate(layers):
+        lyr["selected"] = i == pick
+    lyr = layers[pick]
+    srid = post.get(f"srid_{pick}") or ""
+    lyr["assign_srid"] = bool(srid) and (not lyr.get("srid") or int(srid) != lyr["srid"])
+    lyr["srid"] = int(srid) if srid.isdigit() else lyr.get("srid")
+    fields = lyr.get("fields", [])
+    mapping = {}
+    for c in importinto.target_columns(cols):
+        raw = post.get("map_" + c["name"], "")
+        if raw == "":
+            if importinto.is_required(c):
+                errors.append(f"ستون «{c['name']}» الزامی است و مقدار پیش‌فرض ندارد؛ یک ستون فایل برایش انتخاب کنید.")
+            continue
+        if not raw.isdigit() or int(raw) >= len(fields):
+            errors.append(f"ستون فایل برای «{c['name']}» نامعتبر است.")
+            continue
+        mapping[c["name"]] = int(raw)
+    job.params["into_map"] = mapping
+    mode = post.get("into_mode", "append")
+    job.params["into_mode"] = mode if mode in ("append", "replace") else "append"
+    geo = next(iter(t.geometry), None)
+    if geo:
+        if not lyr.get("geom_type"):
+            gcol = next((c for c in cols if c["name"] == geo["column"]), None)
+            if gcol and gcol["not_null"]:
+                errors.append(f"ستون هندسه‌ی «{geo['column']}» الزامی است ولی این فایل هندسه ندارد.")
+        else:
+            if not lyr.get("srid"):
+                errors.append("سیستم مختصات فایل مشخص نیست؛ آن را انتخاب کنید.")
+            if not importinto.geom_compat(lyr.get("geom_type"), geo.get("type")):
+                errors.append(f"نوع هندسه‌ی فایل ({lyr['geom_type']}) با ستون «{geo['column']}» ({geo['type']}) نمی‌خواند.")
+    if not mapping and not (geo and lyr.get("geom_type")):
+        errors.append("دست‌کم یک ستون را به ستونی از فایل وصل کنید.")
+    if job.params["into_mode"] == "replace" and post.get("confirm", "").strip() != t.name:
+        errors.append("برای جایگزینی کل داده‌ها، نام جدول را دقیقاً در کادر تأیید بنویسید.")
+    if "csv_bad" in lyr:
+        errors += _csv_checks(lyr)
+    return [t.name]
 
 
 # ---------------------------------------------------------------------- ورود CSV: ستون‌های مکانی
@@ -980,6 +1234,10 @@ def _edit_config(request, db, ex, t) -> dict:
                      "writable": c["name"] in writable, "identity": c["identity"], "generated": c["generated"]}
                     for c in cols],
         "geometry": t.geometry,
+        "tiles": SiteSettings.get().map_tile_url, "attr": SiteSettings.get().map_tile_attribution,
+        "vendor": {"leaflet_js": static("vendor/leaflet/leaflet.js"), "leaflet_css": static("vendor/leaflet/leaflet.css"),
+                   "pm_js": static("vendor/leaflet-geoman/leaflet-geoman.min.js"),
+                   "pm_css": static("vendor/leaflet-geoman/leaflet-geoman.css")},
         "urls": {k: reverse(f"databases:explore_edit_{k}", args=args) for k in ("mode", "row", "apply", "undo")},
         "geojson": reverse("databases:explore_geojson", args=args) + "?keys=1",
         "last": ({"id": last.pk, "inserted": last.inserted, "updated": last.updated, "deleted": last.deleted,

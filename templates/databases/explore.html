@@ -1,8 +1,9 @@
-{% extends "databases/_explore_base.html" %}{% load fa ws %}
+{% extends "databases/_explore_base.html" %}{% load fa static ws %}
+{% block head %}{% if builder_cfg %}<link rel="stylesheet" href="{% static 'css/table-builder.css' %}">{% endif %}{% endblock %}
 {% block ex %}
 {% if tables %}
 <form class="panel" method="get" action="{% url 'maps:quick' db.pk %}" id="compare">
-  <h2>خلاصه جدول‌ها</h2>
+  <div class="ex-head"><h2>خلاصه جدول‌ها</h2>{% if builder_cfg %}<button type="button" class="btn" data-tb-open="">{% icon "plus" 18 %}جدول جدید</button>{% endif %}</div>
   {% if spatial_count > 1 %}
   <div class="ex-compare">
     <span class="small muted">چند جدول مکانی را تیک بزنید تا کنار هم روی یک نقشه ببینید.</span>
@@ -43,8 +44,9 @@
 <div class="empty">
   {% icon "table" 28 %}
   <h2>این پایگاه داده هنوز جدولی ندارد</h2>
-  <p class="muted">لایه‌های خود را از QGIS یا با ogr2ogr وارد کنید؛ بعد اینجا می‌توانید داده‌ها و نقشه‌شان را ببینید.</p>
-  <a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a> <a class="btn ghost" href="{% url 'core:doc' 'import' %}">آموزش وارد کردن Shapefile</a>
+  <p class="muted">جدول را خودتان تعریف کنید یا لایه‌های خود را از QGIS یا با ogr2ogr وارد کنید؛ بعد اینجا می‌توانید داده‌ها و نقشه‌شان را ببینید.</p>
+  {% if builder_cfg %}<button type="button" class="btn" data-tb-open="">{% icon "plus" 18 %}جدول جدید</button> <a class="btn ghost" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a>{% else %}<a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a>{% endif %} <a class="btn ghost" href="{% url 'core:doc' 'import' %}">آموزش وارد کردن Shapefile</a>
 </div>
 {% endif %}
 {% endblock %}
+{% block scripts %}{{ block.super }}{% if builder_cfg %}{% include "databases/_table_builder.html" %}<script src="{% static 'js/studio-ui.js' %}" defer></script><script src="{% static 'js/table-builder.js' %}" defer></script>{% endif %}{% endblock %}
