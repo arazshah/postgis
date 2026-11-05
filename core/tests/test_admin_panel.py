@@ -75,3 +75,11 @@ class AdminDashboardTests(TestCase):
         self.assertIn("تیکت منتظر پاسخ", texts)
         self.assertEqual(Invoice.objects.count(), 0)
         self.assertContains(r, "فعالیت اخیر")
+
+
+class AdminNavActiveTests(TestCase):
+    def test_only_current_section_is_active(self):
+        self.client.force_login(User.objects.create_admin("boss", "Str0ng-Admin-Pass"))
+        r = self.client.get("/manage/databases/userdatabase/")
+        active = [i["label"] for g in admin_nav.build(r.wsgi_request) for i in g["items"] if i["on"]]
+        self.assertEqual(active, ["databases.userdatabase"])

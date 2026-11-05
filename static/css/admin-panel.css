@@ -185,3 +185,42 @@ body.ap{margin:0;font:14.5px/1.75 var(--f-body);background:var(--paper);color:va
   .ap .submit-row input[type=submit]{flex:1;min-width:0;padding:0 8px;font-size:12.5px;white-space:nowrap;height:var(--ctl-h)}
   .ap .submit-row .deletelink-box{margin-inline-start:0}
 }
+
+/* ---------- فهرست‌ها ---------- */
+.ap #changelist{display:block}
+.ap #changelist .changelist-form-container{display:block;width:auto;max-width:none;flex:1}
+.ap #changelist-form .results{overflow-x:auto;border:1px solid var(--line-2);border-radius:var(--r-card);background:var(--card)}
+.ap #result_list{width:100%;border:0}
+.ap #result_list thead th{position:sticky;top:var(--top-h);z-index:5;background:var(--paper-2);border-bottom:1px solid var(--line);font:700 12.5px var(--f-body);color:var(--ink-2);padding:8px 10px}
+.ap #result_list thead th a{color:var(--ink-2)}
+.ap #result_list tbody td,.ap #result_list tbody th{padding:6px 10px;border-bottom:1px solid var(--line-2);font-size:13.5px}
+.ap #result_list tbody tr:hover td,.ap #result_list tbody tr:hover th{background:var(--teal-soft)}
+.ap #toolbar{border:0;padding:0;margin:0 0 var(--s3);background:none}
+.ap #toolbar form{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ap #toolbar #searchbar{height:var(--ctl-h);min-width:min(320px,100%);padding:0 12px}
+.ap #changelist .actions{position:sticky;bottom:0;z-index:25;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;margin:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow-sm)}
+.ap .paginator{border:0;background:none;padding:var(--s3) 0}
+.ap .object-tools{float:none;display:flex;gap:8px;margin:0 0 var(--s3);padding:0}
+.ap .object-tools li{margin:0}
+.ap .object-tools a{display:inline-flex;align-items:center;height:var(--ctl-h);padding:0 14px;border-radius:var(--r-ctl);background:var(--teal);color:var(--on-accent);font-size:13.5px;text-decoration:none}
+.ap .object-tools a:hover{background:var(--teal-dark)}
+/* فیلترها: کشوی جداگانه به‌جای ستون ثابت */
+.ap-fbtn{display:inline-flex;align-items:center;gap:7px;height:var(--ctl-h);padding:0 14px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--card);color:var(--teal);font:inherit;font-size:13.5px;cursor:pointer}
+.ap-fbtn:hover{background:var(--teal-soft);border-color:var(--teal)}
+.ap-fbtn b{background:var(--ochre);color:var(--ink);border-radius:10px;min-width:20px;height:20px;font:700 11px/20px var(--f-body);text-align:center;padding:0 5px}
+.ap #changelist-filter{display:none}
+body.ap-filter-open #changelist-filter{display:block;position:fixed;z-index:80;top:0;bottom:0;inset-inline-start:0;width:min(320px,90vw);margin:0;overflow-y:auto;background:var(--card);border:0;border-inline-end:1px solid var(--line);box-shadow:var(--shadow);padding:16px;float:none}
+body.ap-filter-open::after{content:"";position:fixed;inset:0;z-index:75;background:rgba(18,49,58,.45)}
+.ap #changelist-filter h2{font:800 15px var(--f-display);background:none;color:var(--ink);padding:0 0 8px;text-transform:none}
+.ap #changelist-filter .ap-fclose{position:absolute;top:10px;inset-inline-end:10px}
+@media (max-width:900px){.ap #result_list thead th{top:0}}
+.ap-pal-h input::-webkit-search-cancel-button{display:none}
+.ap #changelist-search>div{display:flex;align-items:center;gap:8px;margin:0}
+.ap #changelist-search label{display:none}
+.ap #changelist-search input[type=submit]{height:var(--ctl-h);margin:0;padding:0 16px}
+.ap textarea{max-width:100%;box-sizing:border-box}
+@media (max-width:600px){
+  .ap .submit-row{display:flex!important;flex-direction:row}
+  .ap .submit-row input[type=submit]{width:auto!important;flex:1;min-width:0;height:var(--ctl-h)!important;padding:0 6px!important;margin:0!important;float:none;line-height:1.2}
+  .ap .submit-row input[name=_addanother]{display:none}
+}

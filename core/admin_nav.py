@@ -82,7 +82,7 @@ def build(request):
 
     def item(label, title, model, ma):
         url = _url(model)
-        base = url.rsplit("/", 2)[0] + "/" if url else ""
+        base = url
         return {"label": label, "title": title or str(model._meta.verbose_name_plural), "url": url,
                 "on": bool(base) and path.startswith(base), "count": counts.get(label, 0)}
 

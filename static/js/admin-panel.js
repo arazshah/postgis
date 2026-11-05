@@ -34,6 +34,31 @@
   });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closePops(); drawer(false); } });
 
+  function svg(inner, n) {
+    return '<svg class="i" width="' + n + '" height="' + n + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + "</svg>";
+  }
+
+  // --- فیلترهای فهرست: دکمه + کشو ---
+  var filt = $("#changelist-filter");
+  if (filt) {
+    var applied = (location.search.replace(/^\?/, "").split("&").filter(function (p) { return p && !/^(q|o|p|e)=/.test(p); })).length;
+    var fb = document.createElement("button");
+    fb.type = "button"; fb.className = "ap-fbtn";
+    fb.innerHTML = svg('<path d="M4 5h16l-6 8v6l-4-2v-4z"/>', 16) + "<span>فیلتر</span>";
+    if (applied) { var n = document.createElement("b"); n.textContent = applied; fb.appendChild(n); }
+    var host = $("#toolbar form") || $("#toolbar") || $("#changelist");
+    host.insertBefore(fb, host.firstChild);
+    var cl = document.createElement("button");
+    cl.type = "button"; cl.className = "ib sm ap-fclose"; cl.setAttribute("aria-label", "بستن فیلترها");
+    cl.innerHTML = svg('<path d="M6 6l12 12"/><path d="M18 6 6 18"/>', 16);
+    filt.insertBefore(cl, filt.firstChild);
+    var setF = function (o) { document.body.classList.toggle("ap-filter-open", o); };
+    fb.addEventListener("click", function () { setF(true); });
+    cl.addEventListener("click", function () { setF(false); });
+    document.addEventListener("click", function (e) { if (document.body.classList.contains("ap-filter-open") && !e.target.closest("#changelist-filter,.ap-fbtn")) setF(false); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") setF(false); });
+  }
+
   // --- جست‌وجوی سراسری ---
   var dlg = $("#ap-pal"), input = $("#ap-pal-q"), list = $("#ap-pal-l");
   if (!dlg) return;
