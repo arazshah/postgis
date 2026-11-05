@@ -18,8 +18,18 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      panel-db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: panel
+        ports: ["5434:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DJANGO_TESTING: "1"
+      DATABASE_URL: postgres://postgres:postgres@localhost:5434/panel
       TEST_PG_HOST: localhost
       TEST_PG_PORT: "5432"
       TEST_PG_PASSWORD: postgres
@@ -29,7 +39,7 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: sudo apt-get update -q && sudo apt-get install -y -q gdal-bin shellcheck
+      - run: sudo apt-get update -q && sudo apt-get install -y -q gdal-bin osmium-tool osm2pgrouting pgbouncer gettext-base shellcheck
       - run: pip install -r requirements-dev.txt
       - name: Lint
         run: ruff check .
