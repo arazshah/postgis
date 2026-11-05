@@ -1,6 +1,8 @@
 from django.contrib import admin, messages
 from django.utils.html import format_html
 
+from core.admin_tabs import TabbedAdminMixin
+
 from . import services
 from .models import Classroom, Contract, ContractRequest, Enrollment
 
@@ -15,19 +17,20 @@ class ContractRequestAdmin(admin.ModelAdmin):
 
 
 @admin.register(Contract)
-class ContractAdmin(admin.ModelAdmin):
+class ContractAdmin(TabbedAdminMixin, admin.ModelAdmin):
+    tabs = [("main", "قرارداد و ظرفیت", "cube"), ("teach", "استادها و یادداشت", "users")]
     list_display = ("institution", "number", "seats", "used", "starts_at", "ends_at", "total", "is_active")
     list_filter = ("is_active",)
     search_fields = ("institution", "number", "teacher_phones")
     filter_horizontal = ("teachers",)
     fieldsets = (
-        (None, {"fields": ("institution", "number", "request", "is_active")}),
-        ("ظرفیت و مالی", {"fields": ("seats", "price_per_seat_toman", "quota_mb")}),
-        ("ترم", {"fields": ("starts_at", "ends_at")}),
-        ("استادها", {"fields": ("teacher_phones", "teachers"),
+        (None, {"classes": ("ap-tab-main",), "fields": ("institution", "number", "request", "is_active")}),
+        ("ظرفیت و مالی", {"classes": ("ap-tab-main",), "fields": ("seats", "price_per_seat_toman", "quota_mb")}),
+        ("ترم", {"classes": ("ap-tab-main",), "fields": ("starts_at", "ends_at")}),
+        ("استادها", {"classes": ("ap-tab-teach",), "fields": ("teacher_phones", "teachers"),
                      "description": "موبایل استادها را هر کدام در یک خط بنویسید؛ با ورود به سایت، بخش «کلاس‌های من» "
                                     "برایشان باز می‌شود و تا سقف صندلی‌ها کلاس می‌سازند."}),
-        (None, {"fields": ("notes",)}),
+        (None, {"classes": ("ap-tab-teach",), "fields": ("notes",)}),
     )
 
     @admin.display(description="استفاده‌شده")

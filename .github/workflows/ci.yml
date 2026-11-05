@@ -7,7 +7,9 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # ubuntu-latest صرف‌نظر از نسخه‌ی ۲۴.۰۴ به ۲۶.۰۴ رسیده و pg_dump/pg_restore آن جدیدتر از سرور آزمون (PostgreSQL 16) است؛
+    # آرشیوش «SET transaction_timeout» دارد و روی ۱۶ بازگردانی نمی‌شود. ۲۴.۰۴ همان کلاینت ۱۶ را دارد.
+    runs-on: ubuntu-24.04
     services:
       postgis:
         image: postgis/postgis:16-3.4

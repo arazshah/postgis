@@ -7,6 +7,7 @@ from django.utils.html import format_html
 
 from accounts.models import normalize_mobile
 
+from .admin_tabs import TabbedAdminMixin
 from .models import ContactRequest, SiteSettings, TeamMember, TrustItem
 
 LOGO_MAX_BYTES = 512 * 1024
@@ -237,27 +238,52 @@ class SiteSettingsForm(forms.ModelForm):
 
 
 @admin.register(SiteSettings)
-class SiteSettingsAdmin(admin.ModelAdmin):
+class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
     form = SiteSettingsForm
+    tabs = [("site", "سایت و برند", "globe"), ("users", "کاربران و کلاس", "users"), ("pay", "پرداخت", "card"),
+            ("sms", "پیامک و ورود", "bell"), ("assistant", "دستیار هوشمند", "spark"),
+            ("track", "آمار و اعتماد", "chart"), ("backup", "بکاپ خارج از سرور", "db"),
+            ("map", "نقشه و برداشت", "pin")]
+
+    def tab_status(self, request, obj):
+        sms = ("warn", "آزمایشی") if obj.sms_backend == "console" else (
+            ("bad", "ناقص") if obj.sms_backend == "smsir" and (not obj.has_smsir_api_key or not obj.smsir_template_id)
+            else ("ok", "فعال"))
+        pay = ("warn", "غیرفعال") if not obj.pay_gateway_enabled else (
+            ("warn", "آزمایشی") if obj.gateway_sandbox else
+            (("ok", "فعال") if obj.gateway_merchant_encrypted else ("bad", "مرچنت وارد نشده")))
+        track = ("ok", "اینماد ثبت شده") if obj.enamad_meta_content and obj.enamad_badge_html.strip() \
+            else ("warn", "اینماد ناقص")
+        return {
+            "sms": sms, "pay": pay, "track": track,
+            "assistant": ("ok", "فعال") if obj.assistant_enabled and obj.assistant_key_ready else ("warn", "خاموش"),
+            "users": ("ok", "") if obj.signup_open and obj.allow_new_databases else ("warn", "محدود"),
+            "backup": ("ok", "فعال") if obj.offsite_ready else (
+                ("bad", "ناقص") if obj.offsite_enabled else ("warn", "خاموش")),
+        }
+
     readonly_fields = ["api_key_status", "gateway_status", "gateway_tools", "sms_tools",
                        "enamad_status", "logo_preview", "assistant_status", "assistant_tools", "updated_at",
                        "offsite_status", "offsite_tools"]
     fieldsets = (
-        ("سایت", {"fields": ("site_name", "logo_preview", "logo_file", "clear_logo", "tagline", "announcement", "announcement_level")}),
-        ("پشتیبانی", {"fields": ("support_phone", "support_telegram", "support_email")}),
+        ("سایت", {"classes": ("ap-tab-site",), "fields": ("site_name", "logo_preview", "logo_file", "clear_logo", "tagline", "announcement", "announcement_level")}),
+        ("پشتیبانی", {"classes": ("ap-tab-site",), "fields": ("support_phone", "support_telegram", "support_email")}),
         ("اینماد و نمادهای اعتماد", {
+            "classes": ("ap-tab-track",),
             "fields": ("enamad_status", "enamad_meta_content", "enamad_badge_html", "footer_badges_html"),
             "description": "در پنل enamad.ir دو کد می‌دهند: «متاتگ تأیید مالکیت» که باید در head صفحه اصلی باشد "
                            "(کادر اول)، و «کد نماد» که در فوتر نشان داده می‌شود (کادر دوم). "
                            "نمادهای دیگر مثل ساماندهی را در کادر سوم بگذارید. بعد از ذخیره، سایت را باز کنید و فوتر را ببینید.",
         }),
         ("آمار بازدید (Umami)", {
+            "classes": ("ap-tab-track",),
             "fields": ("umami_script_url", "umami_website_id"),
             "description": "در Umami وب‌سایت postgis.ir را اضافه کنید، از Tracking code نشانی script و Website ID را اینجا بگذارید "
                            "(یا کل تگ script را در کادر اول بچسبانید). اسکریپت فقط برای بازدیدکننده‌ها بارگذاری می‌شود، نه مدیران، "
                            "و تنظیم «Do Not Track» مرورگر را رعایت می‌کند.",
         }),
         ("هویت شرکت و تماس", {
+            "classes": ("ap-tab-site",),
             "fields": ("about_intro", "contact_intro", "support_whatsapp", "support_hours",
                        "company_name", "company_national_id", "company_economic_code", "show_company_info"),
             "description": "متن صفحه‌های «درباره ما» و «تماس». شماره‌ی پشتیبانی همان «تلفن پشتیبانی» بالاست و پیامک اطلاع از "
@@ -265,11 +291,13 @@ class SiteSettingsAdmin(admin.ModelAdmin):
                            "اعضای تیم را از بخش «اعضای تیم» اضافه کنید. اطلاعات شرکت تا «نمایش اطلاعات شرکت» روشن نشود دیده نمی‌شود.",
         }),
         ("اعتماد و محل داده", {
+            "classes": ("ap-tab-track",),
             "fields": ("trust_location_line", "trust_intro", "trust_disk_encrypted"),
             "description": "ردیف‌های صفحه‌ی «امنیت و محل داده» را از بخش «ردیف‌های صفحه‌ی اعتماد» ویرایش کنید. "
                            "جمله‌ی کوتاه محل داده در چند صفحه‌ی حساس نمایش داده می‌شود؛ فقط چیزی بنویسید که دقیقاً درست است.",
         }),
         ("بکاپ خارج از سرور (فضای ابری)", {
+            "classes": ("ap-tab-backup",),
             "fields": ("offsite_status", "offsite_enabled", "offsite_endpoint", "offsite_bucket", "offsite_region",
                        "offsite_prefix", "offsite_access_key", "offsite_secret_key", "clear_offsite_keys",
                        "offsite_encrypt", "offsite_tools"),
@@ -278,14 +306,16 @@ class SiteSettingsAdmin(admin.ModelAdmin):
                            "کلیدها رمزنگاری‌شده ذخیره می‌شوند و هرگز دوباره نمایش داده نمی‌شوند.",
         }),
         ("فوتر سایت", {
+            "classes": ("ap-tab-site",),
             "fields": ("footer_about", "footer_address", "footer_copyright", "footer_links",
                        "social_telegram", "social_instagram", "social_linkedin", "social_github", "social_eitaa"),
             "description": "تلفن، تلگرام و ایمیل پشتیبانی از بخش «پشتیبانی» بالا در فوتر نشان داده می‌شود. "
                            "شبکه‌ای که آدرس نداشته باشد نمایش داده نمی‌شود.",
         }),
-        ("کاربران و سرویس", {"fields": ("signup_open", "allow_new_databases", "max_databases_per_user",
+        ("کاربران و سرویس", {"classes": ("ap-tab-users",), "fields": ("signup_open", "allow_new_databases", "max_databases_per_user",
                                          "renew_window_days", "expiry_warning_days", "expired_grace_days")}),
         ("پرداخت و فروش پلن‌ها", {
+            "classes": ("ap-tab-pay",),
             "fields": ("pay_enabled", "invoice_ttl_minutes",
                        "pay_gateway_enabled", "gateway_provider", "gateway_status", "gateway_merchant",
                        "gateway_sandbox", "gateway_tools",
@@ -294,15 +324,18 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             "description": "قیمت پلن‌ها را از بخش «پلن‌ها» تعیین کنید. پرداخت‌های منتظر تأیید در بخش «فاکتورها» هستند.",
         }),
         ("برداشت میدانی", {
+            "classes": ("ap-tab-map",),
             "fields": ("survey_enabled",),
             "description": "نقشه‌برداری و اتصال گیرنده GNSS. تا خاموش است هیچ‌چیز برای کاربران دیده نمی‌شود.",
         }),
-        ("نقشه مرورگر پایگاه داده", {"fields": ("map_tile_url", "map_tile_attribution")}),
+        ("نقشه مرورگر پایگاه داده", {"classes": ("ap-tab-map",), "fields": ("map_tile_url", "map_tile_attribution")}),
         ("راهنمای ساخت حساب مدل زبانی", {
+            "classes": ("ap-tab-assistant",),
             "fields": ("llm_partner_enabled", "llm_partner_name", "llm_partner_url"),
             "description": "اگر کاربر در صفحه تحلیل حساب مدل زبانی ندارد، دکمه ساخت حساب با پیوند همکاری شما نشان داده می‌شود.",
         }),
         ("دستیار هوشمند (پرسش و پاسخ روی پایگاه دانش)", {
+            "classes": ("ap-tab-assistant",),
             "fields": ("assistant_enabled", "assistant_status", "assistant_base_url", "assistant_api_key",
                        "clear_assistant_api_key", "assistant_chat_model", "assistant_embedding_model",
                        "assistant_welcome", "assistant_member_daily", "assistant_guest_daily",
@@ -312,14 +345,15 @@ class SiteSettingsAdmin(admin.ModelAdmin):
                            "جواب می‌دهد و به داده کاربران دسترسی ندارد. بعد از افزودن یا ویرایش مقاله‌ها، embedding هر ۱۰ دقیقه "
                            "(با run_maintenance) خودکار به‌روز می‌شود.",
         }),
-        ("پلن کلاس و دانشگاه", {"fields": ("class_price_per_student",)}),
+        ("پلن کلاس و دانشگاه", {"classes": ("ap-tab-users",), "fields": ("class_price_per_student",)}),
         ("پنل پیامک (sms.ir)", {
+            "classes": ("ap-tab-sms",),
             "fields": ("sms_backend", "api_key_status", "smsir_api_key", "clear_smsir_api_key",
                        "smsir_template_id", "smsir_code_param", "smsir_line_number", "sms_tools"),
             "description": "قالب کد تأیید را در پنل sms.ir بسازید، مثلاً «کد ورود شما: #CODE#»، "
                            "و شناسه آن را اینجا وارد کنید.",
         }),
-        ("رمز یک‌بار مصرف و امنیت ورود", {"fields": ("otp_length", "otp_ttl_seconds", "otp_resend_seconds",
+        ("رمز یک‌بار مصرف و امنیت ورود", {"classes": ("ap-tab-sms",), "fields": ("otp_length", "otp_ttl_seconds", "otp_resend_seconds",
                                                     "otp_max_attempts", "otp_max_per_phone_hour",
                                                     "otp_max_per_ip_hour")}),
         (None, {"fields": ("updated_at",)}),

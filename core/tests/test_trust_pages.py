@@ -144,3 +144,26 @@ class ContactFormTests(TestCase):
             self.client.post(reverse("core:contact"), self.data())
         notify.assert_called_once()
         self.assertIn("علی رضایی", notify.call_args[0][1])
+
+
+class AdminIntegrationTests(TestCase):
+    def setUp(self):
+        from accounts.models import User
+
+        self.client.force_login(User.objects.create_admin("boss2", "Str0ng-Admin-Pass"))
+
+    def test_admin_pages_render(self):
+        ContactRequest.objects.create(name="س", phone="09120000001")
+        for url in ("/manage/", "/manage/core/sitesettings/", "/manage/core/teammember/", "/manage/core/trustitem/",
+                    "/manage/core/contactrequest/"):
+            self.assertEqual(self.client.get(url, follow=True).status_code, 200, url)
+
+    def test_dashboard_flags_new_lead_and_missing_offsite(self):
+        ContactRequest.objects.create(name="س", phone="09120000001")
+        html = self.client.get("/manage/").content.decode()
+        self.assertIn("درخواست تماس یا جلسه منتظر پیگیری", html)
+        self.assertIn("فضای ابری جداگانه فعال نیست", html)
+
+    def test_settings_has_backup_tab(self):
+        html = self.client.get("/manage/core/sitesettings/", follow=True).content.decode()
+        self.assertIn("ap-tab-backup", html)

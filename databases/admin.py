@@ -3,6 +3,8 @@ from django.contrib import admin, messages
 from django.template.defaultfilters import filesizeformat
 from django.utils.html import format_html
 
+from core.admin_tabs import TabbedAdminMixin
+
 from . import services
 from .models import (
     ActivityLog,
@@ -80,7 +82,8 @@ class DatabaseServerForm(forms.ModelForm):
 
 
 @admin.register(DatabaseServer)
-class DatabaseServerAdmin(admin.ModelAdmin):
+class DatabaseServerAdmin(TabbedAdminMixin, admin.ModelAdmin):
+    tabs = [('conn', 'اتصال', 'server'), ('pool', 'PgBouncer', 'layers'), ('state', 'ظرفیت و وضعیت', 'gauge')]
     form = DatabaseServerForm
     list_display = ["name", "public_host", "health", "usage", "is_active", "is_default", "server_version",
                     "postgis_version", "last_check_at"]
@@ -90,18 +93,20 @@ class DatabaseServerAdmin(admin.ModelAdmin):
                        "created_at", "updated_at"]
     fieldsets = (
         ("اتصال مدیریتی (پنل ← سرور)", {
+            "classes": ("ap-tab-conn",),
             "fields": ("name", "host", "port", "admin_user", "admin_password", "admin_database", "sslmode"),
             "description": "پنل با این اطلاعات به سرور وصل می‌شود و دیتابیس کاربران را می‌سازد. "
                            "کاربر ادمین باید superuser باشد.",
         }),
-        ("اطلاعاتی که به کاربران نمایش داده می‌شود", {"fields": ("public_host", "public_port", "public_sslmode")}),
+        ("اطلاعاتی که به کاربران نمایش داده می‌شود", {"classes": ("ap-tab-conn",), "fields": ("public_host", "public_port", "public_sslmode")}),
         ("PgBouncer (اشتراک اتصال)", {
+            "classes": ("ap-tab-pool",),
             "fields": ("pooler_port", "pooler_host"),
             "description": "۱) در Coolify متغیرهای PGBOUNCER_DB_HOST و PGBOUNCER_AUTH_PASSWORD را بگذارید. "
                            "۲) اقدام «راه‌اندازی PgBouncer» را روی این سرور اجرا کنید. ۳) پورت عمومی را اینجا وارد کنید.",
         }),
-        ("ظرفیت و وضعیت", {"fields": ("is_active", "is_default", "max_databases", "disk_capacity_gb", "notes")}),
-        ("آخرین بررسی", {"fields": ("last_check_at", "last_check_ok", "last_check_message", "server_version",
+        ("ظرفیت و وضعیت", {"classes": ("ap-tab-state",), "fields": ("is_active", "is_default", "max_databases", "disk_capacity_gb", "notes")}),
+        ("آخرین بررسی", {"classes": ("ap-tab-state",), "fields": ("last_check_at", "last_check_ok", "last_check_message", "server_version",
                                      "postgis_version", "created_at", "updated_at")}),
     )
 
@@ -167,21 +172,22 @@ class ExtensionAdmin(admin.ModelAdmin):
 
 
 @admin.register(Plan)
-class PlanAdmin(admin.ModelAdmin):
+class PlanAdmin(TabbedAdminMixin, admin.ModelAdmin):
+    tabs = [('main', 'مشخصات و قیمت', 'card'), ('res', 'منابع', 'gauge'), ('feat', 'امکانات', 'spark')]
     list_display = ["name", "slug", "quota_mb", "max_connections", "duration_days", "price_toman", "is_free",
                     "is_public", "is_default", "order"]
     list_editable = ["price_toman", "is_public", "order"]
     fieldsets = (
-        (None, {"fields": ("name", "slug", "description", "order")}),
-        ("منابع", {"fields": ("quota_mb", "max_connections", "statement_timeout_s", "temp_file_limit_mb",
+        (None, {"classes": ("ap-tab-main",), "fields": ("name", "slug", "description", "order")}),
+        ("منابع", {"classes": ("ap-tab-res",), "fields": ("quota_mb", "max_connections", "statement_timeout_s", "temp_file_limit_mb",
                                "backup_retention_days", "allowed_extensions")}),
-        ("انتشار نقشه", {"fields": ("publish_layers", "publish_daily_requests", "map_badge", "maps", "map_layers", "map_charts")}),
-        ("برداشت میدانی", {"fields": ("survey_projects", "survey_max_points", "gnss_external")}),
-        ("یافتن عارضه", {"fields": ("find_layer_credits",)}),
-        ("مدت و قیمت", {"fields": ("duration_days", "price_toman", "is_free", "is_renewable"),
+        ("انتشار نقشه", {"classes": ("ap-tab-feat",), "fields": ("publish_layers", "publish_daily_requests", "map_badge", "maps", "map_layers", "map_charts")}),
+        ("برداشت میدانی", {"classes": ("ap-tab-feat",), "fields": ("survey_projects", "survey_max_points", "gnss_external")}),
+        ("یافتن عارضه", {"classes": ("ap-tab-feat",), "fields": ("find_layer_credits",)}),
+        ("مدت و قیمت", {"classes": ("ap-tab-main",), "fields": ("duration_days", "price_toman", "is_free", "is_renewable"),
                         "description": "درگاه پرداخت فعلاً فعال نیست؛ پلن‌های پولی در سایت با دکمه «درخواست از پشتیبانی» "
                                        "نمایش داده می‌شوند و شما پلن پایگاه داده کاربر را از همین پنل تغییر می‌دهید."}),
-        ("نمایش", {"fields": ("is_public", "is_default")}),
+        ("نمایش", {"classes": ("ap-tab-main",), "fields": ("is_public", "is_default")}),
     )
     prepopulated_fields = {"slug": ("name",)}
     filter_horizontal = ["allowed_extensions"]
