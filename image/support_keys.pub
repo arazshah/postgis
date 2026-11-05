@@ -1,2 +1,3 @@
 # کلید(های) عمومی SSH پشتیبان، هر کلید یک خط (مثلاً محتوای ~/.ssh/id_ed25519.pub). فقط کلید «عمومی»؛ کلید خصوصی هرگز.
 # خط‌هایی که با ssh-/ecdsa-/sk- شروع نشوند نادیده گرفته می‌شوند. بدون کلید، ورود SSH ممکن نیست (root و رمز بسته است).
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK3FyxKOepf8GC59livNXMwXIzOsS6V3mMRigjgV1eVF pgpro-support
