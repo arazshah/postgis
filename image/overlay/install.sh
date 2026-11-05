@@ -81,8 +81,12 @@ for d in /usr/lib/postgresql/*/; do v=$(basename "$d"); pg_dropcluster --stop "$
 
 if [ "${PGPRO_SKIP_SYSTEMD:-0}" != 1 ]; then
   step "فعال‌سازی سرویس‌ها"
+  # سرویس‌های خودمان و اصلی باید فعال شوند (خطا = توقف)؛ fake-hwclock در Debian ممکن است mask باشد
   systemctl enable pgpro-sshkeys.service pgpro-firstboot.service pgpro-web.service pgpro-worker.service \
-    nginx.service avahi-daemon.service ssh.service fake-hwclock.service cron.service postgresql.service
+    nginx.service avahi-daemon.service ssh.service cron.service postgresql.service
+  # برد باتری ساعت ندارد؛ fake-hwclock آخرین زمان را نگه می‌دارد (اگر نشد، فقط هشدار)
+  systemctl unmask fake-hwclock.service 2>/dev/null || true
+  systemctl enable fake-hwclock.service || echo "هشدار: fake-hwclock فعال نشد."
 fi
 
 # ── ۵) پاک‌سازی برای ایمیج ─────────────────────────────────────────────────────────
