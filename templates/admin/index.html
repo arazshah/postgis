@@ -1,19 +1,44 @@
-{% extends "admin/index.html" %}
+{% extends "admin/base_site.html" %}{% load ws %}
+{% block bodyclass %}ap-dash{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block content_title %}{% endblock %}
 {% block content %}
-{% if gp_stats %}
-<div class="gp-quick">
-  <a class="button" href="{% url 'admin:core_sitesettings_changelist' %}">تنظیمات سایت و پیامک</a>
-  <a class="button" href="{% url 'admin:databases_databaseserver_changelist' %}">سرورهای دیتابیس</a>
-  <a class="button" href="{% url 'admin:databases_plan_changelist' %}">پلن‌ها و قیمت‌ها</a>
-  <a class="button" href="{% url 'admin:accounts_siteuser_changelist' %}">کاربران سایت</a>
-  <a class="button" href="{% url 'admin:analytics_sourcereport_changelist' %}">گزارش منابع ورود</a>
-  <a class="button" href="{% url 'admin:analytics_trackedlink_changelist' %}">لینک‌های ردیابی‌شده</a>
-  <a class="button" href="{% url 'admin:billing_invoice_changelist' %}?status__exact=review">رسیدهای منتظر تأیید</a>
+<div class="ap-head">
+  <div><h1>داشبورد</h1><p class="ap-sub-t">وضعیت لحظه‌ای سرویس و کارهای منتظر شما</p></div>
+  <div class="ap-quick">{% for q in ap_quick %}<a class="ap-chip" href="{{ q.url }}">{% icon q.icon 16 %}{{ q.label }}</a>{% endfor %}</div>
 </div>
-<div class="gp-stats">
-  {% for s in gp_stats %}<div class="gp-stat{% if s.bad %} bad{% endif %}"><b>{{ s.value }}</b><span>{{ s.label }}</span></div>{% endfor %}
+
+<section class="ap-health" aria-label="سلامت سیستم">
+  {% for x in ap_health %}
+  <a class="ap-h {{ x.state }}" href="{{ x.url }}"><span class="ap-h-i">{% icon x.icon 18 %}</span><span class="ap-h-t"><b>{{ x.label }}</b><small>{{ x.detail }}</small></span><i class="ap-dot" aria-hidden="true"></i></a>
+  {% endfor %}
+</section>
+
+<section class="ap-kpis" aria-label="آمار کلیدی">
+  {% for k in ap_kpis %}
+  <a class="ap-k{% if k.bad %} bad{% endif %}{% if k.spark %} sp{% endif %}" href="{{ k.url }}">
+    <small>{{ k.label }}</small><b>{{ k.value }}</b><em>{{ k.sub }}</em>
+    {% if k.spark %}<svg class="ap-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{ k.spark }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>{% endif %}
+  </a>
+  {% endfor %}
+</section>
+
+<div class="ap-cols">
+  <section class="ap-card" aria-label="نیاز به توجه">
+    <h2>{% icon "warn" 18 %}نیاز به توجه{% if ap_attention %}<span class="ap-n">{{ ap_attention|length }}</span>{% endif %}</h2>
+    {% for a in ap_attention %}
+    <div class="ap-row {{ a.level }}"><span class="ap-dot" aria-hidden="true"></span><span class="ap-row-t">{{ a.text }}</span><a class="ap-btn" href="{{ a.url }}">{{ a.action }}</a></div>
+    {% empty %}
+    <div class="ap-empty">{% icon "check" 28 %}<p>همه‌چیز مرتب است؛ موردی منتظر شما نیست.</p></div>
+    {% endfor %}
+  </section>
+  <section class="ap-card" aria-label="فعالیت اخیر">
+    <h2>{% icon "pulse" 18 %}فعالیت اخیر</h2>
+    {% for r in ap_activity %}
+    <a class="ap-act" href="{{ r.url }}"><span class="ap-act-i">{% icon r.icon 16 %}</span><span class="ap-row-t"><small>{{ r.kind }}</small>{{ r.text }}</span><time>{{ r.at|timesince }} پیش</time></a>
+    {% empty %}
+    <div class="ap-empty">{% icon "clock" 28 %}<p>هنوز فعالیتی ثبت نشده است.</p></div>
+    {% endfor %}
+  </section>
 </div>
-{% if gp_warnings %}<ul class="messagelist">{% for w in gp_warnings %}<li class="warning">{{ w }}</li>{% endfor %}</ul>{% endif %}
-{% endif %}
-{{ block.super }}
 {% endblock %}

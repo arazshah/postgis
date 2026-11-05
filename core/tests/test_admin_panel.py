@@ -51,3 +51,27 @@ class AdminPanelShellTests(TestCase):
             orig = re.search(rf"{re.escape(name)}:\s*([^;]+?)\s*[;}}]", theirs)
             self.assertTrue(mine and orig, name)
             self.assertEqual(mine.group(1).strip(), orig.group(1).strip(), name)
+
+
+class AdminDashboardTests(TestCase):
+    def setUp(self):
+        self.client.force_login(User.objects.create_admin("boss", "Str0ng-Admin-Pass"))
+
+    def test_empty_install_shows_attention_and_health(self):
+        r = self.client.get("/manage/")
+        self.assertContains(r, "نیاز به توجه")
+        self.assertContains(r, "هنوز سرور دیتابیسی تعریف نشده")
+        self.assertEqual(len(r.context["ap_health"]), 6)
+        self.assertEqual(len(r.context["ap_kpis"]), 6)
+
+    def test_pending_invoice_and_ticket_show_actions(self):
+        from billing.models import Invoice
+        from support.models import Ticket
+
+        u = User.objects.create_user("09121234567", full_name="علی")
+        Ticket.objects.create(user=u, subject="کمک")
+        r = self.client.get("/manage/")
+        texts = " ".join(a["text"] for a in r.context["ap_attention"])
+        self.assertIn("تیکت منتظر پاسخ", texts)
+        self.assertEqual(Invoice.objects.count(), 0)
+        self.assertContains(r, "فعالیت اخیر")

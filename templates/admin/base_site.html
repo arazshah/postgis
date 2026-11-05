@@ -42,7 +42,7 @@
   <nav class="ap-side" id="ap-side" aria-label="بخش‌های پنل مدیریت">
     <a class="ap-it{% if request.path == '/manage/' %} on{% endif %}" href="{% url 'admin:index' %}">{% icon "dash" 18 %}<span>داشبورد</span></a>
     {% for g in groups %}
-    <details class="ap-grp"{% if g.on or forloop.first and request.path == '/manage/' %} open{% endif %}>
+    <details class="ap-grp"{% if g.on %} open{% endif %}>
       <summary>{% icon g.icon 18 %}<span>{{ g.title }}</span>{% if g.count %}<b class="ap-n" title="منتظر اقدام">{{ g.count }}</b>{% endif %}<i class="ap-chev">{% icon "chev" 16 %}</i></summary>
       <div class="ap-sub">{% for it in g.items %}<a class="ap-it{% if it.on %} on{% endif %}" href="{{ it.url }}"{% if it.on %} aria-current="page"{% endif %}><span>{{ it.title }}</span>{% if it.count %}<b class="ap-n">{{ it.count }}</b>{% endif %}</a>{% endfor %}</div>
     </details>
