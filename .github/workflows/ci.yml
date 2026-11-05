@@ -7,7 +7,9 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # ubuntu-latest صرف‌نظر از نسخه‌ی ۲۴.۰۴ به ۲۶.۰۴ رسیده و pg_dump/pg_restore آن جدیدتر از سرور آزمون (PostgreSQL 16) است؛
+    # آرشیوش «SET transaction_timeout» دارد و روی ۱۶ بازگردانی نمی‌شود. ۲۴.۰۴ همان کلاینت ۱۶ را دارد.
+    runs-on: ubuntu-24.04
     services:
       postgis:
         image: postgis/postgis:16-3.4
@@ -27,7 +29,6 @@ jobs:
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      PG_BIN_PATH: /usr/lib/postgresql/16/bin
       DJANGO_TESTING: "1"
       DATABASE_URL: postgres://postgres:postgres@localhost:5434/panel
       TEST_PG_HOST: localhost
@@ -39,9 +40,7 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      # ابزار pg_dump/pg_restore هم‌نسخه با سرور آزمون (PostGIS 16)؛ نسخه‌ی جدیدتر runner در آرشیو `SET transaction_timeout` می‌نویسد
-      # که روی PostgreSQL 16 شناخته‌شده نیست (jobs/services.py با PG_BIN_PATH همین مسیر را برمی‌دارد).
-      - run: sudo apt-get update -q && sudo apt-get install -y -q gdal-bin osmium-tool osm2pgrouting pgbouncer gettext-base postgresql-client-16
+      - run: sudo apt-get update -q && sudo apt-get install -y -q gdal-bin osmium-tool osm2pgrouting pgbouncer gettext-base
       - run: pip install -r requirements-dev.txt
       - name: Lint
         run: ruff check .
