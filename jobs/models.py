@@ -54,6 +54,11 @@ class Job(models.Model):
     finished_at = models.DateTimeField("پایان", null=True, blank=True)
     expires_at = models.DateTimeField("انقضای فایل", null=True, blank=True)
     alerted = models.BooleanField(default=False, editable=False)
+    # نسخه‌ی دوم در فضای ابری (S3)؛ خالی = ارسال نشده
+    offsite_key = models.CharField("کلید نسخه‌ی ابری", max_length=400, blank=True)
+    offsite_encrypted = models.BooleanField("نسخه‌ی ابری رمزنگاری‌شده", default=False)
+    offsite_at = models.DateTimeField("زمان ارسال به فضای ابری", null=True, blank=True)
+    offsite_error = models.CharField("خطای ارسال به فضای ابری", max_length=300, blank=True)
 
     class Meta:
         verbose_name = "کار پس‌زمینه"

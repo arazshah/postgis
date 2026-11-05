@@ -325,10 +325,15 @@ def backup_download(request, pk, job_id):
     from django.http import FileResponse, Http404
 
     db = _user_db(request, pk)
+    from jobs import offsite
+
     job = get_object_or_404(db.jobs, pk=job_id)
-    if not job.downloadable or not job.path.exists():
+    if not job.downloadable:
         raise Http404
-    return FileResponse(job.path.open("rb"), as_attachment=True, filename=job.path.name,
+    path = offsite.ensure_local(job)  # اگر فایل محلی گم شده باشد، از نسخه‌ی ابری برمی‌گردد
+    if path is None:
+        raise Http404
+    return FileResponse(path.open("rb"), as_attachment=True, filename=path.name,
                         content_type="application/octet-stream")
 
 

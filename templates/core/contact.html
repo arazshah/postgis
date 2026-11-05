@@ -1,0 +1,57 @@
+{% extends "base.html" %}{% load static ws %}
+{% block title %}تماس و درخواست جلسه — {{ SITE_NAME }}{% endblock %}
+{% block description %}با تیم {{ SITE_NAME }} تماس بگیرید: خرید سازمانی، جلسه‌ی معرفی آنلاین، نصب اختصاصی روی سرور سازمان و پرسش‌های دیگر.{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/trust.css' %}">{% endblock %}
+{% block content %}
+<div class="wrap tr-page">
+  <header class="tr-head">
+    <h1>تماس و درخواست جلسه</h1>
+    {% if SITE.contact_intro %}<p class="lead">{{ SITE.contact_intro|linebreaksbr }}</p>{% endif %}
+  </header>
+  <div class="tr-split">
+    <section class="tr-form" aria-labelledby="cf-h">
+      {% if sent %}
+      <div class="tr-done" role="status">
+        <span class="tr-ico">{% icon "check" 26 %}</span>
+        <h2 id="cf-h">درخواست شما ثبت شد</h2>
+        <p class="muted">در اولین فرصت{% if SITE.support_hours %} ({{ SITE.support_hours }}){% endif %} با شما تماس می‌گیریم.</p>
+        <a class="btn ghost" href="{% url 'core:contact' %}">ثبت درخواست دیگر</a>
+      </div>
+      {% else %}
+      <h2 id="cf-h">فرم درخواست</h2>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% include "partials/form_errors.html" %}
+        <fieldset class="tr-topics">
+          <legend>{{ form.topic.label }}</legend>
+          {% for radio in form.topic %}<label>{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>{% endfor %}
+        </fieldset>
+        <div class="row2">
+          {% with field=form.name %}{% include "partials/field.html" %}{% endwith %}
+          {% with field=form.phone %}{% include "partials/field.html" %}{% endwith %}
+        </div>
+        <div class="row2">
+          {% with field=form.organization %}{% include "partials/field.html" %}{% endwith %}
+          {% with field=form.email %}{% include "partials/field.html" %}{% endwith %}
+        </div>
+        {% with field=form.preferred_time %}{% include "partials/field.html" %}{% endwith %}
+        {% with field=form.message %}{% include "partials/field.html" %}{% endwith %}
+        <div class="hp" aria-hidden="true"><label for="id_website">وب‌سایت</label>{{ form.website }}</div>
+        <button class="btn" type="submit">{% icon "check" 18 %}ثبت درخواست</button>
+        <p class="small muted" style="margin-top:var(--s3)">شماره‌ی شما فقط برای همین تماس استفاده می‌شود. <a href="{% url 'core:privacy' %}">حریم خصوصی</a></p>
+      </form>
+      {% endif %}
+    </section>
+
+    <aside class="tr-ways" aria-label="راه‌های تماس مستقیم">
+      {% if SITE.support_phone %}<a class="tr-way" href="tel:{{ SITE.support_phone }}"><span class="tr-ico">{% icon "phone" 20 %}</span><span><b>تماس تلفنی</b><span class="sub ltr">{{ SITE.support_phone }}</span></span></a>{% endif %}
+      {% if SITE.whatsapp_url %}<a class="tr-way" href="{{ SITE.whatsapp_url }}" rel="noopener" target="_blank"><span class="tr-ico">{% icon "phone" 20 %}</span><span><b>واتس‌اپ</b><span class="sub">پیام بدهید</span></span></a>{% endif %}
+      {% if SITE.telegram_url %}<a class="tr-way" href="{{ SITE.telegram_url }}" rel="noopener" target="_blank"><span class="tr-ico">{% icon "share" 20 %}</span><span><b>تلگرام</b><span class="sub ltr">@{{ SITE.support_telegram }}</span></span></a>{% endif %}
+      {% if SITE.support_email %}<a class="tr-way" href="mailto:{{ SITE.support_email }}"><span class="tr-ico">{% icon "mail" 20 %}</span><span><b>ایمیل</b><span class="sub ltr">{{ SITE.support_email }}</span></span></a>{% endif %}
+      {% for label, url, key in SITE.social_list %}{% if key == "linkedin" or key == "instagram" %}<a class="tr-way" href="{{ url }}" rel="noopener me" target="_blank"><span class="tr-ico">{% icon "link" 20 %}</span><span><b>{{ label }}</b><span class="sub">صفحه‌ی ما</span></span></a>{% endif %}{% endfor %}
+      {% if SITE.support_hours %}<div class="tr-way"><span class="tr-ico">{% icon "clock" 20 %}</span><span><b>ساعت پاسخ‌گویی</b><span class="sub">{{ SITE.support_hours }}</span></span></div>{% endif %}
+      <a class="tr-way" href="{% url 'support:new' %}"><span class="tr-ico">{% icon "life" 20 %}</span><span><b>کاربر هستید؟ تیکت پشتیبانی</b><span class="sub">پاسخ را در همین سایت می‌بینید</span></span></a>
+    </aside>
+  </div>
+</div>
+{% endblock %}

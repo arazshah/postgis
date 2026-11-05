@@ -74,6 +74,12 @@ def build():
         add("warn", f"{review} رسید پرداخت منتظر تأیید است", "بررسی", _u("admin:billing_invoice_changelist", "?status__exact=review"))
     if open_tickets:
         add("warn", f"{open_tickets} تیکت منتظر پاسخ شماست", "پاسخ", _u("admin:support_ticket_changelist", "?status__exact=open"))
+    from .models import ContactRequest
+
+    new_leads = ContactRequest.objects.filter(status=ContactRequest.Status.NEW).count()
+    if new_leads:
+        add("warn", f"{new_leads} درخواست تماس یا جلسه منتظر پیگیری است", "دیدن",
+            _u("admin:core_contactrequest_changelist", "?status__exact=new"))
     for s in bad_servers:
         add("bad", f"اتصال به سرور «{s.name}» برقرار نیست: {s.last_check_message[:90]}", "بررسی",
             reverse("admin:databases_databaseserver_change", args=[s.pk]))
@@ -90,6 +96,9 @@ def build():
         add("bad", "تنظیمات sms.ir کامل نیست؛ کاربران کد ورود دریافت نمی‌کنند.", "تنظیم پیامک", _u("admin:core_sitesettings_changelist") + "#sms")
     if conf.sms_backend == "console":
         add("warn", "سرویس پیامک روی حالت آزمایشی است و پیامکی ارسال نمی‌شود.", "تنظیم پیامک", _u("admin:core_sitesettings_changelist") + "#sms")
+    if not conf.offsite_ready:
+        add("info", "کپی بکاپ‌ها در فضای ابری جداگانه فعال نیست؛ بکاپ‌ها فقط روی همین سرورند.", "تنظیمات",
+            _u("admin:core_sitesettings_changelist") + "#backup")
     if not conf.signup_open:
         add("info", "ثبت‌نام کاربر جدید بسته است.", "تنظیمات", _u("admin:core_sitesettings_changelist") + "#users")
     if not conf.allow_new_databases:

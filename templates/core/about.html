@@ -1,0 +1,44 @@
+{% extends "base.html" %}{% load static ws %}
+{% block title %}درباره ما — {{ SITE_NAME }}{% endblock %}
+{% block description %}تیم پشت {{ SITE_NAME }}: آدم‌های واقعی که پایگاه داده مکانی آماده را برای کاربران GIS ایران ساخته‌اند.{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/trust.css' %}">{% endblock %}
+{% block content %}
+<div class="wrap tr-page">
+  <header class="tr-head">
+    <h1>درباره‌ی {{ SITE_NAME }}</h1>
+    {% if SITE.about_intro %}<p class="lead">{{ SITE.about_intro|linebreaksbr }}</p>{% endif %}
+  </header>
+
+  {% if team %}
+  <section aria-labelledby="team-h">
+    <h2 id="team-h" class="sr-label">تیم</h2>
+    <div class="tr-team">
+      {% for m in team %}
+      <article class="tr-person">
+        {% if m.photo_url %}<img class="tr-photo" src="{{ m.photo_url }}" alt="{{ m.name }}" width="96" height="96" loading="lazy">{% else %}<span class="tr-photo ph" aria-hidden="true">{{ m.initial }}</span>{% endif %}
+        <div>
+          <h3>{{ m.name }}</h3>
+          {% if m.role %}<p class="role">{{ m.role }}</p>{% endif %}
+          {% if m.bio %}<p>{{ m.bio|linebreaksbr }}</p>{% endif %}
+          {% if m.links %}<ul class="tr-links">{% for label, url in m.links %}<li><a href="{{ url }}"{% if url|slice:":4" == "http" %} rel="noopener me" target="_blank"{% endif %}>{{ label }}</a></li>{% endfor %}</ul>{% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section style="margin-top:var(--s6)" aria-labelledby="about-trust">
+    <h2 id="about-trust">داده‌ی شما کجاست؟</h2>
+    {% include "core/_loc_line.html" %}
+    <p style="margin-top:var(--s3)"><a class="btn ghost" href="{% url 'core:trust' %}">{% icon "lock" 18 %}امنیت و محل داده</a>
+      <a class="btn" href="{% url 'core:contact' %}">{% icon "phone" 18 %}تماس و درخواست جلسه</a></p>
+  </section>
+
+  {% if SITE.enamad_badge_html.strip %}<section class="tr-card" style="margin-top:var(--s6);max-width:360px"><h2>نماد اعتماد</h2><div>{{ SITE.enamad_badge_html|safe }}</div></section>{% endif %}
+
+  {% if SITE.company_visible %}
+  <p class="tr-co">{{ SITE.company_name }}{% if SITE.company_national_id %} · شناسه ملی {{ SITE.company_national_id }}{% endif %}{% if SITE.company_economic_code %} · کد اقتصادی {{ SITE.company_economic_code }}{% endif %}</p>
+  {% endif %}
+</div>
+{% endblock %}

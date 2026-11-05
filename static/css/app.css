@@ -159,7 +159,7 @@ code,.mono,kbd{font-family:var(--f-mono);font-size:.88em}
 .footer::before{content:"";position:absolute;inset:0 0 auto;height:4px;background:linear-gradient(90deg,var(--teal),var(--ochre) 60%,var(--teal))}
 .footer a{color:#DCEAE4;text-decoration:none}
 .footer a:hover{color:#fff;text-decoration:underline;text-underline-offset:4px}
-.foot-grid{display:grid;grid-template-columns:1.5fr repeat(3,1fr);gap:var(--s6) var(--s7);align-items:start}
+.foot-grid{display:grid;grid-template-columns:1.5fr repeat(4,1fr);gap:var(--s6) var(--s7);align-items:start}
 .foot-brand .brand{color:#fff;margin-bottom:var(--s3)}
 .foot-brand p{margin:0 0 var(--s4);line-height:1.9;max-width:36ch}
 .foot-h{font-family:var(--f-display);font-size:.95rem;color:#fff;margin:0 0 var(--s3);font-weight:700}
@@ -1471,3 +1471,8 @@ body.app .hg-t h2{margin:0;font:800 15px/1.6 var(--f-display);display:flex;gap:8
 }
 @media (prefers-reduced-motion:reduce){.dl-i,.dl-ico,.dl-go{transition:none}}
 .dh-box .dh-h{margin:0}
+
+/* خط کوتاه محل داده (زیر پلن‌ها، ساخت پایگاه و …) */
+.loc-line{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;color:var(--ink-2);font-size:.92rem}
+.loc-line svg{color:var(--teal);flex:none}
+.loc-line a{font-weight:700}

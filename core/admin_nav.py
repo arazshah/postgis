@@ -10,6 +10,7 @@ GROUPS = [
     ("customers", "مشتریان", "users", [
         ("accounts.siteuser", None), ("databases.userdatabase", None), ("databases.activitylog", "رویدادهای پایگاه"),
         ("classroom.classroom", None), ("classroom.contract", None), ("classroom.contractrequest", None),
+        ("core.contactrequest", None),
     ]),
     ("finance", "مالی", "card", [
         ("billing.invoice", None), ("billing.planvoucher", None), ("databases.plan", "پلن‌ها و قیمت‌ها"),
@@ -32,7 +33,7 @@ GROUPS = [
         ("analytics.visit", None), ("analytics.event", "رویدادهای بازدید"),
     ]),
     ("settings", "تنظیمات و امنیت", "settings", [
-        ("core.sitesettings", None), ("accounts.adminuser", None), ("auth.group", None), ("accounts.otpcode", None),
+        ("core.sitesettings", None), ("core.teammember", None), ("core.trustitem", None), ("accounts.adminuser", None), ("auth.group", None), ("accounts.otpcode", None),
     ]),
 ]
 
@@ -68,6 +69,9 @@ def badges():
 
         out["billing.invoice"] = Invoice.objects.filter(status=Invoice.Status.REVIEW).count()
         out["support.ticket"] = Ticket.objects.filter(status=Ticket.Status.OPEN).count()
+        from .models import ContactRequest
+
+        out["core.contactrequest"] = ContactRequest.objects.filter(status=ContactRequest.Status.NEW).count()
     except Exception:  # شمارنده نباید صفحه را بشکند
         pass
     return out

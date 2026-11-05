@@ -69,6 +69,7 @@
           <dt>SSL</dt><dd>require</dd>
         </dl>
       </div>
+      {% if SITE.location_line %}<div class="card">{% include "core/_loc_line.html" %}</div>{% endif %}
       {% if plan %}
       <div class="card">
         <h3>پلن {{ plan.name }}</h3>

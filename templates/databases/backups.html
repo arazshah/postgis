@@ -4,7 +4,7 @@
 <div class="wrap page">
   <div class="page-head">
     <div><h1>بکاپ و بازگردانی</h1>
-      <p class="muted page-sub">هر شب حدود ساعت ۳ بامداد یک بکاپ کامل از <span class="ltr">{{ db.db_name }}</span> گرفته و {{ keep_days|fanum }} روز نگه داشته می‌شود. بکاپ دستی ۷ روز می‌ماند. فایل بکاپ در قالب استاندارد <span class="ltr">pg_dump</span> است و با <span class="ltr">pg_restore</span> یا pgAdmin روی هر PostgreSQL دیگری هم بازمی‌گردد.</p></div>
+      <p class="muted page-sub">هر شب حدود ساعت ۳ بامداد یک بکاپ کامل از <span class="ltr">{{ db.db_name }}</span> گرفته و {{ keep_days|fanum }} روز نگه داشته می‌شود. بکاپ دستی ۷ روز می‌ماند.{% if SITE.offsite_ready %} از هر بکاپ یک نسخه‌ی رمزنگاری‌شده در فضای ابری جداگانه هم نگه داشته می‌شود.{% endif %} فایل بکاپ در قالب استاندارد <span class="ltr">pg_dump</span> است و با <span class="ltr">pg_restore</span> یا pgAdmin روی هر PostgreSQL دیگری هم بازمی‌گردد.</p></div>
     {% if db.is_live %}
     <div class="page-acts"><form method="post" action="{% url 'databases:backup_new' db.pk %}">{% csrf_token %}
       <button class="btn" type="submit" {% if busy %}disabled{% endif %}>{% icon "clock" 18 %}گرفتن بکاپ همین حالا</button></form></div>
@@ -25,7 +25,7 @@
           <td>{{ j.get_kind_display }}{% if j.kind == 'backup' %} {{ j.get_trigger_display }}{% if j.params.safety %} (ایمنی){% endif %}{% endif %}</td>
           <td><span class="badge {% if j.status == 'done' %}active{% elif j.status == 'failed' %}error{% elif j.status == 'expired' %}expired{% else %}pending{% endif %}">{{ j.get_status_display }}</span></td>
           <td>{% if j.size_bytes %}{{ j.size_bytes|fasize }}{% endif %}</td>
-          <td class="small">{% if j.status == 'failed' %}کار ناموفق بود؛ مدیر سایت باخبر شد.{% elif j.kind == 'restore' and j.source %}از بکاپ {{ j.source.created_at|jdatetime_full }}{% if j.status == 'done' %}. {{ j.message }}{% endif %}{% elif j.expires_at and j.status == 'done' %}تا {{ j.expires_at|jdate }} نگه داشته می‌شود{% endif %}</td>
+          <td class="small">{% if j.status == 'failed' %}کار ناموفق بود؛ مدیر سایت باخبر شد.{% elif j.kind == 'restore' and j.source %}از بکاپ {{ j.source.created_at|jdatetime_full }}{% if j.status == 'done' %}. {{ j.message }}{% endif %}{% elif j.expires_at and j.status == 'done' %}تا {{ j.expires_at|jdate }} نگه داشته می‌شود{% endif %}{% if j.kind == 'backup' and j.status == 'done' and SITE.offsite_ready %} <span class="badge {% if j.offsite_key %}active{% else %}pending{% endif %}">{% if j.offsite_key %}نسخه‌ی دوم در فضای ابری{% else %}نسخه‌ی ابری در صف{% endif %}</span>{% endif %}</td>
           <td class="row-acts">{% if j.downloadable %}<a class="btn ghost sm" href="{% url 'databases:backup_download' db.pk j.pk %}">{% icon "download" 16 %}دانلود</a>{% endif %}</td>
         </tr>
       {% endfor %}

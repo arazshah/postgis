@@ -1,0 +1,63 @@
+/* صفحه‌های اعتماد: درباره ما، تماس، امنیت و محل داده، حریم خصوصی. فقط با توکن‌های سیستم طراحی. */
+.tr-page{padding-block:var(--s7) var(--s8)}
+.tr-head{max-width:760px;margin-bottom:var(--s6)}
+.tr-head h1{margin:0 0 var(--s3)}
+.tr-head .lead{font-size:1.08rem;color:var(--ink-2);margin:0}
+
+/* کارت‌های مورد اعتماد */
+.tr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:var(--s4)}
+.tr-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s5);display:flex;flex-direction:column;gap:var(--s3)}
+.tr-card h2,.tr-card h3{font-size:1.05rem;margin:0}
+.tr-card p{margin:0;color:var(--ink-2);line-height:1.9}
+.tr-ico{width:40px;height:40px;border-radius:var(--r-ctl);background:var(--teal-soft);color:var(--teal-dark);display:grid;place-items:center;flex:none}
+.tr-card .tr-link{margin-top:auto;font-weight:700}
+
+/* تیم */
+.tr-team{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:var(--s4)}
+.tr-person{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s5);display:flex;gap:var(--s4);align-items:flex-start}
+.tr-photo{width:96px;height:96px;border-radius:50%;object-fit:cover;flex:none;border:3px solid var(--teal-soft);background:var(--teal-soft)}
+.tr-photo.ph{display:grid;place-items:center;font-family:var(--f-display);font-size:2rem;color:var(--teal-dark)}
+.tr-person h3{margin:0 0 2px;font-size:1.1rem}
+.tr-person .role{color:var(--teal-dark);font-weight:700;font-size:.92rem;margin:0 0 var(--s2)}
+.tr-person p{margin:0 0 var(--s3);color:var(--ink-2);line-height:1.9;font-size:.95rem}
+.tr-links{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:var(--s2)}
+.tr-links a{display:inline-flex;align-items:center;min-height:var(--ctl-h-sm);padding:0 12px;border:1px solid var(--line);border-radius:99px;font-size:.86rem;text-decoration:none;color:var(--ink)}
+.tr-links a:hover{border-color:var(--teal);color:var(--teal-dark)}
+
+/* راه‌های تماس */
+.tr-split{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:var(--s6);align-items:start}
+.tr-ways{display:flex;flex-direction:column;gap:var(--s3)}
+.tr-way{display:flex;gap:var(--s3);align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s4);text-decoration:none;color:var(--ink)}
+a.tr-way:hover{border-color:var(--teal)}
+.tr-way b{display:block}
+.tr-way span.sub{display:block;color:var(--ink-3);font-size:.86rem}
+.tr-form{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s5)}
+.tr-form h2{margin-top:0}
+.tr-topics{display:flex;flex-wrap:wrap;gap:var(--s2);margin:0 0 var(--s5);padding:0;border:0}
+.tr-topics legend{font-weight:700;margin-bottom:var(--s2);padding:0}
+.tr-topics label{position:relative;display:inline-flex;cursor:pointer}
+.tr-topics input{position:absolute;opacity:0;pointer-events:none}
+.tr-topics span{display:inline-flex;align-items:center;min-height:var(--ctl-h);padding:0 14px;border:1.5px solid var(--line);border-radius:99px;background:var(--card);color:var(--ink-2);font-size:.92rem}
+.tr-topics label:hover span{border-color:var(--teal)}
+.tr-topics input:checked+span{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-dark);font-weight:700}
+.tr-topics input:focus-visible+span{outline:2px solid var(--ochre);outline-offset:2px}
+.tr-form .row2{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--s4)}
+.tr-hp{}
+.tr-done{text-align:center;padding:var(--s6) var(--s4)}
+.tr-done .tr-ico{margin:0 auto var(--s3);width:52px;height:52px;background:var(--green-soft);color:var(--green)}
+
+.tr-own{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:var(--s4)}
+.tr-own .tr-card{background:transparent}
+
+.tr-legal{max-width:760px}
+.tr-legal h2{margin-top:var(--s6);font-size:1.15rem}
+.tr-legal li{margin-bottom:var(--s2);line-height:1.9}
+.tr-co{margin-top:var(--s6);padding-top:var(--s4);border-top:1px solid var(--line);color:var(--ink-3);font-size:.9rem}
+
+@media (max-width:900px){.tr-split{grid-template-columns:1fr}}
+@media (max-width:560px){
+  .tr-page{padding-block:var(--s5) var(--s7)}
+  .tr-form .row2{grid-template-columns:1fr}
+  .tr-person{flex-direction:column;align-items:center;text-align:center}
+  .tr-links{justify-content:center}
+}

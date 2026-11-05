@@ -1,8 +1,9 @@
-{% extends "base.html" %}{% load fa humanize static %}
+{% extends "base.html" %}{% load fa humanize static ws %}
 {% block title %}پایگاه داده مکانی PostGIS آنلاین | ساخت رایگان در ۳ دقیقه — {{ SITE_NAME }}{% endblock %}
 {% block head %}
 <link rel="preload" href="{% static 'fonts/noto-kufi-arabic-arabic-800-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{% static 'css/home.css' %}">
+<link rel="stylesheet" href="{% static 'css/trust.css' %}">
 {% endblock %}
 {% block jsonld %}
 <script type="application/ld+json">
@@ -159,6 +160,7 @@ WHERE ST_DWithin(
     <div class="section-head">
       <h2 id="plans-h">پلن‌ها</h2>
       <p class="muted">با پلن رایگان شروع کنید؛ محدودیت‌ها از اول روشن‌اند.</p>
+      {% include "core/_loc_line.html" %}
     </div>
     <div class="plans">
     {% for p in plans %}
@@ -184,6 +186,22 @@ WHERE ST_DWithin(
     </div>
     {% endfor %}
     </div>
+  </div>
+</section>
+
+{# ───────────── اعتماد: داده‌ی شما مال شماست ───────────── #}
+<section class="section cv" id="trust" aria-labelledby="trust-h">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id="trust-h">داده‌ی شما مال شماست</h2>
+      <p class="muted">بی‌پرده بگوییم داده کجاست و اگر خواستید بروید چه می‌شود.</p>
+    </div>
+    <div class="tr-own">
+      <div class="tr-card"><span class="tr-ico">{% icon "server" 22 %}</span><h3>محل داده مشخص است</h3><p>{% if SITE.location_line %}{{ SITE.location_line }}.{% else %}جزئیات محل سرورها را در صفحه‌ی امنیت ببینید.{% endif %}</p></div>
+      <div class="tr-card"><span class="tr-ico">{% icon "download" 22 %}</span><h3>هر لحظه ببرید</h3><p>بکاپ کامل استاندارد PostgreSQL و خروجی جدول‌ها را دانلود کنید؛ قفل فروشنده ندارید.</p></div>
+      <div class="tr-card"><span class="tr-ico">{% icon "users" 22 %}</span><h3>آدم‌های واقعی پشت سایت</h3><p>تیم را بشناسید و مستقیم با ما صحبت کنید.</p></div>
+    </div>
+    <p style="margin-top:var(--s5)"><a class="btn ghost" href="{% url 'core:trust' %}">{% icon "lock" 18 %}امنیت و محل داده</a> <a class="btn ghost" href="{% url 'core:about' %}">درباره ما</a> <a class="btn" href="{% url 'core:contact' %}">{% icon "phone" 18 %}درخواست جلسه</a></p>
   </div>
 </section>
 
