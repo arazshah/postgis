@@ -38,7 +38,7 @@
         </details>
       </form>
       {% endif %}
-      <p class="small muted">هنوز جواب نگرفتید؟ <a href="{% url 'support:new' %}">به پشتیبانی بگویید</a>.</p>
+      {% if not DEVICE_MODE %}<p class="small muted">هنوز جواب نگرفتید؟ <a href="{% url 'support:new' %}">به پشتیبانی بگویید</a>.</p>{% endif %}
     </section>
 
     <nav class="pager" aria-label="مقاله قبلی و بعدی">

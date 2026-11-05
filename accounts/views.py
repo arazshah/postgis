@@ -1,5 +1,6 @@
 import re
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.shortcuts import redirect, render
@@ -31,6 +32,10 @@ def _safe_next(request, value):
 @require_http_methods(["GET", "POST"])
 def login_start(request):
     """قدم اول ورود یا ثبت‌نام: گرفتن شماره موبایل و ارسال کد."""
+    if getattr(settings, "DEVICE_MODE", False):  # دستگاه pgpro: ورود با رمز، بدون پیامک
+        from device.views import login_view
+
+        return login_view(request)
     if request.user.is_authenticated:
         return redirect("databases:dashboard")
     nxt = _safe_next(request, request.GET.get("next") or request.POST.get("next"))
@@ -68,6 +73,8 @@ def login_start(request):
 @require_http_methods(["GET", "POST"])
 def verify(request):
     """قدم دوم: بررسی کد؛ برای کاربر جدید نام و پذیرش قوانین هم گرفته می‌شود."""
+    if getattr(settings, "DEVICE_MODE", False):
+        return redirect("accounts:login")
     phone = request.session.get(SESSION_PHONE)
     if not phone:
         return redirect("accounts:login")
@@ -117,6 +124,8 @@ def verify(request):
 
 @require_POST
 def resend(request):
+    if getattr(settings, "DEVICE_MODE", False):
+        return redirect("accounts:login")
     phone = request.session.get(SESSION_PHONE)
     if not phone:
         return redirect("accounts:login")

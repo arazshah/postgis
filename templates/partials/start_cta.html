@@ -1,4 +1,4 @@
-{% load ws %}{% if not user.is_authenticated %}
+{% load ws %}{% if not user.is_authenticated and not DEVICE_MODE %}
 <aside class="start-cta" aria-labelledby="sc-{{ where }}">
   <span class="dash-ico">{% icon "bolt" 20 %}</span>
   <div class="sc-txt">

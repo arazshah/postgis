@@ -1,0 +1,103 @@
+{% extends "base.html" %}{% load ws fa static device_tags %}
+{% block title %}کاربران — {{ SITE_NAME }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/device.css' %}">{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <header class="page-head">
+    <div><h1>کاربران دستگاه</h1><p class="muted page-sub">هر همکار حساب جدا دارد و فقط پایگاه‌های خودش (یا اشتراکی با او) را می‌بیند. مدیر می‌تواند کاربر بسازد و رمزها را بازنشانی کند.</p></div>
+    <div class="page-acts"><button class="btn" type="button" data-dialog-open="dv-create">{% icon "plus" 18 %}کاربر تازه</button></div>
+  </header>
+  {% include "device/_nav.html" with active="users" %}
+
+  {% if secret %}
+  <section class="card dv-secret" role="status" aria-label="رمز موقت">
+    <div class="dv-secret-h">{% icon "lock" 20 %}<b>{% if secret.kind == "create" %}کاربر <span class="ltr">{{ secret.who }}</span> ساخته شد{% else %}رمز <span class="ltr">{{ secret.who }}</span> بازنشانی شد{% endif %}</b></div>
+    <p class="small muted">این رمز موقت را همین حالا به کاربر بدهید؛ دوباره نمایش داده نمی‌شود. کاربر در اولین ورود باید رمز خودش را بگذارد.</p>
+    <div class="dv-secret-pw"><code id="dv-secret-pw" class="ltr mono">{{ secret.password }}</code><button class="btn ghost sm" type="button" data-copy-target="#dv-secret-pw">{% icon "copy" 16 %}کپی</button></div>
+  </section>
+  {% endif %}
+
+  <ul class="dv-list" aria-label="فهرست کاربران">
+    {% for u in rows %}
+    <li class="dv-row card{% if not u.is_active %} is-off{% endif %}">
+      <span class="dv-av" aria-hidden="true">{% if u.initial %}{{ u.initial }}{% else %}{% icon "user" 18 %}{% endif %}</span>
+      <div class="dv-main">
+        <b>{{ u.full_name|default:u.username }}</b>
+        <span class="small muted ltr dv-id">{{ u.username|default:u.phone }}{% if u.username and u.phone %} · {{ u.phone }}{% endif %}</span>
+        {% if u.organization %}<span class="small muted">{{ u.organization }}</span>{% endif %}
+      </div>
+      <div class="dv-tags">
+        {% if u.is_superuser %}<span class="badge active">مدیر</span>{% endif %}
+        {% if not u.is_active %}<span class="badge error">غیرفعال</span>{% endif %}
+        {% if u.device_profile.must_change_password %}<span class="badge warn">رمز موقت</span>{% endif %}
+        <span class="small muted">{{ u.db_count|fanum }} پایگاه · {% if u.last_login %}آخرین ورود {{ u.last_login|jdate }}{% else %}هنوز وارد نشده{% endif %}</span>
+      </div>
+      <div class="pop-wrap">
+        <button class="ib" type="button" data-pop="dvm-{{ u.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="عملیات {{ u.username|default:u.pk }}">{% icon "more" 18 %}</button>
+        <div class="pop-m" id="dvm-{{ u.pk }}" role="menu" hidden>
+          <button role="menuitem" type="button" data-dialog-open="dv-edit" data-dv="{{ u|dv_json }}">{% icon "edit" 18 %}<span>ویرایش مشخصات و نقش</span></button>
+          <button role="menuitem" type="button" data-dialog-open="dv-reset" data-dv="{{ u|dv_json }}">{% icon "lock" 18 %}<span>بازنشانی رمز</span></button>
+          {% if u.pk != user.pk %}
+          <div class="msep"></div>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="toggle"><input type="hidden" name="user" value="{{ u.pk }}">
+            <button role="menuitem" type="submit">{% if u.is_active %}{% icon "eyeoff" 18 %}<span>غیرفعال کردن</span>{% else %}{% icon "eye" 18 %}<span>فعال کردن</span>{% endif %}</button></form>
+          <form method="post" data-confirm="کاربر «{{ u.username|default:u.pk }}» حذف شود؟ این کار برگشت‌پذیر نیست." data-confirm-text="حذف" data-confirm-kind="danger">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="user" value="{{ u.pk }}">
+            <button role="menuitem" class="danger" type="submit">{% icon "trash" 18 %}<span>حذف کاربر</span></button></form>
+          {% endif %}
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <dialog class="dlg" id="dv-create" aria-labelledby="dv-create-t"{% if open_create and create_form.errors %} data-open{% endif %}>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="create">
+      <div class="dlg-h"><span class="dlg-i">{% icon "user" 22 %}</span><h2 id="dv-create-t">کاربر تازه</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+      <div class="dlg-b">
+        {% include "partials/form_errors.html" with form=create_form %}
+        {% include "partials/field.html" with field=create_form.username %}
+        {% include "partials/field.html" with field=create_form.full_name %}
+        {% include "partials/field.html" with field=create_form.organization %}
+        {% include "partials/field.html" with field=create_form.phone %}
+        {% include "partials/field.html" with field=create_form.password %}
+        <fieldset class="wm-pick"><legend>نقش</legend>
+          <div class="choice-grid">
+            <label class="choice"><input type="radio" name="role" value="user" {% if create_form.role.value != "admin" %}checked{% endif %}><span>{% icon "user" 20 %}<b>کاربر</b><small>پایگاه می‌سازد و با داده‌ی خودش کار می‌کند.</small></span></label>
+            <label class="choice"><input type="radio" name="role" value="admin" {% if create_form.role.value == "admin" %}checked{% endif %}><span>{% icon "lock" 20 %}<b>مدیر</b><small>کاربران و تنظیمات دستگاه را هم مدیریت می‌کند.</small></span></label>
+          </div>
+        </fieldset>
+      </div>
+      <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}ساخت کاربر</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="dlg" id="dv-edit" aria-labelledby="dv-edit-t">
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="edit"><input type="hidden" name="user" data-f="user">
+      <div class="dlg-h"><span class="dlg-i">{% icon "edit" 22 %}</span><h2 id="dv-edit-t">ویرایش <span class="ltr" data-t="username"></span></h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+      <div class="dlg-b">
+        <div class="field"><label for="de-name">نام و نام خانوادگی</label><input id="de-name" type="text" name="full_name" maxlength="150" data-f="full_name"></div>
+        <div class="field"><label for="de-org">واحد / سازمان</label><input id="de-org" type="text" name="organization" maxlength="200" data-f="organization"></div>
+        <div class="field"><label for="de-phone">شماره‌ی موبایل</label><input id="de-phone" type="text" name="phone" class="ltr" inputmode="tel" data-f="phone"></div>
+        <fieldset class="wm-pick"><legend>نقش</legend>
+          <div class="choice-grid">
+            <label class="choice"><input type="radio" name="role" value="user" data-f-role="user"><span>{% icon "user" 20 %}<b>کاربر</b><small>فقط داده‌ی خودش.</small></span></label>
+            <label class="choice"><input type="radio" name="role" value="admin" data-f-role="admin"><span>{% icon "lock" 20 %}<b>مدیر</b><small>مدیریت دستگاه و کاربران.</small></span></label>
+          </div>
+        </fieldset>
+      </div>
+      <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}ذخیره</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="dlg" id="dv-reset" aria-labelledby="dv-reset-t">
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="reset"><input type="hidden" name="user" data-f="user">
+      <div class="dlg-h"><span class="dlg-i">{% icon "lock" 22 %}</span><h2 id="dv-reset-t">بازنشانی رمز <span class="ltr" data-t="username"></span></h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+      <div class="dlg-b">
+        <div class="field"><label for="dr-pw">رمز موقت</label><input id="dr-pw" type="text" name="password" class="ltr mono" autocomplete="off" value="{{ temp_password }}"><small class="help">رمز را به کاربر بدهید؛ در اولین ورود باید رمز خودش را بگذارد. همه‌ی نشست‌های باز او بسته می‌شود.</small></div>
+      </div>
+      <div class="dlg-f"><button class="btn" type="submit">{% icon "check" 18 %}بازنشانی</button><button class="btn ghost" type="button" data-dialog-close>انصراف</button></div>
+    </form>
+  </dialog>
+</div>
+{% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'js/device.js' %}" defer></script>{% endblock %}

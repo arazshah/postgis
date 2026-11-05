@@ -53,10 +53,10 @@
       <a role="menuitem" href="{% url 'core:help' %}">{% icon "play" 18 %}<span>راهنمای تصویری</span></a>
       <a role="menuitem" href="{% url 'core:docs' %}">{% icon "book" 18 %}<span>آموزش‌های نوشتاری</span></a>
       <a role="menuitem" href="{% url 'kb:index' %}">{% icon "info" 18 %}<span>پایگاه دانش</span></a>
-      <a role="menuitem" href="{% url 'core:home' %}#faq">{% icon "help" 18 %}<span>پرسش‌های متداول</span></a>
+      {% if not DEVICE_MODE %}<a role="menuitem" href="{% url 'core:home' %}#faq">{% icon "help" 18 %}<span>پرسش‌های متداول</span></a>
       <div class="msep"></div>
       <a role="menuitem" href="{% url 'support:list' %}">{% icon "life" 18 %}<span>تیکت‌های پشتیبانی</span></a>
-      <a role="menuitem" href="{% url 'support:new' %}">{% icon "plus" 18 %}<span>ثبت تیکت تازه</span></a>
+      <a role="menuitem" href="{% url 'support:new' %}">{% icon "plus" 18 %}<span>ثبت تیکت تازه</span></a>{% endif %}
     </div>
   </div>
   <div class="pop-wrap">
@@ -65,8 +65,13 @@
       <div class="pop-who">{% if user.full_name %}<b>{{ user.full_name }}</b><span class="small muted">{{ user.organization|default:"دانشگاه / شرکت را در پروفایل بنویسید" }}</span>{% else %}<b class="ltr">{{ user.phone|default:user.get_username }}</b><a class="small" href="{% url 'accounts:profile' %}">نام و دانشگاه / شرکت را کامل کنید</a>{% endif %}</div>
       <div class="msep"></div>
       <a role="menuitem" href="{% url 'databases:dashboard' %}">{% icon "db" 18 %}<span>پایگاه‌های داده من</span></a>
-      <a role="menuitem" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}<span>صورتحساب‌ها و پلن</span></a>
+      {% if not DEVICE_MODE %}<a role="menuitem" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}<span>صورتحساب‌ها و پلن</span></a>{% endif %}
       <a role="menuitem" href="{% url 'accounts:profile' %}">{% icon "user" 18 %}<span>پروفایل و تنظیمات</span></a>
+      {% if DEVICE_MODE %}<a role="menuitem" href="{% url 'device:password' %}">{% icon "lock" 18 %}<span>تغییر رمز عبور</span></a>
+      {% if user.is_superuser %}<div class="msep"></div>
+      <a role="menuitem" href="{% url 'device:system' %}">{% icon "server" 18 %}<span>دستگاه</span></a>
+      <a role="menuitem" href="{% url 'device:users' %}">{% icon "users" 18 %}<span>کاربران</span></a>
+      <a role="menuitem" href="{% url 'admin:index' %}">{% icon "settings" 18 %}<span>تنظیمات پیشرفته</span></a>{% endif %}{% endif %}
       <div class="msep"></div>
       <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button role="menuitem" class="danger" type="submit">{% icon "logout" 18 %}<span>خروج</span></button></form>
     </div>
@@ -91,7 +96,7 @@
         <a href="{% url 'accounts:profile' %}" {% if u == 'profile' %}aria-current="page"{% endif %}>پروفایل</a>
         <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="linkbtn" type="submit">خروج</button></form>
       {% else %}
-        <a class="btn sm" href="{% url 'accounts:login' %}">ورود / ثبت‌نام</a>
+        <a class="btn sm" href="{% url 'accounts:login' %}">{% if DEVICE_MODE %}ورود{% else %}ورود / ثبت‌نام{% endif %}</a>
       {% endif %}
       {% endwith %}
     </nav>
@@ -109,7 +114,7 @@
   {% block content %}{% endblock %}
 </main>
 
-{% block footer %}{% if user.is_authenticated and not user.is_staff %}<footer class="app-foot"><span>{{ SITE.copyright_text }}</span><nav aria-label="پیوندهای پایین صفحه"><a href="{% url 'core:terms' %}">قوانین استفاده</a><a href="{% url 'support:new' %}">پشتیبانی</a><a href="{% url 'kb:index' %}">پایگاه دانش</a></nav></footer>{% else %}<footer class="footer">
+{% block footer %}{% if DEVICE_MODE %}<footer class="app-foot"><span>pgpro {{ DEVICE_VERSION }} · PostGIS Pro</span><nav aria-label="پیوندهای پایین صفحه"><a href="{% url 'kb:index' %}">پایگاه دانش</a></nav></footer>{% elif user.is_authenticated and not user.is_staff %}<footer class="app-foot"><span>{{ SITE.copyright_text }}</span><nav aria-label="پیوندهای پایین صفحه"><a href="{% url 'core:terms' %}">قوانین استفاده</a><a href="{% url 'support:new' %}">پشتیبانی</a><a href="{% url 'kb:index' %}">پایگاه دانش</a></nav></footer>{% else %}<footer class="footer">
   <div class="wrap">
     <div class="foot-grid">
       <section class="foot-brand" aria-label="درباره {{ SITE_NAME }}">

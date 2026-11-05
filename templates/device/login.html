@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% load ws %}
+{% block title %}ورود — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <div class="auth">
+    <span class="auth-ico">{% icon "lock" 26 %}</span>
+    <h1>ورود به {{ SITE_NAME }}</h1>
+    <p class="muted">نام کاربری و رمز عبوری را که مدیر دستگاه به شما داده وارد کنید.</p>
+    <form method="post" class="card" novalidate>
+      {% csrf_token %}
+      {% include "partials/form_errors.html" %}
+      {% include "partials/field.html" with field=form.identifier %}
+      {% include "partials/field.html" with field=form.password %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <button class="btn" type="submit" style="width:100%">ورود</button>
+    </form>
+    <p class="muted small" style="margin-top:16px">{% icon "info" 16 %} اولین بار؟ نام کاربری <b class="ltr">admin</b> و رمز <b class="ltr">pgpro</b> است؛ بلافاصله از شما می‌خواهیم رمز تازه بگذارید.</p>
+  </div>
+</div>
+{% endblock %}

@@ -1,5 +1,6 @@
 """منوی کنار صفحه برای همه بخش‌های یک پایگاه داده (فضای کار): دسته‌بندی ثابت، بخش فعلی مشخص."""
 from django import template
+from django.conf import settings
 from django.urls import reverse
 
 register = template.Library()
@@ -70,13 +71,14 @@ def _survey_on() -> bool:
 
 def build(db, view_name: str) -> dict:
     survey_on = _survey_on()
+    hidden = getattr(settings, "DEVICE_HIDDEN_VIEWS", ())  # دستگاه pgpro: بخش‌های نبودنی
     mine = bool(getattr(db, "is_mine", False))
     level = 2 if mine else (1 if getattr(db, "can_edit", False) else 0)
     groups, current = [], None
     for title, items in GROUPS:
         rows, has_current = [], False
         for label, url, views, icon, need in items:
-            if LEVEL[need] > level or (url == "survey:index" and not survey_on):
+            if LEVEL[need] > level or (url == "survey:index" and not survey_on) or url in hidden:
                 continue
             on = view_name in views
             row = {"label": label, "url": url, "on": on, "icon": icon}

@@ -11,8 +11,8 @@
       </div>
     </div>
     <div class="dash-head-actions">
-      <a class="btn ghost" href="{% url 'classroom:enter' %}">{% icon "users" 18 %} ورود به کلاس</a>
-      {% if is_teacher %}<a class="btn ghost" href="{% url 'classroom:teach' %}">{% icon "home" 18 %} کلاس‌های من</a>{% endif %}
+      {% if not DEVICE_MODE %}<a class="btn ghost" href="{% url 'classroom:enter' %}">{% icon "users" 18 %} ورود به کلاس</a>
+      {% if is_teacher %}<a class="btn ghost" href="{% url 'classroom:teach' %}">{% icon "home" 18 %} کلاس‌های من</a>{% endif %}{% endif %}
       {% if can_create %}<a class="btn" href="{% url 'databases:create' %}">{% icon "plus" 18 %} پایگاه داده جدید</a>{% endif %}
     </div>
     {% if dbs %}

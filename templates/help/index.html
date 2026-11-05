@@ -61,11 +61,11 @@
         {% for d in docs %}<li><a href="{% url 'core:doc' d.0 %}">{{ d.1 }}<span>{{ d.2 }}</span></a></li>{% endfor %}
       </ul>
     </div>
-    <aside class="panel help-ask">
+    {% if not DEVICE_MODE %}<aside class="panel help-ask">
       <h2>جوابتان را پیدا نکردید؟</h2>
       <p class="muted">یک تیکت ثبت کنید؛ پاسخ را در همان صفحه می‌گیرید.</p>
       <a class="btn" href="{% url 'support:new' %}">ثبت تیکت پشتیبانی</a>
-    </aside>
+    </aside>{% endif %}
   </section>
 </div>
 {% endblock %}

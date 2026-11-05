@@ -30,5 +30,5 @@
   <ul class="kb-list">{% for a in recent %}{% include "kb/_card.html" %}{% endfor %}</ul>
 </section>
 {% endif %}
-<p class="muted small kb-foot">پاسخ سؤالتان را پیدا نکردید؟ <a href="{% url 'support:list' %}">با پشتیبانی تماس بگیرید</a> یا <a href="{% url 'core:help' %}">راهنمای تصویری</a> را ببینید.</p>
+{% if not DEVICE_MODE %}<p class="muted small kb-foot">پاسخ سؤالتان را پیدا نکردید؟ <a href="{% url 'support:list' %}">با پشتیبانی تماس بگیرید</a> یا <a href="{% url 'core:help' %}">راهنمای تصویری</a> را ببینید.</p>{% endif %}
 {% endblock %}

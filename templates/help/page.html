@@ -71,7 +71,7 @@
       <span>{% if prev %}<a href="{% url 'core:help_page' prev.slug %}">قبلی: {{ prev.title }}</a>{% endif %}</span>
       <span>{% if next %}<a href="{% url 'core:help_page' next.slug %}">بعدی: {{ next.title }}</a>{% endif %}</span>
     </nav>
-    <p class="small muted" style="margin-top:var(--s5)">مشکل حل نشد؟ <a href="{% url 'support:new' %}">تیکت پشتیبانی ثبت کنید</a>.</p>
+    {% if not DEVICE_MODE %}<p class="small muted" style="margin-top:var(--s5)">مشکل حل نشد؟ <a href="{% url 'support:new' %}">تیکت پشتیبانی ثبت کنید</a>.</p>{% endif %}
   </article>
 </div>
 {% endblock %}

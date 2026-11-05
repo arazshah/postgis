@@ -1,0 +1,20 @@
+/* صفحه‌های دستگاه pgpro: فهرست کاربران، کارت‌های وضعیت، پیوندهای زبانه */
+.dv-nav{margin-bottom:var(--s4)}
+.dv-nav a{text-decoration:none}
+.dv-h{display:flex;align-items:center;gap:8px;margin:0;font:800 15px var(--f-display)}
+.dv-acts{display:flex;flex-wrap:wrap;gap:8px}
+.dv-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.card.dv-row{flex-direction:row;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:12px 14px}
+.dv-row.is-off{opacity:.65}
+.dv-av{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--teal-soft);color:var(--teal-dark);font:800 1rem/1 var(--f-display)}
+.dv-main{display:flex;flex-direction:column;min-width:150px;flex:1 1 180px}
+.dv-id{unicode-bidi:plaintext}
+.dv-tags{display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap;flex:2 1 240px}
+.dv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px;align-items:start}
+.dv-grid .kv td{text-align:start}
+.dv-grid .kv .meter{width:100%;margin:0 0 4px}
+.dv-secret{border-color:var(--ochre);background:var(--ochre-soft);margin-bottom:12px}
+.dv-secret-h{display:flex;align-items:center;gap:8px}
+.dv-secret-pw{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dv-secret-pw code{font-size:1.25rem;font-weight:700;letter-spacing:.06em;background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-ctl);padding:6px 12px;user-select:all}
+@media (max-width:480px){.card.dv-row{padding:10px 12px}.dv-tags{flex-basis:100%;order:3}}
