@@ -1,0 +1,113 @@
+/* قاب پنل مدیریت (/manage/) — سیستم طراحی ژئوپایگاه روی جنگو ادمین.
+   توکن‌ها باید با :root در app.css و ds.css یکی باشند (آزمون core/tests/test_admin_panel.py بررسی می‌کند). */
+@font-face{font-family:"Vazirmatn";font-weight:400;font-display:swap;src:url(../fonts/vazirmatn-arabic-400-normal.woff2) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:"Vazirmatn";font-weight:500;font-display:swap;src:url(../fonts/vazirmatn-arabic-500-normal.woff2) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:"Vazirmatn";font-weight:700;font-display:swap;src:url(../fonts/vazirmatn-arabic-700-normal.woff2) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:"Vazirmatn";font-weight:400;font-display:swap;src:url(../fonts/vazirmatn-latin-400-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+2000-206F}
+@font-face{font-family:"Vazirmatn";font-weight:700;font-display:swap;src:url(../fonts/vazirmatn-latin-700-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+2000-206F}
+@font-face{font-family:"Kufi";font-weight:800;font-display:swap;src:url(../fonts/noto-kufi-arabic-arabic-800-normal.woff2) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:"Kufi";font-weight:800;font-display:swap;src:url(../fonts/noto-kufi-arabic-latin-800-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+2000-206F}
+
+/* ---------- توکن‌ها (همگام با app.css و ds.css) ---------- */
+:root{
+  --paper:#EEF2EC; --paper-2:#E3EAE1; --surface:#F9FBF8; --ink:#12313A; --ink-2:#4B6269;
+  --line:#C5D2C2; --teal:#0F5C59; --teal-dark:#0A4341; --teal-soft:#D3E5DF; --ochre:#E0A526; --ochre-soft:#F5E7BD;
+  --red:#B42318; --red-soft:#F7DEDA; --green:#1A7F4B; --green-soft:#D7EEDF;
+  --f-body:"Vazirmatn",Tahoma,sans-serif; --f-display:"Kufi","Vazirmatn",sans-serif; --f-mono:"JBMono",ui-monospace,Menlo,Consolas,monospace;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+  --card:#fff; --line-2:#DDE5DA; --ink-3:#5F7479; --on-accent:#fff; --blue:#3E7CB1;
+  --shadow:0 18px 44px -22px rgba(18,49,58,.55); --shadow-sm:0 8px 20px -16px rgba(18,49,58,.6);
+  --r-card:14px; --r-ctl:10px; --top-h:58px; --rail-w:248px; --ctl-h:38px; --ctl-h-sm:30px;
+  /* نگاشت به متغیرهای جنگو */
+  --font-family-primary:var(--f-body); --primary:var(--teal); --secondary:var(--teal-dark); --accent:var(--ochre);
+  --body-bg:var(--paper); --body-fg:var(--ink); --body-quiet-color:var(--ink-3); --body-loud-color:var(--ink);
+  --header-bg:var(--surface); --header-color:var(--ink); --header-branding-color:var(--teal); --header-link-color:var(--ink);
+  --breadcrumbs-bg:transparent; --breadcrumbs-fg:var(--ink-3); --breadcrumbs-link-fg:var(--teal);
+  --link-fg:var(--teal); --link-hover-color:var(--teal-dark); --link-selected-fg:var(--teal-dark);
+  --hairline-color:var(--line-2); --border-color:var(--line); --darkened-bg:var(--paper-2); --selected-bg:var(--teal-soft); --selected-row:var(--ochre-soft);
+  --button-bg:var(--teal); --button-hover-bg:var(--teal-dark); --default-button-bg:var(--teal); --default-button-hover-bg:var(--teal-dark);
+  --object-tools-bg:var(--teal); --object-tools-hover-bg:var(--teal-dark);
+  --error-fg:var(--red); --message-success-bg:var(--green-soft); --message-warning-bg:var(--ochre-soft); --message-error-bg:var(--red-soft);
+}
+body.ap{margin:0;font:14.5px/1.75 var(--f-body);background:var(--paper);color:var(--ink)}
+.ap :focus-visible{outline:3px solid var(--ochre);outline-offset:2px;border-radius:4px}
+.ap .i{flex:none}
+.ap .ltr{direction:ltr;unicode-bidi:isolate;display:inline-block}
+
+/* ---------- نوار بالا ---------- */
+.ap-top{position:sticky;top:0;z-index:40;height:var(--top-h);display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+.ap-brand{display:flex;align-items:center;gap:9px;font:800 1.02rem var(--f-display);color:var(--teal);text-decoration:none;margin-inline-end:6px;white-space:nowrap}
+.ap-brand img{border-radius:9px}
+.ap-gap{flex:1}
+.ap .ib{width:36px;height:36px;border-radius:var(--r-ctl);border:1px solid transparent;background:none;display:inline-grid;place-items:center;cursor:pointer;color:var(--ink-2);padding:0;text-decoration:none}
+.ap .ib:hover,.ap .ib[aria-expanded=true]{background:var(--teal-soft);color:var(--teal)}
+.ap .ib.sm{width:var(--ctl-h-sm);height:var(--ctl-h-sm);border-radius:8px}
+.ap-burger{display:none!important}
+.ap-find{flex:0 1 460px;display:flex;align-items:center;gap:9px;height:var(--ctl-h);padding:0 12px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--card);color:var(--ink-3);font:inherit;font-size:13px;cursor:pointer;text-align:start;min-width:0}
+.ap-find span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ap-find:hover{border-color:var(--teal);color:var(--ink-2)}
+.ap-find kbd,.ap-pal kbd{font:500 11px var(--f-mono);direction:ltr;background:var(--paper);border:1px solid var(--line-2);border-radius:6px;padding:1px 6px}
+.ap-av{width:34px;height:34px;border-radius:50%;border:0;background:var(--ochre-soft);color:var(--ink);display:grid;place-items:center;cursor:pointer;font:800 15px var(--f-display)}
+.ap-av:hover,.ap-av[aria-expanded=true]{box-shadow:0 0 0 3px var(--teal-soft)}
+.pop-wrap{position:relative}
+.pop-m{position:absolute;inset-inline-end:0;top:calc(100% + 6px);min-width:200px;background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-card);box-shadow:var(--shadow);padding:6px;z-index:60}
+.pop-m[hidden]{display:none}
+.pop-m a,.pop-m button{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border:0;background:none;border-radius:8px;font:inherit;font-size:13.5px;color:var(--ink);text-decoration:none;cursor:pointer;text-align:start}
+.pop-m a:hover,.pop-m button:hover{background:var(--teal-soft);color:var(--teal-dark)}
+.pop-m form{margin:0}
+.ap-um-h{padding:6px 10px;font-size:12px;color:var(--ink-3);border-bottom:1px solid var(--line-2);margin-bottom:4px;direction:ltr;text-align:start}
+
+/* ---------- قاب: ریل کناری + محتوا ---------- */
+.ap-body{display:flex;align-items:flex-start;min-height:calc(100vh - var(--top-h))}
+.ap-side{position:sticky;top:var(--top-h);width:var(--rail-w);flex:none;height:calc(100vh - var(--top-h));overflow-y:auto;background:var(--surface);border-inline-end:1px solid var(--line);padding:10px 8px 24px;scrollbar-width:thin}
+.ap-it{display:flex;align-items:center;gap:10px;min-height:var(--ctl-h);padding:0 10px;border-radius:var(--r-ctl);color:var(--ink-2);text-decoration:none;font-size:13.5px}
+.ap-it:hover{background:var(--teal-soft);color:var(--teal-dark)}
+.ap-it.on{background:var(--teal);color:var(--on-accent);font-weight:700}
+.ap-it span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ap-grp{margin-top:2px}
+.ap-grp>summary{list-style:none;display:flex;align-items:center;gap:10px;min-height:var(--ctl-h);padding:0 10px;border-radius:var(--r-ctl);cursor:pointer;font:800 13.5px var(--f-display);color:var(--ink)}
+.ap-grp>summary::-webkit-details-marker{display:none}
+.ap-grp>summary span{flex:1}
+.ap-grp>summary:hover{background:var(--paper)}
+.ap-chev{display:grid;color:var(--ink-3);transition:transform .15s}
+.ap-grp[open]>summary .ap-chev{transform:rotate(180deg)}
+.ap-sub{padding:2px 0 6px;margin-inline-start:18px;border-inline-start:1px solid var(--line-2);padding-inline-start:6px}
+.ap-sub .ap-it{min-height:var(--ctl-h-sm);font-size:13px}
+.ap-n{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--red);color:var(--on-accent);font:700 11px/20px var(--f-body);text-align:center}
+.ap-it.on .ap-n{background:var(--ochre);color:var(--ink)}
+.ap-main{flex:1;min-width:0;padding:16px 24px 48px}
+.ap-main .breadcrumbs{padding:0;margin:0 0 6px;background:none;color:var(--ink-3);font-size:12.5px;border:0;text-transform:none}
+.ap-main .breadcrumbs a{color:var(--teal)}
+.ap-main h1{font:800 22px/1.5 var(--f-display);margin:0 0 var(--s3);color:var(--ink)}
+.ap-main h2{font:800 15px var(--f-display)}
+.ap-scrim{display:none}
+#content{padding:0;width:auto}
+.ap #content.colMS,.ap #content.colSM{padding:0}
+
+/* ---------- جست‌وجوی سراسری ---------- */
+.ap-pal{border:0;padding:0;border-radius:var(--r-card);box-shadow:var(--shadow);width:min(640px,94vw);margin:12vh auto auto;background:var(--card);color:var(--ink);overflow:hidden}
+.ap-pal::backdrop{background:rgba(18,49,58,.45)}
+.ap-pal-h{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line-2);color:var(--ink-3)}
+.ap-pal-h input{flex:1;min-width:0;height:var(--ctl-h);border:0;outline:0;background:none;font:inherit;font-size:15px;color:var(--ink)}
+.ap-pal-l{list-style:none;margin:0;padding:6px;max-height:min(52vh,420px);overflow-y:auto}
+.ap-pal-l li{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--ink)}
+.ap-pal-l li[aria-selected=true]{background:var(--teal-soft);color:var(--teal-dark)}
+.ap-pal-l li small{margin-inline-start:auto;color:var(--ink-3);font-size:12px}
+.ap-pal-l .ap-pal-s{display:block;cursor:default;padding:8px 10px 2px;font:700 11.5px var(--f-body);color:var(--ink-3)}
+.ap-pal-l .ap-pal-e{display:block;cursor:default;padding:18px;text-align:center;color:var(--ink-3)}
+.ap-pal-f{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--line-2);font-size:12px;color:var(--ink-3);background:var(--paper)}
+
+/* ---------- گوشی ---------- */
+@media (max-width:900px){
+  .ap-burger{display:inline-grid!important}
+  .ap-find{flex:1}.ap-find span{font-size:12.5px}.ap-find kbd{display:none}
+  .ap-brand span{display:none}
+  .ap-side{position:fixed;z-index:70;top:0;bottom:0;inset-inline-start:0;height:100%;width:min(300px,86vw);transform:translateX(100%);transition:transform .2s;box-shadow:var(--shadow);padding-top:14px}
+  html[dir=rtl] .ap-side{transform:translateX(100%)}
+  body.ap-open .ap-side{transform:none}
+  body.ap-open .ap-scrim{display:block;position:fixed;inset:0;z-index:65;background:rgba(18,49,58,.45)}
+  .ap-scrim[hidden]{display:none!important}
+  .ap-main{padding:12px 14px 40px}
+}
+@media (max-width:600px){.ap-gap{display:none}}
+@media (prefers-reduced-motion:reduce){.ap-side,.ap-chev{transition:none}}

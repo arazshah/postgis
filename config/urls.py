@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import include, path
 
 from accounts.admin_auth import LockoutAdminAuthenticationForm
+from core.admin_search import search as admin_search
 
 # پنل مدیریت جدا از حساب کاربران: ورود با نام کاربری و رمز عبور
 admin.site.login_form = LockoutAdminAuthenticationForm
@@ -21,6 +22,7 @@ def _index_with_stats(request, extra_context=None):
 admin.site.index = _index_with_stats
 
 urlpatterns = [
+    path("manage/_search/", admin.site.admin_view(admin_search), name="admin_search"),
     path("manage/", admin.site.urls),
     path("accounts/", include("accounts.urls")),
     path("dashboard/", include("databases.urls")),

@@ -1,22 +1,80 @@
-{% extends "admin/base.html" %}{% load static %}
-{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
-{% block extrastyle %}{{ block.super }}
+{% load static ws admin_shell %}<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="NONE,NOARCHIVE">
+<title>{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:'پنل مدیریت' }}{% endblock %}</title>
 <link rel="icon" href="{{ SITE_LOGO_URL }}">
-<style>
-@font-face{font-family:"Vazirmatn";font-weight:400;src:url({% static 'fonts/vazirmatn-arabic-400-normal.woff2' %}) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
-@font-face{font-family:"Vazirmatn";font-weight:700;src:url({% static 'fonts/vazirmatn-arabic-700-normal.woff2' %}) format("woff2");unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFF}
-@font-face{font-family:"Vazirmatn";font-weight:400;src:url({% static 'fonts/vazirmatn-latin-400-normal.woff2' %}) format("woff2");unicode-range:U+0000-00FF}
-@font-face{font-family:"Vazirmatn";font-weight:700;src:url({% static 'fonts/vazirmatn-latin-700-normal.woff2' %}) format("woff2");unicode-range:U+0000-00FF}
-:root{--font-family-primary:"Vazirmatn",Tahoma,sans-serif;--primary:#0F5C59;--secondary:#0A4341;--header-bg:#12313A;
-  --header-link-color:#fff;--link-fg:#0F5C59;--link-hover-color:#0A4341;--button-bg:#0F5C59;--button-hover-bg:#0A4341;
-  --default-button-bg:#0F5C59;--default-button-hover-bg:#0A4341;--accent:#E0A526}
-.gp-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin:0 0 24px}
-.gp-stat{border:1px solid var(--hairline-color);border-radius:8px;padding:12px 16px;background:var(--body-bg)}
-.gp-stat b{display:block;font-size:1.6rem;line-height:1.4}
-.gp-stat span{color:var(--body-quiet-color);font-size:.85rem}
-.gp-stat.bad b{color:#b42318}
-.gp-quick{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
-</style>
-{% endblock %}
-{% block branding %}<div id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></div>{% endblock %}
-{% block userlinks %}<a href="/" target="_blank">مشاهده سایت</a> / {% if user.has_usable_password %}<a href="{% url 'admin:password_change' %}">تغییر رمز عبور</a> / {% endif %}<form id="logout-form" method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button type="submit">خروج</button></form>{% endblock %}
+<link rel="stylesheet" href="{% block stylesheet %}{% static 'admin/css/base.css' %}{% endblock %}">
+<link rel="stylesheet" href="{% static 'css/admin-panel.css' %}">
+{% block extrastyle %}{% endblock %}
+{% block extrahead %}{% endblock %}
+{% block blockbots %}{% endblock %}
+</head>
+<body class="ap {% if is_popup %}popup {% endif %}{% block bodyclass %}{% endblock %}" data-admin-utc-offset="{% now 'Z' %}">
+<a href="#content-start" class="skip-to-content-link">پرش به محتوای اصلی</a>
+{% if not is_popup %}
+{% admin_nav_groups as groups %}
+<header class="ap-top">
+  {% if has_permission %}<button class="ib ap-burger" type="button" data-ap-drawer aria-label="باز کردن منو" aria-expanded="false">{% icon "menu" 20 %}</button>{% endif %}
+  <a class="ap-brand" href="{% url 'admin:index' %}">{% if SITE_LOGO_URL %}<img src="{{ SITE_LOGO_URL }}" alt="" width="28" height="28">{% endif %}<span>{{ site_header|default:'پنل مدیریت' }}</span></a>
+  {% if has_permission %}
+  <button class="ap-find" type="button" data-ap-find aria-label="جست‌وجو در پنل">
+    {% icon "search" 16 %}<span>جست‌وجوی بخش، کاربر، پایگاه داده، فاکتور…</span><kbd>Ctrl K</kbd>
+  </button>
+  <span class="ap-gap"></span>
+  <a class="ib" href="/" target="_blank" rel="noopener" aria-label="مشاهده سایت" title="مشاهده سایت">{% icon "globe" 20 %}</a>
+  <div class="pop-wrap ap-um">
+    <button class="ap-av" type="button" data-pop="ap-um-m" aria-haspopup="menu" aria-expanded="false" aria-label="حساب مدیر">{% firstof user.get_short_name user.get_username as uname %}<span>{{ uname|slice:":1"|upper }}</span></button>
+    <div class="pop-m" id="ap-um-m" role="menu" hidden>
+      <div class="ap-um-h">{{ uname }}</div>
+      {% if user.has_usable_password %}<a role="menuitem" href="{% url 'admin:password_change' %}">{% icon "lock" 16 %}تغییر رمز عبور</a>{% endif %}
+      <form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button role="menuitem" type="submit">{% icon "logout" 16 %}خروج</button></form>
+    </div>
+  </div>
+  {% endif %}
+</header>
+{% endif %}
+
+<div class="ap-body">
+  {% if not is_popup and has_permission %}
+  <nav class="ap-side" id="ap-side" aria-label="بخش‌های پنل مدیریت">
+    <a class="ap-it{% if request.path == '/manage/' %} on{% endif %}" href="{% url 'admin:index' %}">{% icon "dash" 18 %}<span>داشبورد</span></a>
+    {% for g in groups %}
+    <details class="ap-grp"{% if g.on or forloop.first and request.path == '/manage/' %} open{% endif %}>
+      <summary>{% icon g.icon 18 %}<span>{{ g.title }}</span>{% if g.count %}<b class="ap-n" title="منتظر اقدام">{{ g.count }}</b>{% endif %}<i class="ap-chev">{% icon "chev" 16 %}</i></summary>
+      <div class="ap-sub">{% for it in g.items %}<a class="ap-it{% if it.on %} on{% endif %}" href="{{ it.url }}"{% if it.on %} aria-current="page"{% endif %}><span>{{ it.title }}</span>{% if it.count %}<b class="ap-n">{{ it.count }}</b>{% endif %}</a>{% endfor %}</div>
+    </details>
+    {% endfor %}
+  </nav>
+  <div class="ap-scrim" data-ap-drawer hidden></div>
+  {% endif %}
+
+  <main id="content-start" class="ap-main" tabindex="-1">
+    {% if not is_popup %}{% block nav-breadcrumbs %}<nav aria-label="مسیر صفحه">{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">خانه</a>{% if title %} &rsaquo; {{ title }}{% endif %}</div>{% endblock %}</nav>{% endblock %}{% endif %}
+    {% block messages %}{% if messages %}<ul class="messagelist">{% for message in messages %}<li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message|capfirst }}</li>{% endfor %}</ul>{% endif %}{% endblock messages %}
+    <div id="content" class="{% block coltype %}colM{% endblock %}">
+      {% block pretitle %}{% endblock %}
+      {% block content_title %}{% if title %}<h1>{{ title }}</h1>{% endif %}{% endblock %}
+      {% block content_subtitle %}{% if subtitle %}<h2>{{ subtitle }}</h2>{% endif %}{% endblock %}
+      {% block content %}{% block object-tools %}{% endblock %}{{ content }}{% endblock %}
+      {% block sidebar %}{% endblock %}
+      <br class="clear">
+    </div>
+    <footer id="footer">{% block footer %}{% endblock %}</footer>
+  </main>
+</div>
+
+{% if not is_popup and has_permission %}
+<dialog class="ap-pal" id="ap-pal" aria-label="جست‌وجو در پنل">
+  <div class="ap-pal-h">{% icon "search" 18 %}<input type="search" id="ap-pal-q" placeholder="بخش، کاربر، پایگاه داده، فاکتور یا تیکت…" autocomplete="off" aria-label="جست‌وجو"><button class="ib sm" type="button" data-ap-close aria-label="بستن">{% icon "close" 16 %}</button></div>
+  <ul class="ap-pal-l" id="ap-pal-l" role="listbox"></ul>
+  <div class="ap-pal-f"><span>کلیدهای جهت: حرکت</span><span>Enter: باز کردن</span><span>Esc: بستن</span></div>
+</dialog>
+{% admin_palette %}
+{% endif %}
+<script src="{% static 'js/admin-panel.js' %}" defer data-search="{% url 'admin_search' %}"></script>
+{% block extrabody %}{% endblock %}
+</body>
+</html>
