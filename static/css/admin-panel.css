@@ -162,3 +162,26 @@ body.ap{margin:0;font:14.5px/1.75 var(--f-body);background:var(--paper);color:va
 @media (max-width:1280px){.ap-health,.ap-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:900px){.ap-cols{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:560px){.ap-health,.ap-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.ap-h{padding:8px 10px}.ap-h-i{display:none}.ap-k b{font-size:19px}.ap-row{flex-wrap:wrap}.ap-btn{margin-inline-start:19px}}
+
+/* ---------- زبانه‌ها و نوار ذخیره ---------- */
+.ap fieldset[hidden]{display:none!important}
+.ap-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin:0 0 var(--s4);position:sticky;top:var(--top-h);z-index:20;background:var(--paper);padding-top:4px;scrollbar-width:thin}
+.ap-tab{display:inline-flex;align-items:center;gap:7px;height:var(--ctl-h);padding:0 14px;border:0;border-bottom:3px solid transparent;background:none;font:700 13.5px var(--f-body);color:var(--ink-2);cursor:pointer;white-space:nowrap;border-radius:var(--r-ctl) var(--r-ctl) 0 0}
+.ap-tab:hover{background:var(--teal-soft);color:var(--teal-dark)}
+.ap-tab[aria-selected=true]{color:var(--teal);border-bottom-color:var(--teal);background:var(--card)}
+.ap-tab small{font:400 11.5px var(--f-body);color:var(--ink-3)}
+.ap-tab .ap-dot{width:8px;height:8px}
+.ap .submit-row{position:sticky;bottom:0;z-index:30;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:var(--s4) 0 0;padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow-sm)}
+.ap .submit-row input[type=submit],.ap .submit-row .button,.ap .submit-row a.button{height:var(--ctl-h);border-radius:var(--r-ctl);margin:0;line-height:1;display:inline-flex;align-items:center}
+.ap .submit-row .deletelink-box{margin-inline-start:auto}
+.ap fieldset.module{border:1px solid var(--line-2);border-radius:var(--r-card);background:var(--card);overflow:hidden;margin-bottom:var(--s4)}
+.ap fieldset.module>h2{font:800 14px var(--f-display);background:var(--teal);color:var(--on-accent)}
+.ap .form-row{border-bottom:1px solid var(--line-2)}
+.ap input[type=text],.ap input[type=password],.ap input[type=email],.ap input[type=url],.ap input[type=number],.ap input[type=tel],.ap input[type=search],.ap input[type=date],.ap input[type=time],.ap select,.ap textarea{border:1px solid var(--line);border-radius:var(--r-ctl);font-family:var(--f-body);min-height:var(--ctl-h-sm)}
+.ap .button,.ap input[type=submit],.ap input[type=button],.ap .object-tools a{border-radius:var(--r-ctl);font-family:var(--f-body)}
+.ap-dot.ok{background:var(--green)}.ap-dot.warn{background:var(--ochre)}.ap-dot.bad{background:var(--red)}
+@media (max-width:600px){
+  .ap .submit-row{flex-wrap:nowrap;padding:8px;gap:6px;margin-inline:-6px}
+  .ap .submit-row input[type=submit]{flex:1;min-width:0;padding:0 8px;font-size:12.5px;white-space:nowrap;height:var(--ctl-h)}
+  .ap .submit-row .deletelink-box{margin-inline-start:0}
+}

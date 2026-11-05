@@ -60,7 +60,7 @@ class AdminDashboardTests(TestCase):
     def test_empty_install_shows_attention_and_health(self):
         r = self.client.get("/manage/")
         self.assertContains(r, "نیاز به توجه")
-        self.assertContains(r, "هنوز سرور دیتابیسی تعریف نشده")
+        self.assertContains(r, "هنوز هیچ سرور دیتابیسی تعریف نشده")
         self.assertEqual(len(r.context["ap_health"]), 6)
         self.assertEqual(len(r.context["ap_kpis"]), 6)
 

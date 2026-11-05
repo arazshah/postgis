@@ -78,7 +78,7 @@ def build():
         add("bad", f"اتصال به سرور «{s.name}» برقرار نیست: {s.last_check_message[:90]}", "بررسی",
             reverse("admin:databases_databaseserver_change", args=[s.pk]))
     if not servers:
-        add("bad", "هنوز سرور دیتابیسی تعریف نشده؛ کاربران نمی‌توانند پایگاه داده بسازند.", "افزودن سرور",
+        add("bad", "هنوز هیچ سرور دیتابیسی تعریف نشده؛ کاربران نمی‌توانند پایگاه داده بسازند.", "افزودن سرور",
             reverse("admin:databases_databaseserver_add"))
     if bk_fail:
         add("bad", f"{bk_fail} بکاپ در ۲۴ ساعت گذشته ناموفق بود", "دیدن کارها", _u("admin:jobs_job_changelist"))

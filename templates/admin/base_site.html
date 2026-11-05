@@ -7,6 +7,9 @@
 <title>{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:'پنل مدیریت' }}{% endblock %}</title>
 <link rel="icon" href="{{ SITE_LOGO_URL }}">
 <link rel="stylesheet" href="{% block stylesheet %}{% static 'admin/css/base.css' %}{% endblock %}">
+<link rel="stylesheet" href="{% static 'admin/css/rtl.css' %}">
+<link rel="stylesheet" href="{% static 'admin/css/responsive.css' %}">
+<link rel="stylesheet" href="{% static 'admin/css/responsive_rtl.css' %}">
 <link rel="stylesheet" href="{% static 'css/admin-panel.css' %}">
 {% block extrastyle %}{% endblock %}
 {% block extrahead %}{% endblock %}
