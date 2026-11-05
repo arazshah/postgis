@@ -75,7 +75,7 @@ if ! pg_lsclusters -h | awk -v v="$PGV" '$1==v && $2=="main" {print $4}' | grep 
 else
   pg_ctlcluster "$PGV" main restart
 fi
-for _ in $(seq 1 60); do pg_isready -q -h 127.0.0.1 && break; sleep 1; done
+for _ in $(seq 1 120); do pg_isready -q -h 127.0.0.1 && break; sleep 1; done
 pg_isready -q -h 127.0.0.1 || { log "PostgreSQL بالا نیامد."; exit 1; }
 
 psql_su() { runuser -u postgres -- psql -X -q -v ON_ERROR_STOP=1 "$@"; }

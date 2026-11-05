@@ -66,13 +66,9 @@ step "فایل‌های سیستم"
 rsync -a "$HERE/rootfs/" /
 chmod 755 /usr/local/sbin/pgpro-*
 chmod 440 /etc/sudoers.d/pgpro
-chmod 600 /etc/NetworkManager/system-connections/*.nmconnection 2>/dev/null || true
 printf 'PGPRO_VERSION=%s\n' "$VERSION" > /etc/pgpro/version.env
 [ -f /etc/pgpro/support_keys ] || install -m 644 /dev/null /etc/pgpro/support_keys
 install -d -m 755 /etc/pgpro/support_keys.d
-if [ ! -x /usr/sbin/NetworkManager ]; then   # شبکه با ابزار دیگری است؛ پروفایل‌های NM بی‌اثرند
-  rm -f /etc/NetworkManager/system-connections/pgpro-*.nmconnection
-fi
 echo pgpro > /etc/hostname
 if grep -q '^127.0.1.1' /etc/hosts; then sed -i 's/^127.0.1.1.*/127.0.1.1 pgpro/' /etc/hosts; else echo '127.0.1.1 pgpro' >> /etc/hosts; fi
 ln -sf /usr/share/zoneinfo/Asia/Tehran /etc/localtime

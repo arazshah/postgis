@@ -25,7 +25,7 @@ ROOT=$WORK/root
 NAME=pgpro-$VERSION-nanopineo3
 
 [ "$(id -u)" = 0 ] || { echo "با root اجرا کنید." >&2; exit 1; }
-[ "$(uname -m)" = aarch64 ] || echo "هشدار: هاست aarch64 نیست؛ chroot بدون qemu-user-static کار نمی‌کند." >&2
+if [ "$(uname -m)" != aarch64 ]; then echo "هشدار: هاست aarch64 نیست؛ به qemu-user-static و binfmt نیاز است (بسیار کند)." >&2; fi
 mkdir -p "$OUT" "$ROOT"
 LOOP=""
 
@@ -43,7 +43,15 @@ log "ایمیج پایه"
 IMG=$WORK/base.img
 case "$BASE" in
   http*) curl -fL --retry 3 --retry-delay 5 -o "$WORK/base.dl" "$BASE"
-         # نام فایل واقعی از هدر/آدرس نهایی؛ فشرده است یا نه را از محتوا می‌فهمیم
+         # Armbian کنار هر ایمیج فایل .sha می‌گذارد ("هش  نام فایل")؛ اگر بود و نخواند، می‌ایستیم
+         want=$(curl -fsSL --max-time 30 "$BASE.sha" 2>/dev/null | awk '{print $1; exit}' || true)
+         if [[ "$want" =~ ^[0-9a-f]{64}$ ]]; then
+           have=$(sha256sum "$WORK/base.dl" | awk '{print $1}')
+           [ "$want" = "$have" ] || { echo "هش ایمیج پایه نمی‌خواند (انتظار $want، دریافت $have)." >&2; exit 1; }
+           echo "هش ایمیج پایه تأیید شد."
+         else
+           echo "هشدار: فایل هش ایمیج پایه پیدا نشد؛ بررسی هش انجام نشد." >&2
+         fi
          ;;
   *)     cp "$BASE" "$WORK/base.dl" ;;
 esac
@@ -52,20 +60,26 @@ rm -f "$WORK/base.dl"
 echo "اندازه‌ی ایمیج پایه: $(du -h "$IMG" | cut -f1)"
 
 # ── ۲) بزرگ‌کردن پارتیشن ریشه ────────────────────────────────────────────────────────
+# جدول پارتیشن را روی خود فایل ویرایش می‌کنیم و فقط پارتیشن ریشه را با offset به loop می‌دهیم
+# (به loop با پارتیشن‌های /dev/loopXpN وابسته نیست).
 log "بزرگ‌کردن ایمیج (+${EXTRA_GB}GB)"
 truncate -s "+${EXTRA_GB}G" "$IMG"
-LOOP=$(losetup -fP --show "$IMG")
-PTTYPE=$(parted -s "$LOOP" print 2>/dev/null | awk -F': ' '/Partition Table/ {print $2}')
-if [ "$PTTYPE" = gpt ]; then sgdisk -e "$LOOP" >/dev/null 2>&1 || true; fi
+PTTYPE=$(parted -s "$IMG" print 2>/dev/null | awk -F': ' '/Partition Table/ {print $2}')
+if [ "$PTTYPE" = gpt ]; then sgdisk -e "$IMG" >/dev/null 2>&1 || true; fi
 # پارتیشن ریشه = آخرین پارتیشن ext4
-PART=$(lsblk -nrpo NAME,FSTYPE "$LOOP" | awk '$2=="ext4" {p=$1} END {print p}')
-[ -n "$PART" ] || { echo "پارتیشن ext4 پیدا نشد."; lsblk "$LOOP"; exit 1; }
-PARTNUM=${PART##*p}
-parted -s -- "$LOOP" resizepart "$PARTNUM" 100%
-partprobe "$LOOP" 2>/dev/null || true
+PARTNUM=$(parted -sm "$IMG" unit s print | awk -F: '$5=="ext4" {n=$1} END {print n}')
+[ -n "$PARTNUM" ] || { echo "پارتیشن ext4 پیدا نشد."; parted -s "$IMG" print; exit 1; }
+parted -s -- "$IMG" resizepart "$PARTNUM" 100%
+part_geometry() {
+  parted -sm "$IMG" unit s print | awk -F: -v n="$PARTNUM" '$1==n {gsub(/s/,""); print $2, $4}'
+}
+read -r START SIZE < <(part_geometry)
+LOOP=$(losetup -f --show -o $((START * 512)) --sizelimit $((SIZE * 512)) "$IMG")
+PART=$LOOP
 e2fsck -fy "$PART" || [ $? -le 1 ]
 resize2fs "$PART"
 mount "$PART" "$ROOT"
+grep -q ' / ' "$ROOT/etc/fstab" && sed -i -E '\|[[:space:]]/[[:space:]]+ext4|s/defaults(,errors)/defaults,noatime,commit=60\1/' "$ROOT/etc/fstab"
 
 # ── ۳) نصب داخل chroot ─────────────────────────────────────────────────────────────
 log "آماده‌سازی chroot"
@@ -76,6 +90,10 @@ mount -t devpts devpts "$ROOT/dev/pts" 2>/dev/null || true
 [ -L "$ROOT/etc/resolv.conf" ] && mv "$ROOT/etc/resolv.conf" "$ROOT/etc/resolv.conf.pgpro-orig"
 cp /etc/resolv.conf "$ROOT/etc/resolv.conf"
 
+if [ "$(uname -m)" != aarch64 ]; then
+  command -v qemu-aarch64-static >/dev/null || { echo "qemu-user-static نصب نیست." >&2; exit 1; }
+  cp "$(command -v qemu-aarch64-static)" "$ROOT/usr/bin/qemu-aarch64-static"
+fi
 mkdir -p "$ROOT/tmp/pgpro-src"
 rsync -a --delete --exclude .git --exclude '*.sqlite3' --exclude staticfiles --exclude .ruff_cache \
   --exclude __pycache__ "$REPO"/ "$ROOT/tmp/pgpro-src/"
@@ -95,6 +113,7 @@ fi
 
 # ── ۴) تمیزکاری ───────────────────────────────────────────────────────────────────
 log "تمیزکاری"
+rm -f "$ROOT/usr/bin/qemu-aarch64-static"
 rm -rf "$ROOT/tmp/pgpro-src" "$ROOT/root/.cache" "$ROOT/var/lib/apt/lists"/* "$ROOT/var/cache/apt"/*
 find "$ROOT/var/log" -type f -exec truncate -s 0 {} + 2>/dev/null || true
 rm -f "$ROOT/etc/resolv.conf"
@@ -104,20 +123,18 @@ for m in dev/pts dev proc sys; do umount -lf "$ROOT/$m" 2>/dev/null || true; don
 sync
 
 # ── ۵) کوچک‌کردن (فقط جدول msdos؛ Armbian در اولین بوت دوباره تا آخر کارت بزرگ می‌کند) ─────────────────────
+umount "$ROOT"
 if [ "$PTTYPE" != gpt ]; then
   log "کوچک‌کردن"
-  umount "$ROOT"
   e2fsck -fy "$PART" || [ $? -le 1 ]
   resize2fs -M "$PART"
   BLOCKS=$(dumpe2fs -h "$PART" 2>/dev/null | awk -F: '/^Block count/ {gsub(/ /,"",$2); print $2}')
   BSIZE=$(dumpe2fs -h "$PART" 2>/dev/null | awk -F: '/^Block size/ {gsub(/ /,"",$2); print $2}')
-  START=$(parted -sm "$LOOP" unit s print | awk -F: -v n="$PARTNUM" '$1==n {gsub(/s/,"",$2); print $2}')
-  END=$(( START + BLOCKS * BSIZE / 512 + 2048 ))
-  parted -s -- "$LOOP" resizepart "$PARTNUM" "${END}s"
   losetup -d "$LOOP"; LOOP=""
+  END=$(( START + BLOCKS * BSIZE / 512 + 2048 ))
+  parted -s -- "$IMG" resizepart "$PARTNUM" "${END}s"
   truncate -s $(( (END + 1) * 512 + 1048576 )) "$IMG"
 else
-  umount "$ROOT"
   losetup -d "$LOOP"; LOOP=""
 fi
 

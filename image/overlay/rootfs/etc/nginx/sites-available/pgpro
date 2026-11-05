@@ -4,6 +4,7 @@ server {
     listen [::]:80 default_server;
     server_name _;
     server_tokens off;
+    access_log off;   # کمتر نوشتن روی کارت SD
 
     client_max_body_size 110m;
     client_body_timeout 300s;

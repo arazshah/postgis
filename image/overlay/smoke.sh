@@ -31,7 +31,7 @@ setpriv --reuid=pgpro --regid=pgpro --init-groups env -C "$PGPRO_HOME/current" \
   bash -c 'set -a; . /etc/pgpro/pgpro.env; . /etc/pgpro/version.env; set +a;
            exec "'"$PGPRO_HOME"'/venv/bin/gunicorn" config.wsgi:application --bind 127.0.0.1:8000 --workers 2 --threads 2 --timeout 60' \
   >/tmp/gunicorn.log 2>&1 &
-for _ in $(seq 1 60); do curl -fsS -H "$HOST_H" "$BASE/healthz" >/dev/null 2>&1 && break; sleep 1; done
+for _ in $(seq 1 "${SMOKE_WAIT:-60}"); do curl -fsS -H "$HOST_H" "$BASE/healthz" >/dev/null 2>&1 && break; sleep 1; done
 curl -fsS -H "$HOST_H" "$BASE/healthz" | grep -q '"ok"' || { cat /tmp/gunicorn.log; fail "healthz"; }
 ok "healthz"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example.com' "$BASE/accounts/login/")" = 400 ] || fail "Host بیگانه رد نشد"

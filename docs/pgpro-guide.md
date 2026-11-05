@@ -5,9 +5,12 @@
 ## وضعیت (فاز ۱)
 - کد حالت دستگاه، لایه‌ی سیستم، ساخت ایمیج و آزمون دود **نوشته و در chroot روی x86 (Ubuntu 24.04) آزموده شده‌اند**.
 - **روی برد واقعی هنوز آزموده نشده**؛ ایمیج هم هنوز ساخته نشده. فهرست آزمون پایین همین‌ها را روشن می‌کند.
-- ایمیج پایه: `PGPRO_BASE_IMAGE` (پیش‌فرض `https://dl.armbian.com/nanopineo3/Trixie_current_minimal`). **وجود این ایمیج برای NEO3 تأیید نشده است**؛
-  اگر نبود، یکی از ایمیج‌های رسمی NEO3 را از سایت Armbian بردارید و آدرسش را در ورودی `base_image` گردش‌کار بدهید
-  (Debian Trixie یا Bookworm، نسخه‌ی minimal/CLI).
+- ایمیج پایه: `PGPRO_BASE_IMAGE` (پیش‌فرض `https://dl.armbian.com/nanopineo3/Trixie_current_minimal`). **بررسی شد:** این آدرس به ساخت
+  «community» Armbian (`26.11.0-trunk.120`، Debian 13 Trixie، هسته‌ی 6.18.60، minimal) می‌رود. یعنی برای NEO3 پشتیبانی **community** است، نه رسمی/پایدار؛
+  نسخه‌های trunk ممکن است از ساختی به ساخت دیگر عوض شوند. برای ثابت ماندن، آدرس مستقیم یک نسخه‌ی مشخص را در ورودی `base_image` بدهید.
+- ساخت با هش `.sha` کنار ایمیج تطبیق داده می‌شود و اگر نخواند متوقف می‌شود.
+- ساختار ایمیج بررسی شد: جدول msdos، یک پارتیشن ext4 (از سکتور ۳۲۷۶۸)، شبکه با netplan + systemd-networkd (نه NetworkManager)، `systemd-resolved` و
+  `openssh-server` از پیش نصب‌اند. تنظیم شبکه‌ی pgpro (`05-pgpro-eth.network`، DHCP + link-local) و LLMNR روی همین پایه نوشته شد.
 
 ## ساخت ایمیج
 1. کلید عمومی SSH خودتان را در `image/support_keys.pub` بگذارید (یک خط؛ فقط کلید عمومی).

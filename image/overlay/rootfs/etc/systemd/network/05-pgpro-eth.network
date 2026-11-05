@@ -1,0 +1,16 @@
+# شبکه‌ی pgpro: پیش از فایل netplan آرمبیان (10-netplan-*) خوانده می‌شود و جای آن را می‌گیرد.
+# DHCP؛ اگر سرور DHCP نبود (کابل مستقیم به لپ‌تاپ) آدرس link-local (169.254.x.x) تا pgpro.local کار کند.
+[Match]
+Name=e* lan* wan*
+
+[Network]
+DHCP=yes
+LinkLocalAddressing=fallback
+IPv6AcceptRA=yes
+# mDNS را avahi جواب می‌دهد، نه systemd-resolved؛ LLMNR برای نام تک‌کلمه‌ای (ویندوز) روشن است
+MulticastDNS=no
+LLMNR=yes
+
+[DHCPv4]
+UseHostname=no
+SendHostname=yes
