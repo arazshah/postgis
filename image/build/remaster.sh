@@ -132,7 +132,8 @@ if [ "$PTTYPE" != gpt ]; then
   BSIZE=$(dumpe2fs -h "$PART" 2>/dev/null | awk -F: '/^Block size/ {gsub(/ /,"",$2); print $2}')
   losetup -d "$LOOP"; LOOP=""
   END=$(( START + BLOCKS * BSIZE / 512 + 2048 ))
-  parted -s -- "$IMG" resizepart "$PARTNUM" "${END}s"
+  # parted برای کوچک‌کردن پارتیشن حتی با -s تأیید می‌خواهد؛ فایل سیستم همین الان کوچک شده و امن است
+  printf 'Yes\n' | parted ---pretend-input-tty "$IMG" resizepart "$PARTNUM" "${END}s"
   truncate -s $(( (END + 1) * 512 + 1048576 )) "$IMG"
 else
   losetup -d "$LOOP"; LOOP=""
