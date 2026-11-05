@@ -10,11 +10,17 @@
 
   <div class="dv-grid">
     <section class="card">
-      <h2 class="dv-h">{% icon "link" 20 %}نشانی دستگاه</h2>
-      <p class="small muted">همکاران از هر رایانه‌ی همین شبکه با این نشانی‌ها وارد می‌شوند.</p>
+      <h2 class="dv-h">{% icon "link" 20 %}نشانی و اتصال</h2>
+      <p class="small muted">همکاران از هر رایانه‌ی همین شبکه با این نشانی‌ها وارد می‌شوند. برای QGIS و برنامه‌ها، رشته‌ی اتصال کامل در صفحه‌ی هر پایگاه است.</p>
       <table class="kv"><tbody>
         <tr><th>نام</th><td class="ltr">{{ sys.host_local }}</td></tr>
         {% for ip in sys.ips %}<tr><th>{% if forloop.first %}IP{% endif %}</th><td class="ltr">http://{{ ip }}</td></tr>{% empty %}<tr><th>IP</th><td class="muted">کابل شبکه وصل نیست</td></tr>{% endfor %}
+        {% if server %}
+        <tr><th>سرور پایگاه داده</th><td class="ltr">{{ server.public_host }}:{{ server.public_port }}</td></tr>
+        <tr><th>PostgreSQL</th><td class="ltr">{{ server.server_version|default:"—"|truncatechars:12 }}</td></tr>
+        <tr><th>PostGIS</th><td class="ltr">{{ server.postgis_version|default:"—" }}</td></tr>
+        <tr><th>اتصال</th><td class="rtl">{% if server.last_check_ok %}<span class="badge active">سالم</span>{% elif server.last_check_ok is None %}<span class="badge warn">بررسی نشده</span>{% else %}<span class="badge error">ناسالم</span>{% endif %}</td></tr>
+        {% endif %}
       </tbody></table>
     </section>
 
@@ -22,10 +28,10 @@
       <h2 class="dv-h">{% icon "gauge" 20 %}وضعیت</h2>
       <table class="kv"><tbody>
         <tr><th>نسخه</th><td class="ltr">pgpro {{ sys.version }}</td></tr>
-        <tr><th>روشن از</th><td>{{ sys.uptime }}</td></tr>
-        {% if sys.temp %}<tr><th>دمای پردازنده</th><td class="ltr">{{ sys.temp }}</td></tr>{% endif %}
-        {% if sys.memory.ok %}<tr><th>حافظه</th><td><div class="meter {{ sys.memory.level }}"><i style="width:{{ sys.memory.percent }}%"></i></div><span class="small muted">{{ sys.memory.used|fanum }} از {{ sys.memory.total|fanum }}</span></td></tr>{% endif %}
-        {% if sys.disk.ok %}<tr><th>فضای ذخیره‌سازی</th><td><div class="meter {{ sys.disk.level }}"><i style="width:{{ sys.disk.percent }}%"></i></div><span class="small muted">{{ sys.disk.free|fanum }} آزاد از {{ sys.disk.total|fanum }}</span></td></tr>{% endif %}
+        <tr><th>روشن از</th><td class="rtl">{{ sys.uptime|fanum }}</td></tr>
+        {% if sys.temp %}<tr><th>دمای پردازنده</th><td class="rtl"><span class="ltr">{{ sys.temp }}</span></td></tr>{% endif %}
+        {% if sys.memory.ok %}<tr><th>حافظه</th><td class="rtl"><div class="meter {{ sys.memory.level }}"><i style="width:{{ sys.memory.percent }}%"></i></div><span class="small muted">{{ sys.memory.used|fanum }} از {{ sys.memory.total|fanum }}</span></td></tr>{% endif %}
+        {% if sys.disk.ok %}<tr><th>فضای ذخیره‌سازی</th><td class="rtl"><div class="meter {{ sys.disk.level }}"><i style="width:{{ sys.disk.percent }}%"></i></div><span class="small muted">{{ sys.disk.free|fanum }} آزاد از {{ sys.disk.total|fanum }}</span></td></tr>{% endif %}
       </tbody></table>
       {% if sys.disk.ok and sys.disk.level != "ok" %}<p class="msg warning small">{% icon "warn" 16 %} فضای دستگاه رو به پایان است. بکاپ‌های قدیمی را حذف کنید یا فایل‌های بزرگ را پاک کنید.</p>{% endif %}
     </section>
@@ -34,26 +40,12 @@
       <h2 class="dv-h">{% icon "clock" 20 %}ساعت دستگاه</h2>
       <p class="small muted">این دستگاه باتری ساعت ندارد و بدون اینترنت بعد از هر قطع برق ساعتش عقب می‌ماند. با یک کلیک ساعتش را با این رایانه یکی کنید.</p>
       <table class="kv"><tbody>
-        <tr><th>ساعت دستگاه</th><td>{{ sys.now|jdatetime_full }}</td></tr>
+        <tr><th>ساعت دستگاه</th><td class="rtl">{{ sys.now|jdatetime_full }}</td></tr>
         <tr><th>منطقه‌ی زمانی</th><td class="ltr">{{ tz }}</td></tr>
       </tbody></table>
       <div class="dv-acts"><button class="btn" type="button" id="dv-sync" data-url="{% url 'device:time' %}">{% icon "refresh" 18 %}هماهنگ‌سازی با این رایانه</button></div>
       <p class="small" id="dv-sync-msg" role="status" hidden></p>
     </section>
-
-    {% if server %}
-    <section class="card">
-      <h2 class="dv-h">{% icon "db" 20 %}اتصال QGIS و برنامه‌ها</h2>
-      <p class="small muted">برای هر پایگاه، رشته‌ی اتصال کامل در صفحه‌ی خودش است. نشانی سرور پایگاه داده:</p>
-      <table class="kv"><tbody>
-        <tr><th>سرور</th><td class="ltr">{{ server.public_host }}</td></tr>
-        <tr><th>پورت</th><td class="ltr">{{ server.public_port }}</td></tr>
-        <tr><th>PostgreSQL</th><td class="ltr">{{ server.server_version|default:"—" }}</td></tr>
-        <tr><th>PostGIS</th><td class="ltr">{{ server.postgis_version|default:"—" }}</td></tr>
-        <tr><th>اتصال</th><td>{% if server.last_check_ok %}<span class="badge active">سالم</span>{% elif server.last_check_ok is None %}<span class="badge warn">بررسی نشده</span>{% else %}<span class="badge error">ناسالم</span>{% endif %}</td></tr>
-      </tbody></table>
-    </section>
-    {% endif %}
   </div>
 </div>
 {% endblock %}

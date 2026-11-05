@@ -70,8 +70,7 @@
       {% if DEVICE_MODE %}<a role="menuitem" href="{% url 'device:password' %}">{% icon "lock" 18 %}<span>تغییر رمز عبور</span></a>
       {% if user.is_superuser %}<div class="msep"></div>
       <a role="menuitem" href="{% url 'device:system' %}">{% icon "server" 18 %}<span>دستگاه</span></a>
-      <a role="menuitem" href="{% url 'device:users' %}">{% icon "users" 18 %}<span>کاربران</span></a>
-      <a role="menuitem" href="{% url 'admin:index' %}">{% icon "settings" 18 %}<span>تنظیمات پیشرفته</span></a>{% endif %}{% endif %}
+      <a role="menuitem" href="{% url 'device:users' %}">{% icon "users" 18 %}<span>کاربران</span></a>{% endif %}{% endif %}
       <div class="msep"></div>
       <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button role="menuitem" class="danger" type="submit">{% icon "logout" 18 %}<span>خروج</span></button></form>
     </div>

@@ -18,7 +18,7 @@ DEVICE_EXTRA_HOSTS = _base.env_list("PGPRO_EXTRA_HOSTS", "")
 # بخش‌هایی از رابط که در این نسخه نیستند (نام view ریل پایگاه)
 DEVICE_HIDDEN_VIEWS = ("publish:ows", "publish:ows_detail", "enterprise:page", "iranmap:ready")
 # مسیرهای سرویس ابری که روی دستگاه معنا ندارند
-DEVICE_BLOCKED_PREFIXES = ("/billing/", "/support/", "/class/", "/go/", "/assistant/")
+DEVICE_BLOCKED_PREFIXES = ("/billing/", "/support/", "/class/", "/go/", "/assistant/", "/manage/")
 
 INSTALLED_APPS = [*_base.INSTALLED_APPS, "device"]  # noqa: F405
 

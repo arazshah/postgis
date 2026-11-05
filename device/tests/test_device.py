@@ -128,15 +128,17 @@ class GuardTests(Base):
         for bad in ("/billing/", "/support/", "/class/", "unpkg.com", "t.me/"):
             self.assertNotIn(bad, html, bad)
         self.assertIn("/device/users/", html)  # مدیر منوی کاربران را می‌بیند
+        self.assertNotIn("/manage/", html)
 
-    def test_manage_panel_for_superuser(self):
+    def test_manage_panel_is_closed_even_for_admin(self):
         self.login_ready()
-        self.assertEqual(self.client.get("/manage/").status_code, 200)
+        for path in ("/manage/", "/manage/login/", "/manage/accounts/user/"):
+            self.assertEqual(self.client.get(path).status_code, 404, path)
 
-    def test_manage_login_redirects_to_device_login(self):
-        r = self.client.get("/manage/login/")
-        self.assertEqual(r.status_code, 302)
-        self.assertTrue(r["Location"].startswith("/accounts/login/"))
+    def test_docs_pages_render(self):
+        self.login_ready()
+        for path in ("/docs/", "/docs/start/", "/help/", "/kb/"):
+            self.assertEqual(self.client.get(path).status_code, 200, path)
 
 
 class UsersTests(Base):
@@ -159,7 +161,7 @@ class UsersTests(Base):
         self.assertEqual(self.client.get("/device/users/").status_code, 302)
         self.assertEqual(self.client.get("/device/system/").status_code, 302)
         self.assertEqual(self.client.post("/device/time/", {"epoch": "1900000000"}).status_code, 302)
-        self.assertEqual(self.client.get("/manage/").status_code, 302)
+        self.assertEqual(self.client.get("/manage/").status_code, 404)
 
     def test_create_user(self):
         r = self.post(action="create", username="Sara", full_name="سارا", phone="09121234567", password="vqx7m3kp2d",
@@ -307,3 +309,25 @@ class ResetPasswordCommandTests(TestCase):
         from django.core.management.base import CommandError
         with self.assertRaises(CommandError):
             call_command("device_reset_password", "nobody", stdout=StringIO())
+
+
+class BasemapTests(TestCase):
+    def test_vector_scripts_only_when_basemap_exists(self):
+        import tempfile
+        from pathlib import Path
+
+        from django.template.loader import render_to_string
+        from django.test import RequestFactory, override_settings
+
+        from device.context import device
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(OSM_ROOT=Path(tmp)):
+                self.assertEqual(device(RequestFactory().get("/"))["DEVICE_BASEMAP_URL"], "")
+                (Path(tmp) / "basemap").mkdir()
+                (Path(tmp) / "basemap" / "iran.pmtiles").write_bytes(b"x")
+                url = device(RequestFactory().get("/"))["DEVICE_BASEMAP_URL"]
+        self.assertEqual(url, "/basemap/style.json")
+        html = render_to_string("partials/leaflet_vector.html", {"DEVICE_BASEMAP_URL": url})
+        self.assertIn("leaflet-maplibre-gl.js", html)
+        self.assertIn('data-style="/basemap/style.json"', html)
+        self.assertEqual(render_to_string("partials/leaflet_vector.html", {"DEVICE_BASEMAP_URL": ""}).strip(), "")

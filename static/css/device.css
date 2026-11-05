@@ -10,8 +10,8 @@
 .dv-main{display:flex;flex-direction:column;min-width:150px;flex:1 1 180px}
 .dv-id{unicode-bidi:plaintext}
 .dv-tags{display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap;flex:2 1 240px}
-.dv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px;align-items:start}
-.dv-grid .kv td{text-align:start}
+.dv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px;align-items:start}
+.dv-grid .kv td.rtl{text-align:start}
 .dv-grid .kv .meter{width:100%;margin:0 0 4px}
 .dv-secret{border-color:var(--ochre);background:var(--ochre-soft);margin-bottom:12px}
 .dv-secret-h{display:flex;align-items:center;gap:8px}

@@ -2,5 +2,4 @@
 <nav class="tabs dv-nav" aria-label="مدیریت دستگاه">
   <a href="{% url 'device:system' %}" {% if active == 'system' %}aria-selected="true"{% endif %}>{% icon "server" 16 %}دستگاه</a>
   <a href="{% url 'device:users' %}" {% if active == 'users' %}aria-selected="true"{% endif %}>{% icon "users" 16 %}کاربران</a>
-  <a href="{% url 'admin:index' %}">{% icon "settings" 16 %}تنظیمات پیشرفته</a>
 </nav>

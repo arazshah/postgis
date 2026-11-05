@@ -20,7 +20,7 @@ on:
   push:
     tags: ["pgpro-v*"]
     branches: [pgpro]
-    paths: ["image/**", ".github/workflows/pgpro-image.yml", "requirements.txt"]
+    paths: ["image/**", ".github/workflows/pgpro-image.yml", "requirements.txt", "static/vendor/maplibre-leaflet/**"]
 
 jobs:
   image:
@@ -34,6 +34,32 @@ jobs:
       - uses: actions/checkout@v4
       - name: ابزارهای ساخت
         run: sudo apt-get update -q && sudo apt-get install -y -q rsync parted gdisk e2fsprogs xz-utils curl
+      - name: ماه (کلید کش نقشه)
+        id: month
+        run: echo "m=$(date -u +%Y%m)" >> "$GITHUB_OUTPUT"
+      - name: کش نقشه‌ی پایه‌ی ایران
+        id: bmcache
+        uses: actions/cache@v4
+        with:
+          path: basemap
+          key: pgpro-basemap-z14-iran-${{ steps.month.outputs.m }}
+      - name: نقشه‌ی پایه‌ی ایران (Protomaps/OSM، تا بزرگنمایی ۱۴)
+        if: steps.bmcache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p basemap
+          curl -fsSL https://github.com/protomaps/go-pmtiles/releases/download/v1.28.3/go-pmtiles_1.28.3_Linux_arm64.tar.gz | tar -xz -C /tmp pmtiles
+          for i in 0 1 2 3 4 5 6 7 8 9; do
+            d=$(date -u -d "-$i day" +%Y%m%d)
+            if curl -fsI "https://build.protomaps.com/$d.pmtiles" >/dev/null; then break; fi
+            d=""
+          done
+          [ -n "$d" ] || { echo "نسخه‌ی روزانه‌ی Protomaps پیدا نشد"; exit 1; }
+          echo "نسخه‌ی Protomaps: $d"
+          /tmp/pmtiles extract "https://build.protomaps.com/$d.pmtiles" basemap/iran.pmtiles \
+            --bbox=43.9,24.8,63.5,39.9 --maxzoom=14 --download-threads=4
+      - name: اندازه‌ی نقشه‌ی پایه
+        run: ls -lh basemap/ && /tmp/pmtiles show basemap/iran.pmtiles 2>/dev/null | head -20 || true
       - name: نسخه
         id: ver
         run: |
@@ -43,9 +69,10 @@ jobs:
         env:
           PGPRO_VERSION: ${{ steps.ver.outputs.version }}
           PGPRO_BASE_IMAGE: ${{ inputs.base_image }}
+          PGPRO_BASEMAP_FILE: ${{ github.workspace }}/basemap/iran.pmtiles
         run: |
           [ -n "$PGPRO_BASE_IMAGE" ] || unset PGPRO_BASE_IMAGE
-          sudo --preserve-env=PGPRO_VERSION,PGPRO_BASE_IMAGE bash image/build/remaster.sh "$PWD/out"
+          sudo --preserve-env=PGPRO_VERSION,PGPRO_BASE_IMAGE,PGPRO_BASEMAP_FILE bash image/build/remaster.sh "$PWD/out"
       - uses: actions/upload-artifact@v4
         with:
           name: pgpro-${{ steps.ver.outputs.version }}-nanopineo3

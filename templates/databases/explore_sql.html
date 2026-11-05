@@ -114,4 +114,4 @@
 
 {% endblock %}
 {% block head %}{% if result.geojson %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endif %}{% endblock %}
-{% block ws_scripts %}{% if result.geojson %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script><script src="{% static 'js/sql-map.js' %}" defer></script>{% endif %}<script src="{% static 'js/sql-nl.js' %}" defer></script>{% endblock %}
+{% block ws_scripts %}{% if result.geojson %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>{% include "partials/leaflet_vector.html" %}<script src="{% static 'js/sql-map.js' %}" defer></script>{% endif %}<script src="{% static 'js/sql-nl.js' %}" defer></script>{% endblock %}

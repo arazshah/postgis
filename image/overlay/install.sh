@@ -46,7 +46,7 @@ step "کد برنامه ← $REL"
 install -d "$OPT/releases"
 rm -rf "$REL"
 rsync -a --delete \
-  --exclude '.git' --exclude '.github' --exclude 'image' --exclude 'docs' --exclude 'tests' \
+  --exclude '/.git' --exclude '/.github' --exclude '/image' --exclude '/docs' --exclude 'tests' \
   --exclude '__pycache__' --exclude '*.sqlite3' --exclude 'staticfiles' --exclude '.ruff_cache' \
   "$SRC"/ "$REL"/
 ln -sfn "$REL" "$OPT/current"

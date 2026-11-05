@@ -10,6 +10,7 @@
 #   PGPRO_BASE_IMAGE       مسیر یا آدرس ایمیج پایه (.img یا .img.xz)؛ پیش‌فرض: آخرین Armbian Trixie minimal برای NEO3
 #   PGPRO_EXTRA_GB         فضای افزوده برای نصب (پیش‌فرض ۳)
 #   PGPRO_SKIP_SMOKE=1     رد کردن آزمون دود
+#   PGPRO_BASEMAP_FILE     فایل iran.pmtiles که داخل ایمیج (/opt/pgpro/basemap) گذاشته می‌شود؛ فضای ایمیج به اندازه‌ی آن بیشتر می‌شود
 #   PGPRO_SUPPORT_KEYS     مسیر فایل کلیدهای عمومی SSH پشتیبان (پیش‌فرض: image/support_keys.pub)
 set -euo pipefail
 export LC_ALL=C   # خروجی ابزارها (parted, dumpe2fs) انگلیسی و قابل‌تجزیه باشد
@@ -62,6 +63,10 @@ echo "اندازه‌ی ایمیج پایه: $(du -h "$IMG" | cut -f1)"
 # ── ۲) بزرگ‌کردن پارتیشن ریشه ────────────────────────────────────────────────────────
 # جدول پارتیشن را روی خود فایل ویرایش می‌کنیم و فقط پارتیشن ریشه را با offset به loop می‌دهیم
 # (به loop با پارتیشن‌های /dev/loopXpN وابسته نیست).
+if [ -n "${PGPRO_BASEMAP_FILE:-}" ]; then
+  [ -s "$PGPRO_BASEMAP_FILE" ] || { echo "فایل نقشه‌ی پایه پیدا نشد: $PGPRO_BASEMAP_FILE" >&2; exit 1; }
+  EXTRA_GB=$(( EXTRA_GB + ($(stat -c %s "$PGPRO_BASEMAP_FILE") + 1073741823) / 1073741824 ))
+fi
 log "بزرگ‌کردن ایمیج (+${EXTRA_GB}GB)"
 truncate -s "+${EXTRA_GB}G" "$IMG"
 PTTYPE=$(parted -s "$IMG" print 2>/dev/null | awk -F': ' '/Partition Table/ {print $2}')
@@ -105,6 +110,12 @@ fi
 
 log "install.sh"
 chroot "$ROOT" /usr/bin/env PGPRO_VERSION="$VERSION" bash /tmp/pgpro-src/image/overlay/install.sh
+
+if [ -n "${PGPRO_BASEMAP_FILE:-}" ]; then
+  log "نقشه‌ی پایه‌ی ایران"
+  install -D -m 644 "$PGPRO_BASEMAP_FILE" "$ROOT/opt/pgpro/basemap/iran.pmtiles"
+  ls -lh "$ROOT/opt/pgpro/basemap/iran.pmtiles"
+fi
 
 if [ "${PGPRO_SKIP_SMOKE:-0}" != 1 ]; then
   log "آزمون دود"

@@ -118,6 +118,7 @@
   </div>
   {% endif %}
   <script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>
+  {% include "partials/leaflet_vector.html" %}
   {% if edit_cfg.capable %}<script src="{% static 'vendor/leaflet-geoman/leaflet-geoman.min.js' %}" defer></script>{% endif %}
   <script src="{% static 'js/explore-map.js' %}" defer></script>
 {% else %}

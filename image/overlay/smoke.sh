@@ -53,6 +53,21 @@ curl -sS -c "$jar" -b "$jar" -H "$HOST_H" -d "csrfmiddlewaretoken=$tok&old=pgpro
 code=$(curl -sS -c "$jar" -b "$jar" -H "$HOST_H" -o /dev/null -w '%{http_code}' "$BASE/dashboard/")
 [ "$code" = 200 ] || fail "داشبورد بعد از تغییر رمز: $code"
 ok "داشبورد باز شد"
+for page in /docs/ /docs/start/ /help/ /kb/ /device/system/ /device/users/; do
+  code=$(curl -sS -c "$jar" -b "$jar" -H "$HOST_H" -o /dev/null -w '%{http_code}' "$BASE$page")
+  [ "$code" = 200 ] || fail "صفحه $page کد $code داد"
+done
+ok "راهنما، آموزش‌ها و صفحه‌های دستگاه باز می‌شوند"
+code=$(curl -sS -c "$jar" -b "$jar" -H "$HOST_H" -o /dev/null -w '%{http_code}' "$BASE/manage/")
+[ "$code" = 404 ] || fail "/manage/ باید بسته باشد ($code)"
+ok "/manage/ بسته است"
+if [ -f /opt/pgpro/basemap/iran.pmtiles ]; then
+  code=$(curl -sS -H "$HOST_H" -o /tmp/style.json -w '%{http_code}' "$BASE/basemap/style.json")
+  [ "$code" = 200 ] || fail "style.json نقشه‌ی پایه کد $code داد"
+  size=$(curl -sS -H "$HOST_H" -o /tmp/tile.mvt -w '%{size_download}' "$BASE/basemap/5/21/12.mvt")
+  [ "$size" -gt 0 ] || fail "کاشی نقشه‌ی پایه خالی است"
+  ok "نقشه‌ی پایه‌ی ایران سرو می‌شود (کاشی ${size} بایت)"
+fi
 
 echo "== ۴) ساخت پایگاه PostGIS"
 /usr/local/sbin/pgpro-manage shell -c "

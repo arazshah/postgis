@@ -88,6 +88,7 @@
 {% endblock %}
 {% block ws_scripts %}{% if has_layers %}
 <script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>
+{% include "partials/leaflet_vector.html" %}
 <script src="{% static 'vendor/leaflet-geoman/leaflet-geoman.min.js' %}" defer></script>
 <script src="{% static 'js/studio-ui.js' %}" defer></script>
 <script src="{% static 'js/find.js' %}" defer></script>{% endif %}{% endblock %}

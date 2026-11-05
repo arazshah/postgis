@@ -22,6 +22,12 @@ id pgpro >/dev/null 2>&1 || { log "کاربر pgpro وجود ندارد؛ ایم
 install -d -o pgpro -g pgpro -m 750 "$DATA" "$DATA/media" "$DATA/backups" "$DATA/ows" "$DATA/osm" "$DATA/rasters" \
   "$DATA/imports" /var/cache/pgpro
 
+# نقشه‌ی پایه‌ی آفلاین ایران داخل ایمیج است (فقط‌خواندنی)؛ برنامه آن را از OSM_ROOT/basemap می‌خواند.
+if [ -f /opt/pgpro/basemap/iran.pmtiles ]; then
+  install -d -o pgpro -g pgpro -m 750 "$DATA/osm/basemap"
+  ln -sfn /opt/pgpro/basemap/iran.pmtiles "$DATA/osm/basemap/iran.pmtiles"
+fi
+
 # ── ۱) رمزها و تنظیمات یکتای این دستگاه ──────────────────────────────────────────────
 if [ ! -f "$ENV_FILE" ]; then
   log "ساخت رمزهای یکتا…"

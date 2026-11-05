@@ -1,0 +1,4 @@
+{% load static %}{% if DEVICE_BASEMAP_URL %}<link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}">
+<script src="{% static 'vendor/maplibre/maplibre-gl.js' %}" defer></script>
+<script src="{% static 'vendor/maplibre-leaflet/leaflet-maplibre-gl.js' %}" defer></script>
+<script src="{% static 'js/device-basemap.js' %}" defer data-style="{{ DEVICE_BASEMAP_URL }}" data-rtl="{% static 'vendor/rtl-text/mapbox-gl-rtl-text.js' %}"></script>{% endif %}
