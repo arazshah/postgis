@@ -191,16 +191,20 @@ body.ap{margin:0;font:14.5px/1.75 var(--f-body);background:var(--paper);color:va
 .ap #changelist .changelist-form-container{display:block;width:auto;max-width:none;flex:1}
 .ap #changelist-form .results{overflow-x:auto;border:1px solid var(--line-2);border-radius:var(--r-card);background:var(--card)}
 .ap #result_list{width:100%;border:0}
-.ap #result_list thead th{position:sticky;top:var(--top-h);z-index:5;background:var(--paper-2);border-bottom:1px solid var(--line);font:700 12.5px var(--f-body);color:var(--ink-2);padding:8px 10px}
+.ap #result_list thead th{background:var(--paper-2);border-bottom:1px solid var(--line);font:700 12.5px var(--f-body);color:var(--ink-2);padding:8px 10px}
 .ap #result_list thead th a{color:var(--ink-2)}
 .ap #result_list tbody td,.ap #result_list tbody th{padding:6px 10px;border-bottom:1px solid var(--line-2);font-size:13.5px}
 .ap #result_list tbody tr:hover td,.ap #result_list tbody tr:hover th{background:var(--teal-soft)}
 .ap #toolbar{border:0;padding:0;margin:0 0 var(--s3);background:none}
 .ap #toolbar form{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ap #toolbar #searchbar{height:var(--ctl-h);min-width:min(320px,100%);padding:0 12px}
-.ap #changelist .actions{position:sticky;bottom:0;z-index:25;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;margin:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow-sm)}
+.ap #changelist .actions{box-sizing:border-box;width:auto;margin:0 0 var(--s3)!important;position:sticky;bottom:0;z-index:25;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow-sm)}
 .ap .paginator{border:0;background:none;padding:var(--s3) 0}
-.ap .object-tools{float:none;display:flex;gap:8px;margin:0 0 var(--s3);padding:0}
+/* دکمه‌ی افزودن/تاریخچه هم‌ردیف عنوان صفحه، در انتهای ردیف (نه روی نوار جست‌وجو) */
+.ap #content{position:relative}
+.ap .object-tools{float:none;display:flex;gap:8px;margin:0;padding:0;position:absolute;top:0;inset-inline-end:0;z-index:2}
+.ap #content>h1{padding-inline-end:170px;min-height:var(--ctl-h)}
+@media (max-width:900px){.ap .object-tools{position:static;margin:0 0 var(--s3)}.ap #content>h1{padding-inline-end:0}}
 .ap .object-tools li{margin:0}
 .ap .object-tools a{display:inline-flex;align-items:center;height:var(--ctl-h);padding:0 14px;border-radius:var(--r-ctl);background:var(--teal);color:var(--on-accent);font-size:13.5px;text-decoration:none}
 .ap .object-tools a:hover{background:var(--teal-dark)}
@@ -213,7 +217,6 @@ body.ap-filter-open #changelist-filter{display:block;position:fixed;z-index:80;t
 body.ap-filter-open::after{content:"";position:fixed;inset:0;z-index:75;background:rgba(18,49,58,.45)}
 .ap #changelist-filter h2{font:800 15px var(--f-display);background:none;color:var(--ink);padding:0 0 8px;text-transform:none}
 .ap #changelist-filter .ap-fclose{position:absolute;top:10px;inset-inline-end:10px}
-@media (max-width:900px){.ap #result_list thead th{top:0}}
 .ap-pal-h input::-webkit-search-cancel-button{display:none}
 .ap #changelist-search>div{display:flex;align-items:center;gap:8px;margin:0}
 .ap #changelist-search label{display:none}
@@ -224,3 +227,6 @@ body.ap-filter-open::after{content:"";position:fixed;inset:0;z-index:75;backgrou
   .ap .submit-row input[type=submit]{width:auto!important;flex:1;min-width:0;height:var(--ctl-h)!important;padding:0 6px!important;margin:0!important;float:none;line-height:1.2}
   .ap .submit-row input[name=_addanother]{display:none}
 }
+/* زبانه‌های زیاد: متن وضعیت فقط روی صفحه‌ی عریض؛ نقطه‌ی رنگی با tooltip همیشه هست */
+.ap-tab{padding:0 11px;font-size:13px}
+@media (max-width:1700px){.ap-tab small{display:none}}
