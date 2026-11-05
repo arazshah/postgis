@@ -1,0 +1,27 @@
+[Unit]
+Description=pgpro: پنل وب (gunicorn)
+After=network.target postgresql.service pgpro-firstboot.service
+Wants=postgresql.service
+ConditionPathExists=/var/lib/pgpro/.firstboot-done
+
+[Service]
+User=pgpro
+Group=pgpro
+WorkingDirectory=/opt/pgpro/current
+EnvironmentFile=/etc/pgpro/pgpro.env
+EnvironmentFile=-/etc/pgpro/version.env
+# منتظر آماده‌شدن PostgreSQL، سپس مایگریشن (بعد از هر به‌روزرسانی لازم است؛ بدون تغییر چند ثانیه است)
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 90); do pg_isready -q -h 127.0.0.1 && exit 0; sleep 2; done; exit 1'
+ExecStartPre=/opt/pgpro/venv/bin/python manage.py migrate --noinput
+ExecStart=/opt/pgpro/venv/bin/gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 2 --worker-class gthread --threads 4 --timeout 120 --max-requests 2000 --max-requests-jitter 200 --access-logfile -
+Restart=always
+RestartSec=5
+TimeoutStartSec=300
+MemoryHigh=700M
+MemoryMax=900M
+PrivateTmp=yes
+ProtectHome=yes
+# توجه: NoNewPrivileges عمداً نیست؛ پنل برای تنظیم ساعت از sudo (pgpro-settime) استفاده می‌کند.
+
+[Install]
+WantedBy=multi-user.target

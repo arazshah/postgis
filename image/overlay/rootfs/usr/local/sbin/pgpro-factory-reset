@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# بازگرداندن دستگاه به حالت اولین بوت: همه‌ی پایگاه‌ها، کاربران، رمزها و فایل‌ها پاک می‌شود. برگشت‌ناپذیر است.
+set -euo pipefail
+[ "${1:-}" = "--yes" ] || { echo "این کار همه‌ی داده‌ها را پاک می‌کند. برای اجرا: pgpro-factory-reset --yes" >&2; exit 2; }
+[ "$(id -u)" = 0 ] || { echo "با root اجرا کنید (sudo)." >&2; exit 1; }
+DATA=${PGPRO_DATA:-/var/lib/pgpro}
+ENV_FILE=${PGPRO_ENV:-/etc/pgpro/pgpro.env}
+if [ -d /run/systemd/system ]; then systemctl stop pgpro-web.service pgpro-worker.service 2>/dev/null || true; fi
+for d in /usr/lib/postgresql/*/; do
+  pg_dropcluster --stop "$(basename "$d")" main 2>/dev/null || true
+done
+find "$DATA" -mindepth 1 -delete 2>/dev/null || true
+rm -rf /var/cache/pgpro/* "$ENV_FILE"
+echo "انجام شد. با روشن شدن دوباره (یا اجرای pgpro-firstboot) راه‌اندازی اولیه تکرار می‌شود."

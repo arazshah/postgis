@@ -1,0 +1,4 @@
+# پنل (کاربر pgpro) فقط همین یک دستور را با root اجرا می‌کند
+pgpro ALL=(root) NOPASSWD: /usr/local/sbin/pgpro-settime
+# پشتیبان (ورود فقط با کلید SSH)
+support ALL=(ALL) NOPASSWD: ALL

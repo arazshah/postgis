@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# راه‌اندازی اولیه‌ی دستگاه pgpro: رمزهای یکتای همین دستگاه، خوشه‌ی PostgreSQL، دیتابیس پنل، مایگریشن و مدیر اولیه.
+# چندباره‌اجراشدنی است: هر مرحله‌ای که انجام شده باشد دوباره انجام نمی‌شود؛ با موفقیت که تمام شد نشانه‌ی .firstboot-done می‌ماند.
+set -euo pipefail
+umask 027
+
+PGPRO_HOME=${PGPRO_HOME:-/opt/pgpro}
+DATA=${PGPRO_DATA:-/var/lib/pgpro}
+ENV_FILE=${PGPRO_ENV:-/etc/pgpro/pgpro.env}
+HOSTNAME_SHORT=${PGPRO_HOSTNAME:-pgpro}
+PY="$PGPRO_HOME/venv/bin/python"
+DONE="$DATA/.firstboot-done"
+LOG="$DATA/firstboot.log"
+
+install -d -m 755 "$DATA" /etc/pgpro
+log() { printf '[%s] %s\n' "$(date +%T)" "$*" | tee -a "$LOG" >&2; }
+
+[ -f "$DONE" ] && { log "راه‌اندازی اولیه قبلاً انجام شده است."; exit 0; }
+log "شروع راه‌اندازی اولیه…"
+
+id pgpro >/dev/null 2>&1 || { log "کاربر pgpro وجود ندارد؛ ایمیج ناقص است."; exit 1; }
+install -d -o pgpro -g pgpro -m 750 "$DATA" "$DATA/media" "$DATA/backups" "$DATA/ows" "$DATA/osm" "$DATA/rasters" \
+  "$DATA/imports" /var/cache/pgpro
+
+# ── ۱) رمزها و تنظیمات یکتای این دستگاه ──────────────────────────────────────────────
+if [ ! -f "$ENV_FILE" ]; then
+  log "ساخت رمزهای یکتا…"
+  secret=$("$PY" -c 'import secrets; print(secrets.token_urlsafe(50))')
+  fernet=$("$PY" -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+  panel_pw=$(openssl rand -hex 24)
+  admin_pw=$(openssl rand -hex 24)
+  tmp=$(mktemp "$ENV_FILE.XXXXXX")
+  cat > "$tmp" <<ENVEOF
+# تولیدشده در اولین بوت؛ این فایل را پاک نکنید یا جابه‌جا نکنید (کلید رمزنگاری رمزهای ذخیره‌شده در آن است).
+DJANGO_SETTINGS_MODULE=config.settings_device
+DJANGO_SECRET_KEY=$secret
+CREDENTIALS_ENCRYPTION_KEY=$fernet
+DATABASE_URL=postgres://pgpro_panel:$panel_pw@127.0.0.1:5432/panel
+PGPRO_PG_ADMIN_PASSWORD=$admin_pw
+PGPRO_PG_HOST=127.0.0.1
+PGPRO_HOSTNAME=$HOSTNAME_SHORT
+PGPRO_DATA=$DATA
+PGPRO_CACHE_DIR=/var/cache/pgpro
+MEDIA_ROOT=$DATA/media
+BACKUP_ROOT=$DATA/backups
+OWS_ROOT=$DATA/ows
+OSM_ROOT=$DATA/osm
+RASTER_ROOT=$DATA/rasters
+IMPORT_ROOT=$DATA/imports
+TRUSTED_PROXY_COUNT=1
+LOG_LEVEL=INFO
+ENVEOF
+  chown root:pgpro "$tmp"; chmod 640 "$tmp"; mv "$tmp" "$ENV_FILE"
+fi
+# shellcheck source=/dev/null
+set -a
+# shellcheck source=/dev/null
+. "$ENV_FILE"
+set +a
+ADMIN_PW=$PGPRO_PG_ADMIN_PASSWORD
+PANEL_PW=$(printf '%s' "$DATABASE_URL" | sed -E 's#^postgres://pgpro_panel:([^@]+)@.*#\1#')
+
+# ── ۲) خوشه‌ی PostgreSQL ────────────────────────────────────────────────────────────
+PGV=$(find /usr/lib/postgresql -mindepth 1 -maxdepth 1 -printf "%f\n" | sort -V | tail -1)
+CONF=/etc/postgresql/$PGV/main
+if ! pg_lsclusters -h | awk '{print $1 " " $2}' | grep -qx "$PGV main"; then
+  log "ساخت خوشه‌ی PostgreSQL $PGV…"
+  pg_createcluster "$PGV" main --locale=C.UTF-8 -e UTF8 -- --auth-local=peer --auth-host=scram-sha-256
+fi
+install -d "$CONF/conf.d"
+install -m 644 /etc/pgpro/postgresql-pgpro.conf "$CONF/conf.d/10-pgpro.conf"
+install -o postgres -g postgres -m 640 /etc/pgpro/pg_hba.pgpro.conf "$CONF/pg_hba.conf"
+if ! pg_lsclusters -h | awk -v v="$PGV" '$1==v && $2=="main" {print $4}' | grep -qx online; then
+  pg_ctlcluster "$PGV" main start
+else
+  pg_ctlcluster "$PGV" main restart
+fi
+for _ in $(seq 1 60); do pg_isready -q -h 127.0.0.1 && break; sleep 1; done
+pg_isready -q -h 127.0.0.1 || { log "PostgreSQL بالا نیامد."; exit 1; }
+
+psql_su() { runuser -u postgres -- psql -X -q -v ON_ERROR_STOP=1 "$@"; }
+log "ساخت نقش‌ها و دیتابیس پنل…"
+psql_su -d postgres <<SQL
+DO \$\$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'pgpro_admin') THEN CREATE ROLE pgpro_admin LOGIN SUPERUSER; END IF;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'pgpro_panel') THEN CREATE ROLE pgpro_panel LOGIN; END IF;
+END \$\$;
+ALTER ROLE pgpro_admin PASSWORD '$ADMIN_PW';
+ALTER ROLE pgpro_panel PASSWORD '$PANEL_PW';
+SELECT 'CREATE DATABASE panel OWNER pgpro_panel ENCODING ''UTF8'' TEMPLATE template0 LC_COLLATE ''C.UTF-8'' LC_CTYPE ''C.UTF-8'''
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'panel') \gexec
+SQL
+psql_su -d panel -c 'CREATE EXTENSION IF NOT EXISTS vector' || log "افزونه‌ی vector در دیتابیس پنل ساخته نشد (دستیار هوشمند کار نمی‌کند)."
+
+# ── ۳) برنامه ────────────────────────────────────────────────────────────────────────
+log "مایگریشن و داده‌ی اولیه…"
+/usr/local/sbin/pgpro-manage migrate --noinput
+/usr/local/sbin/pgpro-manage device_init
+/usr/local/sbin/pgpro-manage kb_sync || log "kb_sync ناموفق بود؛ ادامه می‌دهیم."
+/usr/local/sbin/pgpro-manage gnss_sync || log "gnss_sync ناموفق بود؛ ادامه می‌دهیم."
+
+touch "$DONE"
+log "راه‌اندازی اولیه کامل شد."
+if [ -d /run/systemd/system ] && [ "${PGPRO_NO_START:-0}" != "1" ]; then
+  systemctl start pgpro-web.service pgpro-worker.service || log "راه‌اندازی سرویس‌ها ناموفق بود؛ journalctl -u pgpro-web را ببینید."
+fi

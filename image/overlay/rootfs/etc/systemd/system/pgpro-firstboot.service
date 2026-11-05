@@ -1,0 +1,16 @@
+[Unit]
+Description=pgpro: راه‌اندازی اولیه (رمزهای یکتا، PostgreSQL، پنل)
+After=network.target local-fs.target
+ConditionPathExists=!/var/lib/pgpro/.firstboot-done
+# تا موفق نشده هر بار بوت دوباره تلاش می‌شود
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pgpro-firstboot
+RemainAfterExit=yes
+TimeoutStartSec=900
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

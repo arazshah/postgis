@@ -1,0 +1,17 @@
+[connection]
+id=pgpro-dhcp
+uuid=6f1f2c7e-5a0a-4d7e-9a53-0c5a7e2f1a01
+type=ethernet
+autoconnect=true
+autoconnect-priority=10
+
+[ethernet]
+
+[ipv4]
+method=auto
+dhcp-timeout=20
+may-fail=false
+
+[ipv6]
+method=auto
+may-fail=true

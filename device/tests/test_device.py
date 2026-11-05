@@ -291,3 +291,19 @@ class InitTests(TestCase):
         conf = SiteSettings.get()
         self.assertFalse(conf.signup_open)
         self.assertEqual(conf.map_tile_url, "")
+
+
+class ResetPasswordCommandTests(TestCase):
+    def test_reset_reactivates_and_forces_change(self):
+        u = services.create_user("admin", "Rah-Neshan-91", admin=True, must_change=False)
+        u.is_active = False
+        u.save()
+        call_command("device_reset_password", "admin", stdout=StringIO())
+        u.refresh_from_db()
+        self.assertTrue(u.is_active and u.check_password("pgpro"))
+        self.assertTrue(u.device_profile.must_change_password)
+
+    def test_unknown_user_errors(self):
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            call_command("device_reset_password", "nobody", stdout=StringIO())

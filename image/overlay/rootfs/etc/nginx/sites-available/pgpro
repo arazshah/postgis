@@ -1,0 +1,33 @@
+# pgpro: nginx جلوی gunicorn؛ فایل‌های استاتیک را خودش می‌دهد و تا بالا آمدن برنامه صفحه‌ی «در حال آماده‌سازی» می‌گذارد.
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    server_tokens off;
+
+    client_max_body_size 110m;
+    client_body_timeout 300s;
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+
+    location /static/ {
+        alias /opt/pgpro/current/staticfiles/;
+        expires 30d;
+        access_log off;
+    }
+    location = /_starting.html {
+        root /var/www/pgpro;
+        internal;
+        add_header Cache-Control "no-store";
+    }
+    error_page 502 503 504 /_starting.html;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $http_host;
+        # فقط یک نشانی (مال همین اتصال)؛ تا مشتری نتواند X-Forwarded-For جعل کند (TRUSTED_PROXY_COUNT=1)
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_redirect off;
+    }
+}

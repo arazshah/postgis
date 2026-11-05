@@ -1,0 +1,59 @@
+# ساخت ایمیج SD برای NanoPi NEO3: ایمیج رسمی Armbian را remaster می‌کند (image/build/remaster.sh).
+# روی رانر arm64 اجرا می‌شود تا chroot بدون qemu و سریع باشد. فقط در شاخه‌ی pgpro.
+name: pgpro image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "نسخه‌ی ایمیج (مثلاً 0.1.0)"
+        required: true
+        default: "0.1.0"
+      base_image:
+        description: "آدرس ایمیج پایه (Armbian .img.xz)؛ خالی = آخرین Trixie minimal برای NEO3"
+        required: false
+        default: ""
+      release:
+        description: "ساخت Release در GitHub (پیش‌نویس)"
+        type: boolean
+        default: false
+  push:
+    tags: ["pgpro-v*"]
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: ابزارهای ساخت
+        run: sudo apt-get update -q && sudo apt-get install -y -q rsync parted gdisk e2fsprogs xz-utils curl
+      - name: نسخه
+        id: ver
+        run: |
+          v="${VERSION#pgpro-v}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: ساخت ایمیج (شامل آزمون دود)
+        env:
+          PGPRO_VERSION: ${{ steps.ver.outputs.version }}
+          PGPRO_BASE_IMAGE: ${{ inputs.base_image }}
+        run: |
+          [ -n "$PGPRO_BASE_IMAGE" ] || unset PGPRO_BASE_IMAGE
+          sudo --preserve-env=PGPRO_VERSION,PGPRO_BASE_IMAGE bash image/build/remaster.sh "$PWD/out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pgpro-${{ steps.ver.outputs.version }}-nanopineo3
+          path: out/*
+          retention-days: 30
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/pgpro-v') || inputs.release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pgpro-v${{ steps.ver.outputs.version }}
+          name: pgpro ${{ steps.ver.outputs.version }}
+          draft: true
+          files: out/*

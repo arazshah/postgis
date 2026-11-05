@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# تنظیم ساعت سیستم با زمان یونیکس؛ فقط از راه sudoers برای کاربر pgpro (دکمه‌ی «هماهنگ‌سازی ساعت» در پنل).
+# برد باتری ساعت ندارد؛ fake-hwclock زمان را نگه می‌دارد تا بوت بعدی از «زمان آخر» شروع شود.
+set -euo pipefail
+epoch=${1:-}
+[[ "$epoch" =~ ^[0-9]{10}$ ]] || { echo "زمان نامعتبر" >&2; exit 2; }
+if [ "$epoch" -lt 1700000000 ] || [ "$epoch" -gt 4100000000 ]; then echo "زمان خارج از بازه" >&2; exit 2; fi
+date -u -s "@$epoch" >/dev/null
+if command -v fake-hwclock >/dev/null; then fake-hwclock save || true; fi

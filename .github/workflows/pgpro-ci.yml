@@ -1,0 +1,45 @@
+# آزمون‌های شاخه‌ی pgpro (دستگاه آفلاین). این فایل فقط در شاخه‌ی pgpro است و به main نمی‌رود.
+name: pgpro CI
+
+on:
+  push:
+    branches: [pgpro]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DJANGO_TESTING: "1"
+      TEST_PG_HOST: localhost
+      TEST_PG_PORT: "5432"
+      TEST_PG_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: sudo apt-get update -q && sudo apt-get install -y -q gdal-bin shellcheck
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Shell scripts
+        run: shellcheck image/build/*.sh image/overlay/*.sh image/overlay/rootfs/usr/local/sbin/*
+      - name: Check migrations (cloud + device)
+        run: |
+          python manage.py makemigrations --check --dry-run
+          DJANGO_SETTINGS_MODULE=config.settings_device python manage.py makemigrations --check --dry-run
+      - name: Tests (cloud settings)
+        run: python manage.py test
+      - name: Tests (device settings)
+        run: DJANGO_SETTINGS_MODULE=config.settings_device python manage.py test device

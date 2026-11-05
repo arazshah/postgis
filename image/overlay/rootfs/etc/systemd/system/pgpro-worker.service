@@ -1,0 +1,25 @@
+[Unit]
+Description=pgpro: کارهای پس‌زمینه (بکاپ شبانه، درون‌ریزی، هشدارها)
+After=network.target postgresql.service pgpro-web.service
+Wants=postgresql.service
+ConditionPathExists=/var/lib/pgpro/.firstboot-done
+
+[Service]
+User=pgpro
+Group=pgpro
+WorkingDirectory=/opt/pgpro/current
+EnvironmentFile=/etc/pgpro/pgpro.env
+EnvironmentFile=-/etc/pgpro/version.env
+Environment=RUN_MIGRATIONS=0
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 90); do pg_isready -q -h 127.0.0.1 && exit 0; sleep 2; done; exit 1'
+ExecStart=/opt/pgpro/venv/bin/python manage.py run_worker
+Restart=always
+RestartSec=10
+MemoryHigh=500M
+MemoryMax=700M
+PrivateTmp=yes
+ProtectHome=yes
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

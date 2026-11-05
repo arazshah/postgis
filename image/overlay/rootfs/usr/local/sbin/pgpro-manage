@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# اجرای دستورهای manage.py با کاربر و تنظیمات سرویس (برای مدیر دستگاه از راه SSH):
+#   sudo pgpro-manage createsuperuser | device_reset_password admin | shell | ...
+set -euo pipefail
+PGPRO_HOME=${PGPRO_HOME:-/opt/pgpro}
+ENV_FILE=${PGPRO_ENV:-/etc/pgpro/pgpro.env}
+[ -f "$ENV_FILE" ] || { echo "هنوز راه‌اندازی اولیه انجام نشده است ($ENV_FILE نیست)." >&2; exit 1; }
+if [ "$(id -u)" != 0 ]; then exec sudo -n "$0" "$@"; fi
+# shellcheck disable=SC2016
+exec setpriv --reuid=pgpro --regid=pgpro --init-groups \
+  env -C "$PGPRO_HOME/current" ENV_FILE="$ENV_FILE" PGPRO_HOME="$PGPRO_HOME" \
+  bash -c 'set -a; . "$ENV_FILE"; [ -f /etc/pgpro/version.env ] && . /etc/pgpro/version.env; set +a; exec "$PGPRO_HOME/venv/bin/python" manage.py "$@"' _ "$@"
