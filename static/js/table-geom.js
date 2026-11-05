@@ -77,8 +77,8 @@
 
   // ---- بارگذاری تنبل Leaflet و Geoman (فقط وقتی «روی نقشه» خواسته شود)
   const loading = {};
-  function loadScript(src) {
-    if (!loading[src]) loading[src] = new Promise((ok, bad) => { const s = el("script", { src, onload: ok, onerror: () => bad(new Error("بارگذاری نقشه ممکن نشد.")) }); document.head.append(s); });
+  function loadScript(src, data) {
+    if (!loading[src]) loading[src] = new Promise((ok, bad) => { const s = el("script", { src, onload: ok, onerror: () => bad(new Error("بارگذاری نقشه ممکن نشد.")) }); Object.entries(data || {}).forEach(([k, v]) => s.setAttribute(k, v)); document.head.append(s); });
     return loading[src];
   }
   function loadCss(href) { if (!document.querySelector(`link[href="${href}"]`)) document.head.append(el("link", { rel: "stylesheet", href })); }
@@ -86,6 +86,16 @@
     loadCss(v.leaflet_css); loadCss(v.pm_css);
     if (!window.L) await loadScript(v.leaflet_js);
     if (!(window.L && L.PM)) await loadScript(v.pm_js);
+    // دستگاه pgpro: نقشه‌ی پایه‌ی برداری آفلاین (پس از Leaflet و پیش از ساخت نقشه)
+    const vec = v.vector;
+    if (vec && !L.maplibreGL) {
+      try {
+        loadCss(vec.css);
+        await loadScript(vec.maplibre_js);
+        await loadScript(vec.plugin_js);
+        await loadScript(vec.helper_js, { "data-style": vec.style, "data-rtl": vec.rtl_js });
+      } catch (_) { /* بدون نقشه‌ی پایه هم ترسیم ممکن است */ }
+    }
   }
 
   // انتخاب روی نقشه: نتیجه GeoJSON هندسه یا null (انصراف)

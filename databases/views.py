@@ -26,6 +26,15 @@ from .provisioner import ProvisionError
 SESSION_PW_KEY = "gp_once_password_{}"
 
 
+def _device_vector_assets():
+    """فقط در دستگاه pgpro (DEVICE_MODE) و وقتی نقشه‌ی پایه‌ی آفلاین هست؛ غیر از این None."""
+    if not getattr(settings, "DEVICE_MODE", False):
+        return None
+    from device.context import vector_assets
+
+    return vector_assets()
+
+
 def _user_db(request, pk, need: str = "owner") -> UserDatabase:
     """پایگاه داده با بررسی سطح دسترسی (مالک، ویرایشگر یا مشاهده‌گر عضو تیم)؛ در غیر این صورت ۴۰۴."""
     from . import team
@@ -1334,6 +1343,8 @@ def _edit_config(request, db, ex, t) -> dict:
         "vendor": {"leaflet_js": static("vendor/leaflet/leaflet.js"), "leaflet_css": static("vendor/leaflet/leaflet.css"),
                    "pm_js": static("vendor/leaflet-geoman/leaflet-geoman.min.js"),
                    "pm_css": static("vendor/leaflet-geoman/leaflet-geoman.css")},
+        # دستگاه pgpro: نقشه‌ی پایه‌ی آفلاین زیر مودال «انتخاب روی نقشه» (در ابر None است)
+        "vector": _device_vector_assets(),
         "urls": {k: reverse(f"databases:explore_edit_{k}", args=args) for k in ("mode", "row", "apply", "undo")},
         "geojson": reverse("databases:explore_geojson", args=args) + "?keys=1",
         "last": ({"id": last.pk, "inserted": last.inserted, "updated": last.updated, "deleted": last.deleted,

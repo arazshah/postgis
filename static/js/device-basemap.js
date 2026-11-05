@@ -14,6 +14,8 @@
   } catch (_) { /* افزونه‌ی متن راست‌به‌چپ اختیاری است */ }
   L.Map.addInitHook(function () {
     const map = this;
+    // مودال‌ها نقشه را با اندازه‌ی صفر می‌سازند؛ با هر تغییر اندازه، لایه‌ی MapLibre هم اندازه می‌گیرد
+    if (window.ResizeObserver) new ResizeObserver(() => map.invalidateSize({ animate: false })).observe(map.getContainer());
     map.whenReady(() => {
       try {
         L.maplibreGL({ style, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · Protomaps' }).addTo(map);

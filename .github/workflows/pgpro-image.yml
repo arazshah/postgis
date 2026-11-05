@@ -20,7 +20,8 @@ on:
   push:
     tags: ["pgpro-v*"]
     branches: [pgpro]
-    paths: ["image/**", ".github/workflows/pgpro-image.yml", "requirements.txt", "static/vendor/maplibre-leaflet/**"]
+    # هر تغییر کد/قالب/استاتیک ایمیج تازه می‌سازد؛ فقط مستندات و CI آزمون نه
+    paths-ignore: ["docs/**", "**.md", ".github/workflows/pgpro-ci.yml", "kb/**"]
 
 jobs:
   image:

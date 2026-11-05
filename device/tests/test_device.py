@@ -331,3 +331,29 @@ class BasemapTests(TestCase):
         self.assertIn("leaflet-maplibre-gl.js", html)
         self.assertIn('data-style="/basemap/style.json"', html)
         self.assertEqual(render_to_string("partials/leaflet_vector.html", {"DEVICE_BASEMAP_URL": ""}).strip(), "")
+
+
+class VectorAssetsTests(TestCase):
+    def test_vector_assets_for_lazy_leaflet(self):
+        import tempfile
+        from pathlib import Path
+
+        from django.test import override_settings
+
+        from device.context import vector_assets
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(OSM_ROOT=Path(tmp)):
+                self.assertIsNone(vector_assets())
+                (Path(tmp) / "basemap").mkdir()
+                (Path(tmp) / "basemap" / "iran.pmtiles").write_bytes(b"x")
+                v = vector_assets()
+        self.assertEqual(v["style"], "/basemap/style.json")
+        for key in ("css", "maplibre_js", "plugin_js", "helper_js", "rtl_js"):
+            self.assertTrue(v[key].startswith("/static/"), key)
+
+    def test_cloud_view_helper_is_none_without_device_mode(self):
+        from django.test import override_settings
+
+        from databases.views import _device_vector_assets
+        with override_settings(DEVICE_MODE=False):
+            self.assertIsNone(_device_vector_assets())
