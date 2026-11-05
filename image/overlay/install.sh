@@ -63,7 +63,9 @@ chown -R root:root "$OPT"; chmod -R a+rX "$OPT"
 
 # ── ۴) فایل‌های سیستم ─────────────────────────────────────────────────────────────
 step "فایل‌های سیستم"
-rsync -a "$HERE/rootfs/" /
+# بدون مالک/گروه/مجوز پوشه‌ها: فایل‌های مخزن مال کاربر رانر CI (uid 1001) هستند و با -a مالک / و /etc و /etc/sudoers.d
+# را عوض می‌کردند (sudo از آن بعد کار نمی‌کند). فایل‌های تازه با مالک root ساخته می‌شوند.
+rsync -rlt --no-perms --no-owner --no-group "$HERE/rootfs/" /
 chmod 755 /usr/local/sbin/pgpro-*
 chmod 440 /etc/sudoers.d/pgpro
 printf 'PGPRO_VERSION=%s\n' "$VERSION" > /etc/pgpro/version.env

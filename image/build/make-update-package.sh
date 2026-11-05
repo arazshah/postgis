@@ -18,7 +18,7 @@ import json, sys, time
 json.dump({"version": sys.argv[2], "requirements_sha256": sys.argv[3], "created": int(time.time())},
           open(sys.argv[1], "w"), ensure_ascii=False)
 PY
-tar -C "$STAGE" -cf - release rootfs meta.json | xz -T0 -6 > "$OUT/$NAME"
+tar -C "$STAGE" --owner=0 --group=0 --numeric-owner -cf - release rootfs meta.json | xz -T0 -6 > "$OUT/$NAME"
 ( cd "$OUT" && sha256sum "$NAME" > "$NAME.sha256" )
 if [ -n "${PGPRO_UPDATE_SIGN_KEY:-}" ] && [ -f "$PGPRO_UPDATE_SIGN_KEY" ]; then
   openssl pkeyutl -sign -rawin -inkey "$PGPRO_UPDATE_SIGN_KEY" -in "$OUT/$NAME.sha256" -out "$OUT/$NAME.sha256.sig"

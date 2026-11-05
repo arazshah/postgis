@@ -18,6 +18,19 @@ trap cleanup EXIT
 # اجرای قبلی نیمه‌کاره مانده باشد، از حالت تمیز شروع می‌کنیم
 [ -f /var/lib/pgpro/.firstboot-done ] && /usr/local/sbin/pgpro-factory-reset --yes
 
+echo "== ۰) مالکیت فایل‌های سیستم (باید همه root باشند؛ وگرنه sudo کار نمی‌کند)"
+bad=""
+while IFS= read -r p; do
+  target=/${p#./}
+  if [ "$(stat -c %u "$target")" != 0 ]; then bad="$bad $target"; fi
+done < <(cd /tmp/pgpro-src/image/overlay/rootfs && find . -mindepth 1)
+if [ "$(stat -c %u /)" != 0 ]; then bad="$bad /"; fi
+[ -z "$bad" ] || fail "مالک این مسیرها root نیست:$bad"
+ok "مالکیت فایل‌های سیستم درست است"
+if [ "$(stat -c %a /etc/sudoers.d/pgpro)" != 440 ]; then fail "مجوز /etc/sudoers.d/pgpro باید ۴۴۰ باشد"; fi
+visudo -c >/dev/null 2>&1 || fail "visudo -c خطا دارد"
+ok "sudoers سالم است"
+
 echo "== ۱) اولین بوت"
 PGPRO_NO_START=1 /usr/local/sbin/pgpro-firstboot
 [ -f /var/lib/pgpro/.firstboot-done ] || fail "نشانه‌ی firstboot ساخته نشد"
