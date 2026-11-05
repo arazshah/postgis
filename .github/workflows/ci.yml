@@ -27,6 +27,7 @@ jobs:
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
+      PG_BIN_PATH: /usr/lib/postgresql/16/bin
       DJANGO_TESTING: "1"
       DATABASE_URL: postgres://postgres:postgres@localhost:5434/panel
       TEST_PG_HOST: localhost
@@ -38,7 +39,9 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: sudo apt-get update -q && sudo apt-get install -y -q gdal-bin osmium-tool osm2pgrouting pgbouncer gettext-base
+      # ابزار pg_dump/pg_restore هم‌نسخه با سرور آزمون (PostGIS 16)؛ نسخه‌ی جدیدتر runner در آرشیو `SET transaction_timeout` می‌نویسد
+      # که روی PostgreSQL 16 شناخته‌شده نیست (jobs/services.py با PG_BIN_PATH همین مسیر را برمی‌دارد).
+      - run: sudo apt-get update -q && sudo apt-get install -y -q gdal-bin osmium-tool osm2pgrouting pgbouncer gettext-base postgresql-client-16
       - run: pip install -r requirements-dev.txt
       - name: Lint
         run: ruff check .
