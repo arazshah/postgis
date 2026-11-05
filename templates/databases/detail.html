@@ -61,6 +61,7 @@
           <tr><th>رمز عبور</th><td>{% if once_password %}{{ once_password }}{% else %}<span style="font-family:var(--f-body)">همان رمزی که هنگام ساخت انتخاب کردید</span>{% endif %}</td></tr>
           <tr><th>SSL Mode</th><td>{{ db.sslmode }}</td></tr>
         </table>
+        {% if SITE.location_line %}<div style="margin-top:var(--s3)">{% include "core/_loc_line.html" %}</div>{% endif %}
       </section>
     <section class="card">
         <h3>مصرف و اعتبار</h3>

@@ -3,6 +3,8 @@
 """
 
 ICONS: dict[str, str] = {
+    'phone': '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+    'mail': '<path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/>',
     'bell': '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/>',
     'toolbox': '<path d="M4 8h16v11H4z"/><path d="M9 8V5h6v3"/><path d="M4 13h16"/><path d="M11 12v3h2v-3"/>',
     't-buffer': '<circle cx="12" cy="12" r="2.2" fill="currentColor"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="9.5" stroke-dasharray="2 2.4"/>',

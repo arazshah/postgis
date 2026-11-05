@@ -45,6 +45,10 @@ def build():
 
     open_tickets = Ticket.objects.filter(status=Ticket.Status.OPEN).count()
     stats.append({"label": "تیکت منتظر پاسخ", "value": open_tickets, "bad": open_tickets > 0})
+    from .models import ContactRequest
+
+    new_leads = ContactRequest.objects.filter(status=ContactRequest.Status.NEW).count()
+    stats.append({"label": "درخواست تماس و جلسه‌ی تازه", "value": new_leads, "bad": new_leads > 0})
     from jobs.models import Job
 
     backups_day = Job.objects.filter(kind=Job.Kind.BACKUP, created_at__gte=day)
@@ -70,6 +74,8 @@ def build():
         warnings.append("در ۴۸ ساعت گذشته هیچ بکاپی گرفته نشده؛ سرویس worker اجرا نمی‌شود؟")
     if last_test and last_test.status == Job.Status.FAILED:
         warnings.append(f"آخرین آزمون بازگردانی بکاپ ناموفق بود: {last_test.message[:120]}")
+    if new_leads:
+        warnings.append(f"{new_leads} درخواست تماس یا جلسه منتظر پیگیری شماست (بخش درخواست‌های تماس و جلسه).")
     if open_tickets:
         warnings.append(f"{open_tickets} تیکت پشتیبانی منتظر پاسخ شماست (بخش تیکت‌ها).")
     if review:
@@ -82,6 +88,9 @@ def build():
         warnings.append("تنظیمات sms.ir کامل نیست؛ کاربران کد ورود دریافت نمی‌کنند.")
     if conf.sms_backend == "console":
         warnings.append("سرویس پیامک روی حالت آزمایشی است و پیامکی واقعاً ارسال نمی‌شود.")
+    if not conf.offsite_ready:
+        warnings.append("کپی بکاپ‌ها در فضای ابری جداگانه فعال نیست؛ بکاپ‌ها فقط روی همین سرورند "
+                        "(تنظیمات سایت ← بکاپ خارج از سرور).")
     if not conf.signup_open:
         warnings.append("ثبت‌نام کاربر جدید بسته است.")
     if not conf.allow_new_databases:

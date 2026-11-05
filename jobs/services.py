@@ -209,11 +209,17 @@ def _do_backup(job: Job) -> None:
     else:
         job.expires_at = timezone.now() + timedelta(days=_keep_days(job))
     job.message = "بکاپ کامل گرفته شد."
+    from . import offsite
+
+    offsite.upload_job(job)  # شکست ارسال، بکاپ را ناموفق نمی‌کند؛ بعداً دوباره تلاش می‌شود
 
 
 def _do_restore(job: Job) -> None:
+    from . import offsite
+
     db, src = job.database, job.source
-    if src is None or not src.path or not src.path.exists():
+    src_path = offsite.ensure_local(src) if src is not None else None  # اگر فایل محلی نبود، از نسخه‌ی ابری
+    if src_path is None:
         raise JobError("فایل بکاپ پیدا نشد (ممکن است منقضی شده باشد).")
     # ۱. بکاپ ایمنی از وضع فعلی، تا اگر کاربر پشیمان شد برگردد
     safety = Job.objects.create(kind=Job.Kind.BACKUP, trigger=Job.Trigger.SYSTEM, database=db, user=job.user,
@@ -227,7 +233,7 @@ def _do_restore(job: Job) -> None:
     scratch = _scratch_name(db.db_name, "rst")
     prov.create_scratch_database(scratch, db.role_name)
     try:
-        restore_into(db.server, scratch, src.path)
+        restore_into(db.server, scratch, src_path)
         info = prov.finish_restore(scratch, db.role_name)
         # ۳. جابه‌جایی
         old = prov.swap_in_restored(db.db_name, scratch, db.role_name)
@@ -387,6 +393,10 @@ def cleanup(now: datetime | None = None) -> int:
         shutil.rmtree(import_dir(job), ignore_errors=True)
         job.status = Job.Status.EXPIRED
         job.save(update_fields=["status"])
+    from . import offsite
+
+    offsite.purge_expired()
+    offsite.retry_pending()
     # با save (نه update) تا اعلان خطا برای کاربر ساخته شود
     for job in Job.objects.filter(status=Job.Status.RUNNING, started_at__lt=now - timedelta(seconds=DUMP_TIMEOUT + 600)):
         job.status, job.finished_at = Job.Status.FAILED, now
@@ -401,6 +411,7 @@ def disk_usage() -> dict:
 
 
 _last_disk_alert: datetime | None = None
+_last_offsite_alert: datetime | None = None
 
 
 def alerts() -> list[str]:
@@ -417,6 +428,15 @@ def alerts() -> list[str]:
     if disk["percent"] >= 85 and (_last_disk_alert is None or now - _last_disk_alert > timedelta(hours=12)):
         lines.append(f"دیسک بکاپ {disk['percent']}٪ پر است.")
         _last_disk_alert = now
+    from core.models import SiteSettings
+
+    global _last_offsite_alert
+    if SiteSettings.get().offsite_ready:
+        bad = Job.objects.filter(kind=Job.Kind.BACKUP, status=Job.Status.DONE, offsite_key="",
+                                 created_at__gte=now - timedelta(days=1)).exclude(offsite_error="")
+        if bad.exists() and (_last_offsite_alert is None or now - _last_offsite_alert > timedelta(hours=12)):
+            lines.append(f"ارسال {bad.count()} بکاپ به فضای ابری ناموفق بود: {bad.first().offsite_error[:100]}")
+            _last_offsite_alert = now
     if lines:
         notify_admins("هشدار بکاپ", "\n".join(lines))
         Job.objects.filter(pk__in=[j.pk for j in failed]).update(alerted=True)

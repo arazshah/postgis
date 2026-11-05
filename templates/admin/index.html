@@ -9,6 +9,9 @@
   <a class="button" href="{% url 'admin:analytics_sourcereport_changelist' %}">گزارش منابع ورود</a>
   <a class="button" href="{% url 'admin:analytics_trackedlink_changelist' %}">لینک‌های ردیابی‌شده</a>
   <a class="button" href="{% url 'admin:billing_invoice_changelist' %}?status__exact=review">رسیدهای منتظر تأیید</a>
+  <a class="button" href="{% url 'admin:core_contactrequest_changelist' %}?status__exact=new">درخواست‌های تماس و جلسه</a>
+  <a class="button" href="{% url 'admin:core_teammember_changelist' %}">اعضای تیم</a>
+  <a class="button" href="{% url 'admin:core_trustitem_changelist' %}">ردیف‌های صفحه‌ی اعتماد</a>
 </div>
 <div class="gp-stats">
   {% for s in gp_stats %}<div class="gp-stat{% if s.bad %} bad{% endif %}"><b>{{ s.value }}</b><span>{{ s.label }}</span></div>{% endfor %}

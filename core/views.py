@@ -45,6 +45,67 @@ def site_logo(request):
     return resp
 
 
+def team_photo(request, pk):
+    from .models import TeamMember
+
+    m = TeamMember.objects.filter(pk=pk, is_active=True).exclude(photo_data=None).first()
+    if m is None:
+        raise Http404
+    resp = HttpResponse(bytes(m.photo_data), content_type=m.photo_mime)
+    resp["Cache-Control"] = "public, max-age=86400"
+    resp["X-Content-Type-Options"] = "nosniff"
+    return resp
+
+
+def about(request):
+    from .models import TeamMember
+
+    return render(request, "core/about.html", {"team": TeamMember.objects.filter(is_active=True)})
+
+
+def trust(request):
+    from .models import SiteSettings, TrustItem
+
+    return render(request, "core/trust.html", {"items": TrustItem.visible(SiteSettings.get())})
+
+
+def privacy(request):
+    return render(request, "core/privacy.html")
+
+
+def contact(request):
+    from accounts.otp import client_ip
+
+    from . import contact as contact_svc
+    from .models import ContactRequest
+
+    initial = {}
+    if request.GET.get("topic") in ContactRequest.Topic.values:
+        initial["topic"] = request.GET["topic"]
+    user = request.user if request.user.is_authenticated and not request.user.is_staff else None
+    if user is not None:
+        initial.setdefault("name", getattr(user, "full_name", "") or "")
+        initial.setdefault("phone", getattr(user, "phone", "") or "")
+        initial.setdefault("organization", getattr(user, "organization", "") or "")
+    form = contact_svc.ContactForm(request.POST or None, initial=initial)
+    sent = request.GET.get("sent") == "1"
+    if request.method == "POST":
+        ip = client_ip(request)
+        limit = contact_svc.throttled(ip)
+        if limit:
+            form.add_error(None, limit)
+        elif form.is_valid():
+            limit = contact_svc.throttled(ip, form.cleaned_data["phone"])
+            if limit:
+                form.add_error(None, limit)
+            else:
+                contact_svc.submit(form, user, ip)
+                from django.shortcuts import redirect
+
+                return redirect(reverse("core:contact") + "?sent=1")
+    return render(request, "core/contact.html", {"form": form, "sent": sent})
+
+
 def home(request):
     plans = Plan.objects.filter(is_public=True)
     from kb.faq import faq_jsonld, home_faqs
@@ -190,6 +251,8 @@ def sitemap_xml(request):
     pages += [(reverse("core:doc", args=[d[0]]), "0.9" if d[0] == "what-is-postgis" else "0.7", f"docs/{d[0]}.html")
               for d in DOCS]
     pages.append((reverse("core:terms"), "0.3", "core/terms.html"))
+    pages += [(reverse("core:about"), "0.6", "core/about.html"), (reverse("core:trust"), "0.7", "core/trust.html"),
+              (reverse("core:contact"), "0.6", "core/contact.html"), (reverse("core:privacy"), "0.3", "core/privacy.html")]
     entries = [(path, prio, _template_date(tpl)) for path, prio, tpl in pages]
     entries += _kb_sitemap_entries()
     items = "".join(

@@ -109,7 +109,7 @@
   {% block content %}{% endblock %}
 </main>
 
-{% block footer %}{% if user.is_authenticated and not user.is_staff %}<footer class="app-foot"><span>{{ SITE.copyright_text }}</span><nav aria-label="پیوندهای پایین صفحه"><a href="{% url 'core:terms' %}">قوانین استفاده</a><a href="{% url 'support:new' %}">پشتیبانی</a><a href="{% url 'kb:index' %}">پایگاه دانش</a></nav></footer>{% else %}<footer class="footer">
+{% block footer %}{% if user.is_authenticated and not user.is_staff %}<footer class="app-foot"><span>{{ SITE.copyright_text }}</span><nav aria-label="پیوندهای پایین صفحه"><a href="{% url 'core:terms' %}">قوانین استفاده</a><a href="{% url 'core:trust' %}">امنیت و محل داده</a><a href="{% url 'support:new' %}">پشتیبانی</a><a href="{% url 'kb:index' %}">پایگاه دانش</a></nav></footer>{% else %}<footer class="footer">
   <div class="wrap">
     <div class="foot-grid">
       <section class="foot-brand" aria-label="درباره {{ SITE_NAME }}">
@@ -143,9 +143,20 @@
         </ul>
       </nav>
 
+      <nav class="foot-col" aria-labelledby="foot-h-trust">
+        <h2 class="foot-h" id="foot-h-trust">اعتماد</h2>
+        <ul>
+          <li><a href="{% url 'core:trust' %}">امنیت و محل داده</a></li>
+          <li><a href="{% url 'core:about' %}">درباره ما</a></li>
+          <li><a href="{% url 'core:privacy' %}">حریم خصوصی</a></li>
+          {% if SITE.company_visible %}<li class="foot-addr">{{ SITE.company_name }}</li>{% endif %}
+        </ul>
+      </nav>
+
       <section class="foot-col" aria-labelledby="foot-h-contact">
         <h2 class="foot-h" id="foot-h-contact">پشتیبانی</h2>
         <ul>
+          <li><a href="{% url 'core:contact' %}">تماس و درخواست جلسه</a></li>
           <li><a href="{% url 'support:new' %}">ثبت تیکت پشتیبانی</a></li>
           {% if SITE.support_phone %}<li>تلفن: <a class="ltr" href="tel:{{ SITE.support_phone }}">{{ SITE.support_phone }}</a></li>{% endif %}
           {% if SUPPORT_TELEGRAM %}<li><a href="https://t.me/{{ SUPPORT_TELEGRAM }}" rel="noopener" target="_blank">پشتیبانی در تلگرام</a></li>{% endif %}
@@ -166,6 +177,7 @@
       <span>{{ SITE.copyright_text }}</span>
       <ul>
         <li><a href="{% url 'core:terms' %}">قوانین استفاده</a></li>
+        <li><a href="{% url 'core:privacy' %}">حریم خصوصی</a></li>
         {% for title, url in SITE.footer_link_list %}<li><a href="{{ url }}"{% if url|slice:":4" == "http" %} rel="noopener" target="_blank"{% endif %}>{{ title }}</a></li>{% endfor %}
       </ul>
     </div>

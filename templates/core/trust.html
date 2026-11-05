@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% load static ws %}
+{% block title %}امنیت و محل داده — {{ SITE_NAME }}{% endblock %}
+{% block description %}داده‌های شما کجا نگهداری می‌شود، چه کسی دسترسی دارد، بکاپ‌ها کجاست و اگر خواستید بروید چه می‌شود؛ بی‌پرده و ساده.{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/trust.css' %}">{% endblock %}
+{% block content %}
+<div class="wrap tr-page">
+  <header class="tr-head">
+    <h1>امنیت و محل داده</h1>
+    {% if SITE.trust_intro %}<p class="lead">{{ SITE.trust_intro }}</p>{% endif %}
+  </header>
+  {% if items %}
+  <div class="tr-grid">
+    {% for it in items %}
+    <section class="tr-card" aria-labelledby="tr-{{ it.pk }}">
+      <span class="tr-ico">{% icon it.icon 22 %}</span>
+      <h2 id="tr-{{ it.pk }}">{{ it.title }}</h2>
+      <p>{{ it.body|linebreaksbr }}</p>
+      {% if it.safe_link and it.link_label %}<a class="tr-link" href="{{ it.safe_link }}">{{ it.link_label }}</a>{% endif %}
+    </section>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">{% icon "lock" 28 %}<h2>این صفحه هنوز تکمیل نشده</h2><p class="muted">برای هر پرسش درباره‌ی امنیت و محل داده با ما تماس بگیرید.</p><a class="btn" href="{% url 'core:contact' %}">تماس با ما</a></div>
+  {% endif %}
+  <section class="tr-form" style="margin-top:var(--s6)" aria-labelledby="tr-q">
+    <h2 id="tr-q">پرسش دیگری دارید؟</h2>
+    <p class="muted">پرسش‌نامه‌ی امنیتی سازمان شما، نمونه قرارداد، NDA یا جلسه‌ی آنلاین: مستقیم با تیم صحبت کنید.</p>
+    <a class="btn" href="{% url 'core:contact' %}">{% icon "phone" 18 %}تماس و درخواست جلسه</a>
+    <a class="btn ghost" href="{% url 'core:privacy' %}">حریم خصوصی</a>
+  </section>
+</div>
+{% endblock %}

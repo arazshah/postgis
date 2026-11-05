@@ -170,6 +170,54 @@ class SiteSettings(models.Model):
     social_github = models.URLField("گیت‌هاب", blank=True)
     social_eitaa = models.URLField("ایتا", blank=True)
 
+    # --- هویت شرکت و تماس (صفحه‌های «درباره ما» و «تماس») ---
+    company_name = models.CharField("نام شرکت", max_length=150, blank=True)
+    company_national_id = models.CharField("شناسه ملی شرکت", max_length=20, blank=True)
+    company_economic_code = models.CharField("کد اقتصادی", max_length=20, blank=True)
+    show_company_info = models.BooleanField(
+        "نمایش اطلاعات شرکت در سایت", default=False,
+        help_text="تا روشن نکنید، نام و شناسه‌ی شرکت در هیچ صفحه‌ای دیده نمی‌شود.")
+    support_whatsapp = models.CharField("شماره واتس‌اپ", max_length=30, blank=True,
+                                        help_text="به شکل ۰۹۱۲۳۴۵۶۷۸۹؛ دکمه‌ی واتس‌اپ در صفحه‌ی تماس ساخته می‌شود.")
+    support_hours = models.CharField("ساعت پاسخ‌گویی", max_length=100, blank=True,
+                                     default="شنبه تا پنجشنبه، ۹ تا ۱۸")
+    about_intro = models.TextField(
+        "متن معرفی صفحه‌ی «درباره ما»", blank=True,
+        default="این سرویس را برای کوتاه‌کردن راه کاربران GIS ایران ساخته‌ایم: پایگاه داده مکانی آماده، بدون نصب و نگهداری سرور. "
+                "پشت این سایت آدم‌های واقعی هستند که می‌توانید مستقیم با آن‌ها حرف بزنید.")
+    contact_intro = models.TextField(
+        "متن بالای صفحه‌ی «تماس»", blank=True,
+        default="برای خرید سازمانی، جلسه‌ی معرفی آنلاین، نصب اختصاصی روی سرور سازمان یا هر پرسش دیگر، فرم را پر کنید. "
+                "معمولاً در همان روز کاری پاسخ می‌دهیم.")
+
+    # --- اعتماد و محل داده (صفحه‌ی «امنیت و محل داده») ---
+    trust_location_line = models.CharField(
+        "جمله‌ی کوتاه محل داده", max_length=200, blank=True,
+        default="سرور در دیتاسنتر پارس‌پک، ایران",
+        help_text="زیر پلن‌ها، در صفحه‌ی ساخت پایگاه، اطلاعات اتصال و صفحه‌ی اول نمایش داده می‌شود. خالی = نمایش داده نشود.")
+    trust_intro = models.TextField(
+        "متن بالای صفحه‌ی «امنیت و محل داده»", blank=True,
+        default="داده‌ی شما مال شماست. اینجا ساده و بی‌پرده می‌نویسیم داده کجا نگهداری می‌شود، چه کسی به آن دسترسی دارد "
+                "و اگر روزی خواستید بروید چه می‌شود.")
+    trust_disk_encrypted = models.BooleanField(
+        "دیسک سرورها رمزنگاری‌شده است", default=False,
+        help_text="فقط اگر رمزنگاری دیسک را در پارس‌پک (یا سرور) فعال و تأیید کرده‌اید روشن کنید؛ آن‌وقت ردیف مربوط در صفحه‌ی اعتماد دیده می‌شود.")
+
+    # --- بکاپ خارج از سرور (فضای ابری S3؛ مثلاً باکت پارس‌پک) ---
+    offsite_enabled = models.BooleanField(
+        "کپی بکاپ‌ها در فضای ابری جداگانه", default=False,
+        help_text="بعد از هر بکاپ موفق، یک نسخه‌ی رمزنگاری‌شده در باکت زیر هم ذخیره می‌شود.")
+    offsite_endpoint = models.CharField("نشانی سرویس (Endpoint URL)", max_length=300, blank=True,
+                                        help_text="مثلاً https://s3.example.ir؛ باید با https:// شروع شود.")
+    offsite_bucket = models.CharField("نام باکت", max_length=120, blank=True, default="PostGIS_bucket")
+    offsite_region = models.CharField("ناحیه (Region، اختیاری)", max_length=60, blank=True)
+    offsite_prefix = models.CharField("پوشه‌ی داخل باکت", max_length=80, blank=True, default="backups")
+    offsite_access_key_encrypted = models.TextField(blank=True, editable=False)
+    offsite_secret_key_encrypted = models.TextField(blank=True, editable=False)
+    offsite_encrypt = models.BooleanField(
+        "رمزنگاری بکاپ پیش از ارسال", default=True,
+        help_text="پیشنهاد می‌شود روشن بماند: حتی با لو رفتن کلید باکت، کسی نمی‌تواند بکاپ‌ها را باز کند.")
+
     updated_at = models.DateTimeField("آخرین تغییر", auto_now=True)
 
     class Meta:
@@ -289,6 +337,53 @@ class SiteSettings(models.Model):
     def manual_ready(self) -> bool:
         return bool(self.pay_manual_enabled and (self.pay_card_number or self.pay_link_url))
 
+
+    # --- کلیدهای فضای ابری: رمزنگاری‌شده و بدون نمایش ---
+    def set_offsite_keys(self, access: str = "", secret: str = ""):
+        from databases.crypto import encrypt
+
+        if access:
+            self.offsite_access_key_encrypted = encrypt(access.strip())
+        if secret:
+            self.offsite_secret_key_encrypted = encrypt(secret.strip())
+
+    def get_offsite_keys(self) -> tuple[str, str]:
+        from databases.crypto import decrypt
+
+        try:
+            return decrypt(self.offsite_access_key_encrypted), decrypt(self.offsite_secret_key_encrypted)
+        except ValueError:
+            return "", ""
+
+    @property
+    def has_offsite_keys(self) -> bool:
+        return bool(self.offsite_access_key_encrypted and self.offsite_secret_key_encrypted)
+
+    @property
+    def offsite_ready(self) -> bool:
+        return bool(self.offsite_enabled and self.offsite_endpoint and self.offsite_bucket and self.has_offsite_keys)
+
+    @property
+    def location_line(self) -> str:
+        return (self.trust_location_line or "").strip()
+
+    @property
+    def whatsapp_url(self) -> str:
+        import re
+
+        digits = re.sub(r"\D", "", (self.support_whatsapp or "").translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")))
+        if digits.startswith("0"):
+            digits = "98" + digits[1:]
+        return f"https://wa.me/{digits}" if len(digits) >= 11 else ""
+
+    @property
+    def telegram_url(self) -> str:
+        return f"https://t.me/{self.support_telegram}" if self.support_telegram else ""
+
+    @property
+    def company_visible(self) -> bool:
+        return bool(self.show_company_info and self.company_name.strip())
+
     SOCIAL_FIELDS = (
         ("social_telegram", "تلگرام", "telegram"),
         ("social_instagram", "اینستاگرام", "instagram"),
@@ -343,3 +438,134 @@ class SiteSettings(models.Model):
     def card_number_display(self) -> str:
         digits = "".join(ch for ch in self.pay_card_number if ch.isdigit())
         return "-".join(digits[i:i + 4] for i in range(0, len(digits), 4))
+
+
+
+class TrustItem(models.Model):
+    """ردیف‌های صفحه‌ی «امنیت و محل داده»؛ متن، ترتیب و نمایش از پنل مدیریت."""
+
+    SHOW_ALWAYS, SHOW_OFFSITE, SHOW_DISK = "always", "offsite", "disk"
+    SHOW_WHEN = [(SHOW_ALWAYS, "همیشه"),
+                 (SHOW_OFFSITE, "فقط وقتی کپی بکاپ در فضای ابری فعال است"),
+                 (SHOW_DISK, "فقط وقتی «دیسک رمزنگاری‌شده» روشن است")]
+    ICONS = [("server", "سرور"), ("db", "پایگاه داده"), ("lock", "قفل"), ("users", "افراد"), ("download", "دانلود"),
+             ("clock", "زمان"), ("trash", "حذف"), ("spark", "هوش مصنوعی"), ("globe", "کره"), ("cube", "مکعب"),
+             ("check", "تیک"), ("info", "اطلاع")]
+
+    title = models.CharField("عنوان", max_length=120)
+    body = models.TextField("توضیح")
+    icon = models.CharField("آیکون", max_length=20, choices=ICONS, default="check")
+    show_when = models.CharField("نمایش", max_length=10, choices=SHOW_WHEN, default=SHOW_ALWAYS)
+    link_label = models.CharField("برچسب پیوند (اختیاری)", max_length=60, blank=True)
+    link_url = models.CharField("نشانی پیوند", max_length=300, blank=True,
+                                help_text="با / یا https:// شروع شود.")
+    order = models.PositiveSmallIntegerField("ترتیب", default=100)
+    is_active = models.BooleanField("نمایش داده شود", default=True)
+
+    class Meta:
+        verbose_name = "ردیف صفحه‌ی اعتماد"
+        verbose_name_plural = "ردیف‌های صفحه‌ی اعتماد"
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def safe_link(self) -> str:
+        return self.link_url if SiteSettings.is_safe_link(self.link_url) else ""
+
+    @classmethod
+    def visible(cls, conf: "SiteSettings"):
+        out = []
+        for it in cls.objects.filter(is_active=True):
+            if it.show_when == cls.SHOW_OFFSITE and not conf.offsite_ready:
+                continue
+            if it.show_when == cls.SHOW_DISK and not conf.trust_disk_encrypted:
+                continue
+            out.append(it)
+        return out
+
+
+class TeamMember(models.Model):
+    """اعضای تیم در صفحه‌ی «درباره ما»؛ عکس در خود پایگاه داده نگه داشته می‌شود (مثل لوگو)."""
+
+    name = models.CharField("نام و نام خانوادگی", max_length=100)
+    role = models.CharField("عنوان", max_length=120, blank=True)
+    bio = models.TextField("توضیح کوتاه", blank=True)
+    photo_data = models.BinaryField(editable=False, null=True, blank=True)
+    photo_mime = models.CharField(max_length=40, blank=True, editable=False)
+    photo_version = models.PositiveIntegerField(default=0, editable=False)
+    linkedin = models.URLField("لینکدین", blank=True)
+    instagram = models.URLField("اینستاگرام", blank=True)
+    telegram = models.URLField("تلگرام", blank=True)
+    website = models.URLField("وب‌سایت", blank=True)
+    email = models.EmailField("ایمیل", blank=True)
+    order = models.PositiveSmallIntegerField("ترتیب", default=100)
+    is_active = models.BooleanField("نمایش داده شود", default=True)
+
+    class Meta:
+        verbose_name = "عضو تیم"
+        verbose_name_plural = "اعضای تیم"
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def photo_url(self) -> str:
+        if self.photo_data:
+            from django.urls import reverse
+
+            return f"{reverse('core:team_photo', args=[self.pk])}?v={self.photo_version}"
+        return ""
+
+    @property
+    def initial(self) -> str:
+        return (self.name.strip()[:1] or "؟")
+
+    @property
+    def links(self) -> list[tuple[str, str]]:
+        """[(برچسب، آدرس)] فقط پیوندهای پرشده و امن."""
+        pairs = [("لینکدین", self.linkedin), ("اینستاگرام", self.instagram), ("تلگرام", self.telegram),
+                 ("وب‌سایت", self.website)]
+        if self.email:
+            pairs.append(("ایمیل", f"mailto:{self.email}"))
+        return [(label, url) for label, url in pairs if url and SiteSettings.is_safe_link(url)]
+
+
+class ContactRequest(models.Model):
+    """درخواست جلسه یا تماس از فرم عمومی؛ به‌صورت سرنخ در پنل مدیریت پیگیری می‌شود."""
+
+    class Topic(models.TextChoices):
+        ENTERPRISE = "enterprise", "خرید سازمانی"
+        DEMO = "demo", "جلسه‌ی معرفی آنلاین"
+        ONPREM = "onprem", "نصب اختصاصی روی سرور سازمان"
+        EDU = "edu", "دانشگاه و کلاس"
+        OTHER = "other", "سایر"
+
+    class Status(models.TextChoices):
+        NEW = "new", "تازه"
+        FOLLOWUP = "followup", "در حال پیگیری"
+        CLOSED = "closed", "بسته"
+
+    name = models.CharField("نام", max_length=100)
+    phone = models.CharField("موبایل", max_length=20)
+    email = models.EmailField("ایمیل", blank=True)
+    organization = models.CharField("سازمان یا دانشگاه", max_length=150, blank=True)
+    topic = models.CharField("موضوع", max_length=12, choices=Topic.choices, default=Topic.DEMO)
+    preferred_time = models.CharField("زمان پیشنهادی", max_length=120, blank=True)
+    message = models.TextField("توضیح", blank=True, max_length=2000)
+    status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.NEW, db_index=True)
+    note = models.TextField("یادداشت داخلی", blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                             related_name="+", verbose_name="حساب کاربری")
+    ip_hash = models.CharField(max_length=16, blank=True, editable=False)
+    created_at = models.DateTimeField("زمان ثبت", auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "درخواست تماس و جلسه"
+        verbose_name_plural = "درخواست‌های تماس و جلسه"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} · {self.get_topic_display()}"

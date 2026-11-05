@@ -7,7 +7,7 @@ from django.utils.html import format_html
 
 from accounts.models import normalize_mobile
 
-from .models import SiteSettings
+from .models import ContactRequest, SiteSettings, TeamMember, TrustItem
 
 LOGO_MAX_BYTES = 512 * 1024
 LOGO_TYPES = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp", "GIF": "image/gif"}
@@ -67,6 +67,16 @@ class SiteSettingsForm(forms.ModelForm):
         widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
         help_text="فقط هنگام تغییر وارد کنید؛ رمزنگاری‌شده ذخیره می‌شود و دوباره نمایش داده نمی‌شود.")
     clear_assistant_api_key = forms.BooleanField(label="حذف کلید API دستیار", required=False)
+
+    offsite_access_key = forms.CharField(
+        label="Access key فضای ابری", required=False,
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
+        help_text="فقط هنگام تغییر وارد کنید. رمزنگاری‌شده ذخیره می‌شود و دوباره نمایش داده نمی‌شود.")
+    offsite_secret_key = forms.CharField(
+        label="Secret key فضای ابری", required=False,
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
+        help_text="فقط هنگام تغییر وارد کنید. رمزنگاری‌شده ذخیره می‌شود و دوباره نمایش داده نمی‌شود.")
+    clear_offsite_keys = forms.BooleanField(label="حذف کلیدهای فعلی فضای ابری", required=False)
 
     class Meta:
         model = SiteSettings
@@ -153,6 +163,30 @@ class SiteSettingsForm(forms.ModelForm):
         self.logo_raw = raw
         return f
 
+    def clean_offsite_endpoint(self):
+        import re
+
+        url = (self.cleaned_data.get("offsite_endpoint") or "").strip().rstrip("/")
+        if url and not re.fullmatch(r"https://[A-Za-z0-9.\-]+(:\d+)?", url):
+            raise ValidationError("نشانی باید با https:// شروع شود و فقط دامنه (و پورت) باشد؛ مثلاً https://s3.example.ir")
+        return url
+
+    def clean_offsite_bucket(self):
+        import re
+
+        name = (self.cleaned_data.get("offsite_bucket") or "").strip()
+        if name and not re.fullmatch(r"[A-Za-z0-9._\-]{3,120}", name):
+            raise ValidationError("نام باکت فقط حروف انگلیسی، عدد، نقطه، خط تیره و زیرخط دارد.")
+        return name
+
+    def clean_offsite_prefix(self):
+        import re
+
+        p = (self.cleaned_data.get("offsite_prefix") or "").strip().strip("/")
+        if p and not re.fullmatch(r"[A-Za-z0-9._/\-]{1,80}", p):
+            raise ValidationError("نام پوشه فقط حروف انگلیسی، عدد، نقطه، خط تیره و / دارد.")
+        return p
+
     def clean_assistant_api_key(self):
         return "".join((self.cleaned_data.get("assistant_api_key") or "").split())
 
@@ -161,6 +195,12 @@ class SiteSettingsForm(forms.ModelForm):
 
     def clean(self):
         c = super().clean()
+        if c.get("offsite_enabled"):
+            has_keys = self.instance.has_offsite_keys and not c.get("clear_offsite_keys")
+            if not (c.get("offsite_endpoint") and c.get("offsite_bucket")):
+                self.add_error("offsite_enabled", "برای فعال‌کردن، نشانی سرویس و نام باکت را وارد کنید.")
+            elif not (has_keys or (c.get("offsite_access_key") and c.get("offsite_secret_key"))):
+                self.add_error("offsite_enabled", "برای فعال‌کردن، Access key و Secret key را وارد کنید.")
         merchant = c.get("gateway_merchant")
         if merchant and c.get("gateway_provider") == "zarinpal":
             import re
@@ -187,6 +227,10 @@ class SiteSettingsForm(forms.ModelForm):
             obj.assistant_api_key_encrypted = ""
         elif self.cleaned_data.get("assistant_api_key"):
             obj.set_assistant_api_key(self.cleaned_data["assistant_api_key"])
+        if self.cleaned_data.get("clear_offsite_keys"):
+            obj.offsite_access_key_encrypted = obj.offsite_secret_key_encrypted = ""
+            obj.offsite_enabled = False
+        obj.set_offsite_keys(self.cleaned_data.get("offsite_access_key", ""), self.cleaned_data.get("offsite_secret_key", ""))
         if commit:
             obj.save()
         return obj
@@ -196,7 +240,8 @@ class SiteSettingsForm(forms.ModelForm):
 class SiteSettingsAdmin(admin.ModelAdmin):
     form = SiteSettingsForm
     readonly_fields = ["api_key_status", "gateway_status", "gateway_tools", "sms_tools",
-                       "enamad_status", "logo_preview", "assistant_status", "assistant_tools", "updated_at"]
+                       "enamad_status", "logo_preview", "assistant_status", "assistant_tools", "updated_at",
+                       "offsite_status", "offsite_tools"]
     fieldsets = (
         ("سایت", {"fields": ("site_name", "logo_preview", "logo_file", "clear_logo", "tagline", "announcement", "announcement_level")}),
         ("پشتیبانی", {"fields": ("support_phone", "support_telegram", "support_email")}),
@@ -211,6 +256,26 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             "description": "در Umami وب‌سایت postgis.ir را اضافه کنید، از Tracking code نشانی script و Website ID را اینجا بگذارید "
                            "(یا کل تگ script را در کادر اول بچسبانید). اسکریپت فقط برای بازدیدکننده‌ها بارگذاری می‌شود، نه مدیران، "
                            "و تنظیم «Do Not Track» مرورگر را رعایت می‌کند.",
+        }),
+        ("هویت شرکت و تماس", {
+            "fields": ("about_intro", "contact_intro", "support_whatsapp", "support_hours",
+                       "company_name", "company_national_id", "company_economic_code", "show_company_info"),
+            "description": "متن صفحه‌های «درباره ما» و «تماس». شماره‌ی پشتیبانی همان «تلفن پشتیبانی» بالاست و پیامک اطلاع از "
+                           "درخواست‌های تماس به همان شماره می‌رود (به شرط پر بودن «شماره خط» در بخش پنل پیامک). "
+                           "اعضای تیم را از بخش «اعضای تیم» اضافه کنید. اطلاعات شرکت تا «نمایش اطلاعات شرکت» روشن نشود دیده نمی‌شود.",
+        }),
+        ("اعتماد و محل داده", {
+            "fields": ("trust_location_line", "trust_intro", "trust_disk_encrypted"),
+            "description": "ردیف‌های صفحه‌ی «امنیت و محل داده» را از بخش «ردیف‌های صفحه‌ی اعتماد» ویرایش کنید. "
+                           "جمله‌ی کوتاه محل داده در چند صفحه‌ی حساس نمایش داده می‌شود؛ فقط چیزی بنویسید که دقیقاً درست است.",
+        }),
+        ("بکاپ خارج از سرور (فضای ابری)", {
+            "fields": ("offsite_status", "offsite_enabled", "offsite_endpoint", "offsite_bucket", "offsite_region",
+                       "offsite_prefix", "offsite_access_key", "offsite_secret_key", "clear_offsite_keys",
+                       "offsite_encrypt", "offsite_tools"),
+            "description": "بعد از هر بکاپ موفق، نسخه‌ی دومی در باکت S3 (مثلاً پارس‌پک) ذخیره می‌شود. مدت نگهداری در باکت همان "
+                           "مدت نگهداری بکاپ در پلن است. ابتدا ذخیره کنید، سپس «آزمایش اتصال» را بزنید. "
+                           "کلیدها رمزنگاری‌شده ذخیره می‌شوند و هرگز دوباره نمایش داده نمی‌شوند.",
         }),
         ("فوتر سایت", {
             "fields": ("footer_about", "footer_address", "footer_copyright", "footer_links",
@@ -302,6 +367,28 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             return format_html('<b style="color:#b54708">وارد نشده — فقط حالت آزمایشی کار می‌کند</b>')
         return format_html('<b style="color:#b42318">وارد نشده</b>')
 
+    @admin.display(description="وضعیت بکاپ ابری")
+    def offsite_status(self, obj):
+        from jobs import offsite
+        from jobs.models import Job
+
+        if not obj.offsite_enabled:
+            return format_html('<b style="color:#b54708">خاموش است</b>')
+        if not obj.offsite_ready:
+            return format_html('<b style="color:#b42318">روشن است ولی نشانی، باکت یا کلیدها کامل نیست</b>')
+        done = Job.objects.filter(kind=Job.Kind.BACKUP, status=Job.Status.DONE).exclude(offsite_key="").count()
+        failed = Job.objects.filter(kind=Job.Kind.BACKUP, status=Job.Status.DONE, offsite_key="").exclude(offsite_error="").count()
+        fp = offsite.key_fingerprint() if obj.offsite_encrypt else "—"
+        return format_html(
+            '<b style="color:#1a7f4b">فعال</b> — {} بکاپ در فضای ابری، {} در انتظار یا ناموفق. '
+            'اثر انگشت کلید رمزنگاری: <code dir="ltr">{}</code> (یک نسخه از <code>CREDENTIALS_ENCRYPTION_KEY</code> '
+            'را بیرون از سرور نگه دارید؛ بدون آن بکاپ‌های ابری باز نمی‌شوند).', done, failed, fp)
+
+    @admin.display(description="ابزار فضای ابری")
+    def offsite_tools(self, obj):
+        return format_html('<a class="button" href="{}">آزمایش اتصال به فضای ابری</a>',
+                           reverse("admin:core_sitesettings_offsitetest"))
+
     @admin.display(description="وضعیت دستیار")
     def assistant_status(self, obj):
         from kb import vectors
@@ -345,6 +432,8 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             path("gateway-test/", self.admin_site.admin_view(self.gateway_test_view),
                  name="core_sitesettings_gatewaytest"),
             path("test-sms/", self.admin_site.admin_view(self.test_sms_view), name="core_sitesettings_testsms"),
+            path("offsite-test/", self.admin_site.admin_view(self.offsite_test_view),
+                 name="core_sitesettings_offsitetest"),
             path("assistant-test/", self.admin_site.admin_view(self.assistant_test_view),
                  name="core_sitesettings_assistanttest"),
             path("assistant-embed/", self.admin_site.admin_view(self.assistant_embed_view),
@@ -370,6 +459,15 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             messages.success(request, format_html(
                 "اتصال به {}{} درست است. <a href=\"{}\" target=\"_blank\">صفحه پرداخت آزمایشی</a> "
                 "(پرداخت نکنید).", gw.title, mode, res.pay_url))
+        return self._back()
+
+    def offsite_test_view(self, request):
+        from jobs import offsite
+
+        try:
+            messages.success(request, offsite.test_connection(SiteSettings.get()))
+        except offsite.OffsiteError as exc:
+            messages.error(request, f"آزمایش ناموفق بود: {exc}")
         return self._back()
 
     def assistant_test_view(self, request):
@@ -438,3 +536,92 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             **self.admin_site.each_context(request), "form": form, "title": "ارسال کد آزمایشی",
             "opts": self.model._meta,
         })
+
+
+
+class TeamMemberForm(forms.ModelForm):
+    photo_file = forms.FileField(label="عکس", required=False,
+                                 help_text="PNG، JPG یا WebP تا ۵۰۰ کیلوبایت؛ ترجیحاً مربع (حدود ۴۰۰×۴۰۰). خالی = عکس فعلی بماند.")
+    clear_photo = forms.BooleanField(label="حذف عکس", required=False)
+
+    class Meta:
+        model = TeamMember
+        fields = ("name", "role", "bio", "linkedin", "instagram", "telegram", "website", "email", "order", "is_active")
+        widgets = {"bio": forms.Textarea(attrs={"rows": 4, "cols": 70}),
+                   "linkedin": forms.URLInput(attrs={"dir": "ltr", "size": 60}),
+                   "instagram": forms.URLInput(attrs={"dir": "ltr", "size": 60}),
+                   "telegram": forms.URLInput(attrs={"dir": "ltr", "size": 60}),
+                   "website": forms.URLInput(attrs={"dir": "ltr", "size": 60}),
+                   "email": forms.EmailInput(attrs={"dir": "ltr", "size": 40})}
+
+    def clean_photo_file(self):
+        f = self.cleaned_data.get("photo_file")
+        if not f:
+            return f
+        if f.size > LOGO_MAX_BYTES:
+            raise ValidationError("حجم عکس باید کمتر از ۵۰۰ کیلوبایت باشد.")
+        raw = f.read()
+        mime = sniff_logo(raw)
+        if mime == "image/svg+xml":
+            raise ValidationError("برای عکس، PNG، JPG یا WebP بگذارید.")
+        self.photo_raw, self.photo_mime = raw, mime
+        return f
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        if self.cleaned_data.get("clear_photo"):
+            obj.photo_data, obj.photo_mime = None, ""
+            obj.photo_version += 1
+        elif self.cleaned_data.get("photo_file"):
+            obj.photo_data, obj.photo_mime = self.photo_raw, self.photo_mime
+            obj.photo_version += 1
+        if commit:
+            obj.save()
+        return obj
+
+
+@admin.register(TeamMember)
+class TeamMemberAdmin(admin.ModelAdmin):
+    form = TeamMemberForm
+    list_display = ("name", "role", "order", "is_active")
+    list_editable = ("order", "is_active")
+    readonly_fields = ("photo_preview",)
+    fields = ("name", "role", "bio", "photo_preview", "photo_file", "clear_photo", "linkedin", "instagram", "telegram",
+              "website", "email", "order", "is_active")
+
+    @admin.display(description="عکس فعلی")
+    def photo_preview(self, obj):
+        if obj and obj.photo_url:
+            return format_html('<img src="{}" alt="" style="max-height:96px;border-radius:8px">', obj.photo_url)
+        return "عکسی بارگذاری نشده؛ حرف اول نام نمایش داده می‌شود."
+
+
+@admin.register(TrustItem)
+class TrustItemAdmin(admin.ModelAdmin):
+    list_display = ("title", "icon", "show_when", "order", "is_active")
+    list_editable = ("order", "is_active")
+    list_filter = ("show_when", "is_active")
+
+
+@admin.register(ContactRequest)
+class ContactRequestAdmin(admin.ModelAdmin):
+    list_display = ("name", "phone", "organization", "topic", "status", "created_at")
+    list_filter = ("status", "topic")
+    list_editable = ("status",)
+    search_fields = ("name", "phone", "organization", "message")
+    readonly_fields = ("name", "phone", "email", "organization", "topic", "preferred_time", "message", "user",
+                       "created_at")
+    fields = ("status", "note", "name", "phone", "email", "organization", "topic", "preferred_time", "message", "user",
+              "created_at")
+    actions = ("mark_followup", "mark_closed")
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.action(description="علامت‌گذاری «در حال پیگیری»")
+    def mark_followup(self, request, queryset):
+        queryset.update(status=ContactRequest.Status.FOLLOWUP)
+
+    @admin.action(description="علامت‌گذاری «بسته»")
+    def mark_closed(self, request, queryset):
+        queryset.update(status=ContactRequest.Status.CLOSED)
