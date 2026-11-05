@@ -8,7 +8,8 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # ubuntu-latest اکنون Ubuntu 26.04 است و کلاینت PostgreSQL 18 دارد؛ pg_restore آن روی سرور آزمون ۱۶ خطا می‌دهد
+    runs-on: ubuntu-24.04
     services:
       postgis:
         image: postgis/postgis:16-3.4
@@ -40,11 +41,6 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: sudo apt-get update -q && sudo apt-get install -y -q gdal-bin osmium-tool osm2pgrouting pgbouncer gettext-base shellcheck
-      - name: pg_dump/pg_restore هم‌نسخه با سرور آزمون (۱۶)
-        # بعضی بسته‌ها کلاینت جدیدتر می‌آورند و pg_restore روی سرور ۱۶ خطای transaction_timeout می‌دهد
-        run: |
-          sudo apt-get install -y -q postgresql-client-16
-          echo /usr/lib/postgresql/16/bin >> "$GITHUB_PATH"
       - run: pip install -r requirements-dev.txt
       - name: Lint
         run: ruff check .
