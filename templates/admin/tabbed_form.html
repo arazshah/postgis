@@ -1,0 +1,5 @@
+{% extends "admin/change_form.html" %}{% load static %}
+{% block extrabody %}{{ block.super }}
+{{ ap_tabs|json_script:"ap-tabs" }}
+<script src="{% static 'js/admin-tabs.js' %}" defer></script>
+{% endblock %}
