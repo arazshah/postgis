@@ -1,0 +1,258 @@
+#!/usr/bin/env bash
+# به‌روزرسانی pgpro بدون نوشتن دوباره‌ی کارت: کد، فایل‌های استاتیک، سرویس‌ها و تنظیم‌های سیستم را با یک بسته عوض می‌کند.
+#
+#   sudo pgpro-update --latest          آخرین نسخه را از اینترنت (GitHub Releases) می‌گیرد و اعمال می‌کند
+#   sudo pgpro-update --check           فقط می‌گوید نسخه‌ی تازه‌تر هست یا نه
+#   sudo pgpro-update /tmp/بسته.tar.xz  بسته‌ی دستی (مثلاً با scp؛ برای دستگاه بدون اینترنت)
+#   sudo pgpro-update --rollback        برگشت به نسخه‌ی قبلی کد
+#   گزینه‌ها: --detach (اجرا در پس‌زمینه، برای دکمه‌ی پنل)  --force (حتی با همان نسخه)
+#
+# امن‌سازی: اگر /etc/pgpro/update.pub هست، بسته باید امضای ed25519 معتبر (بر فایل .sha256) داشته باشد.
+# هر به‌روزرسانی: بکاپ دیتابیس پنل ← نسخه‌ی تازه کنار نسخه‌ی قبلی ← مایگریشن ← راه‌اندازی دوباره ← بررسی سلامت؛
+# اگر سالم بالا نیامد، کد به نسخه‌ی قبلی برمی‌گردد (مایگریشن‌های دیتابیس برگشت‌پذیر نیستند؛ بکاپ پنل می‌ماند).
+set -euo pipefail
+
+OPT=${PGPRO_HOME:-/opt/pgpro}
+DATA=${PGPRO_DATA:-/var/lib/pgpro}
+CONF=/etc/pgpro/update.conf
+STATE=$DATA/update.state
+LOG=$DATA/update.log
+UPDATE_BASE_URL=https://github.com/arazshah/postgis/releases/download/pgpro-latest
+# shellcheck source=/dev/null
+[ -f "$CONF" ] && . "$CONF"
+
+log() { printf '[%s] %s\n' "$(date +%T)" "$*" | tee -a "$LOG" >&2; }
+state() { printf '%s|%s\n' "$1" "$2" > "$STATE"; }
+die() { log "خطا: $*"; state failed "$*"; exit 1; }
+
+current_version() { basename "$(readlink -f "$OPT/current")"; }
+
+fetch_latest_meta() {
+  curl -fsSL --max-time 30 "$UPDATE_BASE_URL/latest.json" 2>/dev/null
+}
+
+json_get() { python3 -c 'import json,sys; print(json.load(sys.stdin).get(sys.argv[1],""))' "$1"; }
+
+verify_package() {
+  local file=$1 want=$2 have sumfile
+  have=$(sha256sum "$file" | awk '{print $1}')
+  if [ -z "$want" ] && [ -f "$file.sha256" ]; then want=$(awk '{print $1; exit}' "$file.sha256"); fi
+  if [ -n "$want" ]; then
+    [ "$want" = "$have" ] || die "هش بسته نمی‌خواند (انتظار $want، دریافت $have)."
+    log "هش بسته تأیید شد."
+  elif [ ! -f /etc/pgpro/update.pub ]; then
+    log "هشدار: هش بسته داده نشده؛ بررسی هش انجام نشد."
+  else
+    die "برای بسته بدون هش، امضا هم قابل بررسی نیست."
+  fi
+  if [ -s /etc/pgpro/update.pub ]; then
+    sumfile=$file.sha256
+    if [ ! -f "$sumfile" ] || [ ! -f "$sumfile.sig" ]; then die "این دستگاه فقط بسته‌ی امضاشده می‌پذیرد (فایل .sha256 و .sha256.sig لازم است)."; fi
+    openssl pkeyutl -verify -rawin -pubin -inkey /etc/pgpro/update.pub -sigfile "$sumfile.sig" -in "$sumfile" >/dev/null 2>&1 \
+      || die "امضای بسته معتبر نیست."
+    log "امضای بسته تأیید شد."
+  fi
+}
+
+health_ok() {
+  for _ in $(seq 1 45); do
+    curl -fsS --max-time 5 -H 'Host: pgpro.local' http://127.0.0.1:8000/healthz >/dev/null 2>&1 && return 0
+    sleep 2
+  done
+  return 1
+}
+
+restart_services() {
+  if [ -d /run/systemd/system ]; then systemctl restart pgpro-web.service pgpro-worker.service; fi
+}
+
+stop_services() {
+  if [ -d /run/systemd/system ]; then systemctl stop pgpro-worker.service pgpro-web.service || true; fi
+}
+
+apply_package() {
+  local file=$1 want=${2:-} tmp ver newreq ts prev dest
+  [ -f "$file" ] || die "فایل بسته پیدا نشد: $file"
+  verify_package "$file" "$want"
+
+  tmp=$(mktemp -d /var/tmp/pgpro-update.XXXXXX)
+  PGU_TMP=$tmp   # trap بعد از خروج از تابع اجرا می‌شود؛ متغیر محلی آن موقع نیست
+  trap 'rm -rf "${PGU_TMP:-}"' EXIT
+  state running "باز کردن بسته…"
+  tar -xJf "$file" -C "$tmp" || die "بسته خراب است یا کامل دانلود نشده."
+  if [ ! -d "$tmp/release" ] || [ ! -f "$tmp/meta.json" ]; then die "ساختار بسته نامعتبر است."; fi
+  ver=$(json_get version < "$tmp/meta.json")
+  [[ "$ver" =~ ^[0-9A-Za-z._-]+$ ]] || die "نسخه‌ی بسته نامعتبر است."
+  if [ "$ver" = "$(current_version)" ] && [ "${FORCE:-0}" != 1 ]; then
+    log "این نسخه ($ver) همین الان نصب است."
+    state uptodate "نسخه‌ی $ver همین الان نصب است."
+    return 0
+  fi
+
+  # فضا: دو برابر حجم بسته‌ی بازشده
+  local need free
+  need=$(du -sk "$tmp/release" | awk '{print $1}')
+  free=$(df -Pk "$OPT" | awk 'NR==2 {print $4}')
+  [ "$free" -gt $((need * 2)) ] || die "فضای دستگاه کافی نیست (لازم حدود $((need * 2 / 1024)) مگابایت)."
+
+  # بسته‌های پایتون: اگر عوض شده، باید نصب شوند (نیاز به اینترنت)؛ وگرنه بدون هیچ تغییری جلو می‌رویم
+  newreq=$tmp/release/requirements.txt
+  if ! cmp -s "$newreq" "$OPT/current/requirements.txt"; then
+    state running "نصب بسته‌های پایتون تازه…"
+    log "requirements.txt عوض شده؛ نصب بسته‌ها (نیاز به اینترنت)…"
+    "$OPT/venv/bin/pip" install --no-cache-dir --disable-pip-version-check --prefer-binary -r "$newreq" \
+      || die "این نسخه بسته‌های پایتون تازه می‌خواهد و دانلودشان ممکن نشد. ایمیج کامل لازم است."
+  fi
+
+  # ابزار visudo: فایل sudoers خراب نباید sudo را از کار بیندازد
+  if [ -f "$tmp/rootfs/etc/sudoers.d/pgpro" ] && ! visudo -cf "$tmp/rootfs/etc/sudoers.d/pgpro" >/dev/null 2>&1; then
+    log "هشدار: sudoers بسته نامعتبر است؛ نادیده گرفته شد."
+    rm -f "$tmp/rootfs/etc/sudoers.d/pgpro"
+  fi
+
+  state running "بکاپ دیتابیس پنل…"
+  ts=$(date +%Y%m%d-%H%M%S)
+  install -d -m 750 -o postgres -g postgres "$DATA/backups/panel" 2>/dev/null || install -d -m 750 "$DATA/backups/panel"
+  runuser -u postgres -- pg_dump -Fc panel > "$DATA/backups/panel/before-$ver-$ts.dump" \
+    || log "هشدار: بکاپ دیتابیس پنل گرفته نشد."
+  # فقط سه بکاپ آخر
+  # shellcheck disable=SC2012
+  ls -1t "$DATA"/backups/panel/before-*.dump 2>/dev/null | tail -n +4 | xargs -r rm -f
+
+  state running "نصب نسخه‌ی $ver…"
+  dest=$OPT/releases/$ver
+  rm -rf "$dest"
+  mv "$tmp/release" "$dest"
+  # ویدیوهای راهنما (~۱۱۰ مگابایت) در بسته نیستند؛ از نسخه‌ی فعلی هاردلینک می‌شوند
+  if [ ! -d "$dest/staticfiles/help" ] && [ -d "$OPT/current/staticfiles/help" ]; then
+    cp -al "$OPT/current/staticfiles/help" "$dest/staticfiles/help"
+  fi
+  chown -R root:root "$dest"; chmod -R a+rX "$dest"
+  prev=$(readlink -f "$OPT/current")
+
+  stop_services
+  ln -sfn "$dest" "$OPT/current.new"; mv -Tf "$OPT/current.new" "$OPT/current"
+  ln -sfn "$prev" "$OPT/previous"
+
+  if [ -d "$tmp/rootfs" ]; then
+    # بدون مالک/مجوز پوشه‌های ریشه (/، /etc، /usr…) از بسته؛ مجوز فایل‌های مهم پایین‌تر صریح گذاشته می‌شود
+    rsync -rlt --no-perms --no-owner --no-group "$tmp/rootfs/" /
+    chmod 755 /usr/local/sbin/pgpro-* 2>/dev/null || true
+    chmod 440 /etc/sudoers.d/pgpro 2>/dev/null || true
+    [ -d /run/systemd/system ] && systemctl daemon-reload
+    if command -v nginx >/dev/null && nginx -t >/dev/null 2>&1 && [ -d /run/systemd/system ]; then systemctl reload nginx || true; fi
+  fi
+  printf 'PGPRO_VERSION=%s\n' "$ver" > /etc/pgpro/version.env
+
+  state running "مایگریشن و داده‌ی اولیه…"
+  if ! { /usr/local/sbin/pgpro-manage migrate --noinput && /usr/local/sbin/pgpro-manage device_init; }; then
+    log "مایگریشن ناموفق؛ برگشت به نسخه‌ی قبلی."
+    rollback_code "$prev"
+    die "مایگریشن نسخه‌ی $ver ناموفق بود؛ کد به نسخه‌ی قبلی برگشت (بکاپ پنل: $DATA/backups/panel)."
+  fi
+  /usr/local/sbin/pgpro-manage kb_sync >/dev/null 2>&1 || log "kb_sync ناموفق بود؛ ادامه."
+  /usr/local/sbin/pgpro-manage gnss_sync >/dev/null 2>&1 || log "gnss_sync ناموفق بود؛ ادامه."
+
+  state running "راه‌اندازی دوباره…"
+  restart_services
+  if ! health_ok; then
+    log "سرویس بعد از به‌روزرسانی سالم بالا نیامد؛ برگشت."
+    rollback_code "$prev"
+    health_ok || true
+    die "نسخه‌ی $ver سالم بالا نیامد؛ کد به نسخه‌ی قبلی برگشت."
+  fi
+
+  # فقط نسخه‌ی فعلی و قبلی می‌مانند
+  local keep_a keep_b
+  keep_a=$(readlink -f "$OPT/current"); keep_b=$(readlink -f "$OPT/previous")
+  for d in "$OPT"/releases/*/; do
+    d=${d%/}
+    [ "$d" = "$keep_a" ] || [ "$d" = "$keep_b" ] || rm -rf "$d"
+  done
+  log "به‌روزرسانی به $ver کامل شد."
+  state "done" "به نسخه‌ی $ver به‌روز شد."
+}
+
+rollback_code() {
+  local target=$1
+  [ -d "$target" ] || die "نسخه‌ی قبلی برای برگشت پیدا نشد."
+  ln -sfn "$target" "$OPT/current.new"; mv -Tf "$OPT/current.new" "$OPT/current"
+  printf 'PGPRO_VERSION=%s\n' "$(basename "$target")" > /etc/pgpro/version.env
+  restart_services
+}
+
+do_latest() {
+  local meta ver url want
+  state running "بررسی نسخه‌ی تازه…"
+  meta=$(fetch_latest_meta) || die "به GitHub وصل نشد (اینترنت؟). برای دستگاه بدون اینترنت بسته را با scp بفرستید."
+  ver=$(printf '%s' "$meta" | json_get version)
+  want=$(printf '%s' "$meta" | json_get sha256)
+  [ -n "$ver" ] || die "اطلاعات نسخه‌ی تازه خوانده نشد."
+  if [ "$ver" = "$(current_version)" ] && [ "${FORCE:-0}" != 1 ]; then
+    log "نسخه‌ی تازه‌تری نیست ($ver)."
+    state uptodate "نسخه‌ی $ver همین الان نصب است؛ نسخه‌ی تازه‌تری نیست."
+    return 0
+  fi
+  if [ "${CHECK_ONLY:-0}" = 1 ]; then
+    log "نسخه‌ی تازه موجود است: $ver (نصب‌شده: $(current_version))."
+    state available "نسخه‌ی تازه‌ی $ver موجود است (نصب‌شده: $(current_version))."
+    return 0
+  fi
+  url=$UPDATE_BASE_URL/pgpro-update-latest.tar.xz
+  state running "دانلود نسخه‌ی $ver…"
+  local pkg=/var/tmp/pgpro-update-latest.tar.xz
+  curl -fL --retry 3 --max-time 1800 -o "$pkg" "$url" || die "دانلود بسته ناموفق بود."
+  # فایل‌های امضا (اگر هست)
+  curl -fsSL --max-time 30 -o "$pkg.sha256" "$url.sha256" 2>/dev/null || rm -f "$pkg.sha256"
+  curl -fsSL --max-time 30 -o "$pkg.sha256.sig" "$url.sha256.sig" 2>/dev/null || rm -f "$pkg.sha256.sig"
+  apply_package "$pkg" "$want"
+  rm -f "$pkg" "$pkg.sha256" "$pkg.sha256.sig"
+}
+
+main() {
+  local mode=apply file="" detach=0
+  FORCE=0; CHECK_ONLY=0
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --latest) mode=latest ;;
+      --check) mode=latest; CHECK_ONLY=1 ;;
+      --rollback) mode=rollback ;;
+      --detach) detach=1 ;;
+      --force) FORCE=1 ;;
+      -h|--help) sed -n '2,13p' "$0"; return 0 ;;
+      *) file=$1 ;;
+    esac
+    shift
+  done
+  [ "$(id -u)" = 0 ] || { echo "با root اجرا کنید (sudo)." >&2; return 1; }
+  [ "$mode" = apply ] && [ -z "$file" ] && { echo "نشانی بسته یا --latest را بدهید (--help)." >&2; return 2; }
+  install -d -m 755 "$DATA"
+  if [ "$detach" = 1 ]; then
+    state running "شروع به‌روزرسانی…"
+    local args=(); [ "$mode" = latest ] && args+=(--latest); [ "$CHECK_ONLY" = 1 ] && args+=(--check)
+    if [ -d /run/systemd/system ] && command -v systemd-run >/dev/null; then
+      systemd-run --unit="pgpro-update-job-$(date +%s)" --collect --no-block "$0" "${args[@]}" >/dev/null
+    else
+      nohup "$0" "${args[@]}" >/dev/null 2>&1 &
+    fi
+    return 0
+  fi
+  exec 9>/run/pgpro-update.lock
+  flock -n 9 || { echo "به‌روزرسانی دیگری در جریان است." >&2; return 1; }
+  case $mode in
+    latest) do_latest ;;
+    rollback)
+      [ -L "$OPT/previous" ] || die "نسخه‌ی قبلی وجود ندارد."
+      state running "برگشت به نسخه‌ی قبلی…"
+      stop_services
+      rollback_code "$(readlink -f "$OPT/previous")"
+      health_ok || die "پس از برگشت هم سرویس سالم نبود؛ journalctl -u pgpro-web را ببینید."
+      state "done" "به نسخه‌ی قبلی برگشت."
+      ;;
+    apply) apply_package "$file" ;;
+  esac
+}
+
+# اسکریپت خودش در حین به‌روزرسانی عوض می‌شود؛ بعد از main هیچ خطی خوانده نشود
+main "$@"
+exit $?

@@ -29,7 +29,7 @@ if [ "${PGPRO_SKIP_PACKAGES:-0}" != 1 ]; then
   apt-get install -y --no-install-recommends \
     "postgresql-$PGV" "postgresql-$PGV-postgis-3" "postgresql-$PGV-pgrouting" "postgresql-$PGV-pgvector" \
     postgresql-client-common gdal-bin nginx avahi-daemon libnss-mdns \
-    python3 python3-venv ca-certificates curl openssl sudo rsync cron fake-hwclock util-linux openssh-server
+    python3 python3-venv ca-certificates curl openssl sudo rsync cron fake-hwclock util-linux openssh-server xz-utils
   rm -f /usr/sbin/policy-rc.d
 fi
 

@@ -13,6 +13,7 @@
 .dv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px;align-items:start}
 .dv-grid .kv td.rtl{text-align:start}
 .dv-grid .kv .meter{width:100%;margin:0 0 4px}
+.dv-log{margin:8px 0 0;max-height:180px;overflow:auto;white-space:pre-wrap;font:12px/1.6 var(--f-mono);background:var(--paper);border:1px solid var(--line-2);border-radius:var(--r-ctl);padding:8px 10px;direction:ltr;text-align:left}
 .dv-secret{border-color:var(--ochre);background:var(--ochre-soft);margin-bottom:12px}
 .dv-secret-h{display:flex;align-items:center;gap:8px}
 .dv-secret-pw{display:flex;align-items:center;gap:8px;flex-wrap:wrap}

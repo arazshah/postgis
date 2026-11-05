@@ -11,6 +11,7 @@
 #   PGPRO_EXTRA_GB         فضای افزوده برای نصب (پیش‌فرض ۳)
 #   PGPRO_SKIP_SMOKE=1     رد کردن آزمون دود
 #   PGPRO_BASEMAP_FILE     فایل iran.pmtiles که داخل ایمیج (/opt/pgpro/basemap) گذاشته می‌شود؛ فضای ایمیج به اندازه‌ی آن بیشتر می‌شود
+#   PGPRO_UPDATE_SIGN_KEY  کلید خصوصی ed25519 (PEM) برای امضای بسته‌ی به‌روزرسانی (اختیاری)
 #   PGPRO_SUPPORT_KEYS     مسیر فایل کلیدهای عمومی SSH پشتیبان (پیش‌فرض: image/support_keys.pub)
 set -euo pipefail
 export LC_ALL=C   # خروجی ابزارها (parted, dumpe2fs) انگلیسی و قابل‌تجزیه باشد
@@ -116,6 +117,25 @@ if [ -n "${PGPRO_BASEMAP_FILE:-}" ]; then
   install -D -m 644 "$PGPRO_BASEMAP_FILE" "$ROOT/opt/pgpro/basemap/iran.pmtiles"
   ls -lh "$ROOT/opt/pgpro/basemap/iran.pmtiles"
 fi
+
+# کلید عمومی امضای به‌روزرسانی (اگر در مخزن گذاشته شده): دستگاه فقط بسته‌ی امضاشده می‌پذیرد
+if [ -s "$REPO/image/update.pub" ]; then install -D -m 644 "$REPO/image/update.pub" "$ROOT/etc/pgpro/update.pub"; fi
+
+log "بسته‌ی به‌روزرسانی (pgpro-update)"
+bash "$REPO/image/build/make-update-package.sh" "$ROOT/opt/pgpro/releases/$VERSION" "$REPO/image/overlay/rootfs" "$VERSION" "$OUT"
+# فایل‌های «آخرین نسخه» برای GitHub Release با نام ثابت (دستگاه از همین نشانی‌ها می‌گیرد)
+REL_OUT=${PGPRO_RELEASE_OUT:-$OUT-release}
+mkdir -p "$REL_OUT"
+cp "$OUT/pgpro-update-$VERSION.tar.xz" "$REL_OUT/pgpro-update-latest.tar.xz"
+( cd "$REL_OUT" && sha256sum pgpro-update-latest.tar.xz > pgpro-update-latest.tar.xz.sha256 )
+if [ -n "${PGPRO_UPDATE_SIGN_KEY:-}" ] && [ -f "$PGPRO_UPDATE_SIGN_KEY" ]; then
+  openssl pkeyutl -sign -rawin -inkey "$PGPRO_UPDATE_SIGN_KEY" -in "$REL_OUT/pgpro-update-latest.tar.xz.sha256" \
+    -out "$REL_OUT/pgpro-update-latest.tar.xz.sha256.sig"
+fi
+python3 - "$REL_OUT/latest.json" "$VERSION" "$(awk '{print $1}' "$REL_OUT/pgpro-update-latest.tar.xz.sha256")" <<'PY'
+import json, sys
+json.dump({"version": sys.argv[2], "sha256": sys.argv[3]}, open(sys.argv[1], "w"))
+PY
 
 if [ "${PGPRO_SKIP_SMOKE:-0}" != 1 ]; then
   log "آزمون دود"

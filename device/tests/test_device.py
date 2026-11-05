@@ -357,3 +357,64 @@ class VectorAssetsTests(TestCase):
         from databases.views import _device_vector_assets
         with override_settings(DEVICE_MODE=False):
             self.assertIsNone(_device_vector_assets())
+
+
+class UpdateUiTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.login_ready()
+
+    def test_status_idle_and_parsed(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["PGPRO_DATA"] = tmp
+            try:
+                self.assertEqual(self.client.get("/device/update/status/").json()["state"], "idle")
+                (Path(tmp) / "update.state").write_text("running|دانلود نسخه‌ی 0.2\n", encoding="utf-8")
+                (Path(tmp) / "update.log").write_text("\n".join(f"خط {i}" for i in range(30)), encoding="utf-8")
+                j = self.client.get("/device/update/status/").json()
+                self.assertEqual((j["state"], j["message"]), ("running", "دانلود نسخه‌ی 0.2"))
+                self.assertEqual(len(j["log"]), 12)
+                (Path(tmp) / "update.state").write_text("bogus|x", encoding="utf-8")
+                self.assertEqual(self.client.get("/device/update/status/").json()["state"], "idle")
+            finally:
+                os.environ.pop("PGPRO_DATA", None)
+
+    def test_start_needs_admin_and_post(self):
+        from unittest import mock
+        self.assertEqual(self.client.get("/device/update/").status_code, 405)
+        with mock.patch("device.views.update.start", return_value=(True, "به‌روزرسانی شروع شد.")) as m:
+            r = self.client.post("/device/update/", {"mode": "update"})
+            self.assertEqual(r.status_code, 200)
+            m.assert_called_once_with(check_only=False)
+        with mock.patch("device.views.update.start", return_value=(False, "یک به‌روزرسانی در جریان است.")):
+            self.assertEqual(self.client.post("/device/update/", {}).status_code, 400)
+        self.client.logout()
+        services.create_user("sara", "Rah-Neshan-91", phone="09121234567", must_change=False)
+        self.login("sara", "Rah-Neshan-91")
+        self.assertEqual(self.client.post("/device/update/", {}).status_code, 302)
+        self.assertEqual(self.client.get("/device/update/status/").status_code, 302)
+
+    def test_start_runs_sudo_with_exact_args(self):
+        from unittest import mock
+
+        from device import update
+        with mock.patch.object(update, "UPDATER", "/bin/true"), mock.patch("device.update.subprocess.run") as run:
+            run.return_value.returncode = 0
+            ok, _ = update.start()
+        self.assertTrue(ok)
+        self.assertEqual(run.call_args[0][0], ["sudo", "-n", "/bin/true", "--latest", "--detach"])
+
+    def test_start_without_updater_installed(self):
+        from unittest import mock
+
+        from device import update
+        with mock.patch.object(update, "UPDATER", "/nonexistent/pgpro-update"):
+            ok, msg = update.start()
+        self.assertFalse(ok)
+        self.assertIn("نصب نیست", msg)
+
+    def test_system_page_shows_update_card(self):
+        self.assertContains(self.client.get("/device/system/"), "نسخه و به‌روزرسانی")

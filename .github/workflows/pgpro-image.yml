@@ -66,19 +66,43 @@ jobs:
         run: |
           v="${VERSION#pgpro-v}"
           echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: کلید امضای به‌روزرسانی (اگر secret تنظیم شده)
+        id: signkey
+        env:
+          KEY: ${{ secrets.PGPRO_UPDATE_SIGN_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then
+            umask 077; printf '%s\n' "$KEY" > "$RUNNER_TEMP/update-sign.pem"
+            echo "path=$RUNNER_TEMP/update-sign.pem" >> "$GITHUB_OUTPUT"
+          else
+            echo "secret ‏PGPRO_UPDATE_SIGN_KEY تنظیم نیست؛ بسته‌ها بدون امضا ساخته می‌شوند."
+          fi
       - name: ساخت ایمیج (شامل آزمون دود)
         env:
+          PGPRO_UPDATE_SIGN_KEY: ${{ steps.signkey.outputs.path }}
           PGPRO_VERSION: ${{ steps.ver.outputs.version }}
           PGPRO_BASE_IMAGE: ${{ inputs.base_image }}
           PGPRO_BASEMAP_FILE: ${{ github.workspace }}/basemap/iran.pmtiles
+          PGPRO_RELEASE_OUT: ${{ github.workspace }}/out-release
         run: |
           [ -n "$PGPRO_BASE_IMAGE" ] || unset PGPRO_BASE_IMAGE
-          sudo --preserve-env=PGPRO_VERSION,PGPRO_BASE_IMAGE,PGPRO_BASEMAP_FILE bash image/build/remaster.sh "$PWD/out"
+          sudo --preserve-env=PGPRO_VERSION,PGPRO_BASE_IMAGE,PGPRO_BASEMAP_FILE,PGPRO_UPDATE_SIGN_KEY,PGPRO_RELEASE_OUT bash image/build/remaster.sh "$PWD/out"
       - uses: actions/upload-artifact@v4
         with:
           name: pgpro-${{ steps.ver.outputs.version }}-nanopineo3
           path: out/*
           retention-days: 30
+      - name: انتشار «آخرین نسخه» برای pgpro-update (Release با برچسب pgpro-latest)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/pgpro'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: pgpro-latest
+          name: pgpro — آخرین نسخه‌ی به‌روزرسانی
+          body: "بسته‌ی به‌روزرسانی خودکار (pgpro-update). نسخه: ${{ steps.ver.outputs.version }}"
+          prerelease: true
+          make_latest: "false"
+          target_commitish: ${{ github.sha }}
+          files: out-release/*
       - name: Release
         if: startsWith(github.ref, 'refs/tags/pgpro-v') || inputs.release
         uses: softprops/action-gh-release@v2

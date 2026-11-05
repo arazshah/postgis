@@ -23,6 +23,25 @@
 - در این مدت `http://pgpro.local` صفحه‌ی «در حال آماده‌سازی» را نشان می‌دهد؛ سپس صفحه‌ی ورود.
 - ورود `admin` / `pgpro` ← رمز تازه اجباری ← داشبورد. کاربران از منوی حساب ← «کاربران».
 
+## به‌روزرسانی بدون نوشتن دوباره‌ی کارت
+هر ساخت روی شاخه‌ی `pgpro` علاوه بر ایمیج کامل، یک **بسته‌ی به‌روزرسانی** (کد + فایل‌های استاتیک + تنظیم سیستم، حدود ۹۰ مگابایت) می‌سازد و در Release با برچسب
+[`pgpro-latest`](https://github.com/arazshah/postgis/releases/tag/pgpro-latest) می‌گذارد. دستگاه با `pgpro-update` آن را می‌گیرد و اعمال می‌کند:
+بکاپ دیتابیس پنل ← نصب کنار نسخه‌ی قبلی ← مایگریشن ← راه‌اندازی دوباره ← بررسی سلامت؛ اگر سالم بالا نیامد، کد خودکار برمی‌گردد. داده‌ها و کاربران دست نمی‌خورند.
+
+- **از پنل (دستگاه به اینترنت وصل است):** منوی حساب ← «دستگاه» ← «بررسی و به‌روزرسانی».
+- **با SSH:** `sudo pgpro-update --latest` (فقط بررسی: `--check`، برگشت: `--rollback`).
+- **دستگاه بدون اینترنت:** بسته را از Release (یا Artifacts) بردارید و `scp -i ~/.ssh/pgpro_support pgpro-update-latest.tar.xz support@pgpro.local:/tmp/` بزنید، سپس `sudo pgpro-update /tmp/pgpro-update-latest.tar.xz`.
+- **یک‌بار نصب ابزار روی دستگاهی که ایمیج قدیمی دارد** (ایمیج‌های `dev4` و قدیمی‌تر ابزار را ندارند؛ فقط همین یک بار):
+  ```bash
+  ssh -i ~/.ssh/pgpro_support support@pgpro.local
+  curl -fL -o /tmp/u.tar.xz https://github.com/arazshah/postgis/releases/download/pgpro-latest/pgpro-update-latest.tar.xz
+  curl -fL -o /tmp/u.tar.xz.sha256 https://github.com/arazshah/postgis/releases/download/pgpro-latest/pgpro-update-latest.tar.xz.sha256
+  sudo tar -xJf /tmp/u.tar.xz -C / --strip-components=1 rootfs/usr/local/sbin/pgpro-update
+  sudo pgpro-update /tmp/u.tar.xz
+  ```
+- **محدودیت‌ها:** اگر `requirements.txt` عوض شود، دستگاه باید بسته‌های پایتون را از اینترنت بگیرد (وگرنه خطای روشن می‌دهد و ایمیج کامل لازم است). ویدیوهای راهنما و نقشه‌ی پایه در بسته نیستند و با ایمیج کامل عوض می‌شوند. مایگریشن‌های دیتابیس برگشت‌پذیر نیستند؛ بکاپ پنل در `/var/lib/pgpro/backups/panel` می‌ماند.
+- **امضا (اختیاری، پیشنهادی قبل از فروش):** یک جفت کلید ed25519 بسازید (`openssl genpkey -algorithm ed25519 -out sign.pem`؛ کلید عمومی با `openssl pkey -in sign.pem -pubout`)، کلید عمومی را در `image/update.pub` بگذارید و کلید خصوصی را به‌عنوان secret با نام `PGPRO_UPDATE_SIGN_KEY` در GitHub ثبت کنید. بعد از آن، دستگاه فقط بسته‌ی امضاشده می‌پذیرد.
+
 ## نقشه‌ی پایه‌ی ایران (آفلاین)
 - در ساخت ایمیج، محدوده‌ی ایران از ساخت روزانه‌ی Protomaps (داده‌ی OpenStreetMap) تا **بزرگنمایی ۱۴** بریده و در `/opt/pgpro/basemap/iran.pmtiles` گذاشته می‌شود
   (کش ماهانه در Actions؛ اندازه‌ی واقعی در لاگ ساخت چاپ می‌شود). در اولین بوت یک symlink آن را به `OSM_ROOT/basemap` می‌برد تا «بازنشانی کارخانه» پاکش نکند.

@@ -1,4 +1,4 @@
 # پنل (کاربر pgpro) فقط همین یک دستور را با root اجرا می‌کند
-pgpro ALL=(root) NOPASSWD: /usr/local/sbin/pgpro-settime
+pgpro ALL=(root) NOPASSWD: /usr/local/sbin/pgpro-settime, /usr/local/sbin/pgpro-update --latest --detach, /usr/local/sbin/pgpro-update --check --detach
 # پشتیبان (ورود فقط با کلید SSH)
 support ALL=(ALL) NOPASSWD: ALL

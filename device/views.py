@@ -18,7 +18,7 @@ from accounts.otp import client_ip
 from databases.models import UserDatabase
 from databases.services import logevent
 
-from . import services, system
+from . import services, system, update
 from .forms import LoginForm, PasswordChangeForm, UserForm
 from .models import DeviceProfile
 
@@ -239,6 +239,20 @@ def system_view(request):
     server = DatabaseServer.objects.filter(is_default=True).first()
     return render(request, "device/system.html", {"sys": system.snapshot(), "server": server,
                                                   "tz": settings.TIME_ZONE})
+
+
+@admin_required
+@require_POST
+def update_start_view(request):
+    ok, message = update.start(check_only=request.POST.get("mode") == "check")
+    if ok:
+        logevent("update", "به‌روزرسانی دستگاه شروع شد.", user=request.user)
+    return JsonResponse({"ok": ok, "message": message}, status=200 if ok else 400)
+
+
+@admin_required
+def update_status_view(request):
+    return JsonResponse(update.status())
 
 
 @admin_required

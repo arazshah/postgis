@@ -36,6 +36,14 @@
       {% if sys.disk.ok and sys.disk.level != "ok" %}<p class="msg warning small">{% icon "warn" 16 %} فضای دستگاه رو به پایان است. بکاپ‌های قدیمی را حذف کنید یا فایل‌های بزرگ را پاک کنید.</p>{% endif %}
     </section>
 
+    <section class="card" id="dv-upd" data-url="{% url 'device:update' %}" data-status="{% url 'device:update_status' %}">
+      <h2 class="dv-h">{% icon "download" 20 %}نسخه و به‌روزرسانی</h2>
+      <p class="small muted">نسخه‌ی نصب‌شده: <b class="ltr">pgpro {{ sys.version }}</b>. دستگاه برای به‌روزرسانی به اینترنت نیاز دارد (دانلود از GitHub)؛ داده‌ها و کاربران دست نمی‌خورند و پیش از شروع از دیتابیس پنل بکاپ گرفته می‌شود.</p>
+      <div class="dv-acts"><button class="btn" type="button" id="dv-upd-go">{% icon "refresh" 18 %}بررسی و به‌روزرسانی</button></div>
+      <p class="small" id="dv-upd-msg" role="status" hidden></p>
+      <pre class="dv-log ltr" id="dv-upd-log" hidden></pre>
+    </section>
+
     <section class="card">
       <h2 class="dv-h">{% icon "clock" 20 %}ساعت دستگاه</h2>
       <p class="small muted">این دستگاه باتری ساعت ندارد و بدون اینترنت بعد از هر قطع برق ساعتش عقب می‌ماند. با یک کلیک ساعتش را با این رایانه یکی کنید.</p>
