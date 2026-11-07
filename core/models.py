@@ -258,7 +258,29 @@ class SiteSettings(models.Model):
             if api_key:
                 obj.set_smsir_api_key(api_key)
             obj.save()
+            obj.seed_home_trust()
         return obj
+
+    HOME_TRUST_CARDS = [
+        ("server", "محل داده مشخص است", "{محل}."),
+        ("download", "هر لحظه ببرید",
+         "بکاپ کامل استاندارد PostgreSQL و خروجی جدول‌ها را دانلود کنید؛ قفل فروشنده ندارید."),
+        ("users", "آدم‌های واقعی پشت سایت", "تیم را بشناسید و مستقیم با ما صحبت کنید."),
+    ]
+    HOME_TRUST_BUTTONS = [
+        ("امنیت و محل داده", "/trust/", "lock", "ghost"),
+        ("درباره ما", "/about/", "", "ghost"),
+        ("درخواست جلسه", "/contact/", "phone", "primary"),
+    ]
+
+    def seed_home_trust(self) -> None:
+        """کارت‌ها و دکمه‌های اولیه‌ی بخش اعتماد صفحه‌ی اول (فقط وقتی هیچ‌کدام نیست)."""
+        if self.home_cards.exists() or self.home_buttons.exists():
+            return
+        for i, (icon, title, body) in enumerate(self.HOME_TRUST_CARDS, 1):
+            HomeTrustCard.objects.create(site=self, icon=icon, title=title, body=body, order=i * 10)
+        for i, (label, url, icon, style) in enumerate(self.HOME_TRUST_BUTTONS, 1):
+            HomeTrustButton.objects.create(site=self, label=label, url=url, icon=icon, style=style, order=i * 10)
 
     @staticmethod
     def _env_defaults() -> dict:
