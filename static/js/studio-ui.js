@@ -19,7 +19,7 @@ const ICONS={
   close:P("M6 6l12 12|M18 6 6 18"), search:'<circle cx="11" cy="11" r="6.5"/>'+P("M20 20l-4.2-4.2"),
   image:P("M3 5h18v14H3z|M3 16l5-5 4 4 3-3 6 6")+'<circle cx="16" cy="9" r="1.6"/>', table:P("M3 5h18v14H3z|M3 10h18|M3 15h18|M10 5v14"),
   point:'<circle cx="12" cy="12" r="3.2" fill="currentColor"/><circle cx="12" cy="12" r="7.5"/>', line:P("M3 18l6-7 5 4 7-10"), polygon:P("M5 7l7-4 7 5-2 10H7z"),
-  check:P("M5 12.5l4.5 4.5L19 7"), camera:P("M4 8h3l2-3h6l2 3h3v11H4z")+'<circle cx="12" cy="13" r="3.5"/>',
+  check:P("M5 12.5l4.5 4.5L19 7"), refresh:P("M20 11a8 8 0 0 0-14-4L4 9|M4 4v5h5|M4 13a8 8 0 0 0 14 4l2-2|M20 20v-5h-5"), camera:P("M4 8h3l2-3h6l2 3h3v11H4z")+'<circle cx="12" cy="13" r="3.5"/>',
   lock:P("M6 11h12v9H6z|M8.5 11V8a3.5 3.5 0 0 1 7 0v3"), globe:'<circle cx="12" cy="12" r="9"/>'+P("M3 12h18|M12 3c3 3.5 3 14.5 0 18|M12 3c-3 3.5-3 14.5 0 18"),
   link:P("M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1|M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"), code:P("M8 7l-5 5 5 5|M16 7l5 5-5 5"),
   print:P("M7 9V3h10v6|M7 17H4v-7h16v7h-3|M7 14h10v7H7z"), compare:P("M12 3v18|M4 5h16v14H4z|M8 10l-2 2 2 2|M16 10l2 2-2 2"),

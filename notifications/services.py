@@ -10,6 +10,7 @@ L = Notification.Level
 DESTINATIONS = {
     Job.Kind.ASK: ("analysis:page", "analysis_history"),
     Job.Kind.TOOL: ("tools:page", "tools_history"),
+    Job.Kind.FIND: ("databases:explore", ""),
     Job.Kind.BACKUP: ("databases:backups", ""),
     Job.Kind.RESTORE: ("databases:backups", ""),
     Job.Kind.RESTORE_TEST: ("databases:backups", ""),

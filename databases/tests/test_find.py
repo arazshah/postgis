@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import User
-from databases import find_credits, services
+from databases import find_credits, find_save, services
 from databases.explorer import Explorer
 from databases.find import Finder, FindError, _cond_sql, _date, _num, normalize, spec_hash, uses_other_layer
 from databases.models import DatabaseServer, FindLog, Plan
@@ -65,6 +65,27 @@ class FindUnitTests(SimpleTestCase):
         self.assertTrue(uses_other_layer(a))
         self.assertFalse(uses_other_layer({"layer": "public.x", "spatial": {"target": {"kind": "shape"}}}))
         self.assertFalse(uses_other_layer({"layer": "public.x"}))
+
+
+class FindSaveUnitTests(SimpleTestCase):
+    def test_parse_opts(self):
+        o = find_save.parse_opts({"name": " Schools_Found ", "kind": "view", "scope": "selected", "ids": [1, "1", 2]})
+        self.assertEqual((o["name"], o["kind"], o["ids"], o["srid"]), ("schools_found", "view", ["1", "2"], "keep"))
+        self.assertEqual(find_save.parse_opts({"name": "a", "srid": 4326})["srid"], "4326")
+        for bad in ({"name": "نام"}, {"name": "1abc"}, {"name": "a" * 64}, {"name": "x", "kind": "mview"},
+                    {"name": "x", "scope": "selected"}, {"name": "x", "scope": "except", "ids": []},
+                    {"name": "x", "join_cols": ["c"] * 21}, {"name": "x", "ids": "1,2", "scope": "selected"}, "x"):
+            with self.assertRaises(FindError, msg=bad):
+                find_save.parse_opts(bad)
+        with self.assertRaises(FindError):
+            find_save.parse_opts({"name": "x", "scope": "selected", "ids": [str(i) for i in range(5001)]})
+
+    def test_describe_is_persian_and_marks_options(self):
+        spec = {"layer": "public.schools", "match": "any", "conds": [{"col": "kind", "op": "eq", "v": "دخترانه"}],
+                "spatial": {"rel": "dwithin", "dist": 500, "target": {"kind": "layer", "layer": "public.roads"}}}
+        text = find_save.describe(spec, {"invert": True, "scope": "except"})
+        for part in ("public.schools", "kind برابر «دخترانه»", "تا فاصله‌ی 500 متر", "public.roads", "وارونه", "به‌جز"):
+            self.assertIn(part, text)
 
 
 class FindCreditTests(TestCase):
@@ -226,3 +247,110 @@ class FindIntegrationTests(TestCase):
         stranger = User.objects.create_user("09120000203")
         self.client.force_login(stranger)
         self.assertEqual(post(cross).status_code, 404)
+
+    # ------------------------------------------------------------------ ذخیره به‌صورت لایه
+    def _save(self, spec, **opts):
+        """ساخت لایه با همان مسیر کارگر؛ نتیجه‌ی کار پس‌زمینه را برمی‌گرداند."""
+        from jobs import services as jobs
+        from jobs.models import Job
+
+        self.client.force_login(self.user)
+        r = self.client.post(reverse("databases:find_save", args=[self.db.pk]),
+                             json.dumps({"spec": spec, "opts": opts}), content_type="application/json")
+        if r.status_code != 200:
+            return r.json(), None
+        job = jobs.claim_next()
+        self.assertEqual(job.pk, r.json()["job"])
+        jobs.run(job)
+        job = Job.objects.get(pk=job.pk)
+        st = self.client.get(reverse("databases:find_save_status", args=[self.db.pk]), {"job": job.pk}).json()
+        return st, job
+
+    def _q(self, query, *args):
+        with psycopg.connect(host=self.db.server.host, port=self.db.server.port, user=self.db.role_name,
+                             password="Find-Pass-12", dbname=self.db.db_name, autocommit=True) as c:
+            cur = c.execute(query, args)
+            return cur.fetchall() if cur.description else []
+
+    def test_save_table_and_live_view(self):
+        spec = {"layer": "public.schools", "conds": [{"col": "kind", "op": "eq", "v": "دخترانه"}]}
+        st, _ = self._save(spec, name="girls_found")
+        self.assertEqual((st["status"], st["rows"], st["kind"]), ("done", 10, "table"))
+        self.assertEqual(self._q("SELECT count(*) FROM girls_found")[0][0], 10)
+        # کلید اصلی منبع می‌ماند و نمایه‌ی مکانی ساخته می‌شود؛ هندسه‌ی نوع‌دار است
+        self.assertEqual(self._q("SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid "
+                                 "AND a.attnum = ANY(i.indkey) WHERE i.indrelid = 'girls_found'::regclass AND i.indisprimary"),
+                         [("id",)])
+        self.assertEqual(self._q("SELECT type, srid FROM geometry_columns WHERE f_table_name = 'girls_found'"), [("POINT", 4326)])
+        self.assertIn("kind", self._q("SELECT obj_description('girls_found'::regclass)")[0][0])
+        # نمای زنده با تغییر داده‌ی اصلی به‌روز می‌شود
+        st, _ = self._save(spec, name="girls_live", kind="view")
+        self.assertEqual((st["status"], st["rows"], st["kind"]), ("done", 10, "view"))
+        self._q("UPDATE schools SET kind = 'دخترانه' WHERE id = 1")
+        self.assertEqual(self._q("SELECT count(*) FROM girls_live")[0][0], 11)
+        self.assertEqual(self._q("SELECT count(*) FROM girls_found")[0][0], 10)
+
+    def test_scope_invert_and_columns(self):
+        spec = {"layer": "public.schools", "conds": [{"col": "kind", "op": "eq", "v": "دخترانه"}]}  # شناسه‌های زوج
+        st, _ = self._save(spec, name="pick", scope="selected", ids=["2", "4", "5"], cols=["name"])
+        self.assertEqual(st["rows"], 2)  # ۵ دخترانه نیست و کنار گذاشته می‌شود
+        self.assertEqual({r[0] for r in self._q("SELECT column_name FROM information_schema.columns WHERE table_name = 'pick'")},
+                         {"id", "name", "geom"})
+        st, _ = self._save(spec, name="rest", scope="except", ids=["2", "4"])
+        self.assertEqual(st["rows"], 8)
+        st, _ = self._save(spec, name="boys", invert=True)
+        self.assertEqual(st["rows"], 10)
+        self.assertEqual(self._q("SELECT DISTINCT kind FROM boys"), [("پسرانه",)])
+
+    def test_join_columns_distance_and_srid(self):
+        spec = {"layer": "public.schools", "spatial": {"rel": "dwithin", "dist": 500, "target": {
+            "kind": "layer", "layer": "public.roads"}}}
+        st, _ = self._save(spec, name="near_road", cols=["name"], join_cols=["id"], dist_col=True, srid="4326")
+        self.assertEqual((st["status"], st["rows"]), ("done", 3))
+        cols = {r[0] for r in self._q("SELECT column_name FROM information_schema.columns WHERE table_name = 'near_road'")}
+        self.assertEqual(cols, {"id", "name", "geom", "roads_id", "distance_m"})
+        self.assertTrue(all(0 <= r[0] <= 500 for r in self._q("SELECT distance_m FROM near_road")))
+        # لایه‌ی هدف چندضلعی در UTM: تبدیل به ۴۳۲۶
+        st, _ = self._save({"layer": "public.districts", "conds": [{"col": "name", "op": "eq", "v": "نارمک"}]},
+                           name="narmak", srid="4326")
+        self.assertEqual(self._q("SELECT srid FROM geometry_columns WHERE f_table_name = 'narmak'"), [(4326,)])
+        # خطاهای معنایی
+        for opts in ({"name": "x", "join_cols": ["id"]}, {"name": "x", "dist_col": True}):
+            st, _ = self._save({"layer": "public.schools", "conds": [{"col": "id", "op": "gt", "v": "0"}]}, **opts)
+            self.assertFalse(st["ok"])
+        st, _ = self._save({**spec, "spatial": {**spec["spatial"], "rel": "disjoint"}}, name="x", join_cols=["id"])
+        self.assertFalse(st["ok"])
+
+    def test_name_clash_replace_and_permissions(self):
+        spec = {"layer": "public.schools", "conds": [{"col": "kind", "op": "eq", "v": "دخترانه"}]}
+        self._save(spec, name="dup")
+        st, _ = self._save(spec, name="dup")
+        self.assertFalse(st["ok"])
+        self.assertIn("از قبل", st["error"])
+        st, _ = self._save({"layer": "public.schools", "conds": [{"col": "kind", "op": "eq", "v": "پسرانه"}]},
+                           name="dup", replace=True)
+        self.assertEqual((st["status"], st["rows"]), ("done", 10))
+        self.assertEqual(self._q("SELECT DISTINCT kind FROM dup"), [("پسرانه",)])
+        st, _ = self._save(spec, name="schools")  # روی لایه‌ی اصلی نمی‌نویسد
+        self.assertFalse(st["ok"])
+        # بدون کلید اصلی انتخاب دستی ممکن نیست؛ و غیراعضا ۴۰۴ می‌گیرند
+        st, _ = self._save({"layer": "public.notes", "conds": [{"col": "txt", "op": "notempty"}]}, name="n1", scope="selected", ids=["1"])
+        self.assertEqual((st["status"], st["rows"]), ("done", 1))
+        stranger = User.objects.create_user("09120000204")
+        self.client.force_login(stranger)
+        r = self.client.post(reverse("databases:find_save", args=[self.db.pk]), json.dumps({"spec": spec, "opts": {"name": "zz"}}),
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 404)
+
+    def test_sql_preview_and_run_exposes_pk(self):
+        out = self.finder.run({"layer": "public.schools", "conds": [{"col": "id", "op": "lte", "v": "3"}]})
+        self.assertEqual(out["pk"], "id")
+        self.assertEqual([r["k"] for r in out["rows"]], ["1", "2", "3"])
+        self.assertEqual({f["properties"]["__k"] for f in out["features"]["features"]}, {"1", "2", "3"})
+        self.client.force_login(self.user)
+        r = self.client.post(reverse("databases:find_sql", args=[self.db.pk]), json.dumps({
+            "spec": {"layer": "public.schools", "conds": [{"col": "kind", "op": "eq", "v": "دخترانه"}]},
+            "opts": {"kind": "view"}}), content_type="application/json").json()
+        self.assertTrue(r["ok"])
+        self.assertTrue(r["sql"].startswith("CREATE VIEW public.find_result AS"))
+        self.assertIn("'دخترانه'", r["sql"])
