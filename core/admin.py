@@ -8,7 +8,7 @@ from django.utils.html import format_html
 from accounts.models import normalize_mobile
 
 from .admin_tabs import TabbedAdminMixin
-from .models import ContactRequest, SiteSettings, TeamMember, TrustItem
+from .models import ContactRequest, HomeTrustButton, HomeTrustCard, SiteSettings, TeamMember, TrustItem
 
 LOGO_MAX_BYTES = 512 * 1024
 LOGO_TYPES = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp", "GIF": "image/gif"}
@@ -237,10 +237,53 @@ class SiteSettingsForm(forms.ModelForm):
         return obj
 
 
+class HomeTrustCardForm(forms.ModelForm):
+    class Meta:
+        model = HomeTrustCard
+        fields = ("icon", "title", "body", "order", "is_active")
+        widgets = {"body": forms.Textarea(attrs={"rows": 2, "cols": 36}),
+                   "title": forms.TextInput(attrs={"size": 22}),
+                   "order": forms.NumberInput(attrs={"style": "width:5em"})}
+
+
+class HomeTrustCardInline(admin.TabularInline):
+    model = HomeTrustCard
+    form = HomeTrustCardForm
+    classes = ("ap-tab-home",)
+    fields = ("icon", "title", "body", "order", "is_active")
+    extra = 0
+    verbose_name = "کارت"
+    verbose_name_plural = "کارت‌های بخش «داده‌ی شما مال شماست»"
+
+
+class HomeTrustButtonForm(forms.ModelForm):
+    class Meta:
+        model = HomeTrustButton
+        fields = ("label", "url", "icon", "style", "order", "is_active")
+        widgets = {"label": forms.TextInput(attrs={"size": 16}), "url": forms.TextInput(attrs={"size": 18}),
+                   "order": forms.NumberInput(attrs={"style": "width:5em"})}
+
+    def clean_url(self):
+        url = (self.cleaned_data.get("url") or "").strip()
+        if not SiteSettings.is_safe_link(url):
+            raise forms.ValidationError("نشانی باید با / یا https:// شروع شود.")
+        return url
+
+
+class HomeTrustButtonInline(admin.TabularInline):
+    model = HomeTrustButton
+    form = HomeTrustButtonForm
+    classes = ("ap-tab-home",)
+    extra = 0
+    verbose_name = "دکمه"
+    verbose_name_plural = "دکمه‌های زیر کارت‌ها"
+
+
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
     form = SiteSettingsForm
-    tabs = [("site", "سایت و برند", "globe"), ("users", "کاربران و کلاس", "users"), ("pay", "پرداخت", "card"),
+    inlines = [HomeTrustCardInline, HomeTrustButtonInline]
+    tabs = [("site", "سایت و برند", "globe"), ("home", "صفحه‌ی اول", "home"), ("users", "کاربران و کلاس", "users"), ("pay", "پرداخت", "card"),
             ("sms", "پیامک و ورود", "bell"), ("assistant", "دستیار هوشمند", "spark"),
             ("track", "آمار و اعتماد", "chart"), ("backup", "بکاپ خارج از سرور", "db"),
             ("map", "نقشه و برداشت", "pin")]
@@ -268,6 +311,13 @@ class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
     fieldsets = (
         ("سایت", {"classes": ("ap-tab-site",), "fields": ("site_name", "logo_preview", "logo_file", "clear_logo", "tagline", "announcement", "announcement_level")}),
         ("پشتیبانی", {"classes": ("ap-tab-site",), "fields": ("support_phone", "support_telegram", "support_email")}),
+        ("صفحه‌ی اول: بخش «داده‌ی شما مال شماست»", {
+            "classes": ("ap-tab-home",),
+            "fields": ("home_trust_enabled", "home_trust_title", "home_trust_subtitle"),
+            "description": "عنوان و زیرعنوان این بخش را اینجا و کارت‌ها و دکمه‌هایش را در جدول‌های پایین همین زبانه "
+                           "ویرایش کنید؛ ترتیب با عدد «ترتیب» (کوچک‌تر = جلوتر) است. با برداشتن تیک «نمایش» ردیف پنهان "
+                           "می‌شود و با «حذف» برای همیشه پاک می‌شود. بخشی که هیچ کارت و دکمه‌ی فعالی ندارد نمایش داده نمی‌شود.",
+        }),
         ("اینماد و نمادهای اعتماد", {
             "classes": ("ap-tab-track",),
             "fields": ("enamad_status", "enamad_meta_content", "enamad_badge_html", "footer_badges_html"),

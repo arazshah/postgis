@@ -167,3 +167,72 @@ class AdminIntegrationTests(TestCase):
     def test_settings_has_backup_tab(self):
         html = self.client.get("/manage/core/sitesettings/", follow=True).content.decode()
         self.assertIn("ap-tab-backup", html)
+
+
+class HomeTrustSectionTests(TestCase):
+    """بخش «داده‌ی شما مال شماست» صفحه‌ی اول از تنظیمات سایت خوانده می‌شود."""
+
+    def setUp(self):
+        cache.clear()
+        self.conf = SiteSettings.get()
+
+    def test_seeded_section_matches_previous_content(self):
+        r = self.client.get(reverse("core:home"))
+        self.assertContains(r, "داده‌ی شما مال شماست")
+        self.assertContains(r, "هر لحظه ببرید")
+        self.assertContains(r, "سرور در دیتاسنتر پارس‌پک، ایران.")
+        self.assertContains(r, 'class="btn" href="/contact/"')
+        self.assertContains(r, 'class="btn ghost" href="/trust/"')
+
+    def test_texts_cards_and_buttons_are_editable(self):
+        from core.models import HomeTrustButton, HomeTrustCard
+
+        self.conf.home_trust_title, self.conf.home_trust_subtitle = "عنوان تازه", ""
+        self.conf.save()
+        HomeTrustCard.objects.filter(title="هر لحظه ببرید").update(is_active=False)
+        HomeTrustCard.objects.create(site=self.conf, icon="bolt", title="کارت جدید", body="متن کارت", order=1)
+        HomeTrustButton.objects.create(site=self.conf, label="دکمه بد", url="javascript:alert(1)")
+        r = self.client.get(reverse("core:home"))
+        self.assertContains(r, "عنوان تازه")
+        self.assertContains(r, "کارت جدید")
+        self.assertNotContains(r, "هر لحظه ببرید")
+        self.assertNotContains(r, "javascript:")
+        self.assertNotContains(r, "بی‌پرده بگوییم")
+
+    def test_location_card_hidden_without_location_and_section_can_be_disabled(self):
+        self.conf.trust_location_line = ""
+        self.conf.save()
+        r = self.client.get(reverse("core:home"))
+        self.assertNotContains(r, "محل داده مشخص است")
+        self.assertNotContains(r, "{محل}")
+        self.conf.home_trust_enabled = False
+        self.conf.save()
+        self.assertNotContains(self.client.get(reverse("core:home")), 'id="trust"')
+
+    def test_admin_tab_edits_cards(self):
+        from django.contrib.auth import get_user_model
+
+        from core.models import HomeTrustCard
+
+        admin = get_user_model().objects.create_superuser("boss", password="Boss-Pass-99")
+        self.client.force_login(admin)
+        url = reverse("admin:core_sitesettings_change", args=[1])
+        r = self.client.get(url)
+        self.assertContains(r, "ap-tab-home")
+        self.assertContains(r, "home_cards-TOTAL_FORMS")
+        card = HomeTrustCard.objects.order_by("order").first()
+        from django.forms.models import model_to_dict
+
+        data = {k: v for k, v in model_to_dict(self.conf).items() if v is not None and v is not False}
+        cards = list(HomeTrustCard.objects.order_by("order", "id"))
+        data.update({"home_cards-TOTAL_FORMS": len(cards), "home_cards-INITIAL_FORMS": len(cards),
+                     "home_buttons-TOTAL_FORMS": 0, "home_buttons-INITIAL_FORMS": 0})
+        for i, c in enumerate(cards):
+            data.update({f"home_cards-{i}-id": c.pk, f"home_cards-{i}-site": 1, f"home_cards-{i}-icon": c.icon,
+                         f"home_cards-{i}-title": c.title, f"home_cards-{i}-body": c.body,
+                         f"home_cards-{i}-order": c.order, f"home_cards-{i}-is_active": "on"})
+        data["home_cards-0-title"] = "از پنل عوض شد"
+        r = self.client.post(url, data)
+        self.assertEqual(r.status_code, 302)
+        card.refresh_from_db()
+        self.assertEqual(card.title, "از پنل عوض شد")

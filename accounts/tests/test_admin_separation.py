@@ -85,6 +85,8 @@ class AdminPagesTests(TestCase):
         data.update({"site_name": "پستجیس", "sms_backend": "smsir", "smsir_api_key": "SECRET-KEY-1",
                      "smsir_template_id": "100200", "smsir_code_param": "CODE", "announcement_level": "info",
                      "max_databases_per_user": 2, "signup_open": "on", "allow_new_databases": "on"})
+        for prefix in ("home_cards", "home_buttons"):  # جدول‌های زبانه‌ی «صفحه‌ی اول»
+            data.update({f"{prefix}-TOTAL_FORMS": 0, f"{prefix}-INITIAL_FORMS": 0})
         r = self.client.post(url, data)
         self.assertEqual(r.status_code, 302, r.content[:2000])
         conf = SiteSettings.get()

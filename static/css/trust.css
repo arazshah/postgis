@@ -48,6 +48,7 @@ a.tr-way:hover{border-color:var(--teal)}
 
 .tr-own{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:var(--s4)}
 .tr-own .tr-card{background:transparent}
+.tr-actions{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s5)}
 
 .tr-legal{max-width:760px}
 .tr-legal h2{margin-top:var(--s6);font-size:1.15rem}
