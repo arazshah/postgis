@@ -111,10 +111,15 @@ def home(request):
     from kb.faq import faq_jsonld, home_faqs
 
     from .help import GUIDES
+    from .models import HomeTrustButton, HomeTrustCard, SiteSettings
 
     faqs = home_faqs()
+    conf = SiteSettings.get()
+    trust_cards = HomeTrustCard.visible(conf) if conf.home_trust_enabled else []
+    trust_buttons = HomeTrustButton.visible() if conf.home_trust_enabled else []
     return render(request, "core/home.html", {"plans": plans, "guides_count": len(GUIDES), "faqs": faqs,
-                                              "faq_json": faq_jsonld(faqs)})
+                                              "faq_json": faq_jsonld(faqs), "trust_conf": conf,
+                                              "trust_cards": trust_cards, "trust_buttons": trust_buttons})
 
 
 def docs_index(request):

@@ -189,21 +189,22 @@ WHERE ST_DWithin(
   </div>
 </section>
 
-{# ───────────── اعتماد: داده‌ی شما مال شماست ───────────── #}
+{# ───────────── اعتماد: داده‌ی شما مال شماست (پویا: تنظیمات سایت ← زبانه‌ی «صفحه‌ی اول») ───────────── #}
+{% if trust_cards or trust_buttons %}
 <section class="section cv" id="trust" aria-labelledby="trust-h">
   <div class="wrap">
     <div class="section-head">
-      <h2 id="trust-h">داده‌ی شما مال شماست</h2>
-      <p class="muted">بی‌پرده بگوییم داده کجاست و اگر خواستید بروید چه می‌شود.</p>
+      <h2 id="trust-h">{{ trust_conf.home_trust_title|default:"داده‌ی شما مال شماست" }}</h2>
+      {% if trust_conf.home_trust_subtitle %}<p class="muted">{{ trust_conf.home_trust_subtitle }}</p>{% endif %}
     </div>
-    <div class="tr-own">
-      <div class="tr-card"><span class="tr-ico">{% icon "server" 22 %}</span><h3>محل داده مشخص است</h3><p>{% if SITE.location_line %}{{ SITE.location_line }}.{% else %}جزئیات محل سرورها را در صفحه‌ی امنیت ببینید.{% endif %}</p></div>
-      <div class="tr-card"><span class="tr-ico">{% icon "download" 22 %}</span><h3>هر لحظه ببرید</h3><p>بکاپ کامل استاندارد PostgreSQL و خروجی جدول‌ها را دانلود کنید؛ قفل فروشنده ندارید.</p></div>
-      <div class="tr-card"><span class="tr-ico">{% icon "users" 22 %}</span><h3>آدم‌های واقعی پشت سایت</h3><p>تیم را بشناسید و مستقیم با ما صحبت کنید.</p></div>
-    </div>
-    <p style="margin-top:var(--s5)"><a class="btn ghost" href="{% url 'core:trust' %}">{% icon "lock" 18 %}امنیت و محل داده</a> <a class="btn ghost" href="{% url 'core:about' %}">درباره ما</a> <a class="btn" href="{% url 'core:contact' %}">{% icon "phone" 18 %}درخواست جلسه</a></p>
+    {% if trust_cards %}<div class="tr-own">
+      {% for card, body in trust_cards %}<div class="tr-card"><span class="tr-ico">{% icon card.icon 22 %}</span><h3>{{ card.title }}</h3><p>{{ body|linebreaksbr }}</p></div>
+      {% endfor %}
+    </div>{% endif %}
+    {% if trust_buttons %}<p class="tr-actions">{% for b in trust_buttons %}<a class="btn{% if b.style != 'primary' %} ghost{% endif %}" href="{{ b.url }}">{% if b.icon %}{% icon b.icon 18 %}{% endif %}{{ b.label }}</a>{% if not forloop.last %} {% endif %}{% endfor %}</p>{% endif %}
   </div>
 </section>
+{% endif %}
 
 {# ───────────── آموزش و پرسش‌های متداول ───────────── #}
 <section class="section alt cv" id="faq" aria-labelledby="faq-h">

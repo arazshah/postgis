@@ -203,6 +203,13 @@ class SiteSettings(models.Model):
         "دیسک سرورها رمزنگاری‌شده است", default=False,
         help_text="فقط اگر رمزنگاری دیسک را در پارس‌پک (یا سرور) فعال و تأیید کرده‌اید روشن کنید؛ آن‌وقت ردیف مربوط در صفحه‌ی اعتماد دیده می‌شود.")
 
+    # --- صفحه‌ی اول: بخش «داده‌ی شما مال شماست» (کارت‌ها و دکمه‌ها در HomeTrustCard و HomeTrustButton) ---
+    home_trust_enabled = models.BooleanField("بخش اعتماد در صفحه‌ی اول نمایش داده شود", default=True)
+    home_trust_title = models.CharField("عنوان بخش", max_length=120, blank=True, default="داده‌ی شما مال شماست")
+    home_trust_subtitle = models.CharField(
+        "زیرعنوان بخش", max_length=250, blank=True,
+        default="بی‌پرده بگوییم داده کجاست و اگر خواستید بروید چه می‌شود.")
+
     # --- بکاپ خارج از سرور (فضای ابری S3؛ مثلاً باکت پارس‌پک) ---
     offsite_enabled = models.BooleanField(
         "کپی بکاپ‌ها در فضای ابری جداگانه", default=False,
@@ -484,6 +491,73 @@ class TrustItem(models.Model):
                 continue
             out.append(it)
         return out
+
+
+ICON_CHOICES = TrustItem.ICONS + [("phone", "تلفن"), ("mail", "ایمیل"), ("book", "کتاب"), ("home", "خانه"),
+                                   ("pin", "مکان"), ("chart", "نمودار"), ("bolt", "سرعت"), ("layers", "لایه‌ها")]
+
+
+class HomeTrustCard(models.Model):
+    """کارت‌های بخش اعتماد صفحه‌ی اول؛ از زبانه‌ی «صفحه‌ی اول» تنظیمات سایت ویرایش می‌شوند."""
+
+    LOCATION_TOKEN = "{محل}"
+
+    site = models.ForeignKey(SiteSettings, on_delete=models.CASCADE, related_name="home_cards", default=1)
+    icon = models.CharField("آیکون", max_length=20, choices=ICON_CHOICES, default="check")
+    title = models.CharField("عنوان", max_length=80)
+    body = models.TextField(
+        "توضیح", max_length=300,
+        help_text="«{محل}» با «جمله‌ی کوتاه محل داده» جایگزین می‌شود؛ اگر آن خالی باشد، کارت نشان داده نمی‌شود.")
+    order = models.PositiveSmallIntegerField("ترتیب", default=100)
+    is_active = models.BooleanField("نمایش", default=True)
+
+    class Meta:
+        verbose_name = "کارت بخش اعتماد صفحه‌ی اول"
+        verbose_name_plural = "کارت‌های بخش اعتماد صفحه‌ی اول"
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.title
+
+    @classmethod
+    def visible(cls, conf: "SiteSettings") -> list[tuple["HomeTrustCard", str]]:
+        """[(کارت، متن نهایی)]؛ کارتِ وابسته به محل داده بدون آن جمله کنار گذاشته می‌شود."""
+        out, loc = [], conf.location_line.rstrip(".")
+        for card in cls.objects.filter(is_active=True):
+            body = card.body
+            if cls.LOCATION_TOKEN in body:
+                if not loc:
+                    continue
+                body = body.replace(cls.LOCATION_TOKEN, loc)
+            out.append((card, body))
+        return out
+
+
+class HomeTrustButton(models.Model):
+    """دکمه‌های زیر کارت‌های بخش اعتماد صفحه‌ی اول."""
+
+    STYLE_PRIMARY, STYLE_GHOST = "primary", "ghost"
+    STYLES = [(STYLE_GHOST, "ساده (حاشیه‌دار)"), (STYLE_PRIMARY, "اصلی (پررنگ)")]
+
+    site = models.ForeignKey(SiteSettings, on_delete=models.CASCADE, related_name="home_buttons", default=1)
+    label = models.CharField("برچسب", max_length=40)
+    url = models.CharField("نشانی", max_length=300, help_text="با / یا https:// شروع شود؛ مثلاً /contact/")
+    icon = models.CharField("آیکون", max_length=20, choices=ICON_CHOICES, blank=True)
+    style = models.CharField("نوع", max_length=10, choices=STYLES, default=STYLE_GHOST)
+    order = models.PositiveSmallIntegerField("ترتیب", default=100)
+    is_active = models.BooleanField("نمایش", default=True)
+
+    class Meta:
+        verbose_name = "دکمه‌ی بخش اعتماد صفحه‌ی اول"
+        verbose_name_plural = "دکمه‌های بخش اعتماد صفحه‌ی اول"
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.label
+
+    @classmethod
+    def visible(cls) -> list["HomeTrustButton"]:
+        return [b for b in cls.objects.filter(is_active=True) if SiteSettings.is_safe_link(b.url)]
 
 
 class TeamMember(models.Model):
