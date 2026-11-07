@@ -1,0 +1,4 @@
+tools/
+*.md
+docker-compose*.yml
+.git

@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://pgpro.ir/sitemap.xml

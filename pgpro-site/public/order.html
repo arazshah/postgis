@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>سفارش و پیش‌فاکتور — پایگاه داده مکانی پرو</title>
+<meta name="description" content="درخواست پیش‌فاکتور، پیش‌فروش یا نسخه‌ی آزمایشی دستگاه pgpro؛ فرم به پنل ژئوپایگاه می‌رود و همکاران ما تماس می‌گیرند.">
+<link rel="canonical" href="https://pgpro.ir/order">
+<meta name="theme-color" content="#0F5C59">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website"><meta property="og:locale" content="fa_IR">
+<meta property="og:site_name" content="پایگاه داده مکانی پرو">
+<meta property="og:title" content="سفارش و پیش‌فاکتور — پایگاه داده مکانی پرو"><meta property="og:description" content="درخواست پیش‌فاکتور، پیش‌فروش یا نسخه‌ی آزمایشی دستگاه pgpro؛ فرم به پنل ژئوپایگاه می‌رود و همکاران ما تماس می‌گیرند.">
+<meta property="og:url" content="https://pgpro.ir/order"><meta property="og:image" content="https://pgpro.ir/assets/img/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/assets/fonts/vazirmatn-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/css/site.css">
+</head>
+<body>
+<a class="skip" href="#main">پرش به محتوا</a>
+<header class="top"><div class="wrap">
+<a class="brand" href="/"><img src="/assets/img/logo.svg" alt="" width="38" height="38"><span>پایگاه داده مکانی پرو<small>PostGIS&nbsp;Pro</small></span></a>
+<nav class="nav" id="nav" aria-label="منوی اصلی"><a href="/">خانه</a><a href="/setup">راهنمای راه‌اندازی</a><a href="/specs">مشخصات</a><a href="/download">نسخه‌ها و به‌روزرسانی</a><a href="/order" aria-current="page">سفارش</a></nav>
+<span class="gap"></span>
+<a class="btn btn-sm" href="/order"><svg class="i s" aria-hidden="true"><use href="/assets/icons.svg#i-mail"/></svg><span>درخواست پیش‌فاکتور</span></a>
+<button class="menu-btn" type="button" aria-label="منو" aria-expanded="false" aria-controls="nav"><svg class="i " aria-hidden="true"><use href="/assets/icons.svg#i-more"/></svg></button>
+</div></header>
+<main id="main">
+<div class="status"><div class="wrap"><svg class="i s" aria-hidden="true"><use href="/assets/icons.svg#i-info"/></svg><span>پیش‌فروش و نسخه‌ی آزمایشی باز است.</span><a href="/order?interest=trial">نسخه‌ی آزمایشی بگیرید</a></div></div>
+<div class="page-head"><div class="wrap"><nav class="crumbs" aria-label="مسیر"><a href="/">خانه</a><svg class="i s go" aria-hidden="true"><use href="/assets/icons.svg#i-chev"/></svg><span>سفارش و پیش‌فاکتور</span></nav><h1>سفارش و پیش‌فاکتور</h1><p>نیازتان را بنویسید؛ همکاران ما با شما تماس می‌گیرند و پیش‌فاکتور می‌فرستند.</p></div></div>
+<section><div class="wrap"><div class="split rev top">
+<div class="panel"><form id="lead-form" class="form" data-endpoint="https://postgis.ir/api/pgpro/lead/" data-fallback="https://postgis.ir/contact/?topic=pgpro" novalidate>
+<fieldset class="field"><legend>چه می‌خواهید؟</legend><div class="chips"><label class="chip"><input type="radio" name="interest" value="quote" checked><span>پیش‌فاکتور</span></label><label class="chip"><input type="radio" name="interest" value="preorder"><span>پیش‌فروش</span></label><label class="chip"><input type="radio" name="interest" value="trial"><span>نسخه‌ی آزمایشی</span></label><label class="chip"><input type="radio" name="interest" value="info"><span>فقط اطلاعات</span></label></div></fieldset>
+<fieldset class="field"><legend>تعداد دستگاه</legend><div class="chips"><label class="chip"><input type="radio" name="quantity" value="1" checked><span>۱ دستگاه</span></label><label class="chip"><input type="radio" name="quantity" value="2-5"><span>۲ تا ۵</span></label><label class="chip"><input type="radio" name="quantity" value="6-20"><span>۶ تا ۲۰</span></label><label class="chip"><input type="radio" name="quantity" value="20+"><span>بیشتر</span></label></div></fieldset>
+<fieldset class="field"><legend>زمینه‌ی کار</legend><div class="chips"><label class="chip"><input type="radio" name="usage" value="شهرداری و دولتی"><span>شهرداری و دولتی</span></label><label class="chip"><input type="radio" name="usage" value="مشاور و پیمانکار"><span>مشاور و پیمانکار</span></label><label class="chip"><input type="radio" name="usage" value="معدن و صنعت"><span>معدن و صنعت</span></label><label class="chip"><input type="radio" name="usage" value="دانشگاه"><span>دانشگاه</span></label><label class="chip"><input type="radio" name="usage" value="سایر"><span>سایر</span></label></div></fieldset>
+<div class="row2">
+<div class="field"><label for="f-name">نام و نام خانوادگی</label><input class="inp" id="f-name" name="name" autocomplete="name" required><span class="err" id="err-name"></span></div>
+<div class="field"><label for="f-phone">شماره‌ی موبایل</label><input class="inp ltr" id="f-phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="09123456789" required><span class="err" id="err-phone"></span></div>
+</div>
+<div class="row2">
+<div class="field"><label for="f-org">سازمان یا شرکت</label><input class="inp" id="f-org" name="organization" autocomplete="organization"></div>
+<div class="field"><label for="f-mail">ایمیل (اختیاری)</label><input class="inp" id="f-mail" name="email" type="email" autocomplete="email" dir="ltr"><span class="err" id="err-email"></span></div>
+</div>
+<div class="field"><label for="f-msg">توضیح (اختیاری)</label><textarea class="inp" id="f-msg" name="message" rows="4" maxlength="1500" placeholder="مثلاً چند شعبه‌ایم و داده‌ها باید در شبکه‌ی داخلی بماند"></textarea></div>
+<div class="hp" aria-hidden="true"><label>وب‌سایت<input name="website" tabindex="-1" autocomplete="off"></label></div>
+<div id="lead-note" class="note" role="status" aria-live="polite"></div>
+<button class="btn warm lg" type="submit"><svg class="i " aria-hidden="true"><use href="/assets/icons.svg#i-mail"/></svg>ارسال درخواست</button>
+<p class="muted small nomar">با ارسال، شماره‌تان فقط برای همین پیگیری استفاده می‌شود. درخواست در پنل ژئوپایگاه (postgis.ir) ثبت می‌شود.</p>
+</form></div>
+<div>
+<h2>بعد از ارسال چه می‌شود؟</h2>
+<ol class="steps one">
+<li><h3>تماس</h3><p>در همان روز کاری با شما تماس می‌گیریم و نیازتان را می‌شنویم.</p></li>
+<li><h3>پیش‌فاکتور</h3><p>بر اساس تعداد دستگاه، نصب و آموزش، پیش‌فاکتور رسمی می‌فرستیم.</p></li>
+<li><h3>تحویل</h3><p>دستگاه آماده (یا ایمیج برای سخت‌افزار خودتان) تحویل می‌شود و راه‌اندازی را همراهی می‌کنیم.</p></li>
+</ol>
+<div class="callout info"><svg class="i " aria-hidden="true"><use href="/assets/icons.svg#i-info"/></svg><span>نسخه‌ی آزمایشی برای ارزیابی پیش از خرید است و دستگاه نمونه در مرحله‌ی آزمون میدانی قرار دارد.</span></div>
+<p class="muted">ترجیح می‌دهید از فرم عمومی تماس استفاده کنید؟ <a href="https://postgis.ir/contact/?topic=pgpro">فرم postgis.ir</a></p>
+</div></div></div></section>
+</main>
+<footer class="foot"><div class="wrap">
+<div class="foot-grid">
+<div><a class="brand" href="/"><img src="/assets/img/logo.svg" alt="" width="38" height="38"><span>پایگاه داده مکانی پرو</span></a>
+<p>نسخه‌ی آفلاین و روی‌دستگاه سرویس <a href="https://postgis.ir">ژئوپایگاه (postgis.ir)</a>؛ پایگاه داده مکانی PostGIS برای سازمان‌هایی که داده باید در شبکه‌ی خودشان بماند.</p></div>
+<div><h4>محصول</h4><ul><li><a href="/#features">امکانات</a></li><li><a href="/#offline-map">نقشه‌ی آفلاین ایران</a></li><li><a href="/specs">مشخصات فنی</a></li><li><a href="/#faq">پرسش‌های متداول</a></li></ul></div>
+<div><h4>راهنما</h4><ul><li><a href="/setup">راه‌اندازی در ۵ دقیقه</a></li><li><a href="/setup#qgis">اتصال QGIS</a></li><li><a href="/download">نسخه‌ها و به‌روزرسانی</a></li><li><a href="/setup#reset">فراموشی رمز</a></li></ul></div>
+<div><h4>ارتباط</h4><ul><li><a href="/order">درخواست پیش‌فاکتور</a></li><li><a href="/order?interest=trial">نسخه‌ی آزمایشی</a></li><li><a href="https://postgis.ir">postgis.ir (نسخه‌ی ابری)</a></li><li><a href="https://postgis.ir/privacy/">حریم خصوصی</a></li></ul></div>
+</div>
+<div class="copy"><span>© ۱۴۰۵ ژئوپایگاه · pgpro.ir</span><span class="ltr">v0.1.0</span></div>
+</div></footer>
+<script src="/assets/js/site.js" defer></script>
+</body>
+</html>

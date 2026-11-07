@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 440" role="img" aria-label="دستگاه پایگاه داده مکانی پرو">
+<defs>
+<linearGradient id="top" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#EDF1F1"/></linearGradient>
+<linearGradient id="lf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F4F7F7"/><stop offset="1" stop-color="#DFE6E7"/></linearGradient>
+<linearGradient id="rt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E3E9EA"/><stop offset="1" stop-color="#C9D3D5"/></linearGradient>
+<radialGradient id="sh" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#12313A" stop-opacity=".28"/><stop offset="1" stop-color="#12313A" stop-opacity="0"/></radialGradient>
+</defs>
+<ellipse cx="262" cy="380" rx="215" ry="42" fill="url(#sh)"/>
+<!-- کابل شبکه و برق -->
+<path d="M352 150C420 110 470 120 490 70" fill="none" stroke="#1E2D32" stroke-width="9" stroke-linecap="round"/>
+<path d="M388 205C450 215 480 260 470 330" fill="none" stroke="#2C3E44" stroke-width="7" stroke-linecap="round"/>
+<rect x="332" y="138" width="34" height="22" rx="4" fill="#25363B" transform="rotate(-24 349 149)"/>
+<!-- بدنه -->
+<g stroke-linejoin="round" stroke-width="22">
+<path d="M262 118L392 170 262 224 132 170z" fill="url(#top)" stroke="url(#top)"/>
+<path d="M132 176L262 230V340L132 286z" fill="url(#lf)" stroke="url(#lf)"/>
+<path d="M262 230L392 176V286L262 340z" fill="url(#rt)" stroke="url(#rt)"/>
+</g>
+<path d="M132 168L262 222 392 168" fill="none" stroke="#C9D3D5" stroke-width="2" opacity=".7"/>
+<!-- چراغ‌ها و برچسب -->
+<g font-family="JetBrains Mono,monospace" font-size="9.5" fill="#6F858B" letter-spacing=".5">
+<g transform="matrix(.93 .36 0 1 0 0)"><text x="178" y="143">STAT</text><text x="218" y="143">PWR</text></g></g>
+<g transform="matrix(.93 .36 0 1 0 0)">
+<circle cx="188" cy="157" r="3.6" fill="#1A7F4B"/><circle cx="226" cy="157" r="3.6" fill="#E0A526"/>
+<rect x="160" y="196" width="62" height="7" rx="3.5" fill="#C9D3D5"/>
+<text x="164" y="246" font-family="Kufi,Vazirmatn,sans-serif" font-weight="800" font-size="24" fill="#0F5C59">pgpro</text>
+</g>
+<!-- نشان روی سطح بالا -->
+<g transform="translate(262 171) scale(1 .5) rotate(45)"><rect x="-30" y="-30" width="60" height="60" rx="12" fill="#0F5C59" opacity=".95"/>
+<ellipse cx="-4" cy="-6" rx="13" ry="5" fill="#BFE2DC"/><path d="M-17 -6v14c0 4 6 7 13 7s13-3 13-7V-6" fill="none" stroke="#BFE2DC" stroke-width="4"/><circle cx="14" cy="10" r="6" fill="#E0A526"/></g>
+</svg>

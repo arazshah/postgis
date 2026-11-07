@@ -16,6 +16,7 @@ urlpatterns = [
     path("about/", views.about, name="about"),
     path("trust/", views.trust, name="trust"),
     path("contact/", views.contact, name="contact"),
+    path("api/pgpro/lead/", views.pgpro_lead, name="pgpro_lead"),
     path("team/<int:pk>/photo/", views.team_photo, name="team_photo"),
     path("healthz", views.healthz, name="healthz"),
     path("csp-report/", views.csp_report, name="csp_report"),

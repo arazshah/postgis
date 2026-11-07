@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>راهنمای راه‌اندازی — پایگاه داده مکانی پرو</title>
+<meta name="description" content="راه‌اندازی دستگاه pgpro قدم‌به‌قدم: نوشتن کارت، اتصال شبکه، ورود با pgpro.local، ساخت کاربر و پایگاه، اتصال QGIS، ساعت، به‌روزرسانی و فراموشی رمز.">
+<link rel="canonical" href="https://pgpro.ir/setup">
+<meta name="theme-color" content="#0F5C59">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website"><meta property="og:locale" content="fa_IR">
+<meta property="og:site_name" content="پایگاه داده مکانی پرو">
+<meta property="og:title" content="راهنمای راه‌اندازی — پایگاه داده مکانی پرو"><meta property="og:description" content="راه‌اندازی دستگاه pgpro قدم‌به‌قدم: نوشتن کارت، اتصال شبکه، ورود با pgpro.local، ساخت کاربر و پایگاه، اتصال QGIS، ساعت، به‌روزرسانی و فراموشی رمز.">
+<meta property="og:url" content="https://pgpro.ir/setup"><meta property="og:image" content="https://pgpro.ir/assets/img/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/assets/fonts/vazirmatn-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/css/site.css">
+</head>
+<body>
+<a class="skip" href="#main">پرش به محتوا</a>
+<header class="top"><div class="wrap">
+<a class="brand" href="/"><img src="/assets/img/logo.svg" alt="" width="38" height="38"><span>پایگاه داده مکانی پرو<small>PostGIS&nbsp;Pro</small></span></a>
+<nav class="nav" id="nav" aria-label="منوی اصلی"><a href="/">خانه</a><a href="/setup" aria-current="page">راهنمای راه‌اندازی</a><a href="/specs">مشخصات</a><a href="/download">نسخه‌ها و به‌روزرسانی</a><a href="/order">سفارش</a></nav>
+<span class="gap"></span>
+<a class="btn btn-sm" href="/order"><svg class="i s" aria-hidden="true"><use href="/assets/icons.svg#i-mail"/></svg><span>درخواست پیش‌فاکتور</span></a>
+<button class="menu-btn" type="button" aria-label="منو" aria-expanded="false" aria-controls="nav"><svg class="i " aria-hidden="true"><use href="/assets/icons.svg#i-more"/></svg></button>
+</div></header>
+<main id="main">
+<div class="status"><div class="wrap"><svg class="i s" aria-hidden="true"><use href="/assets/icons.svg#i-info"/></svg><span>پیش‌فروش و نسخه‌ی آزمایشی باز است.</span><a href="/order?interest=trial">نسخه‌ی آزمایشی بگیرید</a></div></div>
+<div class="page-head"><div class="wrap"><nav class="crumbs" aria-label="مسیر"><a href="/">خانه</a><svg class="i s go" aria-hidden="true"><use href="/assets/icons.svg#i-chev"/></svg><span>راهنمای راه‌اندازی</span></nav><h1>راهنمای راه‌اندازی</h1><p>از جعبه درآوردن تا اولین پایگاه PostGIS؛ قدم‌به‌قدم و بدون نیاز به دانش شبکه.</p></div></div>
+<section><div class="wrap layout"><aside><nav class="toc" aria-label="فهرست"><b>در این صفحه</b><a href="#prep">پیش‌نیازها</a><a href="#write">نوشتن کارت و روشن کردن</a><a href="#login">ورود و رمز تازه</a><a href="#users">کاربران و پایگاه‌ها</a><a href="#qgis">اتصال QGIS</a><a href="#notfound">اگر pgpro.local باز نشد</a><a href="#clock">ساعت دستگاه</a><a href="#update">به‌روزرسانی</a><a href="#backup">بکاپ</a><a href="#reset">فراموشی رمز</a><a href="#support">پشتیبانی فنی</a></nav></aside>
+<div class="doc">
+<h2 id="prep" class="first">پیش‌نیازها</h2>
+<ul>
+<li>دستگاه pgpro، آداپتور برق ۵ ولت و ۲ آمپر (باکیفیت؛ آداپتور ضعیف عامل اصلی ناپایداری است)</li>
+<li>کارت microSD حداقل ۳۲ گیگابایت (ترجیحاً A1 یا A2)؛ اگر دستگاه را آماده خریده‌اید کارت داخل آن است</li>
+<li>یک کابل شبکه به همان شبکه‌ای که رایانه‌ها در آن هستند</li>
+<li>یک مرورگر مدرن روی رایانه یا گوشی در همان شبکه</li>
+</ul>
+
+<h2 id="write">نوشتن کارت و روشن کردن</h2>
+<ol>
+<li>فایل ایمیج <code class="ltr">pgpro-0.1.0-nanopineo3.img.xz</code> را با <b>balenaEtcher</b> (یا Raspberry Pi Imager ← «Use custom») روی کارت بنویسید. فایل را از حالت فشرده خارج نکنید.</li>
+<li>کارت را در دستگاه بگذارید، کابل شبکه و سپس برق را وصل کنید.</li>
+<li><b>۳ تا ۵ دقیقه صبر کنید.</b> دستگاه در اولین روشن شدن رمزهای یکتای خودش و پایگاه داده را می‌سازد. خاموشش نکنید.</li>
+<li>در مرورگر <code class="ltr">http://pgpro.local</code> را باز کنید. تا آماده شدن صفحه‌ی «در حال آماده‌سازی» دیده می‌شود و خودش تازه می‌شود.</li>
+</ol>
+<div class="callout info"><svg class="i " aria-hidden="true"><use href="/assets/icons.svg#i-info"/></svg><span>اگر دستگاه را آماده خریده‌اید فقط مرحله‌ی ۲ تا ۴ لازم است.</span></div>
+
+<h2 id="login">ورود و رمز تازه</h2>
+<p>نام کاربری <code>admin</code> و رمز <code>pgpro</code>. بلافاصله رمز تازه خواسته می‌شود و تا عوض نکنید جای دیگری باز نمی‌شود. رمز را جای امنی نگه دارید.</p>
+
+<h2 id="users">کاربران و پایگاه‌ها</h2>
+<ol>
+<li>از منوی حساب (دایره‌ی بالا) ← «کاربران» ← «کاربر تازه» برای هر همکار حساب بسازید. رمز موقت فقط یک بار نمایش داده می‌شود؛ به خود او بدهید.</li>
+<li>در داشبورد «ساخت پایگاه داده» را بزنید؛ PostGIS و pgRouting آماده است.</li>
+<li>با «ورود فایل» Shapefile، GeoPackage، GeoJSON، KML یا CSV را بارگذاری کنید. شماره‌ی موبایل هر کاربر برای اشتراک پایگاه با همکاران لازم است.</li>
+</ol>
+
+<h2 id="qgis">اتصال QGIS</h2>
+<ol>
+<li>در صفحه‌ی پایگاه، بخش «اتصال» نشانی، نام پایگاه و نام کاربری را نشان می‌دهد.</li>
+<li>QGIS ← Layer ← Add Layer ← Add PostGIS Layers ← New.</li>
+<li>Host را <code class="ltr">pgpro.local</code> و Port را <code>5432</code> بگذارید و نام پایگاه و کاربر را وارد کنید.</li>
+</ol>
+<pre>psql "host=pgpro.local port=5432 dbname=NAME user=USER"</pre>
+<div class="callout"><svg class="i " aria-hidden="true"><use href="/assets/icons.svg#i-warn"/></svg><span>پورت ۵۴۳۲ را هرگز روی اینترنت باز نکنید (Port Forward در روتر ممنوع). دستگاه برای شبکه‌ی داخلی ساخته شده است.</span></div>
+
+<h2 id="notfound">اگر <span class="ltr">pgpro.local</span> باز نشد</h2>
+<ul>
+<li>ویندوز ۱۰ و ۱۱، مک، لینوکس و گوشی‌های جدید این نشانی را می‌شناسند. اگر شبکه‌ی سازمان کشف نام را بسته است، IP دستگاه را از صفحه‌ی مدیریت روتر (فهرست DHCP، نام <code>pgpro</code>) بخوانید و <code class="ltr">http://IP</code> را بزنید.</li>
+<li>اگر روتر ندارید و کابل را مستقیم به لپ‌تاپ زده‌اید، یک دقیقه صبر کنید؛ دستگاه خودش آدرس محلی می‌گیرد و <code class="ltr">pgpro.local</code> کار می‌کند.</li>
+<li>پس از اولین ورود، صفحه‌ی «دستگاه» (منوی حساب) نشانی‌های دستگاه را نشان می‌دهد.</li>
+</ul>
+
+<h2 id="clock">ساعت دستگاه</h2>
+<p>دستگاه باتری ساعت ندارد و بدون اینترنت بعد از هر قطع برق ساعتش عقب می‌ماند. از صفحه‌ی «دستگاه» دکمه‌ی «هماهنگ‌سازی با این رایانه» را بزنید.</p>
+
+<h2 id="update">به‌روزرسانی</h2>
+<p>دستگاه نسخه‌ی تازه را از <b class="ltr">pgpro.ir/update</b> می‌گیرد.</p>
+<ol>
+<li><b>با اینترنت:</b> منوی حساب ← «دستگاه» ← «بررسی و به‌روزرسانی». داده‌ها و کاربران دست نمی‌خورند.</li>
+<li>پیش از شروع از دیتابیس پنل بکاپ گرفته می‌شود؛ اگر نسخه‌ی تازه سالم بالا نیاید خودکار به نسخه‌ی قبل برمی‌گردد.</li>
+<li>سرویس حدود یک دقیقه در دسترس نیست و صفحه خودش دوباره باز می‌شود.</li>
+<li><b>بدون اینترنت:</b> بسته را از <a href="/download">صفحه‌ی نسخه‌ها</a> روی رایانه‌ی دیگری بگیرید و پشتیبان فنی روی دستگاه اعمال کند.</li>
+</ol>
+
+<h2 id="backup">بکاپ</h2>
+<p>بکاپ شبانه‌ی پنل خودکار است. از «بکاپ و بازگردانی» در صفحه‌ی هر پایگاه بکاپ دستی بگیرید و بازگردانی کنید. بکاپ‌ها روی خود دستگاه می‌مانند؛ برای ایمنی در برابر خرابی کارت، فایل بکاپ را روی رایانه‌ی خودتان هم نگه دارید.</p>
+
+<h2 id="reset">فراموشی رمز مدیر</h2>
+<p>اگر مدیر دیگری دارید، از صفحه‌ی «کاربران» رمزتان را بازنشانی می‌کند. وگرنه پشتیبان فنی با SSH رمز را به <code>pgpro</code> برمی‌گرداند و ورود بعدی دوباره رمز تازه می‌خواهد. داده‌ها دست نمی‌خورد.</p>
+
+<h2 id="support">پشتیبانی فنی</h2>
+<p>پشتیبان فنی با کلید SSH اختصاصی (ورود با رمز خاموش است) به دستگاه وصل می‌شود. برای پشتیبانی از <a href="/order">فرم سفارش</a> یا <a href="https://postgis.ir/contact/?topic=pgpro">فرم تماس</a> استفاده کنید.</p>
+</div></div></section>
+</main>
+<footer class="foot"><div class="wrap">
+<div class="foot-grid">
+<div><a class="brand" href="/"><img src="/assets/img/logo.svg" alt="" width="38" height="38"><span>پایگاه داده مکانی پرو</span></a>
+<p>نسخه‌ی آفلاین و روی‌دستگاه سرویس <a href="https://postgis.ir">ژئوپایگاه (postgis.ir)</a>؛ پایگاه داده مکانی PostGIS برای سازمان‌هایی که داده باید در شبکه‌ی خودشان بماند.</p></div>
+<div><h4>محصول</h4><ul><li><a href="/#features">امکانات</a></li><li><a href="/#offline-map">نقشه‌ی آفلاین ایران</a></li><li><a href="/specs">مشخصات فنی</a></li><li><a href="/#faq">پرسش‌های متداول</a></li></ul></div>
+<div><h4>راهنما</h4><ul><li><a href="/setup">راه‌اندازی در ۵ دقیقه</a></li><li><a href="/setup#qgis">اتصال QGIS</a></li><li><a href="/download">نسخه‌ها و به‌روزرسانی</a></li><li><a href="/setup#reset">فراموشی رمز</a></li></ul></div>
+<div><h4>ارتباط</h4><ul><li><a href="/order">درخواست پیش‌فاکتور</a></li><li><a href="/order?interest=trial">نسخه‌ی آزمایشی</a></li><li><a href="https://postgis.ir">postgis.ir (نسخه‌ی ابری)</a></li><li><a href="https://postgis.ir/privacy/">حریم خصوصی</a></li></ul></div>
+</div>
+<div class="copy"><span>© ۱۴۰۵ ژئوپایگاه · pgpro.ir</span><span class="ltr">v0.1.0</span></div>
+</div></footer>
+<script src="/assets/js/site.js" defer></script>
+</body>
+</html>

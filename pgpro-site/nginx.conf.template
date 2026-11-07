@@ -1,0 +1,63 @@
+# pgpro.ir — سایت استاتیک؛ قالب envsubst ایمیج nginx (فقط متغیرهای محیطی تعریف‌شده جایگزین می‌شوند)
+server {
+    listen 80 default_server;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+    charset utf-8;
+    server_tokens off;
+
+    # TLS و دامنه را پراکسی Coolify می‌گیرد؛ این‌جا فقط HTTP ساده
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
+    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self' https://postgis.ir; form-action 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'" always;
+
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 6;
+    gzip_min_length 512;
+    gzip_types text/css application/javascript application/json image/svg+xml text/plain application/xml;
+
+    error_page 404 /404.html;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # کانال به‌روزرسانی دستگاه‌ها: pgpro-update فایل‌ها را از این نشانی می‌خواند و به Release گیت‌هاب هدایت می‌شود
+    # (latest.json، pgpro-update-latest.tar.xz و فایل‌های .sha256 / .sha256.sig). پایه‌ی هدایت با PGPRO_RELEASE_BASE عوض می‌شود.
+    location ~ ^/update/(?<upd_file>[A-Za-z0-9._-]+)$ {
+        add_header Cache-Control "no-store" always;
+        return 302 ${PGPRO_RELEASE_BASE}/$upd_file;
+    }
+    location = /update/ {
+        return 302 /download;
+    }
+
+    location ^~ /assets/ {
+        expires 30d;
+        access_log off;
+        try_files $uri =404;
+    }
+    location = /favicon.svg { expires 7d; }
+    location = /robots.txt { expires 1d; }
+    location = /sitemap.xml { expires 1d; }
+
+    # نشانی‌های تمیز: /setup ← setup.html ؛ نشانی .html به نسخه‌ی بدون پسوند می‌رود
+    location = /index.html { return 301 /; }
+    location ~ ^/(?<clean>[A-Za-z0-9_-]+)\.html$ {
+        if ($clean = 404) { return 404; }
+        return 301 /$clean;
+    }
+    location = / {
+        expires epoch;
+        try_files /index.html =404;
+    }
+    location / {
+        expires epoch;
+        try_files $uri $uri.html =404;
+    }
+}

@@ -1,0 +1,31 @@
+# استقرار pgpro.ir در Coolify (Build Pack: Docker Compose)
+# - مخزن: arazshah/postgis ، شاخه: pgpro-web
+# - Base Directory: /pgpro-site ، Docker Compose Location: /docker-compose.yml
+# - دامنه‌ها را در تب General روی سرویس web بگذارید: https://pgpro.ir,https://www.pgpro.ir (پورت 80)
+#   (SERVICE_FQDN_WEB_80 را Coolify خودکار مدیریت می‌کند؛ گواهی TLS را پراکسی Coolify می‌گیرد)
+# - هیچ پورتی روی میزبان باز نمی‌شود؛ بدون دیتابیس و بدون رمز
+# - بیلد محلی: docker compose -f docker-compose.yml -f docker-compose.local.yml up --build  ← http://localhost:8080
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - SERVICE_FQDN_WEB_80
+      # مقصد هدایت /update/* (پیش‌فرض: Release گیت‌هاب pgpro-latest)
+      - PGPRO_RELEASE_BASE=${PGPRO_RELEASE_BASE:-https://github.com/arazshah/postgis/releases/download/pgpro-latest}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+      - /etc/nginx/conf.d
+    security_opt:
+      - no-new-privileges:true

@@ -540,6 +540,7 @@ class ContactRequest(models.Model):
         ENTERPRISE = "enterprise", "خرید سازمانی"
         DEMO = "demo", "جلسه‌ی معرفی آنلاین"
         ONPREM = "onprem", "نصب اختصاصی روی سرور سازمان"
+        PGPRO = "pgpro", "پایگاه داده مکانی پرو (دستگاه آفلاین)"
         EDU = "edu", "دانشگاه و کلاس"
         OTHER = "other", "سایر"
 

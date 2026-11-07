@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>نسخه‌ها و به‌روزرسانی — پایگاه داده مکانی پرو</title>
+<meta name="description" content="کانال به‌روزرسانی دستگاه pgpro، روش به‌روزرسانی با اینترنت و بدون اینترنت، ایمیج کامل و فهرست تغییرات.">
+<link rel="canonical" href="https://pgpro.ir/download">
+<meta name="theme-color" content="#0F5C59">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website"><meta property="og:locale" content="fa_IR">
+<meta property="og:site_name" content="پایگاه داده مکانی پرو">
+<meta property="og:title" content="نسخه‌ها و به‌روزرسانی — پایگاه داده مکانی پرو"><meta property="og:description" content="کانال به‌روزرسانی دستگاه pgpro، روش به‌روزرسانی با اینترنت و بدون اینترنت، ایمیج کامل و فهرست تغییرات.">
+<meta property="og:url" content="https://pgpro.ir/download"><meta property="og:image" content="https://pgpro.ir/assets/img/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/assets/fonts/vazirmatn-arabic-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/css/site.css">
+</head>
+<body>
+<a class="skip" href="#main">پرش به محتوا</a>
+<header class="top"><div class="wrap">
+<a class="brand" href="/"><img src="/assets/img/logo.svg" alt="" width="38" height="38"><span>پایگاه داده مکانی پرو<small>PostGIS&nbsp;Pro</small></span></a>
+<nav class="nav" id="nav" aria-label="منوی اصلی"><a href="/">خانه</a><a href="/setup">راهنمای راه‌اندازی</a><a href="/specs">مشخصات</a><a href="/download" aria-current="page">نسخه‌ها و به‌روزرسانی</a><a href="/order">سفارش</a></nav>
+<span class="gap"></span>
+<a class="btn btn-sm" href="/order"><svg class="i s" aria-hidden="true"><use href="/assets/icons.svg#i-mail"/></svg><span>درخواست پیش‌فاکتور</span></a>
+<button class="menu-btn" type="button" aria-label="منو" aria-expanded="false" aria-controls="nav"><svg class="i " aria-hidden="true"><use href="/assets/icons.svg#i-more"/></svg></button>
+</div></header>
+<main id="main">
+<div class="status"><div class="wrap"><svg class="i s" aria-hidden="true"><use href="/assets/icons.svg#i-info"/></svg><span>پیش‌فروش و نسخه‌ی آزمایشی باز است.</span><a href="/order?interest=trial">نسخه‌ی آزمایشی بگیرید</a></div></div>
+<div class="page-head"><div class="wrap"><nav class="crumbs" aria-label="مسیر"><a href="/">خانه</a><svg class="i s go" aria-hidden="true"><use href="/assets/icons.svg#i-chev"/></svg><span>نسخه‌ها و به‌روزرسانی</span></nav><h1>نسخه‌ها و به‌روزرسانی</h1><p>کانال رسمی به‌روزرسانی دستگاه‌های pgpro و فهرست تغییرات.</p></div></div>
+<section><div class="wrap narrow doc">
+<div class="grid g2">
+<div class="card"><h3><span class="ico"><svg class="i " aria-hidden="true"><use href="/assets/icons.svg#i-refresh"/></svg></span>نسخه‌ی کنونی</h3><p><b class="ltr">pgpro 0.1.0</b> — آزمایشی. دستگاه‌ها از همین نشانی نسخه‌ی تازه را می‌گیرند.</p></div>
+<div class="card"><h3><span class="ico"><svg class="i " aria-hidden="true"><use href="/assets/icons.svg#i-download"/></svg></span>نشانی کانال</h3><p><code class="ltr">https://pgpro.ir/update/</code><br>فایل <code class="ltr">latest.json</code> نسخه و هش بسته را می‌گوید.</p></div>
+</div>
+
+<h2>به‌روزرسانی دستگاه</h2>
+<ol>
+<li>وارد پنل شوید ← منوی حساب ← «دستگاه» ← «بررسی و به‌روزرسانی».</li>
+<li>دستگاه نسخه‌ی تازه را از <span class="ltr">pgpro.ir</span> می‌گیرد، از دیتابیس پنل بکاپ می‌گیرد، کنار نسخه‌ی قبل نصب می‌کند، مایگریشن می‌زند و سلامتش را می‌سنجد.</li>
+<li>اگر سالم بالا نیاید خودکار به نسخه‌ی قبل برمی‌گردد.</li>
+</ol>
+<p>با SSH (پشتیبان فنی):</p>
+<pre>sudo pgpro-update --check     # فقط بررسی
+sudo pgpro-update --latest    # گرفتن و اعمال
+sudo pgpro-update --rollback  # برگشت به نسخه‌ی قبل</pre>
+
+<h2>دستگاه بدون اینترنت</h2>
+<p>بسته‌ی به‌روزرسانی (حدود ۹۰ مگابایت) و فایل هش آن را از کانال بالا روی رایانه‌ی دیگری بگیرید و به دستگاه بفرستید:</p>
+<pre>curl -fLO https://pgpro.ir/update/pgpro-update-latest.tar.xz
+curl -fLO https://pgpro.ir/update/pgpro-update-latest.tar.xz.sha256
+scp pgpro-update-latest.tar.xz support@pgpro.local:/tmp/
+ssh support@pgpro.local sudo pgpro-update /tmp/pgpro-update-latest.tar.xz</pre>
+
+<div class="callout"><svg class="i " aria-hidden="true"><use href="/assets/icons.svg#i-info"/></svg><span>اگر فهرست بسته‌های پایتون عوض شده باشد، دستگاه باید آن‌ها را از اینترنت بگیرد؛ در غیر این صورت ایمیج کامل لازم است. ویدیوهای راهنما و نقشه‌ی پایه در بسته‌ی به‌روزرسانی نیستند.</span></div>
+
+<h2>ایمیج کامل</h2>
+<p>ایمیج کامل کارت (<code class="ltr">pgpro-0.1.0-nanopineo3.img.xz</code> با فایل <code>.sha256</code>) در دوره‌ی پیش‌فروش برای مشتریان ارسال می‌شود. اگر دستگاه را خریده‌اید کارت آماده است.</p>
+<p><a class="btn" href="/order?interest=trial"><svg class="i " aria-hidden="true"><use href="/assets/icons.svg#i-mail"/></svg>درخواست ایمیج آزمایشی</a></p>
+
+<h2>فهرست تغییرات</h2>
+<h3>pgpro 0.1.0 — آزمایشی</h3>
+<ul>
+<li>ایمیج آفلاین روی NanoPi NEO3 با PostgreSQL، PostGIS، pgRouting و pgvector</li>
+<li>ورود با نام کاربری و رمز، تغییر رمز اجباری، مدیریت کاربران</li>
+<li>صفحه‌ی «دستگاه»: نشانی، وضعیت، هماهنگ‌سازی ساعت</li>
+<li>نقشه‌ی پایه‌ی آفلاین ایران در همه‌ی بخش‌های نقشه</li>
+<li>به‌روزرسانی با یک دکمه، بکاپ پیش از شروع و برگشت خودکار</li>
+<li>رمزهای یکتا برای هر دستگاه و SSH فقط با کلید</li>
+</ul>
+</div></section>
+</main>
+<footer class="foot"><div class="wrap">
+<div class="foot-grid">
+<div><a class="brand" href="/"><img src="/assets/img/logo.svg" alt="" width="38" height="38"><span>پایگاه داده مکانی پرو</span></a>
+<p>نسخه‌ی آفلاین و روی‌دستگاه سرویس <a href="https://postgis.ir">ژئوپایگاه (postgis.ir)</a>؛ پایگاه داده مکانی PostGIS برای سازمان‌هایی که داده باید در شبکه‌ی خودشان بماند.</p></div>
+<div><h4>محصول</h4><ul><li><a href="/#features">امکانات</a></li><li><a href="/#offline-map">نقشه‌ی آفلاین ایران</a></li><li><a href="/specs">مشخصات فنی</a></li><li><a href="/#faq">پرسش‌های متداول</a></li></ul></div>
+<div><h4>راهنما</h4><ul><li><a href="/setup">راه‌اندازی در ۵ دقیقه</a></li><li><a href="/setup#qgis">اتصال QGIS</a></li><li><a href="/download">نسخه‌ها و به‌روزرسانی</a></li><li><a href="/setup#reset">فراموشی رمز</a></li></ul></div>
+<div><h4>ارتباط</h4><ul><li><a href="/order">درخواست پیش‌فاکتور</a></li><li><a href="/order?interest=trial">نسخه‌ی آزمایشی</a></li><li><a href="https://postgis.ir">postgis.ir (نسخه‌ی ابری)</a></li><li><a href="https://postgis.ir/privacy/">حریم خصوصی</a></li></ul></div>
+</div>
+<div class="copy"><span>© ۱۴۰۵ ژئوپایگاه · pgpro.ir</span><span class="ltr">v0.1.0</span></div>
+</div></footer>
+<script src="/assets/js/site.js" defer></script>
+</body>
+</html>

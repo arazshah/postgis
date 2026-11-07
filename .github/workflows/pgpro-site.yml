@@ -1,0 +1,33 @@
+name: pgpro-site
+
+# سایت استاتیک pgpro.ir (پوشه‌ی pgpro-site): هماهنگی قالب، بررسی لینک‌ها و ساخت/اجرای ایمیج nginx
+on:
+  push:
+    branches: [pgpro-web]
+    paths: ["pgpro-site/**", ".github/workflows/pgpro-site.yml"]
+  pull_request:
+    paths: ["pgpro-site/**", ".github/workflows/pgpro-site.yml"]
+
+jobs:
+  site:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: صفحه‌ها با قالب هماهنگ‌اند
+        run: |
+          python3 pgpro-site/tools/build_pages.py
+          git diff --exit-code -- pgpro-site/public || { echo "build_pages.py را اجرا و خروجی را commit کنید"; exit 1; }
+      - name: لینک‌ها و CSP
+        run: python3 pgpro-site/tools/check_site.py
+      - name: ساخت ایمیج و آزمون nginx
+        run: |
+          docker build -t pgpro-site pgpro-site
+          docker run -d --name site -p 8080:80 --read-only --tmpfs /var/cache/nginx --tmpfs /var/run --tmpfs /tmp --tmpfs /etc/nginx/conf.d pgpro-site
+          for i in $(seq 1 20); do curl -fs http://127.0.0.1:8080/healthz && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8080/ | grep -q "پایگاه داده مکانی پرو"
+          curl -fsS http://127.0.0.1:8080/setup | grep -q "راهنمای راه‌اندازی"
+          curl -fsI http://127.0.0.1:8080/assets/css/site.css | grep -qi "max-age"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/nope)" = 404
+          curl -sI http://127.0.0.1:8080/update/latest.json | grep -i "^location: https://github.com/arazshah/postgis/releases/download/pgpro-latest/latest.json"
+      - if: failure()
+        run: docker logs site || true

@@ -62,6 +62,9 @@ for _host in _coolify_domains():
         if _origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_origin)
 
+# سایت معرفی دستگاه آفلاین (pgpro.ir) فرم درخواست را از مرورگر به /api/pgpro/lead/ می‌فرستد
+PGPRO_SITE_ORIGINS = env_list("PGPRO_SITE_ORIGINS", "https://pgpro.ir,https://www.pgpro.ir")
+
 SITE_NAME = os.environ.get("SITE_NAME", "ژئوپایگاه")
 SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
 # دامنه اصلی برای سئو: لینک canonical، نقشه سایت و تصویر اشتراک‌گذاری

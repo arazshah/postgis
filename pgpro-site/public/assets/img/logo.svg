@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="پایگاه داده مکانی پرو">
+<defs>
+<linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#7FC4BC"/><stop offset="1" stop-color="#B7DDD6"/></linearGradient>
+</defs>
+<rect width="512" height="512" rx="100" fill="#0F5C59"/>
+<!-- بدنه‌ی دستگاه (به‌جای ابر): جعبه‌ی گرد با درگاه شبکه -->
+<path d="M96 188a44 44 0 0 1 44-44h214a44 44 0 0 1 44 44v140a44 44 0 0 1-44 44H140a44 44 0 0 1-44-44z" fill="none" stroke="#EEF2EC" stroke-width="15" stroke-linecap="round"/>
+<!-- پایگاه داده -->
+<g>
+<path d="M150 206v118c0 22 34 38 74 38s74-16 74-38V206z" fill="url(#g)"/>
+<ellipse cx="224" cy="206" rx="74" ry="24" fill="#BFE2DC"/>
+<ellipse cx="224" cy="206" rx="56" ry="15" fill="none" stroke="#7FC4BC" stroke-width="6"/>
+<path d="M150 252c0 22 34 38 74 38s74-16 74-38" fill="none" stroke="#0F5C59" stroke-width="13"/>
+<path d="M150 298c0 22 34 38 74 38s74-16 74-38" fill="none" stroke="#0F5C59" stroke-width="13"/>
+</g>
+<!-- ایران با گره‌های شبکه -->
+<path d="M280,232 L282,236 L282,249 L285,251 L293,271 L296,272 L296,287 L294,289 L294,295 L300,301 L300,306 L314,314 L316,318 L316,329 L319,330 L319,335 L323,338 L323,340 L340,341 L345,347 L345,350 L354,365 L361,367 L365,372 L374,378 L379,378 L384,381 L393,379 L407,379 L409,387 L412,390 L439,394 L448,397 L452,395 L453,386 L460,380 L467,379 L468,373 L463,372 L463,361 L455,358 L450,351 L450,335 L454,330 L453,325 L444,323 L445,286 L448,279 L447,264 L440,264 L428,253 L419,252 L405,245 L388,249 L383,255 L377,256 L376,261 L366,263 L350,263 L344,260 L340,255 L333,254 L329,251 L327,243 L322,240 L322,232 L320,229 L316,229 L308,235 L293,235 L287,228 L285,228 L283,232Z" fill="#E0A526"/>
+<g stroke="#12313A" stroke-width="2.4" fill="none" opacity=".85"><path d="M303 247L352 275 432 267 444 347 407 337 355 310 381 318 407 337M352 275L355 310 363 346 400 373 444 347M325 325L355 310"/></g>
+<g fill="#EEF2EC" stroke="#12313A" stroke-width="3"><circle cx="352" cy="275" r="7"/><circle cx="432" cy="267" r="5"/><circle cx="303" cy="247" r="4.5"/><circle cx="355" cy="310" r="4.5"/><circle cx="381" cy="318" r="4.5"/><circle cx="407" cy="337" r="4.5"/><circle cx="444" cy="347" r="4.5"/><circle cx="363" cy="346" r="4.5"/><circle cx="400" cy="373" r="4.5"/><circle cx="325" cy="325" r="4.5"/></g>
+<!-- چراغ‌های دستگاه و نشان آفلاین -->
+<circle cx="126" cy="352" r="9" fill="#E0A526"/><circle cx="154" cy="352" r="9" fill="#EEF2EC"/>
+</svg>

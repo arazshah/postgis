@@ -106,6 +106,16 @@ def contact(request):
     return render(request, "core/contact.html", {"form": form, "sent": sent})
 
 
+@csrf_exempt
+def pgpro_lead(request):
+    """فرم سایت pgpro.ir؛ جزئیات در core/pgpro_lead.py."""
+    from django.views.decorators.http import require_http_methods
+
+    from .pgpro_lead import handle
+
+    return require_http_methods(["POST", "OPTIONS"])(handle)(request)
+
+
 def home(request):
     plans = Plan.objects.filter(is_public=True)
     from kb.faq import faq_jsonld, home_faqs
