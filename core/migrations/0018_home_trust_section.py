@@ -23,7 +23,11 @@ def seed(apps, schema_editor):
     Button = apps.get_model("core", "HomeTrustButton")
     if Card.objects.exists() or Button.objects.exists():
         return
-    site, _ = SiteSettings.objects.get_or_create(pk=1)
+    # ردیف تنظیمات را اینجا نمی‌سازیم (مقدار پیش‌فرض مدل با مقدار محیط فرق دارد)؛ روی نصب تازه،
+    # SiteSettings.get() هنگام ساختن ردیف، همین محتوا را می‌گذارد.
+    site = SiteSettings.objects.filter(pk=1).first()
+    if site is None:
+        return
     for i, (icon, title, body) in enumerate(CARDS, 1):
         Card.objects.create(site=site, icon=icon, title=title, body=body, order=i * 10)
     for i, (label, url, icon, style) in enumerate(BUTTONS, 1):
