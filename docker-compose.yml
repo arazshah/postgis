@@ -1,167 +1,28 @@
-# استقرار در Coolify (Build Pack: Docker Compose)
-# - ایمیج‌ها را GitHub Actions می‌سازد و در GHCR می‌گذارد (workflow: .github/workflows/ci.yml)؛
-#   سرور فقط pull می‌کند و دیگر apt/pip/git روی سرور اجرا نمی‌شود.
-#   برای بیلد محلی: docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
-# - دامنه با SERVICE_FQDN_WEB_8000 در تب General تنظیم می‌شود
-# - رمز دیتابیس پنل را Coolify خودکار می‌سازد (SERVICE_PASSWORD_POSTGRES)
-# - هیچ پورتی روی میزبان باز نمی‌شود؛ ترافیک از پراکسی Coolify می‌آید
-# - web به شبکه مشترک «coolify» هم وصل است تا به سرویس‌های دیتابیس دیگر Coolify
-#   (مثل سرور PostGIS مشتریان) با نام داخلی‌شان دسترسی داشته باشد
+# شاخه‌ی pgpro-web فقط سایت pgpro.ir است (هرگز به main ادغام نمی‌شود).
+# Coolify: Build Pack = Docker Compose ، Base Directory = / ، Docker Compose Location = /docker-compose.yml
+# دامنه‌ها روی سرویس web (پورت 80): https://pgpro.ir و https://www.pgpro.ir
+# بدون دیتابیس، بدون رمز و بدون پورت میزبان؛ سایت در pgpro-site/ است (README همان‌جا).
 services:
   web:
-    image: ${APP_IMAGE:-ghcr.io/arazshah/postgis:latest}
+    build:
+      context: ./pgpro-site
+      dockerfile: Dockerfile
     restart: unless-stopped
-    depends_on:
-      panel-db:
-        condition: service_healthy
     environment:
-      - SERVICE_FQDN_WEB_8000
-      - DATABASE_URL=postgres://panel:${SERVICE_PASSWORD_POSTGRES}@panel-db:5432/panel
-      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
-      - CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
-      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-postgis.ir,www.postgis.ir}
-      - DJANGO_CSRF_TRUSTED_ORIGINS=${DJANGO_CSRF_TRUSTED_ORIGINS:-https://postgis.ir,https://www.postgis.ir}
-      - SITE_URL=${SITE_URL:-https://postgis.ir}
-      - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME:-admin}
-      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
-      - SMS_BACKEND=${SMS_BACKEND:-smsir}
-      - TENANT_PREFIX=${TENANT_PREFIX:-gp_}
-      - WEB_CONCURRENCY=${WEB_CONCURRENCY:-3}
-      - MEDIA_ROOT=/app/media
-      - BACKUP_ROOT=/app/backups
-      - OWS_ROOT=/app/ows
-      - OSM_ROOT=/app/osm
-      - RASTER_ROOT=/app/rasters
-      - QGIS_SERVER_URL=${QGIS_SERVER_URL:-http://qgis/ows/}
-      - PGBOUNCER_AUTH_PASSWORD=${PGBOUNCER_AUTH_PASSWORD:-}
-    volumes:
-      - panel-media:/app/media
-      - db-backups:/app/backups
-      - ows-projects:/app/ows
-      - osm-data:/app/osm
-      - rasters:/app/rasters
-      - pylibs:/app/pylibs
-    networks:
-      - default
-      - coolify
+      - SERVICE_FQDN_WEB_80
+      # مقصد هدایت /update/* (پیش‌فرض: Release گیت‌هاب pgpro-latest)
+      - PGPRO_RELEASE_BASE=${PGPRO_RELEASE_BASE:-https://github.com/arazshah/postgis/releases/download/pgpro-latest}
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
       interval: 30s
-      timeout: 5s
+      timeout: 3s
       retries: 3
-      start_period: 40s
-
-  # کارهای پس‌زمینه: بکاپ شبانه، بکاپ و بازگردانی درخواستی، آزمون بازگردانی، هشدارها
-  # برای انتقال به سرور دیگر کافی است همین سرویس با همان متغیرها و volume بکاپ آنجا اجرا شود.
-  worker:
-    image: ${APP_IMAGE:-ghcr.io/arazshah/postgis:latest}
-    restart: unless-stopped
-    command: ["python", "manage.py", "run_worker"]
-    depends_on:
-      panel-db:
-        condition: service_healthy
-    environment:
-      - DATABASE_URL=postgres://panel:${SERVICE_PASSWORD_POSTGRES}@panel-db:5432/panel
-      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
-      - CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
-      - SITE_URL=${SITE_URL:-https://postgis.ir}
-      - SMS_BACKEND=${SMS_BACKEND:-smsir}
-      - TENANT_PREFIX=${TENANT_PREFIX:-gp_}
-      - MEDIA_ROOT=/app/media
-      - BACKUP_ROOT=/app/backups
-      - OWS_ROOT=/app/ows
-      - OSM_ROOT=/app/osm
-      - RASTER_ROOT=/app/rasters
-      - OSM_SOURCE_URL=${OSM_SOURCE_URL:-https://download.geofabrik.de/asia/iran-latest.osm.pbf}
-      - BASEMAP_SOURCE_URL=${BASEMAP_SOURCE_URL:-https://build.protomaps.com/{date}.pmtiles}
-      - RUN_MIGRATIONS=0
-      - COOLIFY_API_URL=${COOLIFY_API_URL:-}
-      - COOLIFY_API_TOKEN=${COOLIFY_API_TOKEN:-}
-      - COOLIFY_PROJECT_UUID=${COOLIFY_PROJECT_UUID:-}
-      - COOLIFY_SERVER_UUID=${COOLIFY_SERVER_UUID:-}
-      - GEOSERVER_DOMAIN=${GEOSERVER_DOMAIN:-}
-    volumes:
-      - panel-media:/app/media
-      - db-backups:/app/backups
-      - ows-projects:/app/ows
-      - osm-data:/app/osm
-      - rasters:/app/rasters
-      - pylibs:/app/pylibs
-    networks:
-      - default
-      - coolify
-    healthcheck:
-      test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/worker.alive) )) -lt 180"]
-      interval: 60s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
-
-  # QGIS Server برای WMS/WFS پروژه‌های کاربران. پورتی بیرون نمی‌دهد؛ فقط web به آن درخواست می‌فرستد.
-  # به شبکه coolify وصل است تا به سرور PostGIS مشتریان برسد (با نقش فقط‌خواندنی هر پایگاه داده).
-  # برای انتقال به سرور جدا: همین سرویس آنجا اجرا شود، volume پروژه‌ها همگام شود و QGIS_SERVER_URL عوض شود.
-  qgis:
-    image: ${QGIS_IMAGE:-ghcr.io/arazshah/postgis-qgis:latest}
-    restart: unless-stopped
-    environment:
-      - QGIS_PROCESSES=${QGIS_PROCESSES:-2}
-    volumes:
-      - ows-projects:/app/ows:ro
-    networks:
-      - default
-      - coolify
-    mem_limit: ${QGIS_MEM_LIMIT:-1536m}
-    cpus: ${QGIS_CPUS:-1.5}
-
-  panel-db:
-    # pgvector: جست‌وجوی معنایی دستیار هوشمند (ایمیج Debian است؛ بعد از تعویض از alpine، entrypoint یک بار REINDEX می‌کند)
-    image: pgvector/pgvector:pg16
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=panel
-      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
-      - POSTGRES_DB=panel
-    volumes:
-      - panel-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U panel -d panel"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
-  # اشتراک اتصال برای وب‌سایت‌ها و برنامه‌های کاربران (اختیاری). تا PGBOUNCER_DB_HOST و
-  # PGBOUNCER_AUTH_PASSWORD تنظیم نشوند بیکار می‌ماند. سپس در پنل مدیریت: سرور ← «راه‌اندازی PgBouncer» و
-  # وارد کردن پورت عمومی. حالت transaction: برای وب و API؛ QGIS و pg_dump مستقیم وصل شوند.
-  pgbouncer:
-    image: ${PGBOUNCER_IMAGE:-ghcr.io/arazshah/postgis-pgbouncer:latest}
-    restart: unless-stopped
-    environment:
-      - DB_HOST=${PGBOUNCER_DB_HOST:-}
-      - DB_PORT=${PGBOUNCER_DB_PORT:-5432}
-      - AUTH_PASSWORD=${PGBOUNCER_AUTH_PASSWORD:-}
-      - AUTH_DBNAME=${PGBOUNCER_AUTH_DBNAME:-postgres}
-      - PUBLIC_HOST=${PGBOUNCER_PUBLIC_HOST:-db.postgis.ir}
-      - DEFAULT_POOL_SIZE=${PGBOUNCER_POOL_SIZE:-5}
-      - MAX_DB_CONNECTIONS=${PGBOUNCER_MAX_DB_CONNECTIONS:-15}
-    ports:
-      - "${PGBOUNCER_PUBLIC_PORT:-6432}:6432"
-    networks:
-      - default
-      - coolify
-    mem_limit: 256m
-
-volumes:
-  panel-db-data:
-  panel-media:
-  db-backups:
-  ows-projects:
-  # فایل OSM ایران (~۳۰۰ مگابایت) و نقشه پایه PMTiles (چند گیگابایت)
-  osm-data:
-  # رسترهای پلن سازمانی (Cloud Optimized GeoTIFF)
-  rasters:
-  # نسخه‌های به‌روزشده smart-spatial-system (بدون بیلد دوباره)
-  pylibs:
-
-networks:
-  coolify:
-    external: true
+      start_period: 5s
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+      - /etc/nginx/conf.d
+    security_opt:
+      - no-new-privileges:true

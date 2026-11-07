@@ -25,7 +25,7 @@ python3 pgpro-site/tools/check_site.py    # بررسی
 
 ## استقرار در Coolify
 1. منبع: مخزن `arazshah/postgis`، شاخه‌ی **`pgpro-web`**.
-2. نوع: **Docker Compose**. Base Directory: `/pgpro-site`، Docker Compose Location: `/docker-compose.yml`.
+2. نوع: **Docker Compose**. در شاخه‌ی `pgpro-web` فایل `docker-compose.yml` ریشه همین سایت است: Base Directory برابر `/` و Docker Compose Location برابر `/docker-compose.yml`. (در شاخه‌های دیگر: Base Directory برابر `/pgpro-site`.)
 3. دامنه‌ها را در سرویس `web` بگذارید: `https://pgpro.ir` و `https://www.pgpro.ir` (پورت داخلی ۸۰). گواهی TLS را پراکسی Coolify می‌گیرد.
 4. رکوردهای DNS (A) برای `pgpro.ir` و `www` را به سرور Coolify بدهید.
 5. Deploy. بعد از هر push به `pgpro-web` با Webhook خودکار دوباره ساخته می‌شود (در Coolify «Automatic Deployment» را روشن کنید).
