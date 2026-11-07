@@ -95,7 +95,8 @@ def run(job: Job) -> None:
                Job.Kind.BASEMAP: iranmap_tasks.do_basemap, Job.Kind.OSM_REFRESH: iranmap_tasks.do_osm_refresh,
                Job.Kind.OSM_IMPORT: iranmap_tasks.do_osm_import, Job.Kind.ASK: _do_ask,
                Job.Kind.GEOSERVER: _do_enterprise, Job.Kind.RASTER: _do_enterprise,
-               Job.Kind.CLONE: _do_enterprise, Job.Kind.TOOL: _do_tool}[job.kind]
+               Job.Kind.CLONE: _do_enterprise, Job.Kind.TOOL: _do_tool,
+               Job.Kind.FIND: _do_find}[job.kind]
     try:
         handler(job)
     except Exception as exc:  # noqa: BLE001
@@ -129,6 +130,25 @@ def _do_tool(job: Job) -> None:
     except tools.ToolError as exc:
         raise JobError(str(exc)) from exc
     job.message = f"جدول {res['table']} با {res['rows']:,} عارضه ساخته شد."
+
+
+def _do_find(job: Job) -> None:
+    """ذخیره‌ی نتیجه‌ی «یافتن عارضه» به‌صورت جدول ثابت یا نمای زنده."""
+    from databases import find_save
+    from databases.explorer import Explorer, ExplorerError
+    from databases.find import Finder, FindError
+
+    db = job.database
+    ex = Explorer(db)
+    try:
+        job.set_progress(5, "بررسی شرط‌ها")
+        plan = find_save.build(Finder(ex), job.params.get("spec"), job.params.get("opts"))
+        res = find_save.create(db, ex, plan, step=job.set_progress)
+    except (FindError, ExplorerError) as exc:
+        raise JobError(str(exc)) from exc
+    job.params = {**job.params, "result": res}
+    what = "نمای زنده" if res["kind"] == "view" else "لایه"
+    job.message = f"{what} {res['table']} با {res['rows']:,} عارضه ساخته شد."
 
 
 def _do_ask(job: Job) -> None:

@@ -20,6 +20,7 @@ class Job(models.Model):
         RASTER = "raster", "پردازش رستر"
         CLONE = "clone", "کپی پایگاه داده"
         TOOL = "tool", "ابزار تحلیل"
+        FIND = "find", "ذخیره‌ی نتیجه‌ی یافتن عارضه"
 
     class Status(models.TextChoices):
         DRAFT = "draft", "منتظر تأیید کاربر"

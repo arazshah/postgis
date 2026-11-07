@@ -1467,10 +1467,10 @@ def _find_json(view):
     return site_user_required(wrapper)
 
 
-def _finder(request, pk):
+def _finder(request, pk, need: str = "viewer"):
     from .find import Finder, FindError
 
-    db = _user_db(request, pk, "viewer")
+    db = _user_db(request, pk, need)
     if not db.is_live:
         raise FindError("یافتن عارضه فقط برای پایگاه داده فعال در دسترس است.")
     return db, Finder(Explorer(db))
@@ -1498,9 +1498,15 @@ def find(request, pk):
         "urls": {"cols": reverse("databases:find_columns", args=[db.pk]),
                  "values": reverse("databases:find_values", args=[db.pk]),
                  "run": reverse("databases:find_run", args=[db.pk]),
+                 "save": reverse("databases:find_save", args=[db.pk]),
+                 "status": reverse("databases:find_save_status", args=[db.pk]),
+                 "sql": reverse("databases:find_sql", args=[db.pk]),
+                 "addmap": reverse("maps:add_table", args=[db.pk]),
                  "plans": reverse("billing:plans"),
                  "geojson": reverse("databases:explore_geojson", args=[db.pk, "__s__", "__t__"])},
         "csrf": get_token(request),
+        "can_edit": bool(db.can_edit and db.status == UserDatabase.Status.ACTIVE),
+        "edit_note": "" if db.can_edit else "ذخیره‌ی لایه برای ویرایشگر و مالک پایگاه داده است.",
     }
     return render(request, "databases/find.html", {"db": db, "section": "find", "cfg": cfg,
                                                    "has_layers": bool(layers)})
@@ -1551,3 +1557,86 @@ def find_run(request, pk):
     result = finder.run(spec, page)
     charged = find_credits.record(db, request.user, h, result["layer"], cross)
     return JsonResponse({"ok": True, **result, "charged": charged, "credits": find_credits.status(db)})
+
+
+def _find_body(request) -> dict:
+    from .find import FindError
+
+    if len(request.body) > 1024 * 1024:
+        raise FindError("درخواست بیش از حد بزرگ است.")
+    try:
+        data = json.loads(request.body or b"{}")
+    except ValueError as exc:
+        raise FindError("درخواست نامعتبر است.") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("spec"), dict):
+        raise FindError("درخواست نامعتبر است.")
+    return data
+
+
+@_find_json
+@require_POST
+def find_sql(request, pk):
+    """دستور SQL معادل ذخیره‌ی این نتیجه (برای یادگیری و استفاده در کنسول SQL)؛ هیچ‌چیز اجرا نمی‌شود."""
+    from . import find_save as fs
+
+    data = _find_body(request)
+    db, finder = _finder(request, pk)
+    opts = data.get("opts") if isinstance(data.get("opts"), dict) else {}
+    plan = fs.build(finder, data["spec"], {"name": "find_result", **opts})
+    with finder.ex.connect() as conn:
+        text = fs.statement_text(conn, plan)
+    return JsonResponse({"ok": True, "sql": text, "console": reverse("databases:explore_sql", args=[db.pk])})
+
+
+@_find_json
+@require_POST
+def find_save(request, pk):
+    """صف کردن ساخت لایه (جدول ثابت یا نمای زنده) از نتیجه‌ی یافتن عارضه؛ همیشه در پس‌زمینه."""
+    from jobs.models import Job
+
+    from . import find_credits
+    from . import find_save as fs
+    from .find import FindError, spec_hash, uses_other_layer
+
+    data = _find_body(request)
+    db, finder = _finder(request, pk, "editor")
+    if db.status != UserDatabase.Status.ACTIVE:
+        raise FindError("پایگاه داده فقط‌خواندنی است (حجم پر یا منقضی)؛ ساخت لایه ممکن نیست.")
+    spec = data["spec"]
+    plan = fs.build(finder, spec, data.get("opts"))
+    fs.check_name(finder.ex, plan)
+    if Job.objects.filter(database=db, kind=Job.Kind.FIND,
+                          status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).exists():
+        raise FindError("ساخت یک لایه‌ی دیگر در جریان است؛ صبر کنید تمام شود.")
+    cross = uses_other_layer(spec)
+    h = spec_hash(spec)
+    if not find_credits.check(db, h, cross):
+        st = find_credits.status(db)
+        return JsonResponse({"ok": False, "credits": st, "upgrade": True,
+                             "error": "اعتبار شرط مکانی بین لایه‌ها تمام شده است. شرط توصیفی و شکل کشیده‌شده همچنان آزاد است."},
+                            status=402)
+    find_credits.record(db, request.user, h, plan.source, cross)
+    job = Job.objects.create(kind=Job.Kind.FIND, database=db, user=request.user, status=Job.Status.QUEUED,
+                             params={"spec": spec, "opts": fs.parse_opts(data.get("opts"))})
+    return JsonResponse({"ok": True, "job": job.pk, "credits": find_credits.status(db)})
+
+
+@_find_json
+def find_save_status(request, pk):
+    from jobs.models import Job
+
+    db, _finder_ = _finder(request, pk)
+    job = Job.objects.filter(pk=request.GET.get("job") or 0, database=db, kind=Job.Kind.FIND).first() \
+        if str(request.GET.get("job", "")).isdigit() else None
+    if job is None:
+        return JsonResponse({"ok": False, "error": "این کار پیدا نشد."}, status=404)
+    out = {"ok": True, "status": job.status, "progress": job.progress, "stage": job.stage}
+    if job.status == Job.Status.DONE:
+        res = job.params.get("result") or {}
+        schema, _, name = (res.get("table") or "").partition(".")
+        out.update({"message": job.message, "table": res.get("table"), "rows": res.get("rows"), "kind": res.get("kind"),
+                    "urls": {"table": reverse("databases:explore_table", args=[db.pk, schema, name]) if name else "",
+                             "find": reverse("databases:find", args=[db.pk]) + f"?t={res.get('table')}"}})
+    elif job.status == Job.Status.FAILED:
+        out["error"] = (job.message or "ساخت لایه ناموفق بود.").splitlines()[0][:300]
+    return JsonResponse(out)

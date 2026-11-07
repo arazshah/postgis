@@ -41,6 +41,9 @@ urlpatterns = [
     path("<int:pk>/find/columns/", views.find_columns, name="find_columns"),
     path("<int:pk>/find/values/", views.find_values, name="find_values"),
     path("<int:pk>/find/run/", views.find_run, name="find_run"),
+    path("<int:pk>/find/save/", views.find_save, name="find_save"),
+    path("<int:pk>/find/save/status/", views.find_save_status, name="find_save_status"),
+    path("<int:pk>/find/sql/", views.find_sql, name="find_sql"),
     path("<int:pk>/import/", views.import_start, name="import"),
     path("<int:pk>/import/<int:job_id>/", views.import_review, name="import_review"),
 ]

@@ -363,13 +363,30 @@ class Finder:
             return sql.SQL("{fn}({a}, {g})").format(fn=sql.SQL(fn), a=a_geom, g=g_in_a), params
 
         # لایه‌ی دیگر (با شرط توصیفی اختیاری خودش)
+        _b, _binfo, cond_b, params, _dist = self.layer_rel(info, spatial)
+        exists = sql.SQL("EXISTS (SELECT 1 FROM {B} AS b WHERE {c})").format(
+            B=sql.Identifier(_b.schema, _b.name), c=cond_b)
+        if rel == "disjoint":
+            exists = sql.SQL("NOT ") + exists
+        return exists, params
+
+    def layer_rel(self, info: dict, spatial: dict):
+        """رابطه‌ی عارضه‌ی a با عارضه‌های b از لایه‌ی هدف.
+
+        خروجی: (لایه‌ی هدف، اطلاعات هندسه‌ی آن، شرطِ روی b، پارامترها، عبارت فاصله به متر یا None).
+        شرط روی b شامل «هندسه خالی نباشد»، شرط توصیفی لایه‌ی هدف و خود آزمون مکانی است.
+        """
+        rel = spatial["rel"]
+        target = spatial.get("target") or {}
         b = self.table(target.get("layer"))
         binfo = _geom_info(b, target.get("geom"))
         b_cond, b_params = _conds_sql("b", self.cols(b), target.get("conds"),
                                       "any" if target.get("match") == "any" else "all")
+        a_geom = _g("a", info)
         b_geom = _g("b", binfo)
         a_in_b = _to_srid(a_geom, info["srid"], binfo["srid"])  # نمایه‌ی مکانی لایه هدف به کار می‌آید
         params: list = []
+        dist = None
         if rel == "dwithin":
             d = _distance(spatial)
             ga, gb = _to4326("a", info), _to4326("b", binfo)
@@ -381,15 +398,14 @@ class Finder:
             test = sql.SQL("ST_DWithin({ga}::geography, {gb}::geography, %s)").format(ga=ga, gb=gb)
             inner = sql.SQL("{pre} AND {t}").format(pre=pre, t=test)
             params.append(d)
+            dist = sql.SQL("ST_Distance({ga}::geography, {gb}::geography)").format(ga=ga, gb=gb)
         else:
             fn = "ST_Intersects" if rel == "disjoint" else _REL_FN[rel]
             inner = sql.SQL(" AND {fn}({a}, {b})").format(fn=sql.SQL(fn), a=a_in_b, b=b_geom)
-        exists = sql.SQL("EXISTS (SELECT 1 FROM {B} AS b WHERE {bg} IS NOT NULL{cond}{inner})").format(
-            B=sql.Identifier(b.schema, b.name), bg=sql.SQL("b.{}").format(sql.Identifier(binfo["column"])),
+        cond = sql.SQL("{bg} IS NOT NULL{cond}{inner}").format(
+            bg=sql.SQL("b.{}").format(sql.Identifier(binfo["column"])),
             cond=sql.SQL(" AND ") + b_cond if b_cond is not None else sql.SQL(""), inner=inner)
-        if rel == "disjoint":
-            exists = sql.SQL("NOT ") + exists
-        return exists, b_params + params
+        return b, binfo, cond, b_params + params, dist
 
     # ------------------------------------------------------------------ اجرا
     def run(self, spec: dict, page: int = 1) -> dict:
@@ -399,6 +415,7 @@ class Finder:
         page = max(int(page or 1), 1)
         rel = sql.Identifier(t.schema, t.name)
         pks = [c for c in cols if c["pk"]]
+        pk_col = pks[0]["name"] if len(pks) == 1 and not pks[0]["spatial"] else ""
         order = sql.SQL(", ").join(sql.SQL("a.{}").format(sql.Identifier(c["name"])) for c in pks) if pks \
             else sql.SQL("a.ctid")
         select = sql.SQL(", ").join(sql.SQL("a.{}::text").format(sql.Identifier(c["name"])) for c in plain) \
@@ -422,6 +439,9 @@ class Finder:
                     props = sql.SQL(", ").join(sql.SQL("{}, a.{}::text").format(sql.Literal(c["name"]),
                                                                               sql.Identifier(c["name"]))
                                                for c in plain[:40])
+                    if pk_col:  # شناسه‌ی عارضه برای انتخاب دستی از روی نقشه (در پنجره‌ی اطلاعات نمایش داده نمی‌شود)
+                        props = sql.SQL("{}, {}, a.{}::text").format(props, sql.Literal("__k"), sql.Identifier(pk_col)) \
+                            if plain[:40] else sql.SQL("{}, a.{}::text").format(sql.Literal("__k"), sql.Identifier(pk_col))
                     features = conn.execute(sql.SQL(
                         "SELECT json_build_object('type','FeatureCollection','features', COALESCE(json_agg("
                         "json_build_object('type','Feature','geometry', ST_AsGeoJSON(s.g, 6)::json,'properties', s.p)),"
@@ -441,13 +461,16 @@ class Finder:
                 raise FindError("جست‌وجو بیش از ۲۰ ثانیه طول کشید؛ شرط را محدودتر کنید یا برای ستون‌ها نمایه بسازید.") from exc
             raise FindError("اجرای جست‌وجو ممکن نشد.", msg[:300]) from exc
         out_rows = []
+        names = [c["name"] for c in plain]
         for r in rows:
             vals = [("" if v is None else (v if len(v) <= CELL_MAX else v[:CELL_MAX] + "…")) for v in r[:len(plain)]] \
                 if plain else []
-            out_rows.append({"v": vals, "g": r[-1] if info else None})
+            key = vals[names.index(pk_col)] if pk_col and vals else ""
+            out_rows.append({"v": vals, "g": r[-1] if info else None, "k": key})
         return {
             "layer": t.qualified,
-            "columns": [c["name"] for c in plain],
+            "columns": names,
+            "pk": pk_col,
             "rows": out_rows,
             "total": min(total, COUNT_CAP),
             "capped": total > COUNT_CAP,
