@@ -1,0 +1,159 @@
+<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<style>
+@font-face{font-family:V;font-weight:400;src:url(fonts/vazirmatn-arabic-400-normal.woff2)}
+@font-face{font-family:V;font-weight:700;src:url(fonts/vazirmatn-arabic-700-normal.woff2)}
+@font-face{font-family:V;font-weight:400;src:url(fonts/vazirmatn-latin-400-normal.woff2);unicode-range:U+0000-00FF}
+@font-face{font-family:V;font-weight:700;src:url(fonts/vazirmatn-latin-700-normal.woff2);unicode-range:U+0000-00FF}
+@font-face{font-family:K;font-weight:800;src:url(fonts/noto-kufi-arabic-arabic-800-normal.woff2)}
+@font-face{font-family:K;font-weight:800;src:url(fonts/noto-kufi-arabic-latin-800-normal.woff2);unicode-range:U+0000-00FF}
+@font-face{font-family:M;font-weight:500;src:url(fonts/jetbrains-mono-latin-500-normal.woff2)}
+:root{--teal:#0F5C59;--teal-d:#0A3F3D;--teal-l:#13706B;--ochre:#E0A526;--paper:#EEF2EC;--ink:#12313A;--ink2:#4B6269;--soft:#D3E5DF}
+*{box-sizing:border-box;margin:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#000}
+#stage{position:relative;width:1080px;height:1920px;overflow:hidden;font-family:V,sans-serif;color:#fff}
+.layer,.scene{position:absolute;inset:0}
+.scene{display:none}
+.a{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);will-change:transform,opacity}
+.k{font-family:K,V,sans-serif;font-weight:800;line-height:1.35;white-space:nowrap;text-align:center}
+.m{font-family:M,monospace;direction:ltr}
+svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle}
+#bg{background:radial-gradient(120% 80% at 50% 40%,var(--teal-l),var(--teal-d))}
+#contours{background:url(img/contours.svg) center/1400px auto repeat;opacity:.13;inset:-300px}
+#flash{background:#fff;opacity:0;pointer-events:none}
+.pill{display:inline-flex;align-items:center;gap:14px;padding:14px 34px;border-radius:999px;font-weight:700;font-size:40px;white-space:nowrap}
+.pill.o{background:var(--ochre);color:#2A1D00}.pill.w{background:#fff;color:var(--teal)}.pill.g{background:rgba(255,255,255,.14);color:#fff;border:2px solid rgba(255,255,255,.35)}
+.pill.t{background:var(--soft);color:var(--teal-d)}
+.dev{width:640px}
+.dev img{width:100%;display:block}
+.led{position:absolute;width:26px;height:26px;border-radius:50%;transform:translate(-50%,-50%);opacity:0}
+.glass{border-radius:44px;background:rgba(255,255,255,.10);border:2px solid rgba(255,255,255,.35);box-shadow:0 40px 90px rgba(0,0,0,.35);overflow:hidden}
+.card{background:#fff;color:var(--ink);border-radius:36px;box-shadow:0 24px 60px rgba(18,49,58,.18);display:flex;align-items:center;gap:34px;padding:36px 44px;width:920px}
+.num{width:96px;height:96px;border-radius:50%;background:var(--teal);color:#fff;font-family:K;font-weight:800;font-size:52px;display:grid;place-items:center;flex:none}
+.ic{width:120px;height:120px;border-radius:30px;background:var(--soft);color:var(--teal);display:grid;place-items:center;font-size:68px;flex:none}
+.card h3{font-family:K;font-weight:800;font-size:58px;line-height:1.3}
+.card p{font-size:36px;color:var(--ink2)}
+.browser{background:#fff;border-radius:30px;overflow:hidden;box-shadow:0 40px 90px rgba(18,49,58,.30)}
+.bbar{height:66px;background:#E3EAE1;display:flex;align-items:center;gap:12px;padding:0 24px;direction:ltr}
+.bbar i{width:16px;height:16px;border-radius:50%;background:#C5D2C2}
+.bbar span{flex:1;margin-left:14px;background:#fff;border-radius:999px;padding:6px 22px;font-family:M;font-size:26px;color:var(--ink2)}
+.bview{position:relative;overflow:hidden}
+.bview img{display:block;width:100%}
+.phone{width:340px;height:700px;border-radius:52px;background:#12313A;padding:14px;box-shadow:0 40px 80px rgba(0,0,0,.35)}
+.phone .scr{width:100%;height:100%;border-radius:40px;overflow:hidden;background:#fff;position:relative}
+.phone .scr img{width:100%;display:block}
+.feat{display:flex;flex-direction:column;align-items:center;gap:40px;width:1000px}
+.fic{width:300px;height:300px;border-radius:80px;background:var(--ochre);color:var(--ink);display:grid;place-items:center;font-size:170px;box-shadow:0 30px 80px rgba(0,0,0,.25)}
+.fic img{width:250px}
+.feat h2{font-family:K;font-weight:800;font-size:92px;line-height:1.35;text-align:center}
+.feat p{font-size:44px;color:#CFE6E2;text-align:center}
+.ghost{font-family:K;font-weight:800;font-size:900px;color:#fff;opacity:.05;line-height:1}
+.dots{display:flex;gap:18px;direction:rtl}
+.dots b{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.25)}
+.dots b.on{background:var(--ochre);width:56px;border-radius:12px}
+.letters span{display:inline-block}
+.fold{background:repeating-radial-gradient(ellipse 140% 60% at 50% 120%,rgba(255,255,255,0) 0 40px,rgba(15,92,89,.07) 70px,rgba(255,255,255,0) 110px)}
+</style></head><body><div id="stage">
+<div id="bg" class="layer"></div>
+<div id="contours" class="layer"></div>
+
+<!-- S1: معرفی، دستگاه‌های شناور -->
+<div class="scene" id="s1">
+ <div id="s1fl"></div>
+ <div class="a k" id="s1e" style="font-size:46px;color:var(--ochre);font-family:V;font-weight:700">ژئوپایگاه معرفی می‌کند</div>
+ <div class="a k" id="s1h" style="font-size:66px">چیزی تازه برای داده‌ی مکانی</div>
+ <div class="a dev" id="s1d"><img src="img/device.svg"></div>
+</div>
+
+<!-- S2: فرود دستگاه -->
+<div class="scene" id="s2">
+ <div class="layer fold" style="background-color:var(--paper)"></div>
+ <div class="a" id="s2sh" style="width:560px;height:90px;border-radius:50%;background:radial-gradient(closest-side,rgba(18,49,58,.35),rgba(18,49,58,0))"></div>
+ <div class="a dev" id="s2d" style="width:700px"><img src="img/device.svg"><i class="led" id="s2l1" style="left:33.6%;top:51.1%;background:#3BE38A;box-shadow:0 0 30px 12px rgba(59,227,138,.8)"></i><i class="led" id="s2l2" style="left:40.4%;top:54.2%;background:#FFC23D;box-shadow:0 0 30px 12px rgba(255,194,61,.8)"></i></div>
+ <div class="a k letters" id="s2t" style="font-size:230px;color:var(--teal);direction:ltr"><span>p</span><span>g</span><span>p</span><span>r</span><span>o</span></div>
+ <div class="a m" id="s2s" style="font-size:44px;color:var(--ink2);letter-spacing:.3em">POSTGIS · PRO</div>
+</div>
+
+<!-- S3: نام محصول -->
+<div class="scene" id="s3">
+ <div id="s3orb"></div>
+ <div class="a" id="s3logo" style="width:340px"><img src="img/logo.svg" style="width:100%;display:block;border-radius:80px;box-shadow:0 30px 80px rgba(0,0,0,.35)"></div>
+ <div class="a k" id="s3t1" style="font-size:108px">پایگاه داده مکانی</div>
+ <div class="a k" id="s3t2" style="font-size:230px;color:var(--ochre)">پرو</div>
+ <div class="a k" id="s3sub" style="font-size:52px;font-family:V;font-weight:700;color:#CFE6E2">PostGIS آفلاین، روی دستگاه خودتان</div>
+ <div class="a k" id="s3l" style="font-size:74px">داخل شبکه‌ی سازمان شما</div>
+ <div class="a" id="s3u" style="height:12px;width:640px;background:var(--ochre);border-radius:6px;transform-origin:right"></div>
+ <div class="a" id="s3c1"><span class="pill o"><svg class="i"><use href="#i-wifi-off"/></svg>بدون اینترنت</span></div>
+ <div class="a" id="s3c2"><span class="pill g"><svg class="i"><use href="#i-server"/></svg>بدون نصب سرور</span></div>
+ <div class="a" id="s3c3"><span class="pill g"><svg class="i"><use href="#i-lock"/></svg>داده در اتاق شما</span></div>
+</div>
+
+<!-- S4: سه قدم -->
+<div class="scene" id="s4">
+ <div class="layer" style="background:var(--paper)"></div>
+ <div class="layer" style="background:url(img/contours.svg) center/1400px auto;opacity:.5"></div>
+ <div class="a k" id="s4e" style="font-size:44px;color:var(--teal);font-family:V;font-weight:700">راه‌اندازی</div>
+ <div class="a k" id="s4h" style="font-size:110px;color:var(--ink)">فقط سه قدم</div>
+ <div class="a card" id="s4c1"><span class="num">۱</span><span class="ic"><svg class="i"><use href="#i-plug"/></svg></span><div><h3>وصل کنید</h3><p>یک کابل شبکه، یک کابل برق</p></div></div>
+ <div class="a card" id="s4c2"><span class="num">۲</span><span class="ic"><svg class="i"><use href="#i-globe2"/></svg></span><div><h3>باز کنید</h3><p class="m" style="direction:ltr;text-align:right">http://pgpro.local</p></div></div>
+ <div class="a card" id="s4c3"><span class="num">۳</span><span class="ic"><svg class="i"><use href="#i-db"/></svg></span><div><h3>بسازید</h3><p>اولین پایگاه PostGIS</p></div></div>
+ <div class="a" id="s4chip"><span class="pill o" style="font-size:48px;padding:18px 44px"><svg class="i"><use href="#i-clock"/></svg>حدود ۵ دقیقه</span></div>
+</div>
+
+<!-- S5: دستگاه واقعی -->
+<div class="scene" id="s5">
+ <div id="s5fl"></div>
+ <div class="a" id="s5tag"><span class="pill o"><svg class="i"><use href="#i-play"/></svg>دستگاه واقعی</span></div>
+ <div class="a k" id="s5h" style="font-size:80px">اولین روشن شدن</div>
+ <div class="a glass" id="s5f" style="width:760px;height:1150px"><canvas id="s5cv" width="760" height="1150" style="width:100%;height:100%;display:block"></canvas></div>
+ <div class="a" id="s5cap"><span class="pill w" id="s5capt" style="font-size:42px">یک کابل شبکه، یک کابل برق</span></div>
+</div>
+
+<!-- S6: سایت pgpro.ir -->
+<div class="scene" id="s6">
+ <div class="layer" style="background:var(--paper)"></div>
+ <div class="layer" style="background:url(img/contours.svg) center/1400px auto;opacity:.5"></div>
+ <div class="a k m" id="s6h" style="font-size:150px;color:var(--teal);font-family:K">pgpro.ir</div>
+ <div class="a k" id="s6s" style="font-size:48px;color:var(--ink2);font-family:V;font-weight:700">همه‌چیز درباره‌ی محصول، یک‌جا</div>
+ <div class="a browser" id="s6b" style="width:940px"><div class="bbar"><i></i><i></i><i></i><span>https://pgpro.ir</span></div><div class="bview" style="height:1180px"><img id="s6img" src="img/pgpro-d.jpg"></div></div>
+ <div class="a phone" id="s6p"><div class="scr"><img id="s6pimg" src="img/pgpro-m.jpg"></div></div>
+</div>
+
+<!-- S7: قابلیت‌ها -->
+<div class="scene" id="s7">
+ <div class="a ghost" id="s7g">۱</div>
+ <div class="a k" id="s7top" style="font-size:52px;color:var(--ochre);font-family:V;font-weight:700">همه‌ی ژئوپایگاه، آفلاین</div>
+ <div class="a feat" id="s7f"><div class="fic" id="s7ic"></div><h2 id="s7t"></h2><p id="s7p"></p></div>
+ <div class="a dots" id="s7dots"><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b></div>
+</div>
+
+<!-- S8: postgis.ir ← pgpro -->
+<div class="scene" id="s8">
+ <div class="layer" style="background:var(--paper)"></div>
+ <div class="layer" style="background:url(img/contours.svg) center/1400px auto;opacity:.5"></div>
+ <div class="a" id="s8p1"><span class="pill t" style="font-size:40px"><svg class="i"><use href="#i-globe"/></svg>postgis.ir · نسخه‌ی ابری</span></div>
+ <div class="a browser" id="s8b" style="width:900px"><div class="bbar"><i></i><i></i><i></i><span>https://postgis.ir</span></div><div class="bview" style="height:560px"><img id="s8img" src="img/postgis-d.jpg"></div></div>
+ <div class="a" id="s8arr" style="width:130px;height:130px;border-radius:50%;background:var(--teal);color:#fff;display:grid;place-items:center;font-size:72px;box-shadow:0 20px 50px rgba(15,92,89,.4)"><svg class="i"><use href="#i-down"/></svg></div>
+ <div class="a k" id="s8m" style="font-size:62px;color:var(--ink)">همان ژئوپایگاه</div>
+ <div class="a dev" id="s8d" style="width:600px"><img src="img/device.svg"></div>
+ <div class="a" id="s8p2"><span class="pill o" style="font-size:44px"><svg class="i"><use href="#i-wifi-off"/></svg>pgpro.ir · روی دستگاه شما</span></div>
+ <div class="a k" id="s8h" style="font-size:76px;color:var(--teal)">حالا داخل شبکه‌ی خودتان</div>
+</div>
+
+<!-- S9: پایان -->
+<div class="scene" id="s9">
+ <div id="s9fl"></div>
+ <div class="a" id="s9ring" style="width:420px;height:420px;border-radius:50%;border:6px solid var(--ochre)"></div>
+ <div class="a" id="s9logo" style="width:300px"><img src="img/logo.svg" style="width:100%;display:block;border-radius:70px;box-shadow:0 30px 80px rgba(0,0,0,.35)"></div>
+ <div class="a k" id="s9t" style="font-size:80px">پایگاه داده مکانی پرو</div>
+ <div class="a k" id="s9s" style="font-size:46px;font-family:V;font-weight:700;color:#CFE6E2">PostGIS آفلاین · داخل شبکه‌ی خودتان</div>
+ <div class="a dev" id="s9d" style="width:560px"><img src="img/device.svg"></div>
+ <div class="a" id="s9c"><span class="pill o" style="font-size:44px">پیش‌فروش و نسخه‌ی آزمایشی</span></div>
+ <div class="a" id="s9u" style="overflow:hidden;border-radius:999px"><span class="pill w m" style="font-size:96px;padding:20px 80px;font-family:K">pgpro.ir</span><i id="s9shine" style="position:absolute;top:0;bottom:0;width:120px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.8),transparent)"></i></div>
+ <div class="a k" id="s9f" style="font-size:38px;font-family:V;font-weight:400;color:#B7D3CF">از خانواده‌ی postgis.ir</div>
+</div>
+
+<div id="flash" class="layer"></div>
+</div>
+<svg style="display:none"><symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></symbol><symbol id="i-phone" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/></symbol><symbol id="i-mail" viewBox="0 0 24 24"><path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol><symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol><symbol id="i-code" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5"/><path d="M16 7l5 5-5 5"/></symbol><symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></symbol><symbol id="i-exit" viewBox="0 0 24 24"><path d="M14 4h6v16h-6"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/></symbol><symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol><symbol id="i-globe2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c3 3.5 3 14.5 0 18"/><path d="M12 3c-3 3.5-3 14.5 0 18"/></symbol><symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-5h4v5"/></symbol><symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></symbol><symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5"/></symbol><symbol id="i-lock" viewBox="0 0 24 24"><path d="M6 11h12v9H6z"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></symbol><symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></symbol><symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></symbol><symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14-4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0 0 14 4l2-2"/><path d="M20 20v-5h-5"/></symbol><symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol><symbol id="i-server" viewBox="0 0 24 24"><path d="M4 4h16v6H4z"/><path d="M4 14h16v6H4z"/><path d="M8 7h.01"/><path d="M8 17h.01"/></symbol><symbol id="i-share" viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.2 11l7.6-3.9"/><path d="M8.2 13l7.6 3.9"/></symbol><symbol id="i-table" viewBox="0 0 24 24"><path d="M3 5h18v14H3z"/><path d="M3 10h18"/><path d="M3 15h18"/><path d="M10 5v14"/></symbol><symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></symbol><symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3-6 7-6s7 2.4 7 6"/></symbol><symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5a3 3 0 0 1 0 6"/><path d="M18 14.8c1.7.7 3 2.3 3 5.2"/></symbol><symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4 3 20h18z"/><path d="M12 10v4"/><path d="M12 17h.01"/></symbol><symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 17a9 9 0 1 1 16 0"/><path d="M12 13l4-4"/><path d="M12 13h.01"/></symbol><symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5"/><path d="M12 12v9"/></symbol><symbol id="i-compare" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M4 5h16v14H4z"/><path d="M8 10l-2 2 2 2"/><path d="M16 10l2 2-2 2"/></symbol><symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5c3-1 6-1 8 1 2-2 5-2 8-1v13c-3-1-6-1-8 1-2-2-5-2-8-1z"/><path d="M12 6v13"/></symbol><symbol id="i-life" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M5.6 5.6l3.9 3.9"/><path d="M14.5 14.5l3.9 3.9"/><path d="M18.4 5.6l-3.9 3.9"/><path d="M9.5 14.5l-3.9 3.9"/></symbol><symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol><symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="M6 6l2.5 2.5"/><path d="M15.5 15.5 18 18"/><path d="M18 6l-2.5 2.5"/><path d="M8.5 15.5 6 18"/></symbol><symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/></symbol><symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></symbol><symbol id="i-braces" viewBox="0 0 24 24"><path d="M8 4c-2 0-3 1-3 3v2c0 1-1 2-2 3 1 1 2 2 2 3v2c0 2 1 3 3 3"/><path d="M16 4c2 0 3 1 3 3v2c0 1 1 2 2 3-1 1-2 2-2 3v2c0 2-1 3-3 3"/></symbol><symbol id="i-card" viewBox="0 0 24 24"><path d="M3 6h18v12H3z"/><path d="M3 10h18"/><path d="M7 15h3"/></symbol><symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M5 12.9a9.5 9.5 0 0 1 3.2-2"/><path d="M12 7.5a14 14 0 0 1 7 3"/><path d="M2 8.8a15 15 0 0 1 4-2.4"/><circle cx="12" cy="20" r="1" fill="currentColor"/></symbol><symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></symbol><symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></symbol><symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/></symbol><symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 01-12 0zM12 17v5"/></symbol><symbol id="i-sdcard" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M10 6v3M13 6v3M16 8v1"/></symbol><symbol id="i-ethernet" viewBox="0 0 24 24"><path d="M5 4h14v9h-3v3H8v-3H5z"/><path d="M9 4v4M12 4v4M15 4v4"/><path d="M12 16v5"/></symbol></svg>
+<script src="anim.js"></script>
+</body></html>
