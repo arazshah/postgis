@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # به‌روزرسانی pgpro بدون نوشتن دوباره‌ی کارت: کد، فایل‌های استاتیک، سرویس‌ها و تنظیم‌های سیستم را با یک بسته عوض می‌کند.
 #
-#   sudo pgpro-update --latest          آخرین نسخه را از اینترنت (GitHub Releases) می‌گیرد و اعمال می‌کند
+#   sudo pgpro-update --latest          آخرین نسخه را از اینترنت (pgpro.ir/update) می‌گیرد و اعمال می‌کند
 #   sudo pgpro-update --check           فقط می‌گوید نسخه‌ی تازه‌تر هست یا نه
 #   sudo pgpro-update /tmp/بسته.tar.xz  بسته‌ی دستی (مثلاً با scp؛ برای دستگاه بدون اینترنت)
 #   sudo pgpro-update --rollback        برگشت به نسخه‌ی قبلی کد
@@ -17,7 +17,7 @@ DATA=${PGPRO_DATA:-/var/lib/pgpro}
 CONF=/etc/pgpro/update.conf
 STATE=$DATA/update.state
 LOG=$DATA/update.log
-UPDATE_BASE_URL=https://github.com/arazshah/postgis/releases/download/pgpro-latest
+UPDATE_BASE_URL=${PGPRO_UPDATE_URL:-https://pgpro.ir/update}
 # shellcheck source=/dev/null
 [ -f "$CONF" ] && . "$CONF"
 
@@ -184,7 +184,7 @@ rollback_code() {
 do_latest() {
   local meta ver url want
   state running "بررسی نسخه‌ی تازه…"
-  meta=$(fetch_latest_meta) || die "به GitHub وصل نشد (اینترنت؟). برای دستگاه بدون اینترنت بسته را با scp بفرستید."
+  meta=$(fetch_latest_meta) || die "به pgpro.ir وصل نشد (اینترنت؟). برای دستگاه بدون اینترنت بسته را با scp بفرستید."
   ver=$(printf '%s' "$meta" | json_get version)
   want=$(printf '%s' "$meta" | json_get sha256)
   [ -n "$ver" ] || die "اطلاعات نسخه‌ی تازه خوانده نشد."
