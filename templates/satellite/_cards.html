@@ -1,0 +1,41 @@
+{% load fa ws %}
+{% for r in reqs %}
+<article class="card sat-card" data-st="{{ r.status }}">
+  <div class="sat-th">
+    {% if r.status == 'ready' and r.raster %}<img loading="lazy" alt="" src="{% url 'enterprise:raster_tile' r.raster.slug r.tile.0 r.tile.1 r.tile.2 %}" onerror="this.remove()">
+    {% elif r.active %}<span class="sat-spin" aria-hidden="true"></span>
+    {% else %}{% icon "warn" 30 %}{% endif %}
+    <span class="badge {% if r.status == 'ready' %}active{% elif r.status == 'failed' %}error{% else %}warn{% endif %}">{{ r.get_status_display }}</span>
+  </div>
+  <div class="sat-body">
+    <div class="sat-row">
+      <h2>{{ r.title }}</h2>
+      {% if r.status == 'ready' and r.raster or not r.active and db.can_edit %}
+      <div class="pop-wrap">
+        <button class="ib sm" type="button" data-pop="sat-m{{ r.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های {{ r.title }}">{% icon "more" 16 %}</button>
+        <div class="pop-m" id="sat-m{{ r.pk }}" role="menu" hidden>
+          {% if r.status == 'ready' and r.raster %}
+          <a role="menuitem" href="{% url 'enterprise:raster_view' r.raster.slug %}" target="_blank" rel="noopener">{% icon "eye" 18 %}<span>نمایش روی نقشه</span></a>
+          <a role="menuitem" href="{% url 'enterprise:raster_file' r.raster.slug %}?download=1">{% icon "download" 18 %}<span>دانلود GeoTIFF</span></a>
+          <button role="menuitem" type="button" data-sat-conn data-name="{{ r.title }}" data-cog="{{ base }}{% url 'enterprise:raster_file' r.raster.slug %}" data-xyz="{{ base }}/raster/{{ r.raster.slug }}/{z}/{x}/{y}.png" data-public="{{ r.raster.is_public|yesno:'1,0' }}">{% icon "link" 18 %}<span>اتصال به QGIS و نرم‌افزارهای دیگر</span></button>
+          {% endif %}
+          {% if db.can_edit and not r.active %}
+          <div class="msep"></div>
+          <form method="post" action="{% url 'satellite:delete' db.pk r.pk %}" data-confirm="{% if r.raster %}تصویر «{{ r.title }}» حذف شود؟ فضای آن آزاد می‌شود ولی اعتبار دریافت برنمی‌گردد.{% else %}این درخواست از فهرست پاک شود؟{% endif %}" data-confirm-title="حذف تصویر" data-confirm-text="حذف">{% csrf_token %}<button role="menuitem" class="danger" type="submit">{% icon "trash" 18 %}<span>حذف</span></button></form>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    <p class="small muted sat-meta">
+      {% if r.scene_dt %}<span>{% icon "clock" 14 %}{{ r.scene_dt|jdate }}</span>{% endif %}
+      {% if r.cloud is not None %}<span>{% icon "cloud" 14 %}ابر {{ r.cloud|floatformat:"0"|fanum }}٪</span>{% endif %}
+      <span>{% icon "crop" 14 %}{{ r.area_km2|floatformat:"1"|fanum }} کیلومتر مربع</span>
+      <span>{% icon "db" 14 %}{% if r.raster %}{{ r.raster.size_bytes|fasize }}{% else %}حدود {{ r.est_bytes|fasize }}{% endif %}</span>
+    </p>
+    {% if r.status == 'failed' %}<div class="msg error small">{{ r.message|default:"دریافت ناموفق بود." }}{% if not r.charged %} اعتبار شما برگردانده شد.{% endif %}</div>
+    {% elif r.active %}<div class="sat-bar" role="progressbar" aria-label="در حال پردازش"><i></i></div><p class="small muted">{% if r.status == 'processing' %}دروازه در حال برش محدوده است؛ معمولاً چند دقیقه طول می‌کشد.{% else %}فایل آماده شد و در حال دریافت و تبدیل به COG است.{% endif %}</p>
+    {% elif r.raster %}<div class="sat-foot"><a class="btn ghost sm" href="{% url 'enterprise:raster_view' r.raster.slug %}" target="_blank" rel="noopener">{% icon "eye" 16 %}نمایش روی نقشه</a></div>{% endif %}
+  </div>
+</article>
+{% endfor %}

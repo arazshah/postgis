@@ -1,11 +1,11 @@
 ---
 title: داده برداری و رستر چه فرقی دارند و هر کدام را کجا نگه دارم؟
-summary: داده برداری نقطه، خط و چندضلعی با ویژگی‌هاست و در جدول‌های PostGIS ذخیره می‌شود. رستر شبکه‌ای از سلول‌ها (تصویر ماهواره‌ای، DEM) است و حجم زیادی می‌گیرد؛ برای رستر افزونه رستر یا سرویس رستر پلن سازمانی را در نظر بگیرید.
+summary: داده برداری نقطه، خط و چندضلعی با ویژگی‌هاست و در جدول‌های PostGIS ذخیره می‌شود. رستر شبکه‌ای از سلول‌ها (تصویر ماهواره‌ای، DEM) است و حجم زیادی می‌گیرد؛ برای رستر افزونه رستر یا سرویس رستر (و [دریافت تصویر ماهواره‌ای](kb:satellite-imagery)) را در نظر بگیرید.
 kind: concept
 keywords: vector, raster, برداری, رستر, dem, ماهواره, geotiff, cog, تصویر, ارتفاع
-related: postgis-extensions-explained, enterprise-raster, choose-extensions
+related: postgis-extensions-explained, enterprise-raster, choose-extensions, satellite-imagery
 order: 80
-reviewed: 2026-10-21
+reviewed: 2026-11-08
 ---
 ## داده برداری (Vector)
 

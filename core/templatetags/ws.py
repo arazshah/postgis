@@ -40,6 +40,7 @@ GROUPS = [
         ("اجرای SQL", "databases:explore_sql", ("databases:explore_sql",), "code", "viewer"),
         ("ورود فایل", "databases:import", ("databases:import", "databases:import_review"), "upload", "editor"),
         ("داده آماده ایران", "iranmap:ready", ("iranmap:ready",), "pin", "editor"),
+        ("تصویر ماهواره‌ای", "satellite:index", ("satellite:index",), "satellite", "viewer"),
         ("سلامت داده", "databases:explore_health", ("databases:explore_health",), "pulse", "viewer"),
     ]),
     ("تحلیل و انتشار", [

@@ -1,0 +1,119 @@
+{% extends "databases/_ws.html" %}{% load fa ws static %}
+{% block title %}تصویر ماهواره‌ای {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'vendor/maplibre/maplibre-gl.css' %}"><link rel="stylesheet" href="{% static 'css/satellite.css' %}">{% endblock %}
+{% block ws %}
+<div class="wrap page sat">
+  <div class="page-head">
+    <div>
+      <h1>تصویر ماهواره‌ای</h1>
+      <p class="muted page-sub">محدوده‌ی کارتان را روی نقشه مشخص کنید؛ تصویر رایگان Sentinel-2 همان محدوده بریده می‌شود و به‌صورت رستر کنار داده‌هایتان می‌ماند. لازم نیست چیزی دانلود کنید.</p>
+    </div>
+    <div class="page-acts">
+      <a class="btn ghost" href="{% url 'enterprise:page' db.pk %}#raster">{% icon "upload" 18 %}بارگذاری GeoTIFF</a>
+      {% if db.can_edit %}<button class="btn" type="button" data-sat-open{% if not configured %} disabled title="سرویس هنوز راه‌اندازی نشده است"{% endif %}>{% icon "satellite" 18 %}دریافت تصویر تازه</button>{% endif %}
+    </div>
+  </div>
+
+  {% if not configured %}
+  <div class="msg info">{% icon "info" 18 %}<span class="msg-t">سرویس دریافت تصویر ماهواره‌ای به‌زودی فعال می‌شود. تا آن زمان می‌توانید GeoTIFF خودتان را بارگذاری کنید.</span></div>
+  {% endif %}
+
+  <section class="sat-quota" aria-label="سهمیه شما در پلن {{ db.plan.name }}">
+    <div class="card sat-q">
+      <div class="sat-q-h"><span>{% icon "satellite" 16 %}دریافت در ۳۰ روز اخیر</span><b>{{ st.credits.used|fanum }} از {{ st.credits.cap|fanum }}</b></div>
+      <div class="meter {% if credit_pct >= 100 %}full{% elif credit_pct >= 80 %}warn{% endif %}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ credit_pct }}"><i style="width:{{ credit_pct }}%"></i></div>
+    </div>
+    <div class="card sat-q">
+      <div class="sat-q-h"><span>{% icon "db" 16 %}فضای رستر</span><b>{{ st.space.used|fasize }} از {{ st.space.cap|fasize }}</b></div>
+      <div class="meter {% if space_pct >= 100 %}full{% elif space_pct >= 80 %}warn{% endif %}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ space_pct }}"><i style="width:{{ space_pct }}%"></i></div>
+    </div>
+    <div class="card sat-q">
+      <div class="sat-q-h"><span>{% icon "crop" 16 %}بزرگ‌ترین محدوده</span><b>{{ st.max_km2|fanum }} کیلومتر مربع</b></div>
+      <p class="small muted">هر دریافت ناموفق از اعتبار کم نمی‌کند.</p>
+    </div>
+  </section>
+  {% if credit_pct >= 80 or space_pct >= 80 %}
+  <div class="msg warning">{% icon "warn" 18 %}<span class="msg-t">{% if credit_pct >= 100 %}اعتبار دریافت این ماه تمام شده است.{% elif space_pct >= 100 %}فضای رستر پر است.{% else %}سهمیه‌تان رو به پایان است.{% endif %}
+    برای ادامه می‌توانید تصویرهای قدیمی را حذف کنید یا <a href="{% url 'billing:plans' %}">پلن را ارتقا دهید</a>.</span></div>
+  {% endif %}
+
+  <div id="sat-cards" class="sat-cards" data-url="{% url 'satellite:cards' db.pk %}" data-active="{{ active|yesno:'1,0' }}" aria-live="polite">{% include "satellite/_cards.html" %}</div>
+  {% if not reqs %}
+  <div class="empty" id="sat-empty">{% icon "satellite" 28 %}<h2>هنوز تصویری نگرفته‌اید</h2>
+    <p class="muted">یک محدوده‌ی کوچک (مثلاً یک مزرعه یا یک محله) انتخاب کنید و رنگ طبیعی، شاخص گیاهی NDVI یا ارتفاع را دریافت کنید.</p>
+    {% if db.can_edit %}<button class="btn" type="button" data-sat-open{% if not configured %} disabled{% endif %}>{% icon "satellite" 18 %}اولین تصویر را بگیرید</button>{% endif %}</div>
+  {% endif %}
+  <p class="small muted sat-attr">منبع تصویرها: Contains modified Copernicus Sentinel data (ESA) · ارتفاع: Copernicus DEM GLO-30. استفاده از این داده‌ها رایگان است و ذکر منبع لازم است.</p>
+</div>
+
+<dialog class="dlg sat-conn" id="sat-conn" aria-labelledby="sat-conn-t">
+  <div class="dlg-h"><span class="dlg-i">{% icon "link" 22 %}</span><h2 id="sat-conn-t">اتصال به QGIS و نرم‌افزارهای دیگر</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+  <div class="dlg-b">
+    <div class="field"><label for="sat-conn-cog">نشانی فایل COG <span class="muted">(QGIS: لایه ← افزودن لایه رستر ← پروتکل HTTP)</span></label>
+      <div class="sat-copy"><input id="sat-conn-cog" class="ltr" readonly><button class="btn ghost sm" type="button" data-copy-target="#sat-conn-cog">{% icon "copy" 16 %}کپی</button></div></div>
+    <div class="field"><label for="sat-conn-xyz">کاشی XYZ <span class="muted">(QGIS: Layer ← XYZ Tiles، یا هر نقشه‌ی وب)</span></label>
+      <div class="sat-copy"><input id="sat-conn-xyz" class="ltr" readonly><button class="btn ghost sm" type="button" data-copy-target="#sat-conn-xyz">{% icon "copy" 16 %}کپی</button></div></div>
+    <p class="small muted" id="sat-conn-priv">این تصویر خصوصی است؛ در نشانی بالا به آخرش <code class="ltr">?key=کلید_API</code> اضافه کنید. کلید را از بخش <a href="{% url 'restapi:manage' db.pk %}">REST API</a> می‌سازید. اگر می‌خواهید بدون کلید کار کند، در <a href="{% url 'enterprise:page' db.pk %}#raster">تنظیم رستر</a> گزینه‌ی «عمومی» را بزنید.</p>
+  </div>
+  <div class="dlg-f"><button class="btn ghost" type="button" data-dialog-close>بستن</button></div>
+</dialog>
+
+{% if db.can_edit and configured %}
+<dialog class="dlg sat-dlg" id="sat-dlg" aria-labelledby="sat-t">
+  <div class="dlg-h"><span class="dlg-i">{% icon "satellite" 22 %}</span><h2 id="sat-t">دریافت تصویر ماهواره‌ای</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+  <ol class="sat-steps" aria-label="مراحل">
+    <li data-s="1"><b>۱</b><span>محدوده</span></li><li data-s="2"><b>۲</b><span>زمان و ابر</span></li>
+    <li data-s="3"><b>۳</b><span>تصویر</span></li><li data-s="4"><b>۴</b><span>محصول</span></li>
+  </ol>
+  <div class="dlg-b sat-b">
+    <section data-step="1">
+      <div class="sat-tools">
+        <button class="btn ghost sm" type="button" data-draw>{% icon "crop" 16 %}کشیدن مستطیل</button>
+        <button class="btn ghost sm" type="button" data-view>{% icon "frame" 16 %}محدوده‌ی دید نقشه</button>
+        <label class="sat-layer" hidden><span class="small muted">از لایه</span><select data-layer aria-label="گرفتن محدوده از یک جدول مکانی"><option value="">یک جدول…</option></select></label>
+      </div>
+      <div class="sat-mapwrap"><div id="sat-map" role="application" aria-label="نقشه برای انتخاب محدوده"></div><div class="sat-hint" data-hint hidden></div></div>
+      <div class="sat-area" data-area><span class="muted small">هنوز محدوده‌ای انتخاب نشده؛ «کشیدن مستطیل» یا «محدوده‌ی دید نقشه» را بزنید.</span></div>
+    </section>
+    <section data-step="2" hidden>
+      <div class="field"><label>بازه‌ی زمانی</label>
+        <div class="chips" data-group="period">
+          <label class="pick-chip"><input type="radio" name="period" value="7"><span>۷ روز اخیر</span></label>
+          <label class="pick-chip"><input type="radio" name="period" value="30" checked><span>۳۰ روز</span></label>
+          <label class="pick-chip"><input type="radio" name="period" value="90"><span>۳ ماه</span></label>
+          <label class="pick-chip"><input type="radio" name="period" value="365"><span>یک سال</span></label>
+          <label class="pick-chip"><input type="radio" name="period" value="custom"><span>بازه‌ی دلخواه</span></label>
+        </div>
+        <div class="sat-dates" data-dates hidden><label>از <input type="date" data-from></label><label>تا <input type="date" data-to></label></div>
+      </div>
+      <div class="field"><label>حداکثر ابر</label>
+        <div class="chips" data-group="cloud">
+          <label class="pick-chip"><input type="radio" name="cloud" value="10"><span>تا ۱۰٪ <small>خیلی صاف</small></span></label>
+          <label class="pick-chip"><input type="radio" name="cloud" value="20" checked><span>تا ۲۰٪</span></label>
+          <label class="pick-chip"><input type="radio" name="cloud" value="40"><span>تا ۴۰٪</span></label>
+          <label class="pick-chip"><input type="radio" name="cloud" value="100"><span>هر مقدار</span></label>
+        </div>
+        <p class="help small muted">Sentinel-2 هر ۵ روز یک‌بار از هر نقطه می‌گذرد. در زمستان و بهار ابر بیشتر است؛ اگر چیزی پیدا نشد بازه یا ابر را بیشتر کنید.</p>
+      </div>
+    </section>
+    <section data-step="3" hidden>
+      <div data-scenes class="sat-scenes" role="radiogroup" aria-label="تصویرهای پیدا شده"></div>
+      <div data-scenes-state class="sat-state"></div>
+    </section>
+    <section data-step="4" hidden>
+      <div class="field"><label>محصول</label><div class="sat-prods" data-prods role="radiogroup" aria-label="محصول"></div></div>
+      <div class="sat-quote" data-quote aria-live="polite"></div>
+    </section>
+  </div>
+  <div class="dlg-f sat-f">
+    <button class="btn ghost" type="button" data-back>{% icon "back" 16 %}قبلی</button>
+    <span class="sat-why small" data-why></span>
+    <button class="btn" type="button" data-next>بعدی{% icon "next" 16 %}</button>
+    <button class="btn" type="button" data-go hidden>{% icon "satellite" 18 %}دریافت تصویر</button>
+  </div>
+</dialog>
+{{ cfg|json_script:"sat-config" }}
+<script src="{% static 'vendor/maplibre/maplibre-gl.js' %}" defer></script>
+{% endif %}
+{% endblock %}
+{% block ws_scripts %}<script src="{% static 'js/studio-ui.js' %}" defer></script><script src="{% static 'js/satellite.js' %}" defer></script>{% endblock %}

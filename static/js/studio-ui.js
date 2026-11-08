@@ -23,6 +23,8 @@ const ICONS={
   lock:P("M6 11h12v9H6z|M8.5 11V8a3.5 3.5 0 0 1 7 0v3"), globe:'<circle cx="12" cy="12" r="9"/>'+P("M3 12h18|M12 3c3 3.5 3 14.5 0 18|M12 3c-3 3.5-3 14.5 0 18"),
   link:P("M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1|M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"), code:P("M8 7l-5 5 5 5|M16 7l5 5-5 5"),
   print:P("M7 9V3h10v6|M7 17H4v-7h16v7h-3|M7 14h10v7H7z"), compare:P("M12 3v18|M4 5h16v14H4z|M8 10l-2 2 2 2|M16 10l2 2-2 2"),
+  satellite:'<g transform="rotate(45 12 12)"><rect x="9.3" y="9.3" width="5.4" height="5.4" rx="1.2"/><rect x="1.8" y="9.8" width="5.4" height="4.4" rx=".8"/><rect x="16.8" y="9.8" width="5.4" height="4.4" rx=".8"/><path d="M7.2 12h2.1M14.7 12h2.1M12 9.3V6.5"/><path d="M10.2 5.2a2.6 2.6 0 0 1 3.6 0"/></g>', crop:P("M6 3v15h15|M3 6h15v15"),
+  cloud:P("M7 18h10a4 4 0 0 0 .6-7.9A6 6 0 0 0 6 11.5 3.5 3.5 0 0 0 7 18z"),
   cube:P("M12 3 4 7.5v9L12 21l8-4.5v-9z|M4 7.5 12 12l8-4.5|M12 12v9"), server:P("M4 4h16v6H4z|M4 14h16v6H4z|M8 7h.01|M8 17h.01"),
   info:'<circle cx="12" cy="12" r="9"/>'+P("M12 11v5|M12 8h.01"), chev:P("M6 9l6 6 6-6"), frame:P("M4 8V4h4|M16 4h4v4|M20 16v4h-4|M8 20H4v-4"),
   dash:P("M3 4h8v8H3z|M13 4h8v5h-8z|M13 11h8v9h-8z|M3 14h8v6H3z"), side:P("M3 4h18v16H3z|M15 4v16"), warn:P("M12 4 3 20h18z|M12 10v4|M12 17h.01"),

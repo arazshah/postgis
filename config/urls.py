@@ -41,5 +41,6 @@ urlpatterns = [
     path("", include("notifications.urls")),
     path("", include("restapi.urls")),
     path("", include("enterprise.urls")),
+    path("", include("satellite.urls")),
     path("", include("core.urls")),
 ]

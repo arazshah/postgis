@@ -116,7 +116,7 @@ def raster_upload_path(raster: Raster) -> Path:
 def request_raster(db: UserDatabase, user, upload, title: str) -> Raster:
     cap = db.plan.raster_mb * 1024 * 1024
     if not cap:
-        raise EnterpriseError("سرویس رستر در پلن سازمانی فعال است.")
+        raise EnterpriseError("سرویس رستر در پلن فعلی شما فعال نیست.")
     if db.status != UserDatabase.Status.ACTIVE:
         raise EnterpriseError("پایگاه داده فعال نیست.")
     if Path(upload.name).suffix.lower() not in RASTER_EXT:
@@ -128,7 +128,10 @@ def request_raster(db: UserDatabase, user, upload, title: str) -> Raster:
     if head not in TIFF_MAGIC:
         raise EnterpriseError("محتوای فایل GeoTIFF نیست.")
     if raster_used(db) + upload.size > cap:
-        raise EnterpriseError("فضای رستر پلن پر می‌شود؛ رسترهای قدیمی را حذف کنید.")
+        left = max(cap - raster_used(db), 0)
+        raise EnterpriseError(f"فضای رستر پلن برای این فایل کافی نیست: فایل {upload.size // 1048576} مگابایت است و "
+                              f"{left // 1048576} مگابایت از {db.plan.raster_mb} مگابایت خالی دارید. "
+                              "رسترهای قدیمی را حذف کنید یا پلن را ارتقا دهید.")
     r = Raster.objects.create(database=db, title=(title or Path(upload.name).stem)[:120], original_name=upload.name[:255],
                               created_by=user)
     dest = raster_upload_path(r)

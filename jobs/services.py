@@ -96,7 +96,7 @@ def run(job: Job) -> None:
                Job.Kind.OSM_IMPORT: iranmap_tasks.do_osm_import, Job.Kind.ASK: _do_ask,
                Job.Kind.GEOSERVER: _do_enterprise, Job.Kind.RASTER: _do_enterprise,
                Job.Kind.CLONE: _do_enterprise, Job.Kind.TOOL: _do_tool,
-               Job.Kind.FIND: _do_find}[job.kind]
+               Job.Kind.FIND: _do_find, Job.Kind.SATELLITE: _do_satellite}[job.kind]
     try:
         handler(job)
     except Exception as exc:  # noqa: BLE001
@@ -119,6 +119,18 @@ def _do_enterprise(job: Job) -> None:
     try:
         job.message = fn(job)
     except ent.EnterpriseError as exc:
+        raise JobError(str(exc)) from exc
+
+
+def _do_satellite(job: Job) -> None:
+    """دریافت فایل برش‌خورده از دروازه‌ی ماهواره و ورود آن به سرویس رستر."""
+    from enterprise import services as ent
+    from satellite import client
+    from satellite import services as sat
+
+    try:
+        job.message = sat.ingest(job)
+    except (ent.EnterpriseError, client.GatewayError) as exc:
         raise JobError(str(exc)) from exc
 
 
@@ -468,10 +480,11 @@ def tick(now: datetime | None = None) -> dict:
     from classroom import services as classroom_services
     from enterprise import services as ent
     from iranmap import tasks as iranmap_tasks
+    from satellite import services as sat
 
     ent.cleanup_rasters_dir()
 
     return {"classes": classroom_services.tick(now), "nightly": schedule_nightly(now),
             "restore_test": schedule_restore_test(now),
             "cleanup": cleanup(now), "alerts": len(alerts()), "map_data": iranmap_tasks.schedule(now),
-            "snapshots": ent.schedule_snapshots(now)}
+            "snapshots": ent.schedule_snapshots(now), "satellite": sat.poll(now)}

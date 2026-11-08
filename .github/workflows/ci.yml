@@ -58,6 +58,12 @@ jobs:
         run: docker build -t geopaygah:ci .
       - name: Backup tools present in image
         run: docker run --rm --entrypoint sh geopaygah:ci -c "pg_dump --version && pg_restore --version && ogr2ogr --version && osmium --version && osm2pgrouting --version && pmtiles version"
+      - name: Satgate image builds and starts
+        run: |
+          docker build -f satgate/Dockerfile -t satgate:ci .
+          docker run -d --name sg -p 8080:8080 -e SATGATE_SECRET=ci satgate:ci
+          for i in $(seq 1 20); do curl -fsS http://localhost:8080/v1/health && exit 0; sleep 2; done
+          docker logs sg; exit 1
       - name: Smoke test container
         run: |
           docker run -d --name app -p 8000:8000 \
@@ -130,6 +136,17 @@ jobs:
             ${{ env.IMG }}-qgis:${{ github.sha }}
           cache-from: type=gha,scope=qgis
           cache-to: type=gha,mode=max,scope=qgis
+      - name: Build and push satgate (دروازه‌ی ماهواره؛ روی سرور خارجی)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: satgate/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMG }}-satgate:latest
+            ${{ env.IMG }}-satgate:${{ github.sha }}
+          cache-from: type=gha,scope=satgate
+          cache-to: type=gha,mode=max,scope=satgate
       - name: Build and push pgbouncer
         uses: docker/build-push-action@v6
         with:

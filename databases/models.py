@@ -202,7 +202,14 @@ class Plan(models.Model):
         help_text="تعداد جست‌وجوی «یافتن عارضه» که شرط مکانی آن لایه‌ی دیگری از همین پایگاه است، در ۳۰ روز گذشته "
                   "برای هر پایگاه داده. شرط توصیفی و شرط با شکل کشیده‌شده یا محدوده نقشه از اعتبار کم نمی‌کند. ۰ یعنی ندارد.")
     dedicated_geoserver = models.BooleanField("GeoServer اختصاصی", default=False)
-    raster_mb = models.PositiveIntegerField("فضای رستر (مگابایت)", default=0, help_text="۰ یعنی سرویس رستر ندارد.")
+    raster_mb = models.PositiveIntegerField("فضای رستر (مگابایت)", default=200, help_text="۰ یعنی سرویس رستر ندارد. "
+                                            "آپلود GeoTIFF و تصویرهای ماهواره‌ای دریافتی هر دو از همین فضا کم می‌شوند.")
+    sat_credits = models.PositiveIntegerField(
+        "اعتبار دریافت تصویر ماهواره‌ای (۳۰ روز)", default=10,
+        help_text="تعداد دریافت تصویر برش‌خورده در ۳۰ روز گذشته برای هر پایگاه داده. دریافت ناموفق از اعتبار کم نمی‌کند. ۰ یعنی ندارد.")
+    sat_max_km2 = models.PositiveIntegerField(
+        "سقف مساحت هر دریافت ماهواره‌ای (کیلومتر مربع)", default=100,
+        help_text="بزرگ‌ترین محدوده‌ای که در یک درخواست می‌شود از تصویر ماهواره‌ای برید.")
     clone_enabled = models.BooleanField("کپی آزمایشی پایگاه داده از بکاپ", default=False)
     snapshot_hours = models.PositiveSmallIntegerField(
         "بکاپ هر چند ساعت", default=0, help_text="۰ یعنی فقط بکاپ شبانه؛ مثلاً ۶ یعنی هر ۶ ساعت یک نسخه (۴۸ ساعت نگه‌داری).")

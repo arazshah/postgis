@@ -1,0 +1,20 @@
+# دروازه‌ی ماهواره روی سرور خارجی (کوچک: ۲ هسته، ۴ گیگابایت حافظه، ۴۰ گیگابایت دیسک).
+#   cp satgate/.env.example .env  و مقدارها را پر کنید، سپس:  docker compose -f satgate/docker-compose.yml up -d
+services:
+  satgate:
+    image: ${SATGATE_IMAGE:-ghcr.io/arazshah/postgis-satgate:latest}
+    restart: unless-stopped
+    environment:
+      - SATGATE_SECRET=${SATGATE_SECRET:?کلید مشترک با پنل لازم است}
+      - SATGATE_PANEL_URL=${SATGATE_PANEL_URL:?نشانی پنل، مثلاً https://postgis.ir}
+      - SATGATE_MAX_KM2=${SATGATE_MAX_KM2:-2500}
+      - SATGATE_MAX_MB=${SATGATE_MAX_MB:-600}
+      - SATGATE_WORKERS=${SATGATE_WORKERS:-2}
+      - SATGATE_KEEP_HOURS=${SATGATE_KEEP_HOURS:-24}
+    volumes:
+      - satgate-data:/data
+    ports:
+      - "127.0.0.1:8080:8080"   # جلوی آن یک پراکسی TLS (Caddy/Nginx/Coolify) بگذارید؛ مستقیم باز نشود
+    mem_limit: 3g
+volumes:
+  satgate-data:

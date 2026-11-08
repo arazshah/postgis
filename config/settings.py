@@ -95,6 +95,7 @@ INSTALLED_APPS = [
     "notifications",
     "restapi",
     "enterprise",
+    "satellite",
     "analytics",
     "kb",
     "assistant",
@@ -290,3 +291,10 @@ OTP_SHOW_IN_DEBUG = DEBUG and SMS_BACKEND == "console"
 NTRIP_ALLOW_PRIVATE = os.environ.get("NTRIP_ALLOW_PRIVATE", "") == "1"
 NTRIP_MAX_STREAMS_PER_PROCESS = int(os.environ.get("NTRIP_MAX_STREAMS_PER_PROCESS", "3"))  # از 12 رشته gunicorn
 NTRIP_MAX_SECONDS = int(os.environ.get("NTRIP_MAX_SECONDS", str(4 * 3600)))
+
+# دروازه‌ی ماهواره: سرویس کوچکی روی سرور خارجی (satgate/) که تصویر ماهواره‌ای را جست‌وجو و برش می‌دهد.
+# اگر SATGATE_URL خالی باشد، بخش «تصویر ماهواره‌ای» برای کاربران «به‌زودی» نشان داده می‌شود.
+SATGATE_URL = os.environ.get("SATGATE_URL", "").rstrip("/")
+SATGATE_SECRET = os.environ.get("SATGATE_SECRET", "")
+SATGATE_TIMEOUT = int(os.environ.get("SATGATE_TIMEOUT", "20"))
+SATGATE_JOB_TIMEOUT_MIN = int(os.environ.get("SATGATE_JOB_TIMEOUT_MIN", "40"))

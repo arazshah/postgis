@@ -32,6 +32,8 @@ services:
       - OWS_ROOT=/app/ows
       - OSM_ROOT=/app/osm
       - RASTER_ROOT=/app/rasters
+      - SATGATE_URL=${SATGATE_URL:-}
+      - SATGATE_SECRET=${SATGATE_SECRET:-}
       - QGIS_SERVER_URL=${QGIS_SERVER_URL:-http://qgis/ows/}
       - PGBOUNCER_AUTH_PASSWORD=${PGBOUNCER_AUTH_PASSWORD:-}
     volumes:
@@ -72,6 +74,8 @@ services:
       - OWS_ROOT=/app/ows
       - OSM_ROOT=/app/osm
       - RASTER_ROOT=/app/rasters
+      - SATGATE_URL=${SATGATE_URL:-}
+      - SATGATE_SECRET=${SATGATE_SECRET:-}
       - OSM_SOURCE_URL=${OSM_SOURCE_URL:-https://download.geofabrik.de/asia/iran-latest.osm.pbf}
       - BASEMAP_SOURCE_URL=${BASEMAP_SOURCE_URL:-https://build.protomaps.com/{date}.pmtiles}
       - RUN_MIGRATIONS=0

@@ -25,6 +25,8 @@ def render(raster, z: int, x: int, y: int) -> bytes | None:
     except Exception as exc:  # noqa: BLE001  فایل خراب یا ناموجود
         raise TileError(str(exc)) from exc
     if raster.rgb and raster.bands >= 3:
+        if raster.dtype != "Byte":  # مثلاً همه‌ی باندهای Sentinel-2 (بازتاب ×۱۰۰۰۰): کشش ۰ تا ۰٫۳ به ۰ تا ۲۵۵
+            img.rescale(in_range=((0, 3000),) * 3)
         return img.render(img_format="PNG")
     lo, hi = (raster.stats[0] if raster.stats else [None, None])
     if lo is None or hi is None or hi <= lo:

@@ -3,8 +3,8 @@
 {% block ws %}
 <div class="wrap page">
   <div class="page-head"><div><h1>{% icon "cube" 22 %} امکانات سازمانی</h1><p class="muted page-sub">GeoServer اختصاصی، رستر، بکاپ ساعتی و کپی آزمایشی.</p></div></div>
-  {% if not db.plan.dedicated_geoserver and not db.plan.raster_mb and not db.plan.snapshot_hours and not db.plan.clone_enabled %}
-  <div class="msg info">این امکانات در پلن سازمانی فعال است: GeoServer اختصاصی، سرویس رستر، بکاپ ساعتی و کپی آزمایشی پایگاه داده. <a href="{% url 'billing:plans' %}">مشاهده پلن‌ها</a></div>
+  {% if not db.plan.dedicated_geoserver and not db.plan.snapshot_hours and not db.plan.clone_enabled %}
+  <div class="msg info">GeoServer اختصاصی، بکاپ ساعتی و کپی آزمایشی پایگاه داده در پلن سازمانی فعال است (سرویس رستر برای همه‌ی پلن‌هاست). <a href="{% url 'billing:plans' %}">مشاهده پلن‌ها</a></div>
   {% endif %}
 
   <div class="grid-2">
@@ -46,9 +46,9 @@
   </section>
   </div>
 
-  <section class="card" style="margin-top:var(--s5)">
+  <section class="card" id="raster" style="margin-top:var(--s5)">
     <h2 class="u-h">سرویس رستر</h2>
-    <p class="small muted">GeoTIFF (تصویر ماهواره‌ای، عکس هوایی، DEM و نقشه‌های پیوسته) را بارگذاری کنید؛ به COG تبدیل و به‌صورت کاشی تصویری روی وب، در QGIS (XYZ) و در نقشه‌های شما نمایش داده می‌شود.</p>
+    <p class="small muted">GeoTIFF (تصویر ماهواره‌ای، عکس هوایی، DEM و نقشه‌های پیوسته) را بارگذاری کنید؛ به COG تبدیل و به‌صورت کاشی تصویری روی وب، در QGIS (XYZ) و در نقشه‌های شما نمایش داده می‌شود. برای تصویر Sentinel-2 لازم نیست خودتان فایل بگیرید: از بخش <a href="{% url 'satellite:index' db.pk %}">تصویر ماهواره‌ای</a> محدوده را انتخاب کنید.</p>
     {% if db.plan.raster_mb %}
     <p class="small">فضای رستر: {{ used|fasize }} از {{ raster_cap|fasize }}</p>
     <form method="post" enctype="multipart/form-data" class="inline-form">{% csrf_token %}<input type="hidden" name="action" value="raster_upload">
@@ -67,7 +67,7 @@
           {% if r.bands >= 3 %}<label class="check small"><input type="checkbox" name="rgb" {% if r.rgb %}checked{% endif %}><span>رنگی</span></label>{% endif %}
           <label class="check small"><input type="checkbox" name="public" {% if r.is_public %}checked{% endif %}><span>عمومی</span></label>
           <button class="btn ghost sm" type="submit">ذخیره</button></form>{% endif %}</td>
-        <td style="white-space:nowrap">{% if r.status == 'ready' %}<a class="btn ghost sm" href="{% url 'enterprise:raster_view' r.slug %}" target="_blank" rel="noopener">نقشه</a>{% endif %}
+        <td style="white-space:nowrap">{% if r.status == 'ready' %}<a class="btn ghost sm" href="{% url 'enterprise:raster_view' r.slug %}" target="_blank" rel="noopener">نقشه</a> <a class="btn ghost sm" href="{% url 'enterprise:raster_file' r.slug %}?download=1">دانلود</a>{% endif %}
           <form method="post" style="display:inline" data-confirm="رستر حذف شود؟" data-confirm-title="حذف رستر" data-confirm-text="حذف رستر">{% csrf_token %}<input type="hidden" name="action" value="raster_delete"><input type="hidden" name="raster" value="{{ r.pk }}"><button class="btn ghost sm" type="submit">حذف</button></form></td>
       </tr>{% if r.status == 'ready' %}<tr><td colspan="4" class="small"><span class="muted">XYZ:</span> <code class="ltr" id="rx-{{ r.pk }}">{{ base }}/raster/{{ r.slug }}/{z}/{x}/{y}.png{% if not r.is_public %}?key=کلید_API{% endif %}</code> <button class="copy" data-copy-target="#rx-{{ r.pk }}">کپی</button></td></tr>{% endif %}
       {% endfor %}</tbody>
