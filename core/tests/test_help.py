@@ -73,8 +73,7 @@ class HelpCenterTests(TestCase):
         for slug in ("survey", "gnss", "surface", "workspace", "classroom-teacher", "classroom-student"):
             self.assertIn(f'href="/help/{slug}/"', html)
         # قالب یکدست: همه‌ی راهنماها ویدیو و پوستر دارند (فقط راهنمای بدون ویدیو در دست تهیه نمایش داده می‌شود)
-        # «satellite» فعلاً فقط مراحل نوشتاری دارد؛ ویدیویش را با docs/help-video بسازید و از این فهرست بردارید
-        self.assertEqual([g.slug for g in GUIDES if not g.has_video], ["satellite"])
+        self.assertEqual([g.slug for g in GUIDES if not g.has_video], [])
 
     def test_survey_doc_page(self):
         r = self.client.get("/docs/survey/")
