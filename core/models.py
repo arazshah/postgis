@@ -225,6 +225,12 @@ class SiteSettings(models.Model):
         "رمزنگاری بکاپ پیش از ارسال", default=True,
         help_text="پیشنهاد می‌شود روشن بماند: حتی با لو رفتن کلید باکت، کسی نمی‌تواند بکاپ‌ها را باز کند.")
 
+    # --- دروازه‌ی ماهواره (سرور خارجی تصویر ماهواره‌ای؛ جزئیات: satgate/README.md) ---
+    satgate_url = models.CharField(
+        "نشانی دروازه‌ی ماهواره", max_length=300, blank=True,
+        help_text="نشانی HTTPS سرور خارجی، مثلاً https://sat.example.com. تا خالی است، بخش «تصویر ماهواره‌ای» برای کاربران «به‌زودی» نشان داده می‌شود.")
+    satgate_secret_encrypted = models.TextField(blank=True, editable=False)
+
     updated_at = models.DateTimeField("آخرین تغییر", auto_now=True)
 
     class Meta:
@@ -387,6 +393,26 @@ class SiteSettings(models.Model):
     @property
     def has_offsite_keys(self) -> bool:
         return bool(self.offsite_access_key_encrypted and self.offsite_secret_key_encrypted)
+
+    # --- کلید مشترک دروازه‌ی ماهواره: رمزنگاری‌شده و بدون نمایش ---
+    def set_satgate_secret(self, raw: str):
+        from databases.crypto import encrypt
+
+        self.satgate_secret_encrypted = encrypt(raw.strip()) if raw else ""
+
+    def get_satgate_secret(self) -> str:
+        from databases.crypto import decrypt
+
+        if not self.satgate_secret_encrypted:
+            return ""
+        try:
+            return decrypt(self.satgate_secret_encrypted)
+        except ValueError:
+            return ""
+
+    @property
+    def satgate_ready(self) -> bool:
+        return bool(self.satgate_url and self.satgate_secret_encrypted)
 
     @property
     def offsite_ready(self) -> bool:

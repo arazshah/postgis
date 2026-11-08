@@ -293,7 +293,8 @@ NTRIP_MAX_STREAMS_PER_PROCESS = int(os.environ.get("NTRIP_MAX_STREAMS_PER_PROCES
 NTRIP_MAX_SECONDS = int(os.environ.get("NTRIP_MAX_SECONDS", str(4 * 3600)))
 
 # دروازه‌ی ماهواره: سرویس کوچکی روی سرور خارجی (satgate/) که تصویر ماهواره‌ای را جست‌وجو و برش می‌دهد.
-# اگر SATGATE_URL خالی باشد، بخش «تصویر ماهواره‌ای» برای کاربران «به‌زودی» نشان داده می‌شود.
+# نشانی و کلید را از «تنظیمات سایت» در پنل مدیریت بدهید؛ این دو متغیر فقط جایگزین‌اند (وقتی آن‌جا خالی است).
+# اگر هر دو خالی باشد، بخش «تصویر ماهواره‌ای» برای کاربران «به‌زودی» نشان داده می‌شود.
 SATGATE_URL = os.environ.get("SATGATE_URL", "").rstrip("/")
 SATGATE_SECRET = os.environ.get("SATGATE_SECRET", "")
 SATGATE_TIMEOUT = int(os.environ.get("SATGATE_TIMEOUT", "20"))

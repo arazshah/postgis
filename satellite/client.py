@@ -18,17 +18,29 @@ class GatewayError(Exception):
         self.status = status
 
 
+def config() -> tuple[str, str]:
+    """(نشانی، کلید): اول تنظیمات سایت در پنل مدیریت، اگر خالی بود متغیر محیطی SATGATE_URL و SATGATE_SECRET."""
+    from core.models import SiteSettings
+
+    conf = SiteSettings.get()
+    url = (conf.satgate_url or settings.SATGATE_URL or "").rstrip("/")
+    secret = conf.get_satgate_secret() or settings.SATGATE_SECRET
+    return url, secret
+
+
 def configured() -> bool:
-    return bool(settings.SATGATE_URL and settings.SATGATE_SECRET)
+    url, secret = config()
+    return bool(url and secret)
 
 
 def _open(method: str, path: str, body: bytes = b"", timeout: int | None = None):
-    if not configured():
+    url, secret = config()
+    if not (url and secret):
         raise GatewayError("سرویس تصویر ماهواره‌ای هنوز راه‌اندازی نشده است.")
-    headers = {"User-Agent": "postgis.ir panel", **protocol.sign(settings.SATGATE_SECRET, method, path, body)}
+    headers = {"User-Agent": "postgis.ir panel", **protocol.sign(secret, method, path, body)}
     if body:
         headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(settings.SATGATE_URL + path, data=body or None, method=method, headers=headers)
+    req = urllib.request.Request(url + path, data=body or None, method=method, headers=headers)
     try:
         return urllib.request.urlopen(req, timeout=timeout or settings.SATGATE_TIMEOUT)  # noqa: S310 آدرس از تنظیمات
     except urllib.error.HTTPError as exc:
@@ -37,7 +49,7 @@ def _open(method: str, path: str, body: bytes = b"", timeout: int | None = None)
         except (ValueError, OSError):
             msg = ""
         if exc.code == 401:
-            msg = "کلید ارتباط پنل با دروازه درست نیست؛ مدیر سایت باید SATGATE_SECRET را بررسی کند."
+            msg = "کلید ارتباط پنل با دروازه درست نیست؛ مدیر سایت باید کلید را در تنظیمات سایت (تصویر ماهواره‌ای) بررسی کند."
         raise GatewayError(msg or f"دروازه‌ی ماهواره پاسخ {exc.code} داد.", exc.code) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise GatewayError("دروازه‌ی ماهواره موقتاً در دسترس نیست؛ کمی بعد دوباره امتحان کنید.") from exc

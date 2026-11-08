@@ -207,9 +207,7 @@ def delete(request, pk, req):
 @require_POST
 def hook(request):
     """هوک دروازه: «کار آماده شد/ناموفق شد». با امضای HMAC؛ بدون امضای درست هیچ اثری ندارد."""
-    from django.conf import settings
-
-    ok = protocol.verify(settings.SATGATE_SECRET, "POST", request.get_full_path(), request.body,
+    ok = protocol.verify(client.config()[1], "POST", request.get_full_path(), request.body,
                          request.headers.get(protocol.H_TIME), request.headers.get(protocol.H_SIG))
     if not ok:
         return HttpResponse(status=401)

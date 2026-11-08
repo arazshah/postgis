@@ -19,7 +19,7 @@ from enterprise.models import Raster
 from enterprise.tests.test_enterprise import HAS_GDAL, HAS_RIO, make_tif
 from jobs import services as jobs
 from jobs.models import Job
-from satellite import client, services
+from satellite import client, probe, services
 from satellite.models import SatRequest
 from satgate import protocol
 
@@ -491,16 +491,147 @@ class TileStretchTests(_Base):
         self.assertTrue(png is None or png[:4] == b"\x89PNG")
 
 
-class ProbeCommandTests(TestCase):
-    def test_requires_configuration(self):
-        from django.core.management import call_command
-        from django.core.management.base import CommandError
-        with override_settings(SATGATE_URL="", SATGATE_SECRET=""), self.assertRaisesMessage(CommandError, "SATGATE_URL"):
-            call_command("sat_probe")
+class SiteSettingsTests(TestCase):
+    """نشانی و کلید دروازه از تنظیمات سایت می‌آید (متغیر محیطی فقط جایگزین است)."""
 
-    @GW
-    def test_unreachable_gateway_is_reported(self):
+    def form(self, **extra):
+        from core.admin import SiteSettingsForm
+        from core.models import SiteSettings
+        from core.tests.test_footer_enamad import form_data
+
+        conf = SiteSettings.get()
+        return SiteSettingsForm(form_data(conf, **extra), instance=conf)
+
+    def test_unset_means_off(self):
+        self.assertFalse(client.configured())
+
+    def test_save_encrypts_secret_and_config_prefers_site_settings(self):
+        from core.models import SiteSettings
+        f = self.form(satgate_url="https://sat.example.com/", satgate_secret=" abc def ")
+        self.assertTrue(f.is_valid(), f.errors)
+        f.save()
+        conf = SiteSettings.get()
+        self.assertEqual(conf.satgate_url, "https://sat.example.com")
+        self.assertNotIn("abcdef", conf.satgate_secret_encrypted)
+        self.assertTrue(conf.satgate_ready)
+        with override_settings(SATGATE_URL="https://env.example", SATGATE_SECRET="env"):
+            self.assertEqual(client.config(), ("https://sat.example.com", "abcdef"))
+        self.assertTrue(client.configured())
+
+    def test_env_is_fallback_and_blank_save_keeps_secret(self):
+        from core.models import SiteSettings
+        with override_settings(SATGATE_URL="https://env.example", SATGATE_SECRET="env"):
+            self.assertEqual(client.config(), ("https://env.example", "env"))
+        self.form(satgate_url="https://sat.example.com", satgate_secret="k1").save()
+        f = self.form(satgate_url="https://sat.example.com")
+        self.assertTrue(f.is_valid(), f.errors)
+        f.save()
+        self.assertEqual(SiteSettings.get().get_satgate_secret(), "k1")
+        self.assertNotIn("k1", str(self.form()["satgate_secret"]))
+        f = self.form(clear_satgate_secret="on")
+        self.assertTrue(f.is_valid())
+        f.save()
+        self.assertFalse(SiteSettings.get().satgate_ready)
+
+    def test_generate_secret_once(self):
+        from core.models import SiteSettings
+        f = self.form(satgate_url="https://sat.example.com", generate_satgate_secret="on")
+        self.assertTrue(f.is_valid(), f.errors)
+        obj = f.save()
+        self.assertGreaterEqual(len(obj._new_satgate_secret), 48)
+        self.assertEqual(SiteSettings.get().get_satgate_secret(), obj._new_satgate_secret)
+
+    def test_url_validation(self):
+        for bad in ("http://sat.example.com", "https://sat.example.com/path", "ftp://x", "sat.example.com", "https://a b"):
+            self.assertFalse(self.form(satgate_url=bad).is_valid(), bad)
+        self.assertTrue(self.form(satgate_url="http://127.0.0.1:8099").is_valid())
+        self.assertTrue(self.form(satgate_url="https://sat.example.com:8443").is_valid())
+
+    def test_hook_uses_site_settings_secret(self):
+        from core.models import SiteSettings
+        conf = SiteSettings.get()
+        conf.set_satgate_secret("dbsecret")
+        conf.satgate_url = "https://gw.test"
+        conf.save()
+        body = json.dumps({"id": "0" * 32, "status": "ready"}).encode()
+        h = protocol.sign("dbsecret", "POST", "/hooks/satellite/", body)
+        r = self.client.post("/hooks/satellite/", body, content_type="application/json", HTTP_X_SAT_TIME=h[protocol.H_TIME],
+                             HTTP_X_SAT_SIG=h[protocol.H_SIG])
+        self.assertEqual(r.status_code, 404)   # امضا درست بود (۴۰۱ نیست)؛ فقط شناسه ناموجود است
+
+
+class AdminTestButtonTests(TestCase):
+    def setUp(self):
+        from core.models import SiteSettings
+        SiteSettings.get()
+        self.admin = User.objects.create_admin("boss", "Str0ng-Admin-Pass")
+        self.client.force_login(self.admin)
+
+    def test_settings_page_has_tab_and_button(self):
+        r = self.client.get(reverse("admin:core_sitesettings_change", args=[1]))
+        self.assertContains(r, "تصویر ماهواره‌ای")
+        self.assertContains(r, reverse("admin:core_sitesettings_satgatetest"))
+        self.assertContains(r, "تنظیم نشده")
+
+    def test_button_not_configured(self):
+        r = self.client.get(reverse("admin:core_sitesettings_satgatetest"), follow=True)
+        self.assertContains(r, "هنوز در تنظیمات سایت وارد نشده")
+
+    @mock.patch("satellite.probe.run", return_value=[(True, "دروازه در دسترس است."), (True, "کلید مشترک درست است.")])
+    def test_button_success_shows_each_step(self, _):
+        r = self.client.get(reverse("admin:core_sitesettings_satgatetest"), follow=True)
+        self.assertContains(r, "دروازه در دسترس است.")
+        self.assertContains(r, "همه‌ی مراحل موفق بود")
+
+    @mock.patch("satellite.probe.run", return_value=[(True, "دروازه در دسترس است."), (False, "کلید یا امضا پذیرفته نشد: x")])
+    def test_button_failure_is_explained(self, _):
+        r = self.client.get(reverse("admin:core_sitesettings_satgatetest"), follow=True)
+        self.assertContains(r, "کلید یا امضا پذیرفته نشد")
+        self.assertNotContains(r, "همه‌ی مراحل موفق بود")
+
+    def test_button_requires_staff(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("admin:core_sitesettings_satgatetest")).status_code, 302)
+
+
+@GW
+class ProbeTests(TestCase):
+    def test_not_configured_message(self):
+        with override_settings(SATGATE_URL="", SATGATE_SECRET=""):
+            steps = probe.run()
+        self.assertEqual(steps[0][0], False)
+        self.assertIn("هنوز", steps[0][1])
+
+    def test_unreachable(self):
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("refused")):
+            steps = probe.run()
+        self.assertEqual([ok for ok, _ in steps], [False])
+        self.assertIn("به دروازه نرسیدیم", steps[0][1])
+
+    def test_wrong_key_is_named(self):
+        health = mock.MagicMock()
+        health.__enter__.return_value.read.return_value = b'{"ok": true, "version": "1.0", "configured": true}'
+        with mock.patch("urllib.request.urlopen", return_value=health), \
+                mock.patch("satellite.client.call", side_effect=client.GatewayError("کلید ارتباط پنل با دروازه درست نیست", 401)):
+            steps = probe.run()
+        self.assertEqual([ok for ok, _ in steps], [True, False])
+        self.assertIn("کلید", steps[1][1])
+
+    def test_all_steps_pass(self):
+        health = mock.MagicMock()
+        health.__enter__.return_value.read.return_value = b'{"ok": true, "version": "1.0", "configured": true}'
+        replies = [{"ok": True, "stac_ms": 120, "data_ms": 300},
+                   {"scenes": [{"id": "S2A_X_1", "collection": "sentinel-2-l2a"}]}]
+        with mock.patch("urllib.request.urlopen", return_value=health), mock.patch("satellite.client.call", side_effect=replies), \
+                mock.patch("satellite.client.thumb", return_value=b"x" * 20000):
+            steps = probe.run()
+        self.assertTrue(all(ok for ok, _ in steps), steps)
+        self.assertEqual(len(steps), 4)
+
+
+class ProbeCommandTests(TestCase):
+    def test_fails_when_not_configured(self):
         from django.core.management import call_command
         from django.core.management.base import CommandError
-        with mock.patch("urllib.request.urlopen", side_effect=OSError("refused")), self.assertRaisesMessage(CommandError, "به دروازه نرسیدیم"):
+        with override_settings(SATGATE_URL="", SATGATE_SECRET=""), self.assertRaises(CommandError):
             call_command("sat_probe")

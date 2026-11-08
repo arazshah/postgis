@@ -228,5 +228,5 @@ body.ap-filter-open::after{content:"";position:fixed;inset:0;z-index:75;backgrou
   .ap .submit-row input[name=_addanother]{display:none}
 }
 /* زبانه‌های زیاد: متن وضعیت فقط روی صفحه‌ی عریض؛ نقطه‌ی رنگی با tooltip همیشه هست */
-.ap-tab{padding:0 11px;font-size:13px}
+.ap-tab{padding:0 8px;font-size:13px}
 @media (max-width:1700px){.ap-tab small{display:none}}
