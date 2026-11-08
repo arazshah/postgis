@@ -137,6 +137,59 @@ class SatelliteNameTests(unittest.TestCase):
         self.assertEqual((res[0]["satellite"], res[0]["agency"]), ("Sentinel-2A", "ESA / Copernicus"))
 
 
+class ThumbTests(unittest.TestCase):
+    """پیش‌نمایش هر ماهواره: نام دارایی بین مجموعه‌ها فرق دارد و فقط https تصویری پذیرفته می‌شود."""
+
+    def test_asset_choice(self):
+        t = {"href": "https://a/t.jpg", "type": "image/jpeg"}
+        self.assertIs(stac.thumb_asset({"assets": {"thumbnail": t, "rendered_preview": {"href": "https://a/p.png"}}}), t)
+        p = {"href": "https://pc/api/data/v1/item/preview.png?x=1", "type": "image/png"}
+        self.assertIs(stac.thumb_asset({"assets": {"rendered_preview": p}}), p)
+        self.assertIsNone(stac.thumb_asset({"assets": {"thumbnail": {"href": "http://a/t.jpg"}}}))          # فقط https
+        self.assertIsNone(stac.thumb_asset({"assets": {"thumbnail": {"href": "https://a/x", "type": "application/json"}}}))
+        self.assertIsNone(stac.thumb_asset({"assets": {}}))
+        self.assertIsNone(stac.thumb_asset({}))
+
+    def test_scene_flag_follows_any_preview_asset(self):
+        full = {"type": "Polygon", "coordinates": [[[51, 35], [52, 35], [52, 36], [51, 36], [51, 35]]]}
+        it = {"id": "LC09_L2SP_164035_20261020_20261022_02_T1", "geometry": full, "properties": {"datetime": "2026-10-20T00:00:00Z"},
+              "assets": {"rendered_preview": {"href": "https://pc/p.png", "type": "image/png"}}}
+        res = stac.search(BBOX, "2026-10-01", "2026-10-30", fetch=lambda *a, **k: {"features": [it]}, mission="landsat")
+        self.assertTrue(res[0]["thumb"])
+        self.assertEqual(res[0]["collection"], "landsat-c2-l2")
+
+    def test_gateway_thumb_for_landsat_is_signed_and_cached(self):
+        import tempfile as tf
+        from unittest import mock
+        with tf.TemporaryDirectory() as d:
+            gw = Gateway(Config({"SATGATE_SECRET": SECRET, "SATGATE_DATA": d}), fetch=None)
+            stac._TOKENS.clear()
+            az = "https://landsateuwest.blob.core.windows.net/landsat-c2/x_thumb.jpeg"
+
+            def fetch(url, body=None, timeout=30):
+                if "sas/v1/token" in url:
+                    return {"token": "sig=z", "msft:expiry": "2099-01-01T00:00:00Z"}
+                return {"assets": {"thumbnail": {"href": az, "type": "image/jpeg"}}}
+            gw.fetch = fetch
+            seen = []
+
+            class R:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *a):
+                    return False
+
+                def read(self, n=-1):
+                    return b"\xff\xd8jpg"
+            with mock.patch("urllib.request.urlopen", side_effect=lambda req, timeout=0: (seen.append(req.full_url), R())[1]):
+                self.assertEqual(gw.thumb("landsat-c2-l2", "LC09_L2SP_164035_20261020_20261022_02_T1"), b"\xff\xd8jpg")
+                gw.thumb("landsat-c2-l2", "LC09_L2SP_164035_20261020_20261022_02_T1")
+            self.assertEqual(seen, [az + "?sig=z"])                 # توکن اضافه شد و بار دوم از کش
+            self.assertIsNone(gw.thumb("other-collection", "ABC123"))
+            self.assertIsNone(gw.thumb("landsat-c2-l2", "../etc/passwd"))
+
+
 class LandsatTests(unittest.TestCase):
     """Landsat: وضوح ۳۰ متر، نگاشت باند nir←nir08، مقیاس خود دارایی، توکن فقط برای Azure."""
 
@@ -238,7 +291,7 @@ class StacTests(unittest.TestCase):
         half = {"type": "Polygon", "coordinates": [[[51.31, 35], [52, 35], [52, 36], [51.31, 36], [51.31, 35]]]}
         feats = [{"id": "new-half", "geometry": half, "properties": {"datetime": "2026-06-10T00:00:00Z", "eo:cloud_cover": 1}},
                  {"id": "old-full", "geometry": full, "properties": {"datetime": "2026-06-01T00:00:00Z", "eo:cloud_cover": 5},
-                  "assets": {"thumbnail": {}}}]
+                  "assets": {"thumbnail": {"href": "https://a/t.jpg", "type": "image/jpeg"}}}]
         seen = {}
 
         def fake(url, body=None, timeout=30):

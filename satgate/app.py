@@ -135,9 +135,10 @@ class Gateway:
         cache = self.store.thumbs / f"{item_id}.jpg"
         if cache.exists():
             return cache.read_bytes()
-        href = stac.get_item(collection, item_id, self.fetch).get("assets", {}).get("thumbnail", {}).get("href", "")
-        if not href.startswith("https://"):
+        asset = stac.thumb_asset(stac.get_item(collection, item_id, self.fetch))
+        if asset is None:
             return None
+        href = asset["href"]
         req = urllib.request.Request(stac.sign_href(collection, href, self.fetch), headers={"User-Agent": stac.UA})
         with urllib.request.urlopen(req, timeout=20) as r:  # noqa: S310 فقط https
             data = r.read(2_000_000)
@@ -161,8 +162,8 @@ class Gateway:
             res["stac_ms"] = int((time.monotonic() - t) * 1000)
             f = (hit.get("features") or [None])[0]
             t = time.monotonic()
-            href = (f or {}).get("assets", {}).get("thumbnail", {}).get("href", "")
-            if href.startswith("https://"):
+            href = (stac.thumb_asset(f or {}) or {}).get("href", "")
+            if href:
                 with urllib.request.urlopen(urllib.request.Request(href, headers={"User-Agent": stac.UA}), timeout=20) as r:  # noqa: S310
                     res["data_bytes"] = len(r.read(500_000))
                 res["data_ms"] = int((time.monotonic() - t) * 1000)

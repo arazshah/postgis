@@ -5,10 +5,10 @@
   // کپی در کلیپ‌بورد
   function copyText(text, btn) {
     const done = () => {
-      const old = btn.textContent;
+      const old = btn.innerHTML;  // innerHTML تا آیکن دکمه بعد از «کپی شد» نپرد
       btn.textContent = "کپی شد";
       btn.classList.add("done");
-      setTimeout(() => { btn.textContent = old; btn.classList.remove("done"); }, 1600);
+      setTimeout(() => { btn.innerHTML = old; btn.classList.remove("done"); }, 1600);
     };
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(done, () => fallback(text) && done());
@@ -17,10 +17,12 @@
   function fallback(text) {
     const ta = document.createElement("textarea");
     ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
-    document.body.appendChild(ta); ta.select();
+    // داخل مودال، عنصر بیرون از دیالوگ غیرفعال است؛ پس عنصر موقت را داخل همان دیالوگ می‌گذاریم
+    const host = document.querySelector("dialog[open]") || document.body;
+    host.appendChild(ta); ta.select();
     let ok = false;
     try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
-    document.body.removeChild(ta);
+    host.removeChild(ta);
     return ok;
   }
   document.addEventListener("click", (e) => {
@@ -32,7 +34,8 @@
     if (!text) {
       const target = btn.getAttribute("data-copy-target");
       const el = target ? document.querySelector(target) : btn.closest("pre")?.querySelector("code");
-      text = el ? (el.textContent || "").trim() : "";
+      // فیلد ورودی مقدارش در value است نه textContent
+      text = el ? String(el.value !== undefined ? el.value : el.textContent || "").trim() : "";
     }
     if (text) copyText(text, btn);
   });
