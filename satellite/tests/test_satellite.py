@@ -211,6 +211,20 @@ class HookAndPollTests(_Base):
         self.assertFalse(r.charged)
         self.assertIn("باند", r.message)
 
+    def test_hook_rejection_explains_reason(self):
+        r = self.req()
+        old = protocol.sign(SECRET, "POST", "/hooks/satellite/", b"{}", ts=timezone.now().timestamp() - 900)
+        resp = self.client.post("/hooks/satellite/", "{}", content_type="application/json", HTTP_X_SAT_TIME=old[protocol.H_TIME],
+                                HTTP_X_SAT_SIG=old[protocol.H_SIG], HTTP_X_SAT_KID=old[protocol.H_KID])
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(resp.json()["reason"], "skew")
+        bad = protocol.sign("other", "POST", "/hooks/satellite/", b"{}")
+        resp = self.client.post("/hooks/satellite/", "{}", content_type="application/json", HTTP_X_SAT_TIME=bad[protocol.H_TIME],
+                                HTTP_X_SAT_SIG=bad[protocol.H_SIG], HTTP_X_SAT_KID=bad[protocol.H_KID])
+        self.assertEqual(resp.json()["reason"], "key")
+        r.refresh_from_db()
+        self.assertEqual(r.status, SatRequest.Status.PROCESSING)
+
     def test_unknown_token_is_404(self):
         self.assertEqual(self.signed({"id": "0" * 32, "status": "ready"}).status_code, 404)
 
@@ -583,15 +597,52 @@ class AdminTestButtonTests(TestCase):
         self.assertContains(r, "دروازه در دسترس است.")
         self.assertContains(r, "همه‌ی مراحل موفق بود")
 
-    @mock.patch("satellite.probe.run", return_value=[(True, "دروازه در دسترس است."), (False, "کلید یا امضا پذیرفته نشد: x")])
+    @mock.patch("satellite.probe.run", return_value=[(True, "دروازه در دسترس است."), (False, "امضا پذیرفته نشد: x")])
     def test_button_failure_is_explained(self, _):
         r = self.client.get(reverse("admin:core_sitesettings_satgatetest"), follow=True)
-        self.assertContains(r, "کلید یا امضا پذیرفته نشد")
+        self.assertContains(r, "امضا پذیرفته نشد")
         self.assertNotContains(r, "همه‌ی مراحل موفق بود")
 
     def test_button_requires_staff(self):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("admin:core_sitesettings_satgatetest")).status_code, 302)
+
+
+class RejectMessageTests(TestCase):
+    """پیام ۴۰۱ دروازه به فارسی و با راه‌حل مشخص."""
+
+    def test_messages_per_reason(self):
+        m = client.reject_message({"reason": "skew", "skew_s": 340})
+        self.assertIn("۳۴۰", m)
+        self.assertIn("جلوتر", m)
+        self.assertIn("NTP", m)
+        self.assertIn("عقب‌تر", client.reject_message({"reason": "skew", "skew_s": -500}))
+        self.assertIn("یکی نیست", client.reject_message({"reason": "key"}))
+        self.assertIn("پراکسی", client.reject_message({"reason": "signature"}))
+        self.assertIn("SATGATE_SECRET", client.reject_message({"reason": "no_secret"}))
+        self.assertIn("بررسی کنید", client.reject_message({}))
+
+    @GW
+    def test_http_401_from_gateway_is_translated(self):
+        import io
+        import urllib.error
+        body = json.dumps({"reason": "skew", "skew_s": 300, "error": "x"}).encode()
+        err = urllib.error.HTTPError("https://gw.test/v1/probe", 401, "Unauthorized", {}, io.BytesIO(body))
+        with mock.patch("urllib.request.urlopen", side_effect=err), self.assertRaises(client.GatewayError) as cm:
+            client.call("POST", "/v1/probe", {})
+        self.assertIn("۳۰۰", str(cm.exception))
+        self.assertEqual(cm.exception.status, 401)
+
+    @GW
+    def test_requests_carry_key_id(self):
+        seen = {}
+
+        def fake(req, timeout=0):
+            seen.update(dict(req.header_items()))
+            raise OSError("stop")
+        with mock.patch("urllib.request.urlopen", side_effect=fake), self.assertRaises(client.GatewayError):
+            client.call("POST", "/v1/probe", {})
+        self.assertEqual(seen["X-sat-kid"], protocol.key_id(SECRET))
 
 
 @GW

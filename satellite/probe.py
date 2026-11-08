@@ -31,9 +31,9 @@ def run() -> list[tuple[bool, str]]:
     try:
         res = client.call("POST", "/v1/probe", {}, timeout=60)
     except client.GatewayError as exc:
-        out.append((False, f"کلید یا امضا پذیرفته نشد: {exc}"))
+        out.append((False, f"امضا پذیرفته نشد: {exc}"))
         return out
-    out.append((True, "کلید مشترک درست است (امضا پذیرفته شد)."))
+    out.append((True, "کلید مشترک و ساعت دو سرور درست است (امضا پذیرفته شد)."))
     if res.get("ok"):
         out.append((True, f"دروازه به کاتالوگ و داده‌ی ماهواره می‌رسد (کاتالوگ {res.get('stac_ms')} و داده {res.get('data_ms')} میلی‌ثانیه)."))
     else:

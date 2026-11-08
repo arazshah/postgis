@@ -207,10 +207,12 @@ def delete(request, pk, req):
 @require_POST
 def hook(request):
     """هوک دروازه: «کار آماده شد/ناموفق شد». با امضای HMAC؛ بدون امضای درست هیچ اثری ندارد."""
-    ok = protocol.verify(client.config()[1], "POST", request.get_full_path(), request.body,
-                         request.headers.get(protocol.H_TIME), request.headers.get(protocol.H_SIG))
-    if not ok:
-        return HttpResponse(status=401)
+    chk = protocol.check(client.config()[1], "POST", request.get_full_path(), request.body,
+                         request.headers.get(protocol.H_TIME), request.headers.get(protocol.H_SIG),
+                         request.headers.get(protocol.H_KID))
+    if not chk.ok:
+        return _json({"error": client.reject_message({"reason": chk.reason, "skew_s": chk.skew_s}), "reason": chk.reason,
+                      "skew_s": chk.skew_s}, 401)
     try:
         payload = json.loads(request.body)
     except ValueError:
