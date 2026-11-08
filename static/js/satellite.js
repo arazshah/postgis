@@ -52,6 +52,8 @@
     const fa = (n, o) => Number(n).toLocaleString("fa-IR", o || {maximumFractionDigits: 1});
     const rows = [
       ["ماهواره", i.satellite ? `${i.satellite}${i.agency ? " (" + i.agency + ")" : ""}` : "—"],
+      ["روش", i.composite ? `ترکیب بی‌ابر (میانه)${i.used ? " از " + fa(i.used, {maximumFractionDigits: 0}) + " تصویر" : ""}${i.period ? " · بازه‌ی " + i.period : ""}` : "یک تصویر"],
+      ["حذف ابر و سایه", i.mask ? "بله" : "خیر"],
       ["محصول", i.product], ["تاریخ تصویر", i.date || "—"],
       ["ابر", i.cloud == null ? "—" : fa(i.cloud, {maximumFractionDigits: 0}) + "٪"],
       ["مساحت", fa(i.area) + " کیلومتر مربع"], ["وضوح", fa(i.res) + " متر"],
@@ -75,7 +77,7 @@
   // ---------------------------------------------------------------- مودال سفارش
   const dlg = document.getElementById("sat-dlg");
   const $ = (sel) => dlg.querySelector(sel);
-  const S = {step: 1, bbox: null, scene: null, scenes: null, product: null, quote: null, busy: false, mission: "sentinel2", missions: null};
+  const S = {step: 1, bbox: null, scene: null, scenes: null, product: null, quote: null, busy: false, mission: "sentinel2", missions: null, mode: "scene", mask: true};
   let map = null, drawing = null, drawA = null;
 
   const post = async (url, data) => {
@@ -202,12 +204,16 @@
     if (S.step === 3 && !S.scene && !S.scenes) { can = false; }
     if (S.step === 3) {
       next.disabled = false;
-      msg = S.scene ? "" : "یک تصویر انتخاب کنید، یا برای فقط ارتفاع (DEM) بدون انتخاب ادامه دهید.";
+      const none = S.mode === "composite" && S.scenes && !S.scenes.length;
+      if (none) { next.disabled = true; }
+      msg = none ? "در این بازه تصویری پیدا نشد؛ به مرحله‌ی ۲ بروید و بازه یا ابر را بیشتر کنید."
+        : (S.scene || S.mode === "composite") ? "" : "یک تصویر انتخاب کنید، یا «ترکیب بی‌ابر» را بزنید، یا برای فقط ارتفاع (DEM) ادامه دهید.";
     }
     if (S.step === 4) {
       const q = S.quote, p = prod(S.product);
-      can = !!(q && q.ok && p && (!p.needs_scene || S.scene));
-      msg = !p ? "یک محصول انتخاب کنید." : (p.needs_scene && !S.scene) ? "این محصول به تصویر نیاز دارد؛ به مرحله‌ی ۳ برگردید." :
+      const haveScene = S.scene || S.mode === "composite";
+      can = !!(q && q.ok && p && (!p.needs_scene || haveScene));
+      msg = !p ? "یک محصول انتخاب کنید." : (p.needs_scene && !haveScene) ? "این محصول به تصویر نیاز دارد؛ به مرحله‌ی ۳ برگردید." :
         !q ? "در حال محاسبه…" : q.ok ? "" : q.blockers[0].message;
       goBtn.disabled = !can || S.busy;
     }
@@ -260,6 +266,23 @@
     return {bbox: S.bbox, start: iso(start), end: iso(to), max_cloud: +dlg.querySelector('[name="cloud"]:checked').value, mission: S.mission};
   }
 
+  // -- مرحله ۳: یک تصویر یا ترکیب بی‌ابر
+  const COMPOSITE_N = 6;
+  function renderMode() {
+    const comp = S.mode === "composite", note = $("[data-compnote]");
+    $("[data-scenes]").hidden = comp;
+    note.hidden = !comp;
+    if (comp) {
+      const n = S.scenes ? S.scenes.length : null;
+      note.innerHTML = n === null ? "در حال یافتن تصویرها…" : n ? `${icon("layers", 18)}<span>از میان <b>${faN(n, {maximumFractionDigits: 0})}</b> تصویر پیداشده در بازه، کم‌ابرترین‌ها (تا ${faN(COMPOSITE_N, {maximumFractionDigits: 0})} تصویر) ترکیب می‌شوند: برای هر پیکسل میانه‌ی مقدارهای بی‌ابر. ابر و سایه‌ی هر تصویر با تصویرهای دیگر پر می‌شود.</span>` : "در این بازه تصویری پیدا نشد؛ بازه یا ابر مجاز را بیشتر کنید.";
+    }
+    renderNav();
+  }
+  dlg.querySelectorAll('[name="mode"]').forEach((r) => r.addEventListener("change", () => {
+    S.mode = r.value; S.quote = null; renderMode(); renderProds();
+  }));
+  $("[data-mask]").addEventListener("change", (e) => { S.mask = e.target.checked; });
+
   // -- مرحله ۳
   async function loadScenes() {
     const wrap = $("[data-scenes]"), st = $("[data-scenes-state]");
@@ -278,6 +301,7 @@
     S.scenes = j.scenes; renderScenes();
   }
   function renderScenes() {
+    renderMode();
     const wrap = $("[data-scenes]"), st = $("[data-scenes-state]");
     wrap.innerHTML = ""; st.innerHTML = "";
     if (!S.scenes.length) {
@@ -312,7 +336,7 @@
       });
     }
     wrap.querySelectorAll(".sat-prod").forEach((l) => {
-      const p = prod(l.dataset.k), off = p.needs_scene && !S.scene; l.classList.toggle("off", off); l.querySelector("input").disabled = off;
+      const p = prod(l.dataset.k), off = p.needs_scene && !S.scene && S.mode !== "composite"; l.classList.toggle("off", off); l.querySelector("input").disabled = off;
     });
   }
   async function loadQuote() {
@@ -320,13 +344,14 @@
     const box = $("[data-quote]");
     if (!S.product) { box.innerHTML = ""; S.quote = null; renderNav(); return; }
     const p = prod(S.product);
-    if (p.needs_scene && !S.scene) { box.innerHTML = ""; S.quote = null; renderNav(); return; }
+    if (p.needs_scene && !S.scene && S.mode !== "composite") { box.innerHTML = ""; S.quote = null; renderNav(); return; }
+    $("[data-maskrow]").hidden = !p.needs_scene;
     box.innerHTML = '<div class="sat-skel" style="aspect-ratio:6/1"></div>';
     const j = await post(cfg.urls.quote, {bbox: S.bbox, product: S.product, mission: S.mission});
     if (!j.ok) { S.quote = null; box.innerHTML = `<div class="sat-block"><p>${esc(j.error)}</p></div>`; renderNav(); return; }
     S.quote = j.quote; renderQuote(); renderNav();
   }
-  const lighter = () => cfg.products.filter(mine).filter((p) => p.key !== S.product && (!p.needs_scene || S.scene)).sort((a, b) => a.res - b.res);
+  const lighter = () => cfg.products.filter(mine).filter((p) => p.key !== S.product && (!p.needs_scene || S.scene || S.mode === "composite")).sort((a, b) => a.res - b.res);
   function renderQuote() {
     const q = S.quote, box = $("[data-quote]"), st = q.status;
     const after = st.space.used + q.est_bytes, pct = (v) => Math.min(100, st.space.cap ? v * 100 / st.space.cap : 100);
@@ -374,15 +399,17 @@
   $("[data-go]").addEventListener("click", async () => {
     if (S.busy || !S.quote || !S.quote.ok) return;
     S.busy = true; renderNav();
-    const sc = S.scene;
-    const j = await post(cfg.urls.order, {bbox: S.bbox, product: S.product, mission: S.mission, scene: sc ? sc.id : "", scene_date: sc ? sc.datetime : "", cloud: sc ? sc.cloud : null});
+    const sc = S.mode === "composite" ? null : S.scene;
+    const pr = params();
+    const j = await post(cfg.urls.order, {bbox: S.bbox, product: S.product, mission: S.mission, mask: S.mask, composite: S.mode === "composite" ? {start: pr.start, end: pr.end, max_cloud: pr.max_cloud} : null, scene: sc ? sc.id : "", scene_date: sc ? sc.datetime : "", cloud: sc ? sc.cloud : null});
     S.busy = false;
     if (!j.ok) {
       if (j.quote) { S.quote = j.quote; renderQuote(); } else $("[data-quote]").insertAdjacentHTML("afterbegin", `<div class="sat-block"><p>${esc(j.error)}</p></div>`);
       renderNav(); return;
     }
     dlg.close();
-    S.scenes = null; S.scene = null; S.product = null; S.quote = null; S.step = 1;
+    S.scenes = null; S.scene = null; S.product = null; S.quote = null; S.step = 1; S.mode = "scene";
+    dlg.querySelector('[name="mode"][value="scene"]').checked = true; $("[data-scenes]").hidden = false; $("[data-compnote]").hidden = true;
     dlg.querySelectorAll('[name="prod"]').forEach((r) => { r.checked = false; });
     cardsEl.dataset.active = "1";
     await refreshCards();

@@ -18,8 +18,9 @@ BBOX = [51.30, 35.70, 51.34, 35.73]   # حدود ۳٫۶ در ۳٫۳ کیلومت
 SECRET = "test-secret"
 
 
-def make_scene(root: Path, nir_v=3000, red_v=1000) -> dict:
-    """تصویر ساختگی Sentinel-2: چهار باند ۱۰ متری و یک باند ۲۰ متری روی UTM 39N."""
+def make_scene(root: Path, nir_v=3000, red_v=1000, tag="", cloud=None) -> dict:
+    """تصویر ساختگی Sentinel-2: چهار باند ۱۰ متری و یک باند ۲۰ متری روی UTM 39N.
+    cloud: None، "all"، یا ("north"|"south", عرض جغرافیایی): آن بخش از لایه‌ی SCL کلاس ۹ (ابر) می‌شود، بقیه کلاس ۴."""
     w, s, e, n = transform_bounds("EPSG:4326", "EPSG:32639", 51.2, 35.6, 51.45, 35.85)
     ox, oy = int(w // 10 * 10), int(n // 10 * 10)
     assets = {}
@@ -28,11 +29,27 @@ def make_scene(root: Path, nir_v=3000, red_v=1000) -> dict:
     for name, v in vals.items():
         res = 20 if name in ("rededge1", "rededge2", "rededge3", "nir08", "swir16", "swir22") else 10
         size = int((e - w) / res) + 2, int((n - s) / res) + 2
-        path = root / f"{name}.tif"
+        path = root / f"{tag}{name}.tif"
         with rasterio.open(path, "w", driver="GTiff", width=size[0], height=size[1], count=1, dtype="uint16",
                            crs="EPSG:32639", transform=from_origin(ox, oy, res, res)) as dst:
             dst.write(np.full((size[1], size[0]), v, dtype="uint16"), 1)
         assets[name] = {"href": str(path), "raster:bands": [{"scale": 0.0001, "offset": -0.1}]}
+    sz = int((e - w) / 20) + 2, int((n - s) / 20) + 2
+    scl = np.full((sz[1], sz[0]), 4, dtype="uint8")
+    if cloud == "all":
+        scl[:, :] = 9
+    elif cloud:
+        from rasterio.warp import transform as warp_transform
+        row = int((oy - warp_transform("EPSG:4326", "EPSG:32639", [51.32], [cloud[1]])[1][0]) / 20)
+        if cloud[0] == "north":
+            scl[:row, :] = 9
+        else:
+            scl[row:, :] = 9
+    sp = root / f"{tag}scl.tif"
+    with rasterio.open(sp, "w", driver="GTiff", width=sz[0], height=sz[1], count=1, dtype="uint8", crs="EPSG:32639",
+                       transform=from_origin(ox, oy, 20, 20)) as dst:
+        dst.write(scl, 1)
+    assets["scl"] = {"href": str(sp)}
     return {"id": "S2A_39SUQ_20260601_0_L2A", "collection": "sentinel-2-l2a", "assets": assets,
             "properties": {"datetime": "2026-06-01T07:00:00Z", "eo:cloud_cover": 3.2}}
 
@@ -135,6 +152,125 @@ class SatelliteNameTests(unittest.TestCase):
         feats = [{"id": "S2A_39SUQ_20260601_0_L2A", "geometry": full, "properties": {"datetime": "2026-06-01T00:00:00Z"}}]
         res = stac.search(BBOX, "2026-06-01", "2026-06-30", fetch=lambda *a, **k: {"features": feats})
         self.assertEqual((res[0]["satellite"], res[0]["agency"]), ("Sentinel-2A", "ESA / Copernicus"))
+
+
+class MaskAndCompositeTests(unittest.TestCase):
+    """ماسک ابر (SCL و QA_PIXEL) و ترکیب میانه‌ی چند تصویر روی شبکه‌ی مشترک."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_bad_pixel_rules(self):
+        from satgate.process import ProcessError, bad_pixels
+        scl = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], dtype="uint8")
+        self.assertEqual(bad_pixels("sentinel2", scl).tolist(),
+                         [True, True, False, True, False, False, False, False, True, True, True, False])
+        qa = np.array([0, 1, 2, 4, 8, 16, 32, 64, 128, 5440], dtype="uint16")     # بیت ۶ (clear) و ۷ (water) خراب نیست
+        self.assertEqual(bad_pixels("landsat", qa).tolist(), [False, True, True, True, True, True, False, False, False, False])
+        with self.assertRaises(ProcessError):
+            bad_pixels("dem", scl)
+
+    def test_scene_mask_blanks_cloud_and_leaves_rest(self):
+        from satgate.process import build_scene
+        item = make_scene(self.root, cloud="all")                                    # همه‌ی صحنه ابر
+        out = build_scene(item, "sentinel2", "ndvi", BBOX, self.root / "all.tif", mask=True)
+        with rasterio.open(out) as r:
+            self.assertTrue((r.read(1) == -9999).all())
+        item = make_scene(self.root, tag="p_", cloud=("north", 35.715))              # نیمه‌ی شمالی ابر
+        out = build_scene(item, "sentinel2", "ndvi", BBOX, self.root / "part.tif", mask=True)
+        with rasterio.open(out) as r:
+            a = r.read(1)
+            bad = (a == -9999)
+            self.assertTrue(0.3 < bad.mean() < 0.7)                    # حدود نیمی بی‌اعتبار
+            self.assertTrue(bad[: a.shape[0] // 4].all())              # بالا (شمال) ابر
+            self.assertFalse(bad[-a.shape[0] // 4:].any())             # پایین (جنوب) صاف
+        noscl = make_scene(self.root, tag="n_")
+        del noscl["assets"]["scl"]
+        from satgate.process import ProcessError
+        with self.assertRaises(ProcessError) as cm:
+            build_scene(noscl, "sentinel2", "ndvi", BBOX, self.root / "x.tif", mask=True)
+        self.assertIn("لایه‌ی کیفیت", str(cm.exception))
+        build_scene(noscl, "sentinel2", "ndvi", BBOX, self.root / "ok.tif", mask=False)       # بدون ماسک مشکلی نیست
+
+    def test_utm_grid_snaps_to_resolution(self):
+        from satgate.process import utm_grid
+        g = utm_grid(BBOX, 10)
+        self.assertEqual(g["crs"].to_epsg(), 32639)
+        self.assertEqual((g["transform"].a, g["transform"].e), (10, -10))
+        self.assertEqual(round(g["transform"].c) % 10, 0)
+        self.assertGreater(g["width"], 200)
+        self.assertEqual(utm_grid([-60.1, -10.1, -60.0, -10.0], 30)["crs"].to_epsg(), 32720)    # نیمکره‌ی جنوبی
+
+    def test_composite_fills_cloud_with_other_dates(self):
+        from satgate.process import build_composite
+        # سه تصویر: اولی نیمه‌ی بالایی ابری، دومی نیمه‌ی پایینی ابری، سومی صاف با NIR کمی متفاوت
+        # NDVI: a=.333  b=.5  c=.6 (بازتاب NIR/قرمز = .2/.1  .3/.1  .4/.1)
+        a = make_scene(self.root, nir_v=3000, red_v=2000, tag="a_", cloud=("north", 35.715))
+        b = make_scene(self.root, nir_v=4000, red_v=2000, tag="b_", cloud=("south", 35.715))
+        c = make_scene(self.root, nir_v=5000, red_v=2000, tag="c_")
+        out, used = build_composite([a, b, c], "sentinel2", "ndvi", BBOX, self.root / "comp.tif")
+        self.assertEqual(used, 3)
+        with rasterio.open(out) as r:
+            arr = r.read(1)
+            self.assertTrue((arr != -9999).all())              # هیچ سوراخی نمانده
+            self.assertEqual(r.crs.to_epsg(), 32639)
+        # بدون ماسک: میانه‌ی ۳ مقدار؛ با ماسک: بالا فقط b و c، پایین فقط a و c
+        masked, _ = build_composite([a, b, c], "sentinel2", "ndvi", BBOX, self.root / "m.tif", mask=True)
+        unmasked, _ = build_composite([a, b, c], "sentinel2", "ndvi", BBOX, self.root / "u.tif", mask=False)
+        with rasterio.open(masked) as m, rasterio.open(unmasked) as u:
+            ma, ua = m.read(1), u.read(1)
+            self.assertEqual(ma.shape, ua.shape)
+            # ترکیب روی باندها انجام می‌شود و بعد شاخص: بدون ماسک NIR میانه‌ی (.2 .3 .4)=.3 و قرمز .1 ← NDVI=.5
+            self.assertAlmostEqual(float(np.median(ua)), 0.5, places=3)
+            h = ma.shape[0]
+            self.assertAlmostEqual(float(ma[h // 8].mean()), 0.5556, places=3)     # شمال: فقط b و c ← NIR=.35 ← (.35-.1)/.45
+            self.assertAlmostEqual(float(ma[-h // 8].mean()), 0.5, places=3)       # جنوب: فقط a و c ← NIR=.3
+
+    def test_composite_all_cloudy_gives_nodata_and_unusable_items_skipped(self):
+        from satgate.process import ProcessError, build_composite
+        cloudy = make_scene(self.root, tag="x_", cloud="all")
+        out, used = build_composite([cloudy], "sentinel2", "true_color", BBOX, self.root / "c.tif")
+        with rasterio.open(out) as r:
+            self.assertTrue((r.read() == 0).all())               # همه ابر: نبود داده (۰)
+        bad = make_scene(self.root, tag="y_")
+        del bad["assets"]["scl"]
+        with self.assertRaises(ProcessError):
+            build_composite([bad], "sentinel2", "ndvi", BBOX, self.root / "d.tif")                # هیچ تصویر قابل‌استفاده‌ای نیست
+        good = make_scene(self.root, tag="z_")
+        _, used = build_composite([bad, good], "sentinel2", "ndvi", BBOX, self.root / "e.tif")
+        self.assertEqual(used, 1)                                                                  # تصویر ناقص کنار رفت
+
+    def test_composite_cap_protects_memory(self):
+        from satgate import process
+        from satgate.process import ProcessError, build_composite
+        old = process.MAX_STACK_PX
+        process.MAX_STACK_PX = 1000
+        try:
+            with self.assertRaises(ProcessError):
+                build_composite([make_scene(self.root)], "sentinel2", "ndvi", BBOX, self.root / "f.tif")
+        finally:
+            process.MAX_STACK_PX = old
+
+    def test_landsat_composite_uses_qa_pixel(self):
+        from satgate.process import build_composite
+        a = make_landsat(self.root)
+        sz = rasterio.open(a["assets"]["red"]["href"])
+        qa = np.zeros((sz.height, sz.width), dtype="uint16")
+        qa[:, : sz.width // 2] = 0b11000        # نیمه‌ی غربی: ابر و سایه
+        qp = self.root / "qa.tif"
+        with rasterio.open(qp, "w", driver="GTiff", width=sz.width, height=sz.height, count=1, dtype="uint16", crs=sz.crs,
+                           transform=sz.transform) as d:
+            d.write(qa, 1)
+        a["assets"]["qa_pixel"] = {"href": str(qp)}
+        out, used = build_composite([a], "landsat", "ndvi", BBOX, self.root / "l.tif")
+        self.assertEqual(used, 1)
+        with rasterio.open(out) as r:
+            arr = r.read(1)
+            self.assertTrue((arr == -9999).any() and (arr != -9999).any())
 
 
 class ThumbTests(unittest.TestCase):
@@ -493,6 +629,63 @@ class AppTests(unittest.TestCase):
         self.call("GET", "/v1/missions?refresh=1")
         self.assertGreater(len(n), calls)             # بازخوانی اجباری
         self.assertEqual(self.call("GET", "/v1/missions", secret=None)["status"], 401)
+
+    def test_masked_scene_and_composite_jobs_via_api(self):
+        full = {"type": "Polygon", "coordinates": [[[51.0, 35.4], [51.7, 35.4], [51.7, 36.1], [51.0, 36.1], [51.0, 35.4]]]}
+        scenes = {}
+        for k, (nir, cloud) in enumerate([(3000, ("north", 35.715)), (4000, ("south", 35.715)), (5000, None)]):
+            it = make_scene(self.root, nir_v=nir, red_v=2000, tag=f"j{k}_", cloud=cloud)
+            it["id"] = f"S2A_39SUQ_2026060{k + 1}_0_L2A"
+            it["properties"]["eo:cloud_cover"] = 10 * (k + 1)
+            scenes[it["id"]] = it
+
+        def fetch(url, body=None, timeout=30):
+            if "/items/" in url:
+                return scenes[url.rsplit("/", 1)[1]]
+            return {"features": [{"id": i, "collection": "sentinel-2-l2a", "geometry": full,
+                                  "properties": {"datetime": it["properties"]["datetime"], "eo:cloud_cover": it["properties"]["eo:cloud_cover"]}}
+                                 for i, it in scenes.items()]}
+        self.gw.fetch = fetch
+        ids = list(scenes)
+        # تصویر تکی با ماسک
+        r = self.call("POST", "/v1/jobs", {"id": "4" * 32, "product": "ndvi", "scene": ids[0], "bbox": BBOX, "mask": True})
+        self.assertEqual(r["status"], 202)
+        self.assertEqual(self.wait("4" * 32)["status"], "ready")
+        with rasterio.open(self.gw.store.file("4" * 32)) as ds:
+            a = ds.read(1)
+            self.assertTrue((a == -9999).any())                      # نیمه‌ی ابری ماسک شد
+        # ترکیب: دروازه خودش تصویرها را پیدا می‌کند
+        comp = {"start": "2026-06-01", "end": "2026-06-30", "max_cloud": 50, "max_scenes": 3}
+        r = self.call("POST", "/v1/jobs", {"id": "5" * 32, "product": "ndvi", "bbox": BBOX, "mask": True, "composite": comp})
+        self.assertEqual(r["status"], 202, r["body"])
+        job = self.wait("5" * 32)
+        self.assertEqual((job["status"], job["used"], job["of"]), ("ready", 3, 3), job)
+        with rasterio.open(self.gw.store.file("5" * 32)) as ds:
+            self.assertTrue((ds.read(1) != -9999).all())            # ابرها با تصویرهای دیگر پر شد
+        stored = self.gw.store.get("5" * 32)
+        self.assertEqual(stored["composite"]["max_scenes"], 3)
+
+    def test_composite_params_are_validated(self):
+        base = {"id": "6" * 32, "product": "ndvi", "bbox": BBOX}
+        for bad in ({"start": "x", "end": "2026-01-01"}, {"start": "2026-02-01", "end": "2026-01-01"},
+                    {"start": "2024-01-01", "end": "2026-01-01"}, {"start": "2026-01-01", "end": "2026-02-01", "max_scenes": "n"}):
+            self.assertEqual(self.call("POST", "/v1/jobs", {**base, "composite": bad})["status"], 400, bad)
+        dem = self.call("POST", "/v1/jobs", {"id": "7" * 32, "product": "dem", "bbox": BBOX,
+                                             "composite": {"start": "2026-01-01", "end": "2026-02-01"}})
+        self.assertEqual(dem["status"], 400)
+        ok = self.call("POST", "/v1/jobs", {**base, "id": "8" * 32, "composite": {"start": "2026-06-01", "end": "2026-06-30",
+                                                                               "max_scenes": 99, "max_cloud": 500}})
+        self.assertEqual(ok["status"], 202)
+        j = self.gw.store.get("8" * 32)["composite"]
+        self.assertEqual((j["max_scenes"], j["max_cloud"]), (10, 100.0))              # به سقف می‌رسد
+
+    def test_composite_with_no_scenes_fails_clearly(self):
+        self.gw.fetch = lambda url, body=None, timeout=30: {"features": []}
+        self.call("POST", "/v1/jobs", {"id": "9" * 32, "product": "ndvi", "bbox": BBOX,
+                                       "composite": {"start": "2026-06-01", "end": "2026-06-30"}})
+        job = self.wait("9" * 32)
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("تصویری با این شرایط", job["message"])
 
     def test_area_cap_and_bad_input(self):
         base = {"id": "c" * 32, "product": "ndvi", "scene": "s", "bbox": [51.0, 35.0, 51.4, 35.4]}

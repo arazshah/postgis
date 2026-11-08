@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from satgate.spec import PRODUCTS, get_product, satellite_of
+from satgate.spec import MISSIONS, PRODUCTS, get_product, satellite_of
 
 FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
 
@@ -30,6 +30,8 @@ class SatRequest(models.Model):
     database = models.ForeignKey("databases.UserDatabase", on_delete=models.CASCADE, related_name="sat_requests")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     mission = models.CharField("ماهواره", max_length=12, default="sentinel2")
+    mask = models.BooleanField("حذف ابر و سایه", default=False)
+    composite = models.JSONField("ترکیب بی‌ابر (بازه و سقف‌ها)", null=True, blank=True, default=None)
     product = models.CharField("محصول", max_length=20, choices=PRODUCT_CHOICES)
     scene_id = models.CharField("شناسه‌ی تصویر", max_length=120, blank=True)
     scene_date = models.CharField("تاریخ تصویر", max_length=25, blank=True)
@@ -61,19 +63,27 @@ class SatRequest(models.Model):
 
     @property
     def title(self) -> str:
-        """مثلاً «شاخص گیاهی NDVI · ۱۴۰۵/۰۸/۰۶» (تاریخ تصویر شمسی)."""
+        """مثلاً «شاخص گیاهی NDVI · ۱۴۰۵/۰۸/۰۶» (تاریخ تصویر شمسی)؛ ترکیب: «… · ترکیب بی‌ابر تا ۱۴۰۵/۰۸/۰۶»."""
         dt = self.scene_dt
         when = ""
         if dt:
             when = " · " + jdatetime.date.fromgregorian(date=dt.date()).strftime("%Y/%m/%d").translate(FA_DIGITS)
+        if self.composite:
+            return f"{self.spec.title} · ترکیب بی‌ابر{when.replace(' · ', ' تا ', 1) if when else ''}"
         return f"{self.spec.title}{when}"
 
     @property
     def satellite(self) -> str:
+        if self.composite:                       # ترکیب از چند تصویر یک ماهواره: نام ماموریت
+            m = MISSIONS.get(self.mission)
+            return m.title if m else ""
         return satellite_of(self.scene_id)[0]
 
     @property
     def agency(self) -> str:
+        if self.composite:
+            m = MISSIONS.get(self.mission)
+            return m.agency if m else ""
         return satellite_of(self.scene_id)[1]
 
     @property
@@ -88,9 +98,21 @@ class SatRequest(models.Model):
             "bbox": self.bbox, "bands": r.bands if r else None, "dtype": r.dtype if r else "", "crs": r.crs if r else "",
             "size": r.size_bytes if r else None, "width": r.width if r else None, "height": r.height if r else None,
             "attribution": (r.meta or {}).get("attribution", "") if r else "",
+            "mask": self.mask, "composite": bool(self.composite), "used": (self.remote or {}).get("used"),
+            "period": self._period(),
             "created": jdatetime.datetime.fromgregorian(datetime=timezone.localtime(self.created_at)).strftime("%Y/%m/%d %H:%M")
             .translate(FA_DIGITS),
         }
+
+    def _period(self) -> str:
+        if not self.composite:
+            return ""
+        try:
+            a, b = (jdatetime.date.fromgregorian(date=datetime.fromisoformat(self.composite[k]).date()).strftime("%Y/%m/%d")
+                    .translate(FA_DIGITS) for k in ("start", "end"))
+        except (KeyError, ValueError):
+            return ""
+        return f"{a} تا {b}"
 
     @property
     def scene_dt(self):

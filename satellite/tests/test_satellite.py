@@ -768,6 +768,60 @@ class MissionTests(_Base):
             services.order(self.db, self.user, {"bbox": BBOX, "product": "ndvi", "mission": "nope", "scene": "S2A_X_1"})
         self.assertEqual(cm.exception.code, "mission")
 
+    @mock.patch("satellite.client.call", return_value={})
+    def test_composite_order_needs_no_scene_and_sends_period(self, call):
+        today = timezone.localdate()
+        r = services.order(self.db, self.user, {"bbox": BBOX, "product": "ndvi", "mask": True,
+                                                "composite": {"start": str(today - timedelta(days=60)), "end": str(today), "max_cloud": 50}})
+        self.assertEqual((r.mission, r.mask), ("sentinel2", True))
+        self.assertEqual(r.composite["max_cloud"], 50.0)
+        self.assertEqual(r.composite["max_scenes"], 6)
+        body = call.call_args.args[2]
+        self.assertEqual((body["scene"], body["mask"]), ("", True))
+        self.assertEqual(body["composite"]["start"], str(today - timedelta(days=60)))
+        self.assertEqual((r.satellite, r.agency), ("Sentinel-2", "ESA / Copernicus"))
+        self.assertIn("ترکیب بی‌ابر", r.title)
+        info = r.info
+        self.assertEqual((info["composite"], info["mask"]), (True, True))
+        self.assertIn("تا", info["period"])
+
+    @mock.patch("satellite.client.call", return_value={})
+    def test_composite_validation_and_dem(self, _):
+        today = timezone.localdate()
+        base = {"bbox": BBOX, "product": "ndvi"}
+        for bad in ({"start": "x", "end": "y"}, {"start": str(today), "end": str(today - timedelta(days=3))},
+                    {"start": "2020-01-01", "end": str(today)}):
+            with self.assertRaises(services.SatError, msg=str(bad)):
+                services.order(self.db, self.user, {**base, "composite": bad})
+        with self.assertRaises(services.SatError) as cm:
+            services.order(self.db, self.user, {"bbox": BBOX, "product": "dem",
+                                                "composite": {"start": str(today - timedelta(days=9)), "end": str(today)}})
+        self.assertEqual(cm.exception.code, "composite")
+        with self.assertRaises(services.SatError) as cm:
+            services.order(self.db, self.user, {**base})                       # نه تصویر، نه ترکیب
+        self.assertEqual(cm.exception.code, "scene")
+
+    @mock.patch("satellite.client.call", return_value={})
+    def test_single_scene_mask_flag_is_kept_and_composite_is_masked_by_default(self, call):
+        r = services.order(self.db, self.user, {"bbox": BBOX, "product": "ndvi", "scene": "S2A_39SUQ_20260601_0_L2A",
+                                                "scene_date": "2026-06-01T07:00:00Z", "mask": True})
+        self.assertTrue(r.mask)
+        SatRequest.objects.update(status=SatRequest.Status.READY)            # سقف دو دریافت هم‌زمان
+        r2 = services.order(self.db, self.user, {"bbox": BBOX, "product": "ndvi", "scene": "S2A_39SUQ_20260602_0_L2A"})
+        self.assertFalse(r2.mask)
+        SatRequest.objects.update(status=SatRequest.Status.READY)
+        today = timezone.localdate()
+        r3 = services.order(self.db, self.user, {"bbox": BBOX, "product": "true_color",
+                                                 "composite": {"start": str(today - timedelta(days=30)), "end": str(today)}})
+        self.assertTrue(r3.mask)                                               # در ترکیب پیش‌فرض ماسک روشن است
+
+    def test_hook_keeps_composite_usage_for_ingest(self):
+        r = self.req(composite={"start": "2026-06-01", "end": "2026-06-30", "max_cloud": 40, "max_scenes": 6}, mask=True)
+        services.on_remote({"id": r.token, "status": "ready", "size": 10, "sha256": "", "used": 4, "of": 5})
+        r.refresh_from_db()
+        self.assertEqual((r.remote["used"], r.remote["of"]), (4, 5))
+        self.assertEqual(r.info["used"], 4)
+
     def test_landsat_estimate_is_smaller_than_sentinel2(self):
         big = [51.0, 35.5, 51.4, 35.9]
         a = services.quote(self.db, big, "true_color", "sentinel2")["est_bytes"]

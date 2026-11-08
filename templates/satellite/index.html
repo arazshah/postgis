@@ -106,11 +106,18 @@
       </div>
     </section>
     <section data-step="3" hidden>
+      <div class="chips" data-group="mode" role="radiogroup" aria-label="روش دریافت">
+        <label class="pick-chip"><input type="radio" name="mode" value="scene" checked><span>یک تصویر را خودم انتخاب می‌کنم</span></label>
+        <label class="pick-chip"><input type="radio" name="mode" value="composite"><span>{% icon "layers" 16 %}ترکیب بی‌ابر از چند تصویر</span></label>
+      </div>
+      <div class="sat-note" data-compnote hidden></div>
       <div data-scenes class="sat-scenes" role="radiogroup" aria-label="تصویرهای پیدا شده"></div>
       <div data-scenes-state class="sat-state"></div>
     </section>
     <section data-step="4" hidden>
       <div class="field"><label>محصول</label><div class="sat-prods" data-prods role="radiogroup" aria-label="محصول"></div></div>
+      <div class="field" data-maskrow><label class="pick-chip"><input type="checkbox" data-mask checked><span>{% icon "cloud" 16 %}حذف ابر و سایه (پیشنهاد می‌شود)</span></label>
+        <p class="help small muted">ابر، سایه‌ی ابر و بی‌داده از روی لایه‌ی کیفیت خود تصویر بی‌اعتبار می‌شود تا شاخص‌ها و رنگ‌ها خراب نشوند.</p></div>
       <div class="sat-quote" data-quote aria-live="polite"></div>
     </section>
   </div>
