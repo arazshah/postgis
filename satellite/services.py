@@ -27,6 +27,7 @@ SCENE_RE = re.compile(r"^[A-Za-z0-9_\-]{5,100}$")
 MB = 1024 * 1024
 ATTRIBUTION = {
     "sentinel-2-l2a": "Contains modified Copernicus Sentinel data (ESA)",
+    "landsat-c2-l2": "Landsat-8/9 Collection 2 Level-2 image courtesy of the U.S. Geological Survey",
     "cop-dem-glo-30": "Copernicus DEM GLO-30 © DLR e.V. / Airbus Defence and Space, provided under COPERNICUS by the EU and ESA",
 }
 
@@ -80,14 +81,25 @@ def plan_hint(db: UserDatabase, km2: float, est: int, need_credit: bool) -> dict
     return None
 
 
-def quote(db: UserDatabase, bbox, product: str) -> dict:
+def _mission(product: str, mission) -> str:
+    """ماهواره‌ی معتبر؛ DEM مستقل از ماهواره است."""
+    if product == "dem":
+        return spec.DEM_MISSION
+    mission = str(mission or "sentinel2")
+    if mission not in spec.MISSIONS:
+        raise SatError("ماهواره‌ی انتخاب‌شده را نمی‌شناسیم.", "mission")
+    return mission
+
+
+def quote(db: UserDatabase, bbox, product: str, mission: str = "sentinel2") -> dict:
     """برآورد حجم و بررسی همه‌ی محدودیت‌ها؛ هر مانع دلیل فارسی و راه‌حل دارد (نه فقط دکمه‌ی غیرفعال)."""
-    if product not in spec.PRODUCTS:
+    if not isinstance(product, str) or spec.get_product(spec.DEM_MISSION if product == "dem" else "sentinel2", product) is None:
         raise SatError("محصول انتخاب‌شده را نمی‌شناسیم.", "product")
+    mission = _mission(product, mission)
     if not spec.valid_bbox(bbox):
         raise SatError("محدوده نامعتبر است؛ دوباره روی نقشه بکشید.", "bbox")
     bbox = [round(float(v), 5) for v in bbox]
-    km2, est = spec.area_km2(bbox), spec.estimate_bytes(bbox, product)
+    km2, est = spec.area_km2(bbox), spec.estimate_bytes(bbox, product, mission)
     st = status(db)
     cap_km2, blockers = st["max_km2"], []
     if db.status != UserDatabase.Status.ACTIVE:
@@ -136,6 +148,7 @@ def search(db: UserDatabase, user, data: dict) -> list[dict]:
         cloud = min(max(float(data.get("max_cloud", 30)), 0), 100)
     except (TypeError, ValueError) as exc:
         raise SatError("درصد ابر نامعتبر است.", "cloud") from exc
+    mission = _mission("imagery", data.get("mission"))
     key = f"satsearch:{user.pk}"
     n = cache.get(key, 0)
     if n >= 40:
@@ -143,7 +156,7 @@ def search(db: UserDatabase, user, data: dict) -> list[dict]:
     cache.set(key, n + 1, 600)
     try:
         res = client.call("POST", "/v1/search", {"bbox": bbox, "start": start.isoformat(), "end": end.isoformat(),
-                                                 "max_cloud": cloud, "limit": 24})
+                                                 "max_cloud": cloud, "limit": 24, "mission": mission})
     except client.GatewayError as exc:
         raise SatError(str(exc), "gateway") from exc
     return res.get("scenes", [])
@@ -152,8 +165,9 @@ def search(db: UserDatabase, user, data: dict) -> list[dict]:
 # ---------------------------------------------------------------------- سفارش
 def order(db: UserDatabase, user, data: dict) -> SatRequest:
     product = data.get("product")
-    q = quote(db, data.get("bbox"), product)
-    p = spec.PRODUCTS[product]
+    mission = _mission(product, data.get("mission"))
+    q = quote(db, data.get("bbox"), product, mission)
+    p = spec.get_product(mission, product)
     scene = str(data.get("scene") or "").strip()
     if p.needs_scene and not SCENE_RE.match(scene):
         raise SatError("اول یکی از تصویرها را انتخاب کنید.", "scene")
@@ -161,7 +175,7 @@ def order(db: UserDatabase, user, data: dict) -> SatRequest:
         raise SatError("سرویس تصویر ماهواره‌ای هنوز راه‌اندازی نشده است.", "off")
     with transaction.atomic():
         UserDatabase.objects.select_for_update().filter(pk=db.pk).first()  # جلوی مصرف هم‌زمان بیش از اعتبار
-        q = quote(db, q["bbox"], product)
+        q = quote(db, q["bbox"], product, mission)
         if not q["ok"]:
             b = q["blockers"][0]
             raise SatError(b["message"], b["code"], q)
@@ -169,11 +183,11 @@ def order(db: UserDatabase, user, data: dict) -> SatRequest:
                                                               SatRequest.Status.DOWNLOADING]).count() >= MAX_ACTIVE:
             raise SatError(f"حداکثر {fa(MAX_ACTIVE)} دریافت هم‌زمان ممکن است؛ تا تمام شدن قبلی‌ها صبر کنید.", "busy")
         req = SatRequest.objects.create(
-            database=db, user=user, product=product, scene_id=scene if p.needs_scene else p.collection,
+            database=db, user=user, mission=mission, product=product, scene_id=scene if p.needs_scene else p.collection,
             scene_date=str(data.get("scene_date") or "")[:25], cloud=_num(data.get("cloud")), bbox=q["bbox"],
             area_km2=q["area_km2"], est_bytes=q["est_bytes"])
     try:
-        client.call("POST", "/v1/jobs", {"id": req.token, "product": product, "scene": scene, "bbox": q["bbox"],
+        client.call("POST", "/v1/jobs", {"id": req.token, "product": product, "mission": mission, "scene": scene, "bbox": q["bbox"],
                                          "max_km2": db.plan.sat_max_km2})
     except client.GatewayError as exc:
         _fail(req, str(exc))
@@ -261,7 +275,8 @@ def ingest(job: Job) -> str:
         raise ent.EnterpriseError("فضای رستر کافی نیست.")
     raster = Raster.objects.create(
         database=db, title=req.title[:120], original_name=f"{req.product}.tif", created_by=req.user,
-        meta={"source": "sentinel-2" if p.collection == spec.COLLECTION_S2 else "copernicus-dem", "product": req.product,
+        meta={"source": {"sentinel-2-l2a": "sentinel-2", "landsat-c2-l2": "landsat"}.get(p.collection, "copernicus-dem"),
+              "mission": req.mission, "product": req.product,
               "scene": req.scene_id, "datetime": req.scene_date, "cloud": req.cloud, "bbox": req.bbox,
               "attribution": ATTRIBUTION[p.collection]})
     try:
@@ -296,3 +311,26 @@ def delete_request(req: SatRequest) -> None:
     if req.raster_id:
         ent.delete_raster(req.raster)
     req.delete()
+
+
+# ---------------------------------------------------------------------- ماهواره‌های در دسترس
+def missions(force: bool = False) -> list[dict]:
+    """فهرست ماهواره‌ها با وضعیت «در دسترس»؛ فقط آن‌هایی که دروازه واقعاً به‌شان می‌رسد فعال‌اند.
+    Sentinel-2 همیشه پیش‌فرض است؛ دروازه‌ی قدیمی بدون /v1/missions فقط Sentinel-2 را می‌دهد."""
+    key = "satmissions"
+    live = None if force else cache.get(key)
+    if live is None:
+        try:
+            live = client.call("GET", "/v1/missions" + ("?refresh=1" if force else ""), timeout=60).get("missions", {})
+        except client.GatewayError as exc:
+            live = {"_error": str(exc)} if exc.status != 404 else {}
+        cache.set(key, live, 300)
+    out = []
+    for m in spec.MISSIONS.values():
+        st = live.get(m.key)
+        known = m.key == "sentinel2" and not isinstance(st, dict)
+        ok = bool(st.get("ok")) if isinstance(st, dict) else known
+        out.append({"key": m.key, "title": m.title, "agency": m.agency, "res": m.res_m, "revisit": m.revisit,
+                    "since": m.since, "hint": m.hint, "available": ok,
+                    "error": "" if ok else (st or {}).get("error", "") if isinstance(st, dict) else live.get("_error", "")})
+    return out

@@ -3,12 +3,20 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 
-from .spec import COLLECTION_DEM, COLLECTION_S2, satellite_of, valid_bbox
+from .spec import COLLECTION_DEM, COLLECTION_LANDSAT, COLLECTION_S2, MISSIONS, satellite_of, valid_bbox
 
 STAC_URL = os.environ.get("SATGATE_STAC_URL", "https://earth-search.aws.element84.com/v1").rstrip("/")
+# Landsat Collection 2 Level-2 از Microsoft Planetary Computer: کاتالوگ آزاد، فایل‌ها با توکن رایگان و بدون حساب
+LANDSAT_STAC_URL = os.environ.get("SATGATE_LANDSAT_STAC_URL", "https://planetarycomputer.microsoft.com/api/stac/v1").rstrip("/")
+LANDSAT_TOKEN_URL = os.environ.get("SATGATE_LANDSAT_TOKEN_URL",
+                                   "https://planetarycomputer.microsoft.com/api/sas/v1/token/landsat-c2-l2")
+STAC_BY_COLLECTION = {COLLECTION_S2: STAC_URL, COLLECTION_DEM: STAC_URL, COLLECTION_LANDSAT: LANDSAT_STAC_URL}
+SIGNED_HOST = ".blob.core.windows.net"
 UA = "postgis.ir satgate"
 
 
@@ -79,31 +87,101 @@ def coverage(geometry: dict | None, bbox) -> float:
 
 
 # ------------------------------------------------------------------ جست‌وجو
-def _scene(it: dict, bbox) -> dict:
+def _scene(it: dict, bbox, default_collection: str = COLLECTION_S2) -> dict:
     p = it.get("properties", {})
     sat, agency = satellite_of(it["id"])
-    return {"id": it["id"], "collection": it.get("collection", COLLECTION_S2), "datetime": p.get("datetime", ""),
+    return {"id": it["id"], "collection": it.get("collection", default_collection), "datetime": p.get("datetime", ""),
             "satellite": sat, "agency": agency, "gsd": p.get("gsd"),
             "cloud": round(float(p.get("eo:cloud_cover", 0) or 0), 1), "tile": p.get("grid:code") or p.get("s2:mgrs_tile", ""),
             "coverage": coverage(it.get("geometry"), bbox), "thumb": "thumbnail" in it.get("assets", {})}
 
 
-def search(bbox, start: str, end: str, max_cloud: float = 30, limit: int = 24, fetch=fetch_json) -> list[dict]:
+def search(bbox, start: str, end: str, max_cloud: float = 30, limit: int = 24, fetch=fetch_json,
+           mission: str = "sentinel2") -> list[dict]:
     if not valid_bbox(bbox):
         raise StacError("محدوده نامعتبر است.")
-    body = {"collections": [COLLECTION_S2], "bbox": [float(v) for v in bbox], "limit": min(int(limit), 50),
-            "datetime": f"{start}T00:00:00Z/{end}T23:59:59Z",
-            "query": {"eo:cloud_cover": {"lte": float(max_cloud)}},
+    m = MISSIONS.get(mission)
+    if m is None:
+        raise StacError("ماهواره‌ی نامعتبر است.")
+    query = {"eo:cloud_cover": {"lte": float(max_cloud)}}
+    if m.platforms:
+        query["platform"] = {"in": list(m.platforms)}
+    body = {"collections": [m.collection], "bbox": [float(v) for v in bbox], "limit": min(int(limit), 50),
+            "datetime": f"{start}T00:00:00Z/{end}T23:59:59Z", "query": query,
             "sortby": [{"field": "properties.datetime", "direction": "desc"}]}
-    res = fetch(f"{STAC_URL}/search", body)
-    scenes = [_scene(it, bbox) for it in res.get("features", [])]
+    res = fetch(f"{STAC_BY_COLLECTION[m.collection]}/search", body)
+    scenes = [_scene(it, bbox, m.collection) for it in res.get("features", [])]
     # تصویری که بخش بزرگی از منطقه را نمی‌پوشاند آخر فهرست می‌آید
     scenes.sort(key=lambda s: (s["coverage"] < 95, -int(s["datetime"][:10].replace("-", "") or 0), s["cloud"]))
     return scenes
 
 
 def get_item(collection: str, item_id: str, fetch=fetch_json) -> dict:
-    return fetch(f"{STAC_URL}/collections/{collection}/items/{item_id}")
+    return fetch(f"{STAC_BY_COLLECTION.get(collection, STAC_URL)}/collections/{collection}/items/{item_id}")
+
+
+# ------------------------------------------------------------------ توکن خواندن فایل (Landsat روی Azure)
+_TOKENS: dict[str, tuple[str, float]] = {}
+
+
+def _token(collection: str, fetch=fetch_json) -> str:
+    """توکن رایگان و کوتاه‌مدت خواندن؛ تا پایان اعتبار (منهای ۵ دقیقه) نگه داشته می‌شود."""
+    tok, until = _TOKENS.get(collection, ("", 0.0))
+    if tok and until > time.time():
+        return tok
+    data = fetch(LANDSAT_TOKEN_URL)
+    tok = str(data.get("token", ""))
+    if not tok:
+        raise StacError("توکن خواندن تصویر Landsat گرفته نشد.")
+    ttl = 600.0
+    try:
+        from datetime import datetime
+        ttl = max(datetime.fromisoformat(str(data["msft:expiry"]).replace("Z", "+00:00")).timestamp() - time.time() - 300, 60)
+    except (KeyError, ValueError):
+        pass
+    _TOKENS[collection] = (tok, time.time() + ttl)
+    return tok
+
+
+def sign_href(collection: str, href: str, fetch=fetch_json) -> str:
+    """آدرس فایل را در صورت نیاز با توکن می‌خواند (فقط Landsat روی Azure)."""
+    host = urlparse(href).hostname or ""
+    if collection == COLLECTION_LANDSAT and host.endswith(SIGNED_HOST):
+        return href + ("&" if "?" in href else "?") + _token(collection, fetch)
+    return href
+
+
+# ------------------------------------------------------------------ بررسی در دسترس بودن هر ماهواره
+def check_mission(key: str, fetch=fetch_json, open_url=None) -> dict:
+    """آیا دروازه واقعاً به کاتالوگ و داده‌ی این ماهواره می‌رسد؟ {ok, ms, error}."""
+    m = MISSIONS[key]
+    t = time.monotonic()
+    try:
+        from datetime import date, timedelta
+        end = date.today()
+        res = fetch(f"{STAC_BY_COLLECTION[m.collection]}/search", {
+            "collections": [m.collection], "limit": 1, "bbox": [51.3, 35.7, 51.4, 35.8],
+            "datetime": f"{(end - timedelta(days=120)).isoformat()}T00:00:00Z/{end.isoformat()}T23:59:59Z"})
+        feat = (res.get("features") or [None])[0]
+        href = ((feat or {}).get("assets", {}).get("thumbnail") or {}).get("href", "")
+        if href.startswith("https://"):
+            data = (open_url or _read_head)(sign_href(m.collection, href, fetch))
+            if not data:
+                raise StacError("فایل تصویر خوانده نشد.")
+        return {"ok": True, "ms": int((time.monotonic() - t) * 1000)}
+    except (StacError, OSError) as exc:
+        return {"ok": False, "ms": int((time.monotonic() - t) * 1000), "error": str(exc)[:160]}
+
+
+def _read_head(href: str) -> bytes:
+    req = urllib.request.Request(href, headers={"User-Agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:  # noqa: S310 فقط https
+            return r.read(100_000)
+    except urllib.error.HTTPError as exc:
+        raise StacError(f"دسترسی به فایل تصویر رد شد ({exc.code}).") from exc
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise StacError("به فایل تصویر وصل نشدیم.") from exc
 
 
 def dem_items(bbox, fetch=fetch_json) -> list[dict]:

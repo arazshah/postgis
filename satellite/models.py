@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from satgate.spec import PRODUCTS, satellite_of
+from satgate.spec import PRODUCTS, get_product, satellite_of
 
 FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
 
@@ -29,6 +29,7 @@ class SatRequest(models.Model):
     token = models.CharField(max_length=32, unique=True, default=_token, editable=False)
     database = models.ForeignKey("databases.UserDatabase", on_delete=models.CASCADE, related_name="sat_requests")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    mission = models.CharField("ماهواره", max_length=12, default="sentinel2")
     product = models.CharField("محصول", max_length=20, choices=PRODUCT_CHOICES)
     scene_id = models.CharField("شناسه‌ی تصویر", max_length=120, blank=True)
     scene_date = models.CharField("تاریخ تصویر", max_length=25, blank=True)
@@ -56,7 +57,7 @@ class SatRequest(models.Model):
 
     @property
     def spec(self):
-        return PRODUCTS[self.product]
+        return get_product(self.mission, self.product)
 
     @property
     def title(self) -> str:

@@ -41,6 +41,15 @@ def run() -> list[tuple[bool, str]]:
         return out
 
     try:
+        ms = client.call("GET", "/v1/missions?refresh=1", timeout=90).get("missions", {})
+        from satgate.spec import MISSIONS
+        for key, m in MISSIONS.items():
+            st = ms.get(key) or {}
+            out.append((bool(st.get("ok")), f"{m.title}: " + (f"در دسترس ({st.get('ms')} میلی‌ثانیه)." if st.get("ok") else
+                                                              f"در دسترس نیست — {st.get('error') or 'پاسخی نیامد'}")))
+    except client.GatewayError as exc:
+        out.append((False, f"وضعیت ماهواره‌ها خوانده نشد (دروازه را به‌روز کنید): {exc}"))
+    try:
         scenes = client.call("POST", "/v1/search", {"bbox": [51.3, 35.7, 51.4, 35.8], "start": "2026-01-01",
                                                       "end": "2026-12-31", "max_cloud": 100, "limit": 1}).get("scenes", [])
         if scenes:

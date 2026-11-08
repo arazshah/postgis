@@ -111,3 +111,5 @@ dialog.sat-dlg{width:min(960px,calc(100vw - 32px));height:min(720px,calc(100vh -
   .sat-why{order:-1;flex-basis:100%}
 }
 @media (prefers-reduced-motion:reduce){.sat-bar i,.sat-spin,.sat-skel{animation:none}}
+.sat-pub{position:absolute;inset-block-start:10px;inset-inline-end:10px;display:inline-flex;align-items:center;gap:4px;font-size:11.5px;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:var(--ink-2)}
+.sat-prod b small{display:inline;font-weight:400;margin-inline-start:6px}

@@ -75,7 +75,7 @@
   // ---------------------------------------------------------------- مودال سفارش
   const dlg = document.getElementById("sat-dlg");
   const $ = (sel) => dlg.querySelector(sel);
-  const S = {step: 1, bbox: null, scene: null, scenes: null, product: null, quote: null, busy: false};
+  const S = {step: 1, bbox: null, scene: null, scenes: null, product: null, quote: null, busy: false, mission: "sentinel2", missions: null};
   let map = null, drawing = null, drawA = null;
 
   const post = async (url, data) => {
@@ -92,6 +92,7 @@
     dlg.showModal();
     go(S.step);
     initMap();
+    loadMissions();
   }));
 
   // -- نقشه
@@ -217,7 +218,34 @@
   $("[data-next]").addEventListener("click", () => go(Math.min(S.step + 1, 4)));
   $("[data-back]").addEventListener("click", () => go(Math.max(S.step - 1, 1)));
 
-  // -- مرحله ۲
+  // -- مرحله ۲: انتخاب ماهواره (فقط آن‌هایی که الان در دسترس‌اند)
+  async function loadMissions() {
+    if (S.missions) return;
+    let list = [];
+    try { list = (await (await fetch(cfg.urls.missions)).json()).missions || []; } catch (e) { /* فقط Sentinel-2 */ }
+    S.missions = list.length ? list : [{key: "sentinel2", title: "Sentinel-2", agency: "ESA / Copernicus", res: 10, revisit: "هر ۵ روز", since: "۲۰۱۷", hint: "", available: true}];
+    renderMissions();
+  }
+  function renderMissions() {
+    const wrap = $("[data-missions]"), ok = S.missions.filter((m) => m.available), off = S.missions.filter((m) => !m.available);
+    if (ok.length && !ok.some((m) => m.key === S.mission)) S.mission = ok[0].key;
+    wrap.innerHTML = "";
+    ok.forEach((m) => {
+      const l = el(`<label class="sat-prod"><input type="radio" name="mission" value="${esc(m.key)}" ${m.key === S.mission ? "checked" : ""}><b>${esc(m.title)} <small>${esc(m.agency)}</small></b>
+        <small>${esc(m.hint)}</small><small>وضوح ${faN(m.res, {maximumFractionDigits: 0})} متر، ${esc(m.revisit)}، از ${esc(m.since)}</small></label>`);
+      l.querySelector("input").addEventListener("change", () => {
+        if (S.mission === m.key) return;
+        S.mission = m.key; S.scenes = null; S.scene = null; S.quote = null; S.product = null; S.key = "";
+        dlg.querySelectorAll('[name="prod"]').forEach((r) => { r.checked = false; });
+        renderProds(); renderNav();
+      });
+      wrap.append(l);
+    });
+    $("[data-mission-hint]").textContent = off.length ? `${off.map((m) => m.title).join("، ")} فعلاً در دسترس نیست.` : "";
+    renderProds();
+  }
+
+  // -- مرحله ۲ (زمان و ابر)
   dlg.querySelectorAll('[name="period"]').forEach((r) => r.addEventListener("change", () => {
     $("[data-dates]").hidden = r.value !== "custom" || !r.checked;
   }));
@@ -229,7 +257,7 @@
       start = $("[data-from]").value ? new Date($("[data-from]").value) : new Date(Date.now() - 30 * 864e5);
       to = $("[data-to]").value ? new Date($("[data-to]").value) : end;
     } else start = new Date(Date.now() - (+pv) * 864e5);
-    return {bbox: S.bbox, start: iso(start), end: iso(to), max_cloud: +dlg.querySelector('[name="cloud"]:checked').value};
+    return {bbox: S.bbox, start: iso(start), end: iso(to), max_cloud: +dlg.querySelector('[name="cloud"]:checked').value, mission: S.mission};
   }
 
   // -- مرحله ۳
@@ -271,18 +299,21 @@
   }
 
   // -- مرحله ۴
-  const prod = (k) => cfg.products.find((p) => p.key === k);
+  const mine = (p) => p.mission === S.mission || p.mission === "dem";
+  const prod = (k) => cfg.products.find((p) => p.key === k && mine(p));
   function renderProds() {
     const wrap = $("[data-prods]");
-    if (wrap.childElementCount) { wrap.querySelectorAll(".sat-prod").forEach((l) => {
+    if (wrap.dataset.mission !== S.mission) {   // با عوض شدن ماهواره فهرست محصول‌ها از نو ساخته می‌شود
+      wrap.innerHTML = ""; wrap.dataset.mission = S.mission;
+      cfg.products.filter(mine).forEach((p) => {
+        const l = el(`<label class="sat-prod" data-k="${p.key}"><input type="radio" name="prod" value="${p.key}" ${S.product === p.key ? "checked" : ""}><b>${esc(p.title)}</b><small>${esc(p.hint)}</small></label>`);
+        l.querySelector("input").addEventListener("change", () => { S.product = p.key; loadQuote(); });
+        wrap.append(l);
+      });
+    }
+    wrap.querySelectorAll(".sat-prod").forEach((l) => {
       const p = prod(l.dataset.k), off = p.needs_scene && !S.scene; l.classList.toggle("off", off); l.querySelector("input").disabled = off;
-    }); return; }
-    cfg.products.forEach((p) => {
-      const l = el(`<label class="sat-prod" data-k="${p.key}"><input type="radio" name="prod" value="${p.key}"><b>${esc(p.title)}</b><small>${esc(p.hint)}</small></label>`);
-      l.querySelector("input").addEventListener("change", () => { S.product = p.key; loadQuote(); });
-      wrap.append(l);
     });
-    renderProds();
   }
   async function loadQuote() {
     renderProds();
@@ -291,11 +322,11 @@
     const p = prod(S.product);
     if (p.needs_scene && !S.scene) { box.innerHTML = ""; S.quote = null; renderNav(); return; }
     box.innerHTML = '<div class="sat-skel" style="aspect-ratio:6/1"></div>';
-    const j = await post(cfg.urls.quote, {bbox: S.bbox, product: S.product});
+    const j = await post(cfg.urls.quote, {bbox: S.bbox, product: S.product, mission: S.mission});
     if (!j.ok) { S.quote = null; box.innerHTML = `<div class="sat-block"><p>${esc(j.error)}</p></div>`; renderNav(); return; }
     S.quote = j.quote; renderQuote(); renderNav();
   }
-  const lighter = () => cfg.products.filter((p) => p.key !== S.product && (!p.needs_scene || S.scene)).sort((a, b) => a.res - b.res);
+  const lighter = () => cfg.products.filter(mine).filter((p) => p.key !== S.product && (!p.needs_scene || S.scene)).sort((a, b) => a.res - b.res);
   function renderQuote() {
     const q = S.quote, box = $("[data-quote]"), st = q.status;
     const after = st.space.used + q.est_bytes, pct = (v) => Math.min(100, st.space.cap ? v * 100 / st.space.cap : 100);
@@ -344,7 +375,7 @@
     if (S.busy || !S.quote || !S.quote.ok) return;
     S.busy = true; renderNav();
     const sc = S.scene;
-    const j = await post(cfg.urls.order, {bbox: S.bbox, product: S.product, scene: sc ? sc.id : "", scene_date: sc ? sc.datetime : "", cloud: sc ? sc.cloud : null});
+    const j = await post(cfg.urls.order, {bbox: S.bbox, product: S.product, mission: S.mission, scene: sc ? sc.id : "", scene_date: sc ? sc.datetime : "", cloud: sc ? sc.cloud : null});
     S.busy = false;
     if (!j.ok) {
       if (j.quote) { S.quote = j.quote; renderQuote(); } else $("[data-quote]").insertAdjacentHTML("afterbegin", `<div class="sat-block"><p>${esc(j.error)}</p></div>`);

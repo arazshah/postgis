@@ -43,7 +43,7 @@
     <p class="muted">یک محدوده‌ی کوچک (مثلاً یک مزرعه یا یک محله) انتخاب کنید و رنگ طبیعی، شاخص گیاهی NDVI یا ارتفاع را دریافت کنید.</p>
     {% if db.can_edit %}<button class="btn" type="button" data-sat-open{% if not configured %} disabled{% endif %}>{% icon "satellite" 18 %}اولین تصویر را بگیرید</button>{% endif %}</div>
   {% endif %}
-  <p class="small muted sat-attr">منبع تصویرها: Contains modified Copernicus Sentinel data (ESA) · ارتفاع: Copernicus DEM GLO-30. استفاده از این داده‌ها رایگان است و ذکر منبع لازم است.</p>
+  <p class="small muted sat-attr">منبع تصویرها: Contains modified Copernicus Sentinel data (ESA) · Landsat-8/9 courtesy of the U.S. Geological Survey · ارتفاع: Copernicus DEM GLO-30. استفاده از این داده‌ها رایگان است و ذکر منبع لازم است.</p>
 </div>
 
 <dialog class="dlg sat-info" id="sat-info" aria-labelledby="sat-info-t">
@@ -59,7 +59,7 @@
       <div class="sat-copy"><input id="sat-conn-cog" class="ltr" readonly><button class="btn ghost sm" type="button" data-copy-target="#sat-conn-cog">{% icon "copy" 16 %}کپی</button></div></div>
     <div class="field"><label for="sat-conn-xyz">کاشی XYZ <span class="muted">(QGIS: Layer ← XYZ Tiles، یا هر نقشه‌ی وب)</span></label>
       <div class="sat-copy"><input id="sat-conn-xyz" class="ltr" readonly><button class="btn ghost sm" type="button" data-copy-target="#sat-conn-xyz">{% icon "copy" 16 %}کپی</button></div></div>
-    <p class="small muted" id="sat-conn-priv">این تصویر خصوصی است؛ در نشانی بالا به آخرش <code class="ltr">?key=کلید_API</code> اضافه کنید. کلید را از بخش <a href="{% url 'restapi:manage' db.pk %}">REST API</a> می‌سازید. اگر می‌خواهید بدون کلید کار کند، در <a href="{% url 'enterprise:page' db.pk %}#raster">تنظیم رستر</a> گزینه‌ی «عمومی» را بزنید.</p>
+    <p class="small muted" id="sat-conn-priv">این تصویر خصوصی است؛ در نشانی بالا به آخرش <code class="ltr">?key=کلید_API</code> اضافه کنید. کلید را از صفحه‌ی <a href="{% url 'publish:manage' db.pk %}#keys">نقشه و API ← کلیدهای API</a> می‌سازید (فقط مالک پایگاه داده). اگر می‌خواهید بدون کلید کار کند، از منوی کارت «عمومی کردن» را بزنید.</p>
   </div>
   <div class="dlg-f"><button class="btn ghost" type="button" data-dialog-close>بستن</button></div>
 </dialog>
@@ -82,6 +82,9 @@
       <div class="sat-area" data-area><span class="muted small">هنوز محدوده‌ای انتخاب نشده؛ «کشیدن مستطیل» یا «محدوده‌ی دید نقشه» را بزنید.</span></div>
     </section>
     <section data-step="2" hidden>
+      <div class="field"><label>ماهواره</label>
+        <div class="sat-prods" data-missions role="radiogroup" aria-label="ماهواره"></div>
+        <p class="help small muted" data-mission-hint></p></div>
       <div class="field"><label>بازه‌ی زمانی</label>
         <div class="chips" data-group="period">
           <label class="pick-chip"><input type="radio" name="period" value="7"><span>۷ روز اخیر</span></label>
@@ -99,7 +102,7 @@
           <label class="pick-chip"><input type="radio" name="cloud" value="40"><span>تا ۴۰٪</span></label>
           <label class="pick-chip"><input type="radio" name="cloud" value="100"><span>هر مقدار</span></label>
         </div>
-        <p class="help small muted">Sentinel-2 هر ۵ روز یک‌بار از هر نقطه می‌گذرد. در زمستان و بهار ابر بیشتر است؛ اگر چیزی پیدا نشد بازه یا ابر را بیشتر کنید.</p>
+        <p class="help small muted">هر ماهواره هر چند روز یک‌بار از هر نقطه می‌گذرد. در زمستان و بهار ابر بیشتر است؛ اگر چیزی پیدا نشد بازه یا ابر را بیشتر کنید.</p>
       </div>
     </section>
     <section data-step="3" hidden>

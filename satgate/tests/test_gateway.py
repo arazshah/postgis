@@ -37,6 +37,22 @@ def make_scene(root: Path, nir_v=3000, red_v=1000) -> dict:
             "properties": {"datetime": "2026-06-01T07:00:00Z", "eo:cloud_cover": 3.2}}
 
 
+def make_landsat(root: Path, nir_dn=20000, red_dn=15000) -> dict:
+    """تصویر ساختگی Landsat 8/9 Collection 2 Level-2: شش باند ۳۰ متری، scale=2.75e-5 و offset=-0.2."""
+    w, s, e, n = transform_bounds("EPSG:4326", "EPSG:32639", 51.1, 35.5, 51.55, 35.95)
+    ox, oy = int(w // 30 * 30), int(n // 30 * 30)
+    size = int((e - w) / 30) + 2, int((n - s) / 30) + 2
+    assets = {}
+    for name, v in {"red": red_dn, "green": 14000, "blue": 12000, "nir08": nir_dn, "swir16": 16000, "swir22": 13000}.items():
+        path = root / f"ls_{name}.tif"
+        with rasterio.open(path, "w", driver="GTiff", width=size[0], height=size[1], count=1, dtype="uint16",
+                           crs="EPSG:32639", transform=from_origin(ox, oy, 30, 30)) as dst:
+            dst.write(np.full((size[1], size[0]), v, dtype="uint16"), 1)
+        assets[name] = {"href": str(path), "raster:bands": [{"scale": 2.75e-05, "offset": -0.2}]}
+    return {"id": "LC09_L2SP_164035_20261020_20261022_02_T1", "collection": "landsat-c2-l2", "assets": assets,
+            "properties": {"datetime": "2026-10-20T07:10:00Z", "eo:cloud_cover": 4.0, "platform": "landsat-9"}}
+
+
 class ProtocolTests(unittest.TestCase):
     def test_sign_and_verify(self):
         h = protocol.sign("k", "POST", "/v1/jobs", b'{"a":1}')
@@ -119,6 +135,95 @@ class SatelliteNameTests(unittest.TestCase):
         feats = [{"id": "S2A_39SUQ_20260601_0_L2A", "geometry": full, "properties": {"datetime": "2026-06-01T00:00:00Z"}}]
         res = stac.search(BBOX, "2026-06-01", "2026-06-30", fetch=lambda *a, **k: {"features": feats})
         self.assertEqual((res[0]["satellite"], res[0]["agency"]), ("Sentinel-2A", "ESA / Copernicus"))
+
+
+class LandsatTests(unittest.TestCase):
+    """Landsat: وضوح ۳۰ متر، نگاشت باند nir←nir08، مقیاس خود دارایی، توکن فقط برای Azure."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.item = make_landsat(self.root)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_ndvi_uses_nir08_and_asset_scale(self):
+        from satgate.process import build_scene
+        out = build_scene(self.item, "landsat", "ndvi", BBOX, self.root / "nd.tif")
+        # nir=(20000*2.75e-5-.2)=.35  red=(15000*2.75e-5-.2)=.2125 → (.35-.2125)/(.5625)=.2444
+        with rasterio.open(out) as r:
+            self.assertEqual((r.count, r.dtypes[0]), (1, "float32"))
+            self.assertAlmostEqual(r.res[0], 30, places=3)
+            self.assertAlmostEqual(float(r.read(1).mean()), 0.2444, places=3)
+
+    def test_true_color_and_allbands(self):
+        from satgate.process import build_scene
+        tc = build_scene(self.item, "landsat", "true_color", BBOX, self.root / "tc.tif")
+        with rasterio.open(tc) as r:
+            self.assertEqual((r.count, r.dtypes[0], r.nodata), (3, "uint8", 0))
+            self.assertTrue((r.read() > 0).all())
+        al = build_scene(self.item, "landsat", "allbands", BBOX, self.root / "all.tif")
+        with rasterio.open(al) as r:
+            self.assertEqual((r.count, r.dtypes[0]), (6, "uint16"))
+            self.assertEqual(r.descriptions[3], "nir")
+
+    def test_missing_asset_named_by_stac_key(self):
+        from satgate.process import ProcessError, build_scene
+        del self.item["assets"]["nir08"]
+        with self.assertRaises(ProcessError) as cm:
+            build_scene(self.item, "landsat", "ndvi", BBOX, self.root / "x.tif")
+        self.assertIn("nir08", str(cm.exception))
+
+    def test_products_and_estimates_differ_per_mission(self):
+        self.assertEqual(spec.get_product("landsat", "allbands").bands, ("red", "green", "blue", "nir", "swir16", "swir22"))
+        self.assertEqual(spec.get_product("sentinel2", "allbands").res_m, 10)
+        self.assertEqual(spec.get_product("landsat", "true_color").res_m, 30)
+        self.assertEqual(spec.get_product("anything", "dem").key, "dem")
+        self.assertIsNone(spec.get_product("landsat", "nope"))
+        big = [51.0, 35.5, 51.4, 35.9]
+        self.assertLess(spec.estimate_bytes(big, "true_color", "landsat"), spec.estimate_bytes(big, "true_color", "sentinel2") / 5)
+
+    def test_search_filters_platform_and_uses_planetary_computer(self):
+        seen = {}
+
+        def fake(url, body=None, timeout=30):
+            seen.update(url=url, body=body)
+            return {"features": []}
+        stac.search(BBOX, "2026-06-01", "2026-06-30", 20, fetch=fake, mission="landsat")
+        self.assertIn("planetarycomputer", seen["url"])
+        self.assertEqual(seen["body"]["collections"], ["landsat-c2-l2"])
+        self.assertEqual(seen["body"]["query"]["platform"], {"in": ["landsat-8", "landsat-9"]})
+        with self.assertRaises(stac.StacError):
+            stac.search(BBOX, "a", "b", fetch=fake, mission="nope")
+
+    def test_token_signs_only_azure_landsat_hrefs_and_is_cached(self):
+        stac._TOKENS.clear()
+        calls = []
+
+        def fake(url, body=None, timeout=30):
+            calls.append(url)
+            return {"token": "sig=abc&se=2099", "msft:expiry": "2099-01-01T00:00:00Z"}
+        az = "https://landsateuwest.blob.core.windows.net/landsat-c2/x/red.tif"
+        self.assertEqual(stac.sign_href("landsat-c2-l2", az, fake), az + "?sig=abc&se=2099")
+        self.assertEqual(stac.sign_href("landsat-c2-l2", az + "?a=1", fake), az + "?a=1&sig=abc&se=2099")
+        self.assertEqual(len(calls), 1)    # توکن کش شد
+        other = "https://sentinel-cogs.s3.us-west-2.amazonaws.com/x.tif"
+        self.assertEqual(stac.sign_href("sentinel-2-l2a", other, fake), other)
+        self.assertEqual(stac.sign_href("landsat-c2-l2", other, fake), other)
+        self.assertEqual(stac.sign_href("landsat-c2-l2", "/local/path.tif", fake), "/local/path.tif")
+
+    def test_check_mission_reports_ok_and_reason(self):
+        ok = stac.check_mission("sentinel2", fetch=lambda *a, **k: {"features": []})
+        self.assertTrue(ok["ok"])
+
+        def boom(*a, **k):
+            raise stac.StacError("به کاتالوگ تصویر وصل نشدیم.")
+        bad = stac.check_mission("landsat", fetch=boom)
+        self.assertEqual((bad["ok"], bad["error"]), (False, "به کاتالوگ تصویر وصل نشدیم."))
+        feat = {"features": [{"assets": {"thumbnail": {"href": "https://x.example/t.jpg"}}}]}
+        self.assertTrue(stac.check_mission("sentinel2", fetch=lambda *a, **k: feat, open_url=lambda h: b"jpg")["ok"])
+        self.assertFalse(stac.check_mission("sentinel2", fetch=lambda *a, **k: feat, open_url=lambda h: b"")["ok"])
 
 
 class StacTests(unittest.TestCase):
@@ -297,6 +402,45 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.call("GET", f"/v1/jobs/{jid}")["status"], 404)
         self.assertFalse(self.gw.store.file(jid).exists())
 
+    def test_landsat_job_flow_and_mission_listing(self):
+        self.scene = make_landsat(self.root)
+        jid = "1" * 32
+        r = self.call("POST", "/v1/jobs", {"id": jid, "product": "ndvi", "mission": "landsat", "scene": self.scene["id"],
+                                           "bbox": BBOX, "max_km2": 100})
+        self.assertEqual(r["status"], 202)
+        job = self.wait(jid)
+        self.assertEqual(job["status"], "ready", job)
+        self.assertEqual(self.gw.store.get(jid)["mission"], "landsat")
+        with rasterio.open(self.gw.store.file(jid)) as ds:
+            self.assertAlmostEqual(ds.res[0], 30, places=3)
+        bad = self.call("POST", "/v1/jobs", {"id": "2" * 32, "product": "ndvi", "mission": "nope", "scene": "s", "bbox": BBOX})
+        self.assertEqual(bad["status"], 400)
+        # بدون ماموریت = Sentinel-2 (سازگار با پنل قدیمی)
+        old = self.call("POST", "/v1/jobs", {"id": "3" * 32, "product": "ndvi", "scene": "S2A_39SUQ_20260601_0_L2A", "bbox": BBOX})
+        self.assertEqual(old["status"], 202)
+        self.wait("3" * 32)
+        self.assertEqual(self.gw.store.get("3" * 32)["mission"], "sentinel2")
+
+    def test_missions_endpoint_reports_each_satellite_and_caches(self):
+        n = []
+
+        def fetch(url, body=None, timeout=30):
+            n.append(url)
+            if "planetarycomputer" in url:
+                raise stac.StacError("به کاتالوگ تصویر وصل نشدیم.")
+            return {"features": []}
+        self.gw.fetch = fetch
+        j = json.loads(self.call("GET", "/v1/missions")["body"])["missions"]
+        self.assertTrue(j["sentinel2"]["ok"])
+        self.assertFalse(j["landsat"]["ok"])
+        self.assertIn("وصل نشدیم", j["landsat"]["error"])
+        calls = len(n)
+        self.call("GET", "/v1/missions")
+        self.assertEqual(len(n), calls)               # کش
+        self.call("GET", "/v1/missions?refresh=1")
+        self.assertGreater(len(n), calls)             # بازخوانی اجباری
+        self.assertEqual(self.call("GET", "/v1/missions", secret=None)["status"], 401)
+
     def test_area_cap_and_bad_input(self):
         base = {"id": "c" * 32, "product": "ndvi", "scene": "s", "bbox": [51.0, 35.0, 51.4, 35.4]}
         r = self.call("POST", "/v1/jobs", base)
@@ -320,13 +464,13 @@ class AppTests(unittest.TestCase):
         for exc, expect_detail in ((ImportError("libexpat.so.1: cannot open shared object file"), True),
                                    (RuntimeError("secret /internal/path"), False)):
             jid = ("f" if expect_detail else "9") * 32
-            orig = app_mod.build_s2
-            app_mod.build_s2 = lambda *a, _e=exc, **k: (_ for _ in ()).throw(_e)
+            orig = app_mod.build_scene
+            app_mod.build_scene = lambda *a, _e=exc, **k: (_ for _ in ()).throw(_e)
             try:
                 self.call("POST", "/v1/jobs", {"id": jid, "product": "ndvi", "scene": "s", "bbox": BBOX})
                 job = self.wait(jid)
             finally:
-                app_mod.build_s2 = orig
+                app_mod.build_scene = orig
             self.assertEqual(job["status"], "failed")
             self.assertIn(exc.__class__.__name__, job["message"])
             self.assertEqual("libexpat" in job["message"], expect_detail)

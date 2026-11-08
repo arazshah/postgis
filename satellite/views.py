@@ -48,7 +48,7 @@ def _err(exc: services.SatError, status: int = 400) -> JsonResponse:
 
 def _products() -> list[dict]:
     return [{"key": p.key, "title": p.title, "hint": p.hint, "needs_scene": p.needs_scene, "res": p.res_m,
-             "bands": len(p.bands)} for p in spec.PRODUCTS.values()]
+             "bands": len(p.bands), "mission": p.mission} for p in spec.all_products()]
 
 
 @site_user_required
@@ -57,7 +57,7 @@ def index(request, pk):
     reqs = list(SatRequest.objects.filter(database=db).select_related("raster")[:40])
     st = services.status(db)
     cfg = {
-        "urls": {n: reverse(f"satellite:{n}", args=[db.pk]) for n in ("cards", "layers", "extent", "quote", "search", "order")},
+        "urls": {n: reverse(f"satellite:{n}", args=[db.pk]) for n in ("cards", "layers", "extent", "quote", "search", "order", "missions")},
         "thumb": reverse("satellite:thumb", args=[db.pk, "sentinel-2-l2a", "ITEM"]),
         "csrf": get_token(request), "products": _products(), "status": st,
         "iranStyle": request.build_absolute_uri("/basemap/style.json") if basemap.available() else "",
@@ -139,12 +139,20 @@ def extent(request, pk):
 
 
 @site_user_required
+@require_GET
+def missions(request, pk):
+    """ماهواره‌هایی که الان می‌شود از آن‌ها تصویر گرفت (دروازه وضعیتشان را می‌سنجد)."""
+    team.get_db(request, pk, "viewer")
+    return _json({"ok": True, "missions": services.missions(force=request.GET.get("refresh") == "1" and request.user.is_staff)})
+
+
+@site_user_required
 @require_POST
 def quote(request, pk):
     db = team.get_db(request, pk, "viewer")
     data = _body(request)
     try:
-        return _json({"ok": True, "quote": services.quote(db, data.get("bbox"), data.get("product"))})
+        return _json({"ok": True, "quote": services.quote(db, data.get("bbox"), data.get("product"), data.get("mission"))})
     except services.SatError as exc:
         return _err(exc)
 
@@ -175,7 +183,7 @@ def order(request, pk):
 def thumb(request, pk, collection, item):
     """پیش‌نمایش تصویر از طریق دروازه (مرورگر کاربر در ایران به منبع اصلی دسترسی ندارد)."""
     team.get_db(request, pk, "viewer")
-    if collection != spec.COLLECTION_S2 or not NAME_RE.match(item):
+    if collection not in (spec.COLLECTION_S2, spec.COLLECTION_LANDSAT) or not NAME_RE.match(item):
         raise Http404
     key = f"satthumb:{item}"
     data = cache.get(key)
@@ -188,6 +196,21 @@ def thumb(request, pk, collection, item):
     resp = HttpResponse(data, content_type="image/jpeg")
     resp["Cache-Control"] = "private, max-age=86400"
     return resp
+
+
+@site_user_required
+@require_POST
+def toggle_public(request, pk, req):
+    """عمومی یا خصوصی کردن تصویر: عمومی بدون کلید API در QGIS باز می‌شود."""
+    db = team.get_db(request, pk, "editor")
+    r = get_object_or_404(SatRequest.objects.select_related("raster"), pk=req, database=db)
+    if not r.raster_id:
+        raise Http404
+    r.raster.is_public = not r.raster.is_public
+    r.raster.save(update_fields=["is_public"])
+    messages.success(request, "تصویر عمومی شد؛ هر کسی با نشانی آن را می‌بیند." if r.raster.is_public
+                     else "تصویر دوباره خصوصی شد؛ فقط با ورود یا کلید API دیده می‌شود.")
+    return redirect("satellite:index", pk=db.pk)
 
 
 @site_user_required

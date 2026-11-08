@@ -694,12 +694,126 @@ class ProbeTests(TestCase):
         health = mock.MagicMock()
         health.__enter__.return_value.read.return_value = b'{"ok": true, "version": "1.0", "configured": true}'
         replies = [{"ok": True, "stac_ms": 120, "data_ms": 300},
+                   {"missions": {"sentinel2": {"ok": True, "ms": 90}, "landsat": {"ok": True, "ms": 210}}},
                    {"scenes": [{"id": "S2A_X_1", "collection": "sentinel-2-l2a"}]}]
         with mock.patch("urllib.request.urlopen", return_value=health), mock.patch("satellite.client.call", side_effect=replies), \
                 mock.patch("satellite.client.thumb", return_value=b"x" * 20000):
             steps = probe.run()
         self.assertTrue(all(ok for ok, _ in steps), steps)
-        self.assertEqual(len(steps), 4)
+        self.assertEqual(len(steps), 6)
+        self.assertTrue(any("Landsat 8/9: در دسترس" in t for _, t in steps))
+
+
+@GW
+class MissionTests(_Base):
+    """انتخاب ماهواره: فقط ماهواره‌ی در دسترس نشان داده می‌شود؛ Landsat محصول و سهمیه‌ی خودش را دارد."""
+
+    def setUp(self):
+        super().setUp()
+        from django.core.cache import cache
+        cache.clear()
+        self.client.force_login(self.user)
+
+    def url(self, name, *a):
+        return reverse(f"satellite:{name}", args=[self.db.pk, *a])
+
+    def test_missions_list_hides_unavailable_and_explains(self):
+        live = {"missions": {"sentinel2": {"ok": True, "ms": 80}, "landsat": {"ok": False, "ms": 5, "error": "به کاتالوگ تصویر وصل نشدیم."}}}
+        with mock.patch("satellite.client.call", return_value=live):
+            j = self.client.get(self.url("missions")).json()
+        by = {m["key"]: m for m in j["missions"]}
+        self.assertTrue(by["sentinel2"]["available"])
+        self.assertFalse(by["landsat"]["available"])
+        self.assertIn("وصل نشدیم", by["landsat"]["error"])
+        self.assertEqual(by["landsat"]["res"], 30)
+
+    def test_landsat_available_when_gateway_says_so(self):
+        live = {"missions": {"sentinel2": {"ok": True}, "landsat": {"ok": True, "ms": 300}}}
+        with mock.patch("satellite.client.call", return_value=live):
+            by = {m["key"]: m for m in self.client.get(self.url("missions")).json()["missions"]}
+        self.assertTrue(by["landsat"]["available"])
+
+    def test_old_gateway_without_missions_endpoint_offers_only_sentinel2(self):
+        with mock.patch("satellite.client.call", side_effect=client.GatewayError("پیدا نشد", 404)):
+            by = {m["key"]: m for m in self.client.get(self.url("missions")).json()["missions"]}
+        self.assertTrue(by["sentinel2"]["available"])
+        self.assertFalse(by["landsat"]["available"])
+
+    def test_gateway_down_still_lists_sentinel2(self):
+        with mock.patch("satellite.client.call", side_effect=client.GatewayError("در دسترس نیست")):
+            by = {m["key"]: m for m in self.client.get(self.url("missions")).json()["missions"]}
+        self.assertTrue(by["sentinel2"]["available"])
+        self.assertIn("در دسترس نیست", by["landsat"]["error"])
+
+    def test_page_config_has_products_per_mission(self):
+        html = self.client.get(self.url("index")).content.decode()
+        self.assertIn('"mission":"landsat"', html.replace(" ", ""))
+        self.assertIn("data-missions", html)
+
+    @mock.patch("satellite.client.call", return_value={})
+    def test_order_landsat_sends_mission_and_stores_it(self, call):
+        r = services.order(self.db, self.user, {"bbox": BBOX, "product": "ndvi", "mission": "landsat",
+                                                "scene": "LC09_L2SP_164035_20261020_20261022_02_T1",
+                                                "scene_date": "2026-10-20T07:10:00Z", "cloud": 4})
+        self.assertEqual(r.mission, "landsat")
+        self.assertEqual(call.call_args.args[2]["mission"], "landsat")
+        self.assertEqual((r.satellite, r.agency), ("Landsat 9", "USGS / NASA"))
+        self.assertEqual(r.spec.res_m, 30)
+
+    @mock.patch("satellite.client.call", return_value={})
+    def test_dem_ignores_mission_and_bad_mission_rejected(self, call):
+        r = services.order(self.db, self.user, {"bbox": BBOX, "product": "dem", "mission": "landsat"})
+        self.assertEqual(r.mission, "dem")
+        with self.assertRaises(services.SatError) as cm:
+            services.order(self.db, self.user, {"bbox": BBOX, "product": "ndvi", "mission": "nope", "scene": "S2A_X_1"})
+        self.assertEqual(cm.exception.code, "mission")
+
+    def test_landsat_estimate_is_smaller_than_sentinel2(self):
+        big = [51.0, 35.5, 51.4, 35.9]
+        a = services.quote(self.db, big, "true_color", "sentinel2")["est_bytes"]
+        b = services.quote(self.db, big, "true_color", "landsat")["est_bytes"]
+        self.assertLess(b, a / 5)
+
+    @mock.patch("satellite.client.call", return_value={"scenes": []})
+    def test_search_passes_mission(self, call):
+        today = str(timezone.localdate())
+        self.client.post(self.url("search"), json.dumps({"bbox": BBOX, "start": today, "end": today, "mission": "landsat"}),
+                         content_type="application/json")
+        self.assertEqual(call.call_args.args[2]["mission"], "landsat")
+        bad = self.client.post(self.url("search"), json.dumps({"bbox": BBOX, "start": today, "end": today, "mission": "x"}),
+                               content_type="application/json")
+        self.assertEqual(bad.status_code, 400)
+
+    def test_thumb_allows_landsat_collection(self):
+        with mock.patch("satellite.client.thumb", return_value=b"jpg"):
+            r = self.client.get(self.url("thumb", "landsat-c2-l2", "LC09_L2SP_164035_20261020_20261022_02_T1"))
+        self.assertEqual(r.content, b"jpg")
+
+    def test_toggle_public_and_key_link(self):
+        req = self.req(status=SatRequest.Status.READY)
+        rr = Raster.objects.create(database=self.db, title="t", status=Raster.Status.READY, bounds=BBOX, size_bytes=1)
+        req.raster = rr
+        req.save()
+        html = self.client.get(self.url("index")).content.decode()
+        self.assertIn("عمومی کردن", html)
+        self.assertIn(f"/dashboard/{self.db.pk}/publish/#keys", html)     # ساخت کلید: نقشه و API
+        self.assertIn("نقشه و API ← کلیدهای API", html)
+        self.client.post(self.url("toggle_public", req.pk))
+        rr.refresh_from_db()
+        self.assertTrue(rr.is_public)
+        self.assertIn("خصوصی کردن", self.client.get(self.url("index")).content.decode())
+        self.client.post(self.url("toggle_public", req.pk))
+        rr.refresh_from_db()
+        self.assertFalse(rr.is_public)
+
+    def test_viewer_cannot_toggle_public(self):
+        req = self.req(status=SatRequest.Status.READY)
+        req.raster = Raster.objects.create(database=self.db, title="t", status=Raster.Status.READY)
+        req.save()
+        other = User.objects.create_user("09120000083")
+        Member.objects.create(database=self.db, user=other, role=Member.Role.VIEWER)
+        self.client.force_login(other)
+        self.assertEqual(self.client.post(self.url("toggle_public", req.pk)).status_code, 404)
 
 
 class ProbeCommandTests(TestCase):
