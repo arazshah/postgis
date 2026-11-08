@@ -288,7 +288,7 @@
     S.scenes.forEach((s, i) => {
       const low = s.coverage < 95;
       const lab = el(`<label class="sat-scene"><input type="radio" name="scene" value="${esc(s.id)}" ${S.scene && S.scene.id === s.id ? "checked" : ""}>
-        <span class="th">${s.thumb ? `<img loading="lazy" alt="" src="${cfg.thumb.replace("ITEM", encodeURIComponent(s.id))}">` : icon("satellite", 28)}</span>
+        <span class="th">${s.thumb ? `<img loading="lazy" alt="" src="${cfg.thumb.replace("COLL", encodeURIComponent(s.collection)).replace("ITEM", encodeURIComponent(s.id))}">` : icon("satellite", 28)}</span>
         <span class="tx"><b>${fmtDate(s.datetime)}</b>${s.satellite ? `<span class="sn">${esc(s.satellite)}</span>` : ""}<span>ابر ${faN(s.cloud, {maximumFractionDigits: 0})}٪</span>
         <span class="${low ? "low" : ""}">${low ? "پوشش ناقص: " : "پوشش محدوده: "}${faN(s.coverage, {maximumFractionDigits: 0})}٪</span></span></label>`);
       lab.querySelector("input").addEventListener("change", () => { S.scene = s; S.quote = null; renderNav(); });

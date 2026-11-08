@@ -58,7 +58,7 @@ def index(request, pk):
     st = services.status(db)
     cfg = {
         "urls": {n: reverse(f"satellite:{n}", args=[db.pk]) for n in ("cards", "layers", "extent", "quote", "search", "order", "missions")},
-        "thumb": reverse("satellite:thumb", args=[db.pk, "sentinel-2-l2a", "ITEM"]),
+        "thumb": reverse("satellite:thumb", args=[db.pk, "COLL", "ITEM"]),
         "csrf": get_token(request), "products": _products(), "status": st,
         "iranStyle": request.build_absolute_uri("/basemap/style.json") if basemap.available() else "",
         "basemap": SiteSettings.get().map_tile_url,

@@ -789,6 +789,13 @@ class MissionTests(_Base):
             r = self.client.get(self.url("thumb", "landsat-c2-l2", "LC09_L2SP_164035_20261020_20261022_02_T1"))
         self.assertEqual(r.content, b"jpg")
 
+    def test_thumb_url_template_takes_collection_per_scene(self):
+        """پیش‌نمایش Landsat با مجموعه‌ی Sentinel-2 درخواست می‌شد؛ حالا قالب هر دو جای‌نگهدار را دارد."""
+        html = self.client.get(self.url("index")).content.decode()
+        self.assertIn("/satellite/thumb/COLL/ITEM.jpg", html)
+        js = Path(__file__).resolve().parents[2].joinpath("static/js/satellite.js").read_text()
+        self.assertIn('cfg.thumb.replace("COLL", encodeURIComponent(s.collection))', js)
+
     def test_toggle_public_and_key_link(self):
         req = self.req(status=SatRequest.Status.READY)
         rr = Raster.objects.create(database=self.db, title="t", status=Raster.Status.READY, bounds=BBOX, size_bytes=1)

@@ -87,13 +87,26 @@ def coverage(geometry: dict | None, bbox) -> float:
 
 
 # ------------------------------------------------------------------ جست‌وجو
+THUMB_KEYS = ("thumbnail", "rendered_preview", "reduced_resolution_browse", "overview")
+
+
+def thumb_asset(item: dict) -> dict | None:
+    """دارایی پیش‌نمایش: همان thumbnail، و در نبودش اولین دارایی تصویری شناخته‌شده (نام‌ها بین مجموعه‌ها فرق دارد)."""
+    assets = item.get("assets", {})
+    for k in THUMB_KEYS:
+        a = assets.get(k)
+        if a and str(a.get("type", "image/jpeg")).startswith("image/") and str(a.get("href", "")).startswith("https://"):
+            return a
+    return None
+
+
 def _scene(it: dict, bbox, default_collection: str = COLLECTION_S2) -> dict:
     p = it.get("properties", {})
     sat, agency = satellite_of(it["id"])
     return {"id": it["id"], "collection": it.get("collection", default_collection), "datetime": p.get("datetime", ""),
             "satellite": sat, "agency": agency, "gsd": p.get("gsd"),
             "cloud": round(float(p.get("eo:cloud_cover", 0) or 0), 1), "tile": p.get("grid:code") or p.get("s2:mgrs_tile", ""),
-            "coverage": coverage(it.get("geometry"), bbox), "thumb": "thumbnail" in it.get("assets", {})}
+            "coverage": coverage(it.get("geometry"), bbox), "thumb": thumb_asset(it) is not None}
 
 
 def search(bbox, start: str, end: str, max_cloud: float = 30, limit: int = 24, fetch=fetch_json,
@@ -163,8 +176,8 @@ def check_mission(key: str, fetch=fetch_json, open_url=None) -> dict:
             "collections": [m.collection], "limit": 1, "bbox": [51.3, 35.7, 51.4, 35.8],
             "datetime": f"{(end - timedelta(days=120)).isoformat()}T00:00:00Z/{end.isoformat()}T23:59:59Z"})
         feat = (res.get("features") or [None])[0]
-        href = ((feat or {}).get("assets", {}).get("thumbnail") or {}).get("href", "")
-        if href.startswith("https://"):
+        href = (thumb_asset(feat or {}) or {}).get("href", "")
+        if href:
             data = (open_url or _read_head)(sign_href(m.collection, href, fetch))
             if not data:
                 raise StacError("فایل تصویر خوانده نشد.")
