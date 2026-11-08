@@ -3,7 +3,7 @@ title: تصویر ماهواره‌ای دریافت‌شده را چطور در
 summary: از منوی ⋯ کارت تصویر، «اتصال به QGIS» نشانی COG و کاشی XYZ را می‌دهد. COG بدون دانلود کامل خوانده می‌شود؛ برای تصویر خصوصی کلید API لازم است. «دانلود GeoTIFF» هم هست.
 kind: howto
 keywords: qgis, cog, geotiff, xyz, کاشی, دانلود, arcgis, ماهواره, رستر, کلید api
-related: satellite-imagery, connect-qgis, enterprise-raster
+related: satellite-imagery, satellite-analysis, connect-qgis, enterprise-raster
 order: 90
 reviewed: 2026-11-08
 ---
@@ -14,3 +14,8 @@ reviewed: 2026-11-08
 5. برای فایل روی دیسک: **دانلود GeoTIFF**.
 
 تصویر «همه‌ی باندها» مقدار بازتاب × ۱۰۰۰۰ دارد (۱۰ باند: قرمز، سبز، آبی، NIR، سه لبه‌ی قرمز، NIR باریک، SWIR1 و SWIR2).
+
+## نتیجه‌ی تحلیل (جدول و نمای «آخرین مقدار»)
+تحلیل «آمار هر قطعه» عکس نمی‌دهد؛ دو جدول در پایگاه داده‌ی خودتان می‌سازد و در QGIS مثل هر جدول دیگر باز می‌شود (با [اطلاعات اتصال](kb:connection-info)):
+- `نام_جدول` (مثلاً `ndvi_parcels`): یک ردیف برای هر قطعه و تاریخ، با ستون‌های `feature_id`، `scene_date`، `mean`، `median`، `min`، `max`، `std` و `valid_pct`.
+- `نام_جدول_latest`: نمای چندضلعی با شکل قطعه‌ها و ستون‌های `sat_date` و `sat_<شاخص>` (آخرین مقدار هر قطعه). روی آن در QGIS رنگ‌آمیزی «درجه‌بندی‌شده» بزنید تا نقشه‌ی سلامت پوشش گیاهی بسازید.
