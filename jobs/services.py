@@ -96,7 +96,8 @@ def run(job: Job) -> None:
                Job.Kind.OSM_IMPORT: iranmap_tasks.do_osm_import, Job.Kind.ASK: _do_ask,
                Job.Kind.GEOSERVER: _do_enterprise, Job.Kind.RASTER: _do_enterprise,
                Job.Kind.CLONE: _do_enterprise, Job.Kind.TOOL: _do_tool,
-               Job.Kind.FIND: _do_find, Job.Kind.SATELLITE: _do_satellite}[job.kind]
+               Job.Kind.FIND: _do_find, Job.Kind.SATELLITE: _do_satellite,
+               Job.Kind.SAT_ANALYSIS: _do_sat_analysis}[job.kind]
     try:
         handler(job)
     except Exception as exc:  # noqa: BLE001
@@ -131,6 +132,17 @@ def _do_satellite(job: Job) -> None:
     try:
         job.message = sat.ingest(job)
     except (ent.EnterpriseError, client.GatewayError) as exc:
+        raise JobError(str(exc)) from exc
+
+
+def _do_sat_analysis(job: Job) -> None:
+    """آمار هر ناحیه: نوشتن جدول نتیجه‌ی تحلیل دروازه، یا محاسبه‌ی سبک روی رستر موجود (با اولویت کم)."""
+    from satellite import client, zonal_service
+    from satellite.services import SatError
+
+    try:
+        job.message = zonal_service.ingest(job)
+    except (SatError, client.GatewayError) as exc:
         raise JobError(str(exc)) from exc
 
 

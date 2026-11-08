@@ -245,7 +245,8 @@ def on_remote(payload: dict) -> bool:
     with transaction.atomic():
         req = SatRequest.objects.select_for_update().filter(token=str(payload.get("id", ""))).first()
         if req is None:
-            return False
+            from . import zonal_service  # شناسه‌ی تحلیل (آمار هر ناحیه)، نه دریافت تصویر
+            return bool(zonal_service.on_remote(payload))
         if req.status != SatRequest.Status.PROCESSING:
             return True
         if payload.get("status") == "ready":
@@ -282,7 +283,8 @@ def poll(now: datetime | None = None) -> int:
     stale = SatRequest.objects.filter(status=SatRequest.Status.DOWNLOADING, updated_at__lt=now - timedelta(hours=3))
     for req in stale:
         _fail(req, "دریافت فایل کامل نشد؛ دوباره درخواست بدهید. اعتبار شما برگردانده شد.")
-    return n + stale.count()
+    from . import zonal_service
+    return n + stale.count() + zonal_service.poll(now)
 
 
 def _forget(req: SatRequest) -> None:

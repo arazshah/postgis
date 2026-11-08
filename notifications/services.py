@@ -21,6 +21,8 @@ DESTINATIONS = {
     Job.Kind.GEOSERVER: ("enterprise:page", ""),
     Job.Kind.RASTER: ("enterprise:page", ""),
     Job.Kind.CLONE: ("enterprise:page", ""),
+    Job.Kind.SATELLITE: ("satellite:index", ""),
+    Job.Kind.SAT_ANALYSIS: ("satellite:index", ""),
 }
 FRIENDLY_FAIL = {
     "statement timeout": "عملیات بیش از حد مجاز طول کشید؛ داده را کوچک‌تر کنید یا دوباره تلاش کنید.",

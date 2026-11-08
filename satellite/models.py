@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from satgate.spec import MISSIONS, PRODUCTS, get_product, satellite_of
+from satgate.spec import INDICES, MISSIONS, PRODUCTS, get_product, satellite_of
 
 FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
 
@@ -134,3 +134,110 @@ class SatRequest(models.Model):
     @property
     def active(self) -> bool:
         return self.status in (self.Status.PROCESSING, self.Status.DOWNLOADING)
+
+
+class SatAnalysis(models.Model):
+    """آمار هر ناحیه‌ی یک شاخص روی لایه‌ی چندضلعی (سری زمانی)؛ نتیجه در جدولی داخل پایگاه داده‌ی خود کاربر می‌نشیند."""
+
+    class Status(models.TextChoices):
+        PROCESSING = "processing", "در حال محاسبه"
+        DOWNLOADING = "downloading", "در حال نوشتن جدول نتیجه"
+        READY = "ready", "آماده"
+        FAILED = "failed", "ناموفق"
+
+    class Source(models.TextChoices):
+        SATELLITE = "satellite", "تصویر ماهواره‌ای (دروازه)"
+        RASTER = "raster", "رستر موجود (روی سرور ما)"
+
+    token = models.CharField(max_length=32, unique=True, default=_token, editable=False)
+    database = models.ForeignKey("databases.UserDatabase", on_delete=models.CASCADE, related_name="sat_analyses")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    name = models.CharField("جدول نتیجه", max_length=63)
+    layer = models.CharField("لایه‌ی چندضلعی", max_length=130)
+    id_column = models.CharField("ستون شناسه", max_length=63)
+    source = models.CharField("منبع", max_length=10, choices=Source.choices, default=Source.SATELLITE)
+    mission = models.CharField("ماهواره", max_length=12, default="sentinel2")
+    index = models.CharField("شاخص", max_length=8, default="ndvi")
+    start = models.DateField("از", null=True, blank=True)
+    end = models.DateField("تا", null=True, blank=True)
+    max_cloud = models.FloatField("حداکثر ابر", default=40)
+    mask = models.BooleanField("حذف ابر و سایه", default=True)
+    raster = models.ForeignKey("enterprise.Raster", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    features = models.PositiveIntegerField("تعداد عارضه", default=0)
+    area_km2 = models.FloatField("مساحت (کیلومتر مربع)", default=0)
+    status = models.CharField("وضعیت", max_length=12, choices=Status.choices, default=Status.PROCESSING, db_index=True)
+    message = models.TextField("پیام", blank=True)
+    charged = models.BooleanField("از اعتبار کم شده", default=False)
+    remote = models.JSONField("پاسخ دروازه", default=dict, blank=True)
+    rows = models.PositiveIntegerField("ردیف نتیجه", default=0)
+    scenes = models.JSONField("تصویرهای محاسبه‌شده", default=list, blank=True)
+    monitor = models.ForeignKey("satellite.SatMonitor", null=True, blank=True, on_delete=models.SET_NULL, related_name="runs")
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "تحلیل ماهواره‌ای"
+        verbose_name_plural = "تحلیل‌های ماهواره‌ای"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["database", "charged", "created_at"], name="satan_credit_idx")]
+
+    def __str__(self):
+        return f"{self.index.upper()} · {self.layer}"
+
+    @property
+    def index_title(self) -> str:
+        return INDICES[self.index][2] if self.index in INDICES else self.index
+
+    @property
+    def active(self) -> bool:
+        return self.status in (self.Status.PROCESSING, self.Status.DOWNLOADING)
+
+    @property
+    def table_ref(self) -> str:
+        return f"public.{self.name}"
+
+    @property
+    def latest_name(self) -> str:
+        return f"{self.name}_latest"
+
+    @property
+    def mission_title(self) -> str:
+        m = MISSIONS.get(self.mission)
+        return m.title if m else self.mission
+
+
+class SatMonitor(models.Model):
+    """پایش خودکار: هر چند روز تصویر تازه‌ی بازه را برای قطعه‌ها بسنج و اگر افت محسوس بود هشدار بده."""
+
+    class Freq(models.IntegerChoices):
+        WEEKLY = 7, "هفتگی"
+        BIWEEKLY = 14, "هر دو هفته"
+        MONTHLY = 30, "ماهانه"
+
+    database = models.ForeignKey("databases.UserDatabase", on_delete=models.CASCADE, related_name="sat_monitors")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    name = models.CharField("نام پایش", max_length=80)
+    layer = models.CharField("لایه‌ی چندضلعی", max_length=130)
+    id_column = models.CharField("ستون شناسه", max_length=63)
+    table_name = models.CharField("جدول نتیجه", max_length=63)
+    mission = models.CharField("ماهواره", max_length=12, default="sentinel2")
+    index = models.CharField("شاخص", max_length=8, default="ndvi")
+    max_cloud = models.FloatField("حداکثر ابر", default=40)
+    every_days = models.PositiveSmallIntegerField("هر چند روز", choices=Freq.choices, default=Freq.WEEKLY)
+    drop_pct = models.PositiveSmallIntegerField("افت هشدار (٪)", default=20,
+                                                help_text="اگر میانگین شاخص یک قطعه نسبت به تصویر قبلی این‌قدر درصد کم شود هشدار می‌دهد.")
+    min_valid_pct = models.PositiveSmallIntegerField("حداقل پیکسل بی‌ابر (٪)", default=50)
+    enabled = models.BooleanField("فعال", default=True)
+    last_run_at = models.DateTimeField("آخرین بررسی", null=True, blank=True)
+    last_scene_date = models.DateField("تاریخ آخرین تصویر پردازش‌شده", null=True, blank=True)
+    last_alert_at = models.DateTimeField("آخرین هشدار", null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = "پایش ماهواره‌ای"
+        verbose_name_plural = "پایش‌های ماهواره‌ای"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.name

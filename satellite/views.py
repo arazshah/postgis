@@ -21,8 +21,8 @@ from databases.explorer import Explorer, ExplorerError
 from iranmap import basemap
 from satgate import protocol, spec
 
-from . import client, services
-from .models import SatRequest
+from . import client, router, services, zonal_service
+from .models import SatAnalysis, SatRequest
 
 NAME_RE = re.compile(r"^[A-Za-z0-9_\-]{1,100}$")
 
@@ -58,6 +58,9 @@ def index(request, pk):
     st = services.status(db)
     cfg = {
         "urls": {n: reverse(f"satellite:{n}", args=[db.pk]) for n in ("cards", "layers", "extent", "quote", "search", "order", "missions")},
+        "an": {"cards": reverse("satellite:an_cards", args=[db.pk]), "layers": reverse("satellite:an_layers", args=[db.pk]),
+               "quote": reverse("satellite:an_quote", args=[db.pk]), "order": reverse("satellite:an_order", args=[db.pk]),
+               "series": reverse("satellite:an_series", args=[db.pk, 0]), "table": reverse("databases:explore_table", args=[db.pk, "public", "TABLE"])},
         "thumb": reverse("satellite:thumb", args=[db.pk, "COLL", "ITEM"]),
         "csrf": get_token(request), "products": _products(), "status": st,
         "iranStyle": request.build_absolute_uri("/basemap/style.json") if basemap.available() else "",
@@ -67,6 +70,8 @@ def index(request, pk):
     }
     return render(request, "satellite/index.html", {
         "db": db, "reqs": reqs, "st": st, "cfg": cfg, "configured": client.configured(),
+        "analyses": (ans := _analyses(db)), "an_active": any(a.active for a in ans), "an_cr": (acr := zonal_service.credits(db)),
+        "an_cr_pct": _pct(acr["used"], acr["cap"]), "max_features": zonal_service.zl.MAX_FEATURES,
         "active": any(r.active for r in reqs), "base": request.build_absolute_uri("/")[:-1],
         "credit_pct": _pct(st["credits"]["used"], st["credits"]["cap"]), "space_pct": _pct(st["space"]["used"], st["space"]["cap"]),
     })
@@ -144,6 +149,84 @@ def missions(request, pk):
     """ماهواره‌هایی که الان می‌شود از آن‌ها تصویر گرفت (دروازه وضعیتشان را می‌سنجد)."""
     team.get_db(request, pk, "viewer")
     return _json({"ok": True, "missions": services.missions(force=request.GET.get("refresh") == "1" and request.user.is_staff)})
+
+
+def _analyses(db):
+    return list(SatAnalysis.objects.filter(database=db)[:30])
+
+
+@site_user_required
+@require_GET
+def an_cards(request, pk):
+    db = team.get_db(request, pk, "viewer")
+    items = _analyses(db)
+    resp = render(request, "satellite/_analysis_cards.html", {"db": db, "items": items})
+    resp["X-Sat-Active"] = "1" if any(a.active for a in items) else "0"
+    return resp
+
+
+@site_user_required
+@require_GET
+def an_layers(request, pk):
+    """لایه‌های چندضلعی، ستون‌های شناسه و رسترهای آماده‌ی همین پایگاه داده برای فرم تحلیل."""
+    from enterprise.models import Raster
+
+    db = team.get_db(request, pk, "viewer")
+    try:
+        layers = zonal_service.polygon_layers(db) if db.is_live else []
+    except ExplorerError:
+        layers = []
+    rasters = [{"id": r.pk, "title": r.title, "bands": r.bands, "dtype": r.dtype}
+               for r in Raster.objects.filter(database=db, status=Raster.Status.READY)]
+    return _json({"ok": True, "layers": layers, "rasters": rasters, "indices": [
+        {"key": k, "title": v[2], "hint": v[3]} for k, v in spec.INDICES.items()],
+        "credits": zonal_service.credits(db), "local": router.status() if request.user.is_staff else {}})
+
+
+@site_user_required
+@require_POST
+def an_quote(request, pk):
+    db = team.get_db(request, pk, "viewer")
+    try:
+        return _json({"ok": True, "quote": zonal_service.quote(db, _body(request))})
+    except services.SatError as exc:
+        return _err(exc)
+
+
+@site_user_required
+@require_POST
+def an_order(request, pk):
+    db = team.get_db(request, pk, "editor")
+    try:
+        an = zonal_service.order(db, request.user, _body(request))
+    except services.SatError as exc:
+        return _err(exc, 409 if exc.code in ("busy", "credits", "area", "exists") else 400)
+    return _json({"ok": True, "id": an.pk})
+
+
+@site_user_required
+@require_GET
+def an_series(request, pk, an_id):
+    """سری زمانی برای نمودار: از جدول نتیجه‌ی خود کاربر خوانده می‌شود، نه از پایگاه داده‌ی پنل."""
+    db = team.get_db(request, pk, "viewer")
+    an = get_object_or_404(SatAnalysis, pk=an_id, database=db, status=SatAnalysis.Status.READY)
+    try:
+        return _json({"ok": True, **zonal_service.series(an, request.GET.get("feature", "")[:80])})
+    except (ExplorerError, Exception):  # noqa: BLE001  جدول حذف شده یا اتصال
+        return _json({"ok": False, "error": "جدول نتیجه خوانده نشد؛ شاید حذف یا تغییر نام داده شده است."}, 404)
+
+
+@site_user_required
+@require_POST
+def an_delete(request, pk, an_id):
+    db = team.get_db(request, pk, "editor")
+    an = get_object_or_404(SatAnalysis, pk=an_id, database=db)
+    if an.active:
+        messages.error(request, "تا پایان محاسبه نمی‌شود این تحلیل را حذف کرد.")
+    else:
+        an.delete()
+        messages.success(request, "تحلیل از فهرست حذف شد؛ جدول نتیجه در پایگاه داده‌ی شما می‌ماند و از «جدول‌ها» پاک می‌شود.")
+    return redirect(reverse("satellite:index", args=[db.pk]) + "#analysis")
 
 
 @site_user_required

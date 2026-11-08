@@ -14,6 +14,12 @@
     </div>
   </div>
 
+  <div class="tabs" role="tablist" aria-label="بخش‌های تصویر ماهواره‌ای" data-hash-tabs>
+    <button role="tab" id="t-images" aria-controls="p-images" aria-selected="true">{% icon "image" 16 %}تصویرها <span class="tab-n">{{ reqs|length|fanum }}</span></button>
+    <button role="tab" id="t-analysis" aria-controls="p-analysis" aria-selected="false" tabindex="-1">{% icon "chart" 16 %}تحلیل و سری زمانی <span class="tab-n">{{ analyses|length|fanum }}</span></button>
+  </div>
+
+  <div class="tabpanel" role="tabpanel" id="p-images" aria-labelledby="t-images">
   {% if not configured %}
   <div class="msg info">{% icon "info" 18 %}<span class="msg-t">سرویس دریافت تصویر ماهواره‌ای به‌زودی فعال می‌شود. تا آن زمان می‌توانید GeoTIFF خودتان را بارگذاری کنید.</span></div>
   {% endif %}
@@ -44,6 +50,11 @@
     {% if db.can_edit %}<button class="btn" type="button" data-sat-open{% if not configured %} disabled{% endif %}>{% icon "satellite" 18 %}اولین تصویر را بگیرید</button>{% endif %}</div>
   {% endif %}
   <p class="small muted sat-attr">منبع تصویرها: Contains modified Copernicus Sentinel data (ESA) · Landsat-8/9 courtesy of the U.S. Geological Survey · ارتفاع: Copernicus DEM GLO-30. استفاده از این داده‌ها رایگان است و ذکر منبع لازم است.</p>
+  </div>
+
+  <div class="tabpanel" role="tabpanel" id="p-analysis" aria-labelledby="t-analysis" hidden>
+    {% include "satellite/_analysis.html" %}
+  </div>
 </div>
 
 <dialog class="dlg sat-info" id="sat-info" aria-labelledby="sat-info-t">
@@ -64,6 +75,7 @@
   <div class="dlg-f"><button class="btn ghost" type="button" data-dialog-close>بستن</button></div>
 </dialog>
 
+{% include "satellite/_analysis_dialogs.html" %}
 {% if db.can_edit and configured %}
 <dialog class="dlg sat-dlg" id="sat-dlg" aria-labelledby="sat-t">
   <div class="dlg-h"><span class="dlg-i">{% icon "satellite" 22 %}</span><h2 id="sat-t">دریافت تصویر ماهواره‌ای</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
@@ -132,4 +144,4 @@
 <script src="{% static 'vendor/maplibre/maplibre-gl.js' %}" defer></script>
 {% endif %}
 {% endblock %}
-{% block ws_scripts %}<script src="{% static 'js/studio-ui.js' %}" defer></script><script src="{% static 'js/satellite.js' %}" defer></script>{% endblock %}
+{% block ws_scripts %}<script src="{% static 'js/studio-ui.js' %}" defer></script><script src="{% static 'vendor/echarts/echarts.min.js' %}" defer></script><script src="{% static 'js/satellite.js' %}" defer></script><script src="{% static 'js/satellite-analysis.js' %}" defer></script>{% endblock %}

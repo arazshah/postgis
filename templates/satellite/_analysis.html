@@ -1,0 +1,25 @@
+{% load fa ws %}
+<section class="sat-quota" aria-label="سهمیه‌ی تحلیل">
+  <div class="card sat-q">
+    <div class="sat-q-h"><span>{% icon "chart" 16 %}تحلیل ماهواره‌ای در ۳۰ روز اخیر</span><b>{{ an_cr.used|fanum }} از {{ an_cr.cap|fanum }}</b></div>
+    <div class="meter {% if an_cr_pct >= 100 %}full{% elif an_cr_pct >= 80 %}warn{% endif %}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ an_cr_pct }}"><i style="width:{{ an_cr_pct }}%"></i></div>
+  </div>
+  <div class="card sat-q">
+    <div class="sat-q-h"><span>{% icon "server" 16 %}روی رستر موجود (سرور ما)</span><b>بدون اعتبار</b></div>
+    <p class="small muted">سبک و محدود؛ فقط روی رسترهایی که قبلاً دارید.</p>
+  </div>
+  <div class="card sat-q">
+    <div class="sat-q-h"><span>{% icon "layers" 16 %}بیشترین عارضه</span><b>{{ max_features|fanum }} چندضلعی</b></div>
+    <p class="small muted">نتیجه جدولی در پایگاه داده‌ی خودتان می‌شود.</p>
+  </div>
+</section>
+<div class="sat-an-head">
+  <p class="muted small">میانگین یک شاخص (مثلاً NDVI) را برای هر قطعه‌ی زمین یا ناحیه در چند تاریخ حساب کنید و روند را روی نمودار ببینید. محاسبه روی دروازه‌ی خارجی انجام می‌شود و فقط جدول کوچک نتیجه به پایگاه داده‌ی شما برمی‌گردد.</p>
+  {% if db.can_edit %}<button class="btn" type="button" data-an-open{% if not configured %} disabled title="سرویس هنوز راه‌اندازی نشده است"{% endif %}>{% icon "plus" 18 %}تحلیل تازه</button>{% endif %}
+</div>
+<div id="an-cards" class="sat-cards" data-url="{% url 'satellite:an_cards' db.pk %}" data-active="{{ an_active|yesno:'1,0' }}" aria-live="polite">{% include "satellite/_analysis_cards.html" with items=analyses %}</div>
+{% if not analyses %}
+<div class="empty" id="an-empty">{% icon "chart" 28 %}<h2>هنوز تحلیلی نساخته‌اید</h2>
+  <p class="muted">یک لایه‌ی چندضلعی (مثلاً قطعه‌های زمین) و یک شاخص انتخاب کنید تا سری زمانی آن را ببینید.</p>
+  {% if db.can_edit %}<button class="btn" type="button" data-an-open{% if not configured %} disabled{% endif %}>{% icon "plus" 18 %}اولین تحلیل</button>{% endif %}</div>
+{% endif %}

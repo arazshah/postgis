@@ -116,3 +116,17 @@ dialog.sat-dlg{width:min(960px,calc(100vw - 32px));height:min(720px,calc(100vh -
 .sat-note{display:flex;gap:10px;align-items:flex-start;background:var(--teal-soft);border-radius:var(--r-card);padding:12px 14px;font-size:13.5px;line-height:1.9}
 .sat-note[hidden]{display:none}
 .sat-note .i{flex:none;margin-top:4px;color:var(--teal)}
+
+/* تحلیل و سری زمانی */
+.sat-an-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin:var(--s3) 0 var(--s4)}
+.sat-an-head p{margin:0;max-width:62ch}
+dialog.sat-andlg{width:min(760px,calc(100vw - 32px))}
+.sat-two{display:grid;grid-template-columns:2fr 1fr;gap:8px}
+.sat-andlg [hidden]{display:none!important}
+dialog.sat-chart{width:min(960px,calc(100vw - 32px))}
+.sat-chart-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sat-chart-bar select{max-width:260px;height:var(--ctl-h-sm)}
+.sat-chart-box{width:100%;height:380px}
+.sat-an .sat-row{align-items:center}
+.sat-an .sat-row h2{flex:1}
+@media (max-width:640px){.sat-two{grid-template-columns:1fr}.sat-chart-box{height:300px}}

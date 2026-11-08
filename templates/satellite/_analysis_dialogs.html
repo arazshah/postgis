@@ -1,0 +1,54 @@
+{% load fa ws %}
+<dialog class="dlg sat-chart" id="an-chart" aria-labelledby="an-chart-t">
+  <div class="dlg-h"><span class="dlg-i">{% icon "chart" 22 %}</span><h2 id="an-chart-t">نمودار روند</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+  <div class="dlg-b">
+    <div class="sat-chart-bar">
+      <label class="small muted" for="an-feature">قطعه‌ی مشخص</label>
+      <select id="an-feature" class="ltr" aria-label="انتخاب یک عارضه"><option value="">همه‌ی قطعه‌ها (میانگین)</option></select>
+      <span class="small muted" data-an-info></span>
+    </div>
+    <div id="an-chart-box" class="sat-chart-box" role="img" aria-label="نمودار روند شاخص"></div>
+    <p class="small muted" data-an-empty hidden>برای این تحلیل داده‌ای برای رسم نیست.</p>
+  </div>
+  <div class="dlg-f"><button class="btn ghost" type="button" data-dialog-close>بستن</button></div>
+</dialog>
+
+{% if db.can_edit and configured %}
+<dialog class="dlg sat-andlg" id="an-dlg" aria-labelledby="an-t">
+  <div class="dlg-h"><span class="dlg-i">{% icon "chart" 22 %}</span><h2 id="an-t">تحلیل تازه: آمار هر قطعه</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+  <div class="dlg-b">
+    <div class="field"><label for="an-layer">لایه‌ی چندضلعی</label>
+      <div class="sat-two"><select id="an-layer" class="ltr" aria-label="لایه"></select>
+        <select id="an-id" class="ltr" aria-label="ستون شناسه"></select></div>
+      <p class="help small muted">هر چندضلعی یک قطعه است. ستون شناسه باید برای هر قطعه فرق داشته باشد.</p>
+      <p class="help small muted" data-an-nolayer hidden>لایه‌ی چندضلعی ندارید؛ ابتدا از «ورود فایل» قطعه‌ها را وارد کنید.</p></div>
+    <div class="field"><label>شاخص</label><div class="sat-prods" data-an-indices role="radiogroup" aria-label="شاخص"></div></div>
+    <div class="field"><label>منبع تصویر</label>
+      <div class="chips" role="radiogroup" aria-label="منبع">
+        <label class="pick-chip"><input type="radio" name="an-src" value="satellite" checked><span>{% icon "satellite" 16 %}تصویر ماهواره‌ای (روی دروازه)</span></label>
+        <label class="pick-chip" data-an-rastchip><input type="radio" name="an-src" value="raster"><span>{% icon "server" 16 %}رستر موجود (روی سرور ما، سبک)</span></label>
+      </div></div>
+    <div data-an-sat>
+      <div class="field"><label>ماهواره</label><div class="chips" data-an-missions role="radiogroup" aria-label="ماهواره"></div></div>
+      <div class="field"><label>بازه‌ی زمانی</label>
+        <div class="chips" role="radiogroup" aria-label="بازه">
+          <label class="pick-chip"><input type="radio" name="an-period" value="60"><span>۲ ماه</span></label>
+          <label class="pick-chip"><input type="radio" name="an-period" value="120" checked><span>۴ ماه</span></label>
+          <label class="pick-chip"><input type="radio" name="an-period" value="250"><span>۸ ماه</span></label>
+          <label class="pick-chip"><input type="radio" name="an-period" value="365"><span>یک سال</span></label></div></div>
+      <div class="field"><label>حداکثر ابر هر تصویر</label>
+        <div class="chips" role="radiogroup" aria-label="ابر">
+          <label class="pick-chip"><input type="radio" name="an-cloud" value="20"><span>تا ۲۰٪</span></label>
+          <label class="pick-chip"><input type="radio" name="an-cloud" value="40" checked><span>تا ۴۰٪</span></label>
+          <label class="pick-chip"><input type="radio" name="an-cloud" value="70"><span>تا ۷۰٪</span></label></div></div>
+    </div>
+    <div class="field" data-an-rast hidden><label for="an-raster">رستر</label><select id="an-raster" aria-label="رستر"></select>
+      <p class="help small muted">رستر «همه‌ی باندها» برای هر شاخص، رستر تک‌باند (مثل NDVI) برای همان مقدار.</p></div>
+    <div class="field"><label class="pick-chip"><input type="checkbox" id="an-mask" checked><span>{% icon "cloud" 16 %}حذف ابر و سایه</span></label></div>
+    <div class="field"><label for="an-name">نام جدول نتیجه</label><input id="an-name" class="ltr" type="text" maxlength="39" autocomplete="off" placeholder="ndvi_parcels">
+      <p class="help small muted">جدول در پایگاه داده‌ی شما ساخته می‌شود؛ یک نمای «آخرین مقدار» با شکل قطعه‌ها هم کنارش می‌آید.</p></div>
+    <div class="sat-quote" data-an-quote aria-live="polite"></div>
+  </div>
+  <div class="dlg-f"><span class="sat-why small" data-an-why></span><button class="btn ghost" type="button" data-dialog-close>انصراف</button><button class="btn" type="button" data-an-go>{% icon "chart" 18 %}شروع تحلیل</button></div>
+</dialog>
+{% endif %}
