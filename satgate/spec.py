@@ -28,19 +28,29 @@ class Mission:
     scale: float = 0.0001   # بازتاب = DN × scale + offset (اگر خود دارایی raster:bands نداشت)
     offset: float = -0.1
     platforms: tuple = ()   # فیلتر platform در جست‌وجو (خالی = همه)
+    mask_asset: str = ""    # دارایی ماسک ابر: sentinel2 ← scl، landsat ← qa_pixel
 
 
 MISSIONS: dict[str, Mission] = {m.key: m for m in (
     Mission("sentinel2", "Sentinel-2", "ESA / Copernicus", COLLECTION_S2, 10, "هر ۵ روز", "۲۰۱۷",
             "تصویر چندطیفی با وضوح ۱۰ متر؛ بهترین انتخاب برای کشاورزی و شهر",
             {"red": "red", "green": "green", "blue": "blue", "nir": "nir", "rededge1": "rededge1", "rededge2": "rededge2",
-             "rededge3": "rededge3", "nir08": "nir08", "swir16": "swir16", "swir22": "swir22"}),
+             "rededge3": "rededge3", "nir08": "nir08", "swir16": "swir16", "swir22": "swir22"}, mask_asset="scl"),
     Mission("landsat", "Landsat 8/9", "USGS / NASA", COLLECTION_LANDSAT, 30, "هر ۸ روز", "۲۰۱۳",
             "وضوح ۳۰ متر و آرشیو چندساله؛ مناسب مقایسه‌ی سال‌ها و محدوده‌های بزرگ‌تر",
             {"red": "red", "green": "green", "blue": "blue", "nir": "nir08", "swir16": "swir16", "swir22": "swir22"},
-            scale=0.0000275, offset=-0.2, platforms=("landsat-8", "landsat-9")),
+            scale=0.0000275, offset=-0.2, platforms=("landsat-8", "landsat-9"), mask_asset="qa_pixel"),
 )}
 DEM_MISSION = "dem"
+
+# شاخص‌های نرمال‌شده: (باند اول − باند دوم) ÷ (باند اول + باند دوم) روی باندهای منطقی هر ماهواره
+INDICES: dict[str, tuple[str, str, str, str]] = {
+    "ndvi": ("nir", "red", "شاخص گیاهی NDVI", "سبزی و سلامت پوشش گیاهی"),
+    "ndwi": ("green", "nir", "شاخص آب NDWI", "آب‌های سطحی و دریاچه؛ مقدار بالا یعنی آب"),
+    "ndmi": ("nir", "swir16", "شاخص رطوبت NDMI", "رطوبت پوشش گیاهی؛ پایش تنش آبی"),
+    "nbr": ("nir", "swir22", "شاخص آتش‌سوزی NBR", "گیاه سالم در برابر سوخته"),
+    "ndbi": ("swir16", "nir", "شاخص ساخت‌وساز NDBI", "سطوح ساخته‌شده و خاک لخت"),
+}
 
 
 @dataclass(frozen=True)

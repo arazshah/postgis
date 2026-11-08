@@ -15,14 +15,15 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import protocol, stac
-from .process import ProcessError, build_dem, build_scene, check_limits
+from . import analysis, protocol, stac
+from .process import ProcessError, build_composite, build_dem, build_scene, check_limits
 from .spec import COLLECTION_DEM, COLLECTION_LANDSAT, COLLECTION_S2, DEM_MISSION, MISSIONS, get_product, valid_bbox
 from .store import ID_RE, Store
 
 log = logging.getLogger("satgate")
-VERSION = "1.1"
+VERSION = "1.2"
 MAX_BODY = 64 * 1024
+MAX_BODY_ANALYZE = 4 * 1024 * 1024   # عارضه‌های کاربر برای آمار هر ناحیه
 
 
 class Config:
@@ -35,6 +36,14 @@ class Config:
         self.workers = int(env.get("SATGATE_WORKERS", "2"))
         self.keep_hours = float(env.get("SATGATE_KEEP_HOURS", "24"))
         self.max_active = int(env.get("SATGATE_MAX_ACTIVE", "20"))
+
+
+def _load() -> float:
+    """بار ۱ دقیقه‌ی دروازه ÷ تعداد هسته؛ برای اینکه پنل ببیند ظرفیت دارد."""
+    try:
+        return round(os.getloadavg()[0] / max(os.cpu_count() or 1, 1), 2)
+    except (OSError, AttributeError):
+        return 0.0
 
 
 class Gateway:
@@ -61,7 +70,12 @@ class Gateway:
         bbox = body.get("bbox")
         if not valid_bbox(bbox):
             return 400, {"error": "محدوده نامعتبر است."}
-        if spec.needs_scene and not str(body.get("scene", "")).strip():
+        comp = body.get("composite") or None
+        if comp:
+            comp, err = _composite_params(comp, spec)
+            if err:
+                return 400, {"error": err}
+        elif spec.needs_scene and not str(body.get("scene", "")).strip():
             return 400, {"error": "تصویر انتخاب نشده است."}
         try:
             cap = min(float(body.get("max_km2") or self.cfg.max_km2), self.cfg.max_km2)
@@ -71,24 +85,74 @@ class Gateway:
         if self.store.active() >= self.cfg.max_active:
             return 503, {"error": "صف دروازه پر است؛ کمی بعد دوباره امتحان کنید."}
         job = {"id": jid, "status": "queued", "product": product, "mission": mission, "bbox": [float(v) for v in bbox],
-               "scene": str(body.get("scene", ""))[:120], "created": int(time.time()), "message": ""}
+               "scene": str(body.get("scene", ""))[:120], "created": int(time.time()), "message": "",
+               "mask": bool(body.get("mask")), "composite": comp}
         self.store.put(job)
         self.pool.submit(self.run, jid)
         return 202, _public(job)
 
+    def submit_analysis(self, body: dict) -> tuple[int, dict]:
+        jid = str(body.get("id", ""))
+        if not ID_RE.match(jid):
+            return 400, {"error": "شناسه نامعتبر است."}
+        old = self.store.get(jid)
+        if old:
+            return 200, _public(old)
+        try:
+            cap = min(float(body.get("max_km2") or self.cfg.max_km2), self.cfg.max_km2)
+        except (TypeError, ValueError):
+            return 400, {"error": "سقف مساحت نامعتبر است."}
+        params, err = analysis.validate(body, cap)
+        if err:
+            return 422, {"error": err}
+        if self.store.active() >= self.cfg.max_active:
+            return 503, {"error": "صف دروازه پر است؛ کمی بعد دوباره امتحان کنید."}
+        job = {"id": jid, "kind": "zonal", "status": "queued", "product": params["index"], "mission": params["mission"],
+               "params": params, "created": int(time.time()), "message": ""}
+        self.store.put(job)
+        self.pool.submit(self.run, jid)
+        return 202, _public(job)
+
+    def _run_zonal(self, jid: str, job: dict) -> dict:
+        sign_for = lambda c: (lambda href: stac.sign_href(c, href, self.fetch))  # noqa: E731
+        res = analysis.run_zonal(job["params"], self.fetch, sign_for)
+        data = json.dumps(res, ensure_ascii=False).encode()
+        self.store.result(jid).write_bytes(data)
+        return self.store.update(jid, status="ready", size=len(data), sha256=hashlib.sha256(data).hexdigest(), message="",
+                                 used=len(res["scenes"]), of=len(res["scenes"]) + len(res["skipped"]), rows=len(res["rows"]),
+                                 params=None)       # عارضه‌های کاربر بعد از اتمام روی دروازه نمی‌ماند
+
     def run(self, jid: str) -> None:
         job = self.store.update(jid, status="running")
+        if job.get("kind") == "zonal":
+            try:
+                job = self._run_zonal(jid, job)
+            except (ProcessError, stac.StacError, analysis.ZonalError) as exc:
+                job = self.store.update(jid, status="failed", message=str(exc)[:300], params=None)
+            except Exception as exc:  # noqa: BLE001
+                log.exception("analysis %s failed", jid)
+                detail = f": {exc}"[:160] if isinstance(exc, (ImportError, OSError)) else ""
+                job = self.store.update(jid, status="failed", params=None,
+                                        message=f"تحلیل ناموفق بود ({exc.__class__.__name__}{detail}).")
+            self.notify(job)
+            return
         out = self.store.file(jid)
         part = out.with_suffix(".part.tif")
         try:
             mission = job.get("mission") or "sentinel2"
             spec = get_product(mission, job["product"])
+            sign = lambda href, c=spec.collection: stac.sign_href(c, href, self.fetch)  # noqa: E731
+            extra = {}
             if spec.collection == COLLECTION_DEM:
                 build_dem(stac.dem_items(job["bbox"], self.fetch), job["bbox"], part)
+            elif job.get("composite"):
+                items = self._composite_items(job, mission, spec)
+                _, used = build_composite(items, mission, job["product"], job["bbox"], part, sign=sign,
+                                          mask=bool(job.get("mask", True)))
+                extra = {"used": used, "of": len(items)}
             else:
                 item = stac.get_item(spec.collection, job["scene"], self.fetch)
-                build_scene(item, mission, job["product"], job["bbox"], part,
-                            sign=lambda href, c=spec.collection: stac.sign_href(c, href, self.fetch))
+                build_scene(item, mission, job["product"], job["bbox"], part, sign=sign, mask=bool(job.get("mask")))
             size = part.stat().st_size
             if size > self.cfg.max_mb * 1024 * 1024:
                 raise ProcessError(f"خروجی {size // 1048576} مگابایت شد و از سقف {self.cfg.max_mb} بیشتر است.")
@@ -97,7 +161,7 @@ class Gateway:
             with open(out, "rb") as f:
                 for chunk in iter(lambda: f.read(1 << 20), b""):
                     digest.update(chunk)
-            job = self.store.update(jid, status="ready", size=size, sha256=digest.hexdigest(), message="")
+            job = self.store.update(jid, status="ready", size=size, sha256=digest.hexdigest(), message="", **extra)
         except (ProcessError, stac.StacError) as exc:
             part.unlink(missing_ok=True)
             job = self.store.update(jid, status="failed", message=str(exc)[:300])
@@ -108,6 +172,16 @@ class Gateway:
             detail = f": {exc}"[:160] if isinstance(exc, (ImportError, OSError)) else ""
             job = self.store.update(jid, status="failed", message=f"پردازش ناموفق بود ({exc.__class__.__name__}{detail}).")
         self.notify(job)
+
+    def _composite_items(self, job: dict, mission: str, spec) -> list[dict]:
+        """تصویرهای بازه را خود دروازه پیدا می‌کند: کم‌ابرترین‌ها با پوشش کافی، تا سقف تعداد."""
+        c = job["composite"]
+        found = stac.search(job["bbox"], c["start"], c["end"], c["max_cloud"], 30, self.fetch, mission=mission)
+        found = [x for x in found if x["coverage"] >= 30]
+        if not found:
+            raise ProcessError("تصویری با این شرایط در بازه پیدا نشد؛ بازه یا ابر مجاز را بیشتر کنید.")
+        found.sort(key=lambda x: (x["cloud"], -int(x["datetime"][:10].replace("-", "") or 0)))
+        return [stac.get_item(spec.collection, x["id"], self.fetch) for x in found[: c["max_scenes"]]]
 
     def notify(self, job: dict) -> None:
         """هوک به پنل؛ اگر نرسید، پنل خودش وضعیت را می‌پرسد."""
@@ -178,8 +252,28 @@ class Gateway:
             self.store.cleanup(self.cfg.keep_hours)
 
 
+MAX_COMPOSITE_SCENES = 10
+
+
+def _composite_params(c, spec) -> tuple[dict | None, str]:
+    """اعتبارسنجی پارامترهای ترکیب بی‌ابر: بازه‌ی تاریخ، سقف ابر و تعداد تصویر."""
+    from datetime import date
+
+    if not spec.needs_scene:
+        return None, "ترکیب فقط برای تصویرهای ماهواره‌ای است، نه ارتفاع."
+    try:
+        start, end = date.fromisoformat(str(c.get("start"))[:10]), date.fromisoformat(str(c.get("end"))[:10])
+        cloud = min(max(float(c.get("max_cloud", 40)), 0), 100)
+        n = min(max(int(c.get("max_scenes", 6)), 2), MAX_COMPOSITE_SCENES)
+    except (TypeError, ValueError, AttributeError):
+        return None, "پارامتر ترکیب نامعتبر است."
+    if start > end or (end - start).days > 400:
+        return None, "بازه‌ی ترکیب باید بین یک روز تا ۴۰۰ روز باشد."
+    return {"start": start.isoformat(), "end": end.isoformat(), "max_cloud": cloud, "max_scenes": n}, ""
+
+
 def _public(job: dict) -> dict:
-    keys = ("id", "status", "message", "size", "sha256", "product")
+    keys = ("id", "kind", "status", "message", "size", "sha256", "product", "used", "of", "rows")
     return {k: job[k] for k in keys if k in job}
 
 
@@ -209,12 +303,12 @@ def make_app(gw: Gateway):
         gw.maintenance()
         if path == "/v1/health":
             return _resp(start, 200, {"ok": True, "version": VERSION, "active": gw.store.active(),
-                                      "configured": bool(gw.cfg.secret)})
+                                      "configured": bool(gw.cfg.secret), "load": _load()})
         try:
             n = int(environ.get("CONTENT_LENGTH") or 0)
         except ValueError:
             n = 0
-        if n > MAX_BODY:
+        if n > (MAX_BODY_ANALYZE if path == "/v1/analyze" else MAX_BODY):
             return _resp(start, 400, {"error": "بدنه‌ی درخواست بزرگ است."})
         body = environ["wsgi.input"].read(n) if n else b""
         target = path + (f"?{query}" if query else "")
@@ -239,6 +333,9 @@ def make_app(gw: Gateway):
             except (TypeError, ValueError):
                 return _resp(start, 400, {"error": "پارامتر نامعتبر است."})
             return _resp(start, 200, {"scenes": scenes})
+        if path == "/v1/analyze" and method == "POST":
+            code, out = gw.submit_analysis(data)
+            return _resp(start, code, out)
         if path == "/v1/jobs" and method == "POST":
             code, out = gw.submit(data)
             return _resp(start, code, out)
@@ -268,6 +365,11 @@ def make_app(gw: Gateway):
             if len(rest) == 1 and method == "DELETE":
                 gw.store.delete(jid)
                 return _resp(start, 200, {"ok": True})
+            if rest[1:] == ["result"] and method == "GET":
+                f = gw.store.result(jid)
+                if job.get("status") != "ready" or not f.exists():
+                    return _resp(start, 404, {"error": "نتیجه آماده نیست."})
+                return _resp(start, 200, f.read_bytes())
             if rest[1:] == ["file"] and method == "GET":
                 return _file(environ, start, gw.store.file(jid), job)
         return _resp(start, 404, {"error": "پیدا نشد."})

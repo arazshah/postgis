@@ -46,6 +46,8 @@ def _plan_values(plan) -> dict[str, str]:
         "plan_find_credits": fanum(g("find_layer_credits", 50)),
         "plan_raster_mb": fanum(g("raster_mb", 200)),
         "plan_sat_credits": fanum(g("sat_credits", 10)),
+        "plan_sat_analysis": fanum(g("sat_analysis_credits", 6)),
+        "plan_sat_monitors": fanum(g("sat_monitors", 1)),
         "plan_sat_km2": fanum(g("sat_max_km2", 100)),
     }
 

@@ -24,6 +24,15 @@ def run() -> list[tuple[bool, str]]:
     except (urllib.error.URLError, OSError, ValueError) as exc:
         return [(False, f"به دروازه نرسیدیم ({exc.__class__.__name__}). نشانی، DNS، گواهی HTTPS و فایروال سرور خارجی را بررسی کنید.")]
     out.append((True, f"دروازه در دسترس است (نسخه‌ی {info.get('version')}، {int((time.monotonic() - t) * 1000)} میلی‌ثانیه)."))
+    if info.get("load") is not None:
+        out.append((True, f"بار دروازه: {info['load']} (۱ یعنی همه‌ی هسته‌ها پر)."))
+    try:
+        from . import router
+        st = router.status()
+        out.append((True, f"سرور ایران: بار {st['load']} از سقف {st['max_load']}؛ "
+                          + ("آماده‌ی پذیرش کار محلی سبک." if st["local_ok"] else f"کار محلی پذیرفته نمی‌شود ({st['why']})")))
+    except Exception:  # noqa: BLE001 اطلاع جانبی است
+        pass
     if not info.get("configured"):
         out.append((False, "روی دروازه SATGATE_SECRET تنظیم نشده است."))
         return out

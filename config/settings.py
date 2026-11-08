@@ -299,3 +299,8 @@ SATGATE_URL = os.environ.get("SATGATE_URL", "").rstrip("/")
 SATGATE_SECRET = os.environ.get("SATGATE_SECRET", "")
 SATGATE_TIMEOUT = int(os.environ.get("SATGATE_TIMEOUT", "20"))
 SATGATE_JOB_TIMEOUT_MIN = int(os.environ.get("SATGATE_JOB_TIMEOUT_MIN", "40"))
+
+# تعادل بار: سرور ایران فقط کار سبک می‌کند (آمار روی رستر کوچک موجود)؛ پردازش سنگین ماهواره روی دروازه است.
+SAT_LOCAL_MAX_LOAD = float(os.environ.get("SAT_LOCAL_MAX_LOAD", "0.75"))      # بار ۱ دقیقه ÷ تعداد هسته
+SAT_LOCAL_MAX_PIXELS = int(os.environ.get("SAT_LOCAL_MAX_PIXELS", "4000000"))  # پیکسل × باند برای هر کار محلی
+SAT_LOCAL_MAX_JOBS = int(os.environ.get("SAT_LOCAL_MAX_JOBS", "2"))           # کار محلی در صف یا در حال اجرا

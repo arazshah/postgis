@@ -22,6 +22,7 @@ class Job(models.Model):
         TOOL = "tool", "ابزار تحلیل"
         FIND = "find", "ذخیره‌ی نتیجه‌ی یافتن عارضه"
         SATELLITE = "satellite", "دریافت تصویر ماهواره‌ای"
+        SAT_ANALYSIS = "sat_analysis", "تحلیل ماهواره‌ای"
 
     class Status(models.TextChoices):
         DRAFT = "draft", "منتظر تأیید کاربر"

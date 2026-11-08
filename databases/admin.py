@@ -184,7 +184,7 @@ class PlanAdmin(TabbedAdminMixin, admin.ModelAdmin):
         ("انتشار نقشه", {"classes": ("ap-tab-feat",), "fields": ("publish_layers", "publish_daily_requests", "map_badge", "maps", "map_layers", "map_charts")}),
         ("برداشت میدانی", {"classes": ("ap-tab-feat",), "fields": ("survey_projects", "survey_max_points", "gnss_external")}),
         ("یافتن عارضه", {"classes": ("ap-tab-feat",), "fields": ("find_layer_credits",)}),
-        ("رستر و تصویر ماهواره‌ای", {"classes": ("ap-tab-feat",), "fields": ("raster_mb", "sat_credits", "sat_max_km2")}),
+        ("رستر و تصویر ماهواره‌ای", {"classes": ("ap-tab-feat",), "fields": ("raster_mb", "sat_credits", "sat_max_km2", "sat_analysis_credits", "sat_monitors")}),
         ("مدت و قیمت", {"classes": ("ap-tab-main",), "fields": ("duration_days", "price_toman", "is_free", "is_renewable"),
                         "description": "درگاه پرداخت فعلاً فعال نیست؛ پلن‌های پولی در سایت با دکمه «درخواست از پشتیبانی» "
                                        "نمایش داده می‌شوند و شما پلن پایگاه داده کاربر را از همین پنل تغییر می‌دهید."}),

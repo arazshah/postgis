@@ -163,14 +163,40 @@ def search(db: UserDatabase, user, data: dict) -> list[dict]:
 
 
 # ---------------------------------------------------------------------- سفارش
+COMPOSITE_MAX_SCENES = 6
+
+
+def _composite(data: dict, p) -> dict | None:
+    """پارامترهای ترکیب بی‌ابر (بازه، ابر مجاز، تعداد تصویر) یا None برای تصویر تکی."""
+    c = data.get("composite")
+    if not c:
+        return None
+    if not p.needs_scene:
+        raise SatError("ترکیب بی‌ابر برای ارتفاع (DEM) معنی ندارد.", "composite")
+    try:
+        start, end = date.fromisoformat(str(c.get("start"))[:10]), date.fromisoformat(str(c.get("end"))[:10])
+        cloud = min(max(float(c.get("max_cloud", 40)), 0), 100)
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise SatError("بازه‌ی ترکیب نامعتبر است.", "dates") from exc
+    end = min(end, timezone.localdate())
+    if start > end or (end - start).days > SEARCH_MAX_DAYS:
+        raise SatError(f"بازه‌ی ترکیب باید بین یک روز تا {fa(SEARCH_MAX_DAYS)} روز باشد.", "dates")
+    return {"start": start.isoformat(), "end": end.isoformat(), "max_cloud": cloud, "max_scenes": COMPOSITE_MAX_SCENES}
+
+
 def order(db: UserDatabase, user, data: dict) -> SatRequest:
     product = data.get("product")
     mission = _mission(product, data.get("mission"))
     q = quote(db, data.get("bbox"), product, mission)
     p = spec.get_product(mission, product)
+    composite = _composite(data, p)
+    mask = bool(data.get("mask")) and p.needs_scene
     scene = str(data.get("scene") or "").strip()
-    if p.needs_scene and not SCENE_RE.match(scene):
-        raise SatError("اول یکی از تصویرها را انتخاب کنید.", "scene")
+    if composite:
+        mask = bool(data.get("mask", True))
+        scene = ""
+    elif p.needs_scene and not SCENE_RE.match(scene):
+        raise SatError("اول یکی از تصویرها را انتخاب کنید یا «ترکیب بی‌ابر» را بزنید.", "scene")
     if not client.configured():
         raise SatError("سرویس تصویر ماهواره‌ای هنوز راه‌اندازی نشده است.", "off")
     with transaction.atomic():
@@ -183,11 +209,13 @@ def order(db: UserDatabase, user, data: dict) -> SatRequest:
                                                               SatRequest.Status.DOWNLOADING]).count() >= MAX_ACTIVE:
             raise SatError(f"حداکثر {fa(MAX_ACTIVE)} دریافت هم‌زمان ممکن است؛ تا تمام شدن قبلی‌ها صبر کنید.", "busy")
         req = SatRequest.objects.create(
-            database=db, user=user, mission=mission, product=product, scene_id=scene if p.needs_scene else p.collection,
-            scene_date=str(data.get("scene_date") or "")[:25], cloud=_num(data.get("cloud")), bbox=q["bbox"],
+            database=db, user=user, mission=mission, product=product, mask=mask, composite=composite,
+            scene_id=("composite:" + mission) if composite else (scene if p.needs_scene else p.collection),
+            scene_date=(composite["end"] if composite else str(data.get("scene_date") or "")[:25]), cloud=_num(data.get("cloud")), bbox=q["bbox"],
             area_km2=q["area_km2"], est_bytes=q["est_bytes"])
     try:
         client.call("POST", "/v1/jobs", {"id": req.token, "product": product, "mission": mission, "scene": scene, "bbox": q["bbox"],
+                                         "mask": mask, "composite": composite,
                                          "max_km2": db.plan.sat_max_km2})
     except client.GatewayError as exc:
         _fail(req, str(exc))
@@ -217,12 +245,14 @@ def on_remote(payload: dict) -> bool:
     with transaction.atomic():
         req = SatRequest.objects.select_for_update().filter(token=str(payload.get("id", ""))).first()
         if req is None:
-            return False
+            from . import zonal_service  # شناسه‌ی تحلیل (آمار هر ناحیه)، نه دریافت تصویر
+            return bool(zonal_service.on_remote(payload))
         if req.status != SatRequest.Status.PROCESSING:
             return True
         if payload.get("status") == "ready":
             req.status = SatRequest.Status.DOWNLOADING
-            req.remote = {"size": int(payload.get("size") or 0), "sha256": str(payload.get("sha256") or "")}
+            req.remote = {"size": int(payload.get("size") or 0), "sha256": str(payload.get("sha256") or ""),
+                          "used": payload.get("used"), "of": payload.get("of")}
             req.save(update_fields=["status", "remote", "updated_at"])
             Job.objects.create(kind=Job.Kind.SATELLITE, database=req.database, user=req.user, trigger=Job.Trigger.SYSTEM,
                                status=Job.Status.QUEUED, params={"request": req.pk})
@@ -253,7 +283,8 @@ def poll(now: datetime | None = None) -> int:
     stale = SatRequest.objects.filter(status=SatRequest.Status.DOWNLOADING, updated_at__lt=now - timedelta(hours=3))
     for req in stale:
         _fail(req, "دریافت فایل کامل نشد؛ دوباره درخواست بدهید. اعتبار شما برگردانده شد.")
-    return n + stale.count()
+    from . import zonal_service
+    return n + stale.count() + zonal_service.poll(now)
 
 
 def _forget(req: SatRequest) -> None:
@@ -276,7 +307,8 @@ def ingest(job: Job) -> str:
     raster = Raster.objects.create(
         database=db, title=req.title[:120], original_name=f"{req.product}.tif", created_by=req.user,
         meta={"source": {"sentinel-2-l2a": "sentinel-2", "landsat-c2-l2": "landsat"}.get(p.collection, "copernicus-dem"),
-              "mission": req.mission, "product": req.product,
+              "mission": req.mission, "product": req.product, "mask": req.mask, "composite": req.composite,
+              "used": (req.remote or {}).get("used"),
               "scene": req.scene_id, "datetime": req.scene_date, "cloud": req.cloud, "bbox": req.bbox,
               "attribution": ATTRIBUTION[p.collection]})
     try:

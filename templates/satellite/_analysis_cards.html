@@ -1,0 +1,34 @@
+{% load fa ws %}
+{% for a in items %}
+<article class="card sat-card sat-an" data-st="{{ a.status }}">
+  <div class="sat-body">
+    <div class="sat-row">
+      <h2>{{ a.index_title }}</h2>
+      <span class="badge {% if a.status == 'ready' %}active{% elif a.status == 'failed' %}error{% else %}warn{% endif %}">{{ a.get_status_display }}</span>
+      <div class="pop-wrap">
+        <button class="ib sm" type="button" data-pop="an-m{{ a.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های تحلیل">{% icon "more" 16 %}</button>
+        <div class="pop-m" id="an-m{{ a.pk }}" role="menu" hidden>
+          {% if a.status == 'ready' %}
+          <a role="menuitem" href="{% url 'databases:explore_table' db.pk 'public' a.name %}">{% icon "table" 18 %}<span>جدول نتیجه</span></a>
+          <a role="menuitem" href="{% url 'databases:explore_table' db.pk 'public' a.latest_name %}">{% icon "layers" 18 %}<span>لایه‌ی آخرین مقدار (روی نقشه)</span></a>
+          {% endif %}
+          {% if db.can_edit and not a.active %}
+          <div class="msep"></div>
+          <form method="post" action="{% url 'satellite:an_delete' db.pk a.pk %}" data-confirm="این تحلیل از فهرست حذف شود؟ جدول نتیجه در پایگاه داده‌ی شما می‌ماند." data-confirm-title="حذف تحلیل" data-confirm-text="حذف">{% csrf_token %}<button role="menuitem" class="danger" type="submit">{% icon "trash" 18 %}<span>حذف از فهرست</span></button></form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <p class="sat-sat">{% icon "layers" 14 %}<b class="ltr">{{ a.layer }}</b><span class="muted">{{ a.features|fanum }} عارضه · {{ a.area_km2|floatformat:"1"|fanum }} کیلومتر مربع</span></p>
+    <p class="small muted sat-meta">
+      {% if a.source == 'satellite' %}<span>{% icon "satellite" 14 %}{{ a.mission_title }}</span>{% if a.start %}<span>{% icon "clock" 14 %}{{ a.start|jdate }} تا {{ a.end|jdate }}</span>{% endif %}
+      {% else %}<span>{% icon "server" 14 %}رستر موجود (محلی)</span>{% endif %}
+      {% if a.status == 'ready' %}<span>{% icon "db" 14 %}<span class="ltr">{{ a.name }}</span> · {{ a.rows|fanum }} ردیف</span>{% endif %}
+    </p>
+    {% if a.status == 'failed' %}<div class="msg error small">{{ a.message|default:"محاسبه ناموفق بود." }}{% if not a.charged and a.source == 'satellite' %} اعتبار شما برگردانده شد.{% endif %}</div>
+    {% elif a.active %}<div class="sat-bar" role="progressbar" aria-label="در حال محاسبه"><i></i></div><p class="small muted">{% if a.status == 'processing' %}دروازه تصویرها را می‌خواند و آمار هر قطعه را حساب می‌کند؛ چند دقیقه طول می‌کشد.{% else %}نتیجه آماده است و در حال نوشتن جدول در پایگاه داده‌ی شماست.{% endif %}</p>
+    {% elif a.status == 'ready' %}{% if a.message %}<p class="small muted">{{ a.message }}</p>{% endif %}
+    <div class="sat-foot"><button class="btn sm" type="button" data-an-chart data-id="{{ a.pk }}" data-title="{{ a.index_title }} · {{ a.layer }}" data-series="{% url 'satellite:an_series' db.pk a.pk %}">{% icon "chart" 16 %}نمودار روند</button></div>{% endif %}
+  </div>
+</article>
+{% endfor %}

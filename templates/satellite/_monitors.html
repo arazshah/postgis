@@ -1,0 +1,32 @@
+{% load fa ws %}
+{% for m in monitors %}
+<article class="card sat-card sat-an">
+  <div class="sat-body">
+    <div class="sat-row">
+      <h2>{{ m.name }}</h2>
+      <span class="badge {% if m.enabled %}active{% else %}warn{% endif %}">{% if m.enabled %}فعال{% else %}متوقف{% endif %}</span>
+      {% if db.can_edit %}
+      <div class="pop-wrap">
+        <button class="ib sm" type="button" data-pop="mon-m{{ m.pk }}" aria-haspopup="menu" aria-expanded="false" aria-label="گزینه‌های پایش">{% icon "more" 16 %}</button>
+        <div class="pop-m" id="mon-m{{ m.pk }}" role="menu" hidden>
+          <a role="menuitem" href="{% url 'databases:explore_table' db.pk 'public' m.table_name %}">{% icon "table" 18 %}<span>جدول نتیجه</span></a>
+          <form method="post" action="{% url 'satellite:mon_action' db.pk m.pk 'run' %}">{% csrf_token %}<button role="menuitem" type="submit">{% icon "refresh" 18 %}<span>بررسی همین حالا</span></button></form>
+          <form method="post" action="{% url 'satellite:mon_action' db.pk m.pk 'toggle' %}">{% csrf_token %}<button role="menuitem" type="submit">{% icon "clock" 18 %}<span>{% if m.enabled %}توقف پایش{% else %}ازسرگیری پایش{% endif %}</span></button></form>
+          <div class="msep"></div>
+          <form method="post" action="{% url 'satellite:mon_action' db.pk m.pk 'delete' %}" data-confirm="این پایش حذف شود؟ جدول نتیجه در پایگاه داده‌ی شما می‌ماند." data-confirm-title="حذف پایش" data-confirm-text="حذف">{% csrf_token %}<button role="menuitem" class="danger" type="submit">{% icon "trash" 18 %}<span>حذف پایش</span></button></form>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    <p class="sat-sat">{% icon "layers" 14 %}<b class="ltr">{{ m.layer }}</b><span class="muted">{{ m.get_every_days_display }} · هشدار با افت {{ m.drop_pct|fanum }}٪</span></p>
+    <p class="small muted sat-meta">
+      <span>{% icon "satellite" 14 %}{{ m.mission_title }} · {{ m.index_title }}</span>
+      {% if m.last_scene_date %}<span>{% icon "clock" 14 %}آخرین تصویر {{ m.last_scene_date|jdate }}</span>{% endif %}
+      {% if m.last_alert_at %}<span>{% icon "bell" 14 %}آخرین هشدار {{ m.last_alert_at|jdate }}</span>{% endif %}
+    </p>
+    {% if m.last_message %}<p class="small muted">{{ m.last_message }}</p>{% endif %}
+  </div>
+</article>
+{% empty %}
+<div class="empty">{% icon "bell" 28 %}<h2>پایشی ندارید</h2><p class="muted">یک لایه‌ی چندضلعی انتخاب کنید تا هر چند روز یک‌بار خودکار بررسی شود.</p></div>
+{% endfor %}
