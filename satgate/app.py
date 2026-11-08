@@ -38,6 +38,14 @@ class Config:
         self.max_active = int(env.get("SATGATE_MAX_ACTIVE", "20"))
 
 
+def _load() -> float:
+    """بار ۱ دقیقه‌ی دروازه ÷ تعداد هسته؛ برای اینکه پنل ببیند ظرفیت دارد."""
+    try:
+        return round(os.getloadavg()[0] / max(os.cpu_count() or 1, 1), 2)
+    except (OSError, AttributeError):
+        return 0.0
+
+
 class Gateway:
     def __init__(self, cfg: Config, fetch=stac.fetch_json, post=None):
         self.cfg, self.fetch = cfg, fetch
@@ -295,7 +303,7 @@ def make_app(gw: Gateway):
         gw.maintenance()
         if path == "/v1/health":
             return _resp(start, 200, {"ok": True, "version": VERSION, "active": gw.store.active(),
-                                      "configured": bool(gw.cfg.secret)})
+                                      "configured": bool(gw.cfg.secret), "load": _load()})
         try:
             n = int(environ.get("CONTENT_LENGTH") or 0)
         except ValueError:

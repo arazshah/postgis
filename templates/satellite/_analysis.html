@@ -23,3 +23,13 @@
   <p class="muted">یک لایه‌ی چندضلعی (مثلاً قطعه‌های زمین) و یک شاخص انتخاب کنید تا سری زمانی آن را ببینید.</p>
   {% if db.can_edit %}<button class="btn" type="button" data-an-open{% if not configured %} disabled{% endif %}>{% icon "plus" 18 %}اولین تحلیل</button>{% endif %}</div>
 {% endif %}
+
+<section class="sat-mon" aria-labelledby="mon-h">
+  <div class="sat-an-head">
+    <div><h2 id="mon-h" class="sat-h2">{% icon "bell" 18 %}پایش خودکار</h2>
+      <p class="muted small">هر هفته یا ماه تصویر تازه را برای قطعه‌هایتان می‌سنجد، به همان جدول اضافه می‌کند و اگر شاخص یک قطعه افت کرد اعلان می‌فرستد. <b>{{ mon_lim.used|fanum }} از {{ mon_lim.cap|fanum }}</b> پایش پلن شما.</p></div>
+    {% if db.can_edit %}<button class="btn ghost" type="button" data-mon-open{% if not configured or not mon_lim.cap %} disabled title="{% if not mon_lim.cap %}پلن شما پایش خودکار ندارد{% else %}سرویس هنوز راه‌اندازی نشده است{% endif %}"{% endif %}>{% icon "plus" 18 %}پایش تازه</button>{% endif %}
+  </div>
+  {% if not mon_lim.cap %}<div class="msg small">پلن فعلی پایش خودکار ندارد. <a href="{% url 'billing:plans' %}">مقایسه‌ی پلن‌ها</a></div>{% endif %}
+  <div class="sat-cards">{% include "satellite/_monitors.html" %}</div>
+</section>

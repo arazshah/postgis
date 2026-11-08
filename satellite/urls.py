@@ -21,5 +21,7 @@ urlpatterns = [
     path("dashboard/<int:pk>/satellite/analysis/order/", views.an_order, name="an_order"),
     path("dashboard/<int:pk>/satellite/analysis/<int:an_id>/series/", views.an_series, name="an_series"),
     path("dashboard/<int:pk>/satellite/analysis/<int:an_id>/delete/", views.an_delete, name="an_delete"),
+    path("dashboard/<int:pk>/satellite/monitor/create/", views.mon_create, name="mon_create"),
+    path("dashboard/<int:pk>/satellite/monitor/<int:mon_id>/<str:action>/", views.mon_action, name="mon_action"),
     path("hooks/satellite/", views.hook, name="hook"),
 ]

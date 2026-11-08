@@ -12,6 +12,7 @@
   <tr><td>برداشت میدانی</td><td>{{ plan.survey_projects|fanum }} پروژه، حداکثر {{ plan.survey_max_points|fanum }} نقطه{% if not plan.gnss_external %}، فقط GPS گوشی{% endif %}</td></tr>
   <tr><td>یافتن عارضه</td><td>شرط توصیفی و شکل کشیده‌شده نامحدود؛ شرط مکانی بین دو لایه {{ plan.find_layer_credits|fanum }} بار در ۳۰ روز</td></tr>
   <tr><td>رستر و تصویر ماهواره‌ای</td><td>فضای رستر {{ plan.raster_mb|fanum }} مگابایت؛ دریافت تصویر ماهواره‌ای {{ plan.sat_credits|fanum }} بار در ۳۰ روز، هر بار تا {{ plan.sat_max_km2|fanum }} کیلومتر مربع</td></tr>
+  <tr><td>تحلیل ماهواره‌ای</td><td>{{ plan.sat_analysis_credits|fanum }} تحلیل «آمار هر قطعه» در ۳۰ روز؛ {{ plan.sat_monitors|fanum }} پایش خودکار با هشدار</td></tr>
 </table>
 {% endif %}
 <h2>وقتی حجم پر شود</h2>

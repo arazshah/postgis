@@ -26,6 +26,7 @@ from databases.provisioner import Provisioner
 from enterprise.models import Raster
 from jobs import services as jobs
 from jobs.models import Job
+from notifications.models import Notification
 from satellite import client, router, services, zonal_service
 from satellite.models import SatAnalysis
 from satgate import protocol
@@ -506,3 +507,30 @@ class PostgisTests(TestCase):
         self.assertAlmostEqual(s["mean"][1], 0.3, places=3)                  # میانگین A=.5 و B=.1 در ۱۰/۰۱
         self.assertEqual(s["feature"]["mean"], [.3, .5])
         self.assertEqual(s["features"], ["A", "B"])
+
+    def test_monitor_appends_and_compares_with_previous_scene(self):
+        from satellite import monitor_service
+        from satellite.models import SatMonitor
+
+        m = SatMonitor.objects.create(database=self.db, user=self.user, name="باغ", layer="parcels", id_column="pid",
+                                      table_name="mon_ndvi_parcels", drop_pct=20, min_valid_pct=50)
+        an = SatAnalysis.objects.create(database=self.db, user=self.user, name=m.table_name, layer="parcels", id_column="pid",
+                                        index="ndvi", monitor=m, charged=False)
+        row = lambda f, d, mean, v=100.0: {"feature": f, "date": d, "scene": "S_" + d, "mean": mean, "valid_pct": v, "count": 10, "valid": 10}  # noqa: E731
+        first = [row("A", "2026-09-01", .6), row("B", "2026-09-01", .5)]
+        zonal_service.write_table(an, first)
+        monitor_service.after_run(an, first)
+        m.refresh_from_db()
+        self.assertEqual(str(m.last_scene_date), "2026-09-01")
+        self.assertEqual(Notification.objects.count(), 0)               # فقط یک تصویر: چیزی برای مقایسه نیست
+        second = [row("A", "2026-09-10", .3), row("B", "2026-09-10", .49), row("B", "2026-09-10", .1, 20.0)]
+        second[2]["scene"] = "S_cloudy"
+        zonal_service.write_table(an, second)                          # به جدول موجود اضافه می‌شود، نه خطا
+        zonal_service.write_table(an, second)                          # دوباره‌نوشتن همان ردیف‌ها بی‌اثر است
+        monitor_service.after_run(an, second)
+        with psycopg.connect(host=self.db.server.host, port=self.db.server.port, user=self.db.role_name, password="Sat-Pass-12",
+                             dbname=self.db.db_name) as c:
+            self.assertEqual(c.execute("SELECT count(*) FROM mon_ndvi_parcels").fetchone()[0], 5)
+        n = Notification.objects.get()
+        self.assertIn("A", n.body)
+        self.assertNotIn("B", n.body)                                   # B فقط ۲٪ کم شد؛ ردیف ابری ۲۰٪ پیکسل نادیده ماند

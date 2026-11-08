@@ -52,3 +52,29 @@
   <div class="dlg-f"><span class="sat-why small" data-an-why></span><button class="btn ghost" type="button" data-dialog-close>انصراف</button><button class="btn" type="button" data-an-go>{% icon "chart" 18 %}شروع تحلیل</button></div>
 </dialog>
 {% endif %}
+
+{% if db.can_edit and configured and mon_lim.cap %}
+<dialog class="dlg sat-andlg" id="mon-dlg" aria-labelledby="mon-t">
+  <div class="dlg-h"><span class="dlg-i">{% icon "bell" 22 %}</span><h2 id="mon-t">پایش تازه</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+  <div class="dlg-b">
+    <div class="field"><label for="mon-layer">لایه‌ی چندضلعی</label>
+      <div class="sat-two"><select id="mon-layer" class="ltr" aria-label="لایه"></select><select id="mon-id" class="ltr" aria-label="ستون شناسه"></select></div>
+      <p class="help small muted" data-mon-nolayer hidden>لایه‌ی چندضلعی ندارید؛ ابتدا قطعه‌ها را وارد کنید.</p></div>
+    <div class="field"><label>شاخص</label><div class="sat-prods" data-mon-indices role="radiogroup" aria-label="شاخص"></div></div>
+    <div class="field"><label>ماهواره</label><div class="chips" data-mon-missions role="radiogroup" aria-label="ماهواره"></div></div>
+    <div class="field"><label>هر چند وقت بررسی شود</label>
+      <div class="chips" role="radiogroup" aria-label="تناوب">
+        <label class="pick-chip"><input type="radio" name="mon-every" value="7" checked><span>هفتگی</span></label>
+        <label class="pick-chip"><input type="radio" name="mon-every" value="14"><span>هر دو هفته</span></label>
+        <label class="pick-chip"><input type="radio" name="mon-every" value="30"><span>ماهانه</span></label></div></div>
+    <div class="field"><label>هشدار وقتی شاخص یک قطعه نسبت به تصویر قبلی کم شود</label>
+      <div class="chips" role="radiogroup" aria-label="درصد افت">
+        <label class="pick-chip"><input type="radio" name="mon-drop" value="10"><span>۱۰٪</span></label>
+        <label class="pick-chip"><input type="radio" name="mon-drop" value="20" checked><span>۲۰٪</span></label>
+        <label class="pick-chip"><input type="radio" name="mon-drop" value="30"><span>۳۰٪</span></label></div></div>
+    <p class="small muted">تصویر ابری حذف می‌شود و قطعه‌ای که کمتر از نیمی از پیکسل‌هایش بی‌ابر باشد در مقایسه نمی‌آید. پایش از اعتبار تحلیل کم نمی‌کند.</p>
+    <div class="sat-block" data-mon-err hidden></div>
+  </div>
+  <div class="dlg-f"><button class="btn ghost" type="button" data-dialog-close>انصراف</button><button class="btn" type="button" data-mon-go>{% icon "bell" 18 %}شروع پایش</button></div>
+</dialog>
+{% endif %}

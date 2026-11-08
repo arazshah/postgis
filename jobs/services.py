@@ -492,6 +492,7 @@ def tick(now: datetime | None = None) -> dict:
     from classroom import services as classroom_services
     from enterprise import services as ent
     from iranmap import tasks as iranmap_tasks
+    from satellite import monitor_service
     from satellite import services as sat
 
     ent.cleanup_rasters_dir()
@@ -499,4 +500,4 @@ def tick(now: datetime | None = None) -> dict:
     return {"classes": classroom_services.tick(now), "nightly": schedule_nightly(now),
             "restore_test": schedule_restore_test(now),
             "cleanup": cleanup(now), "alerts": len(alerts()), "map_data": iranmap_tasks.schedule(now),
-            "snapshots": ent.schedule_snapshots(now), "satellite": sat.poll(now)}
+            "snapshots": ent.schedule_snapshots(now), "satellite": sat.poll(now), "monitors": monitor_service.run_due(now)}

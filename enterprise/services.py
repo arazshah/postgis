@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from datetime import timedelta
 from pathlib import Path
@@ -98,9 +99,17 @@ def raster_used(db: UserDatabase) -> int:
     return db.rasters.aggregate(s=Sum("size_bytes"))["s"] or 0
 
 
+def _nice() -> None:
+    """پردازش رستر با اولویت کم تا پنل و کار کاربران روی سرور ایران کند نشود."""
+    try:
+        os.nice(10)
+    except OSError:
+        pass
+
+
 def _run(cmd: list[str], timeout: int = 3600) -> str:
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, preexec_fn=_nice,
                               env={"GDAL_HTTP_PROXY": "127.0.0.1:9", "PATH": "/usr/bin:/usr/local/bin:/bin"})
     except subprocess.TimeoutExpired as exc:
         raise EnterpriseError("پردازش رستر بیش از حد طول کشید.") from exc

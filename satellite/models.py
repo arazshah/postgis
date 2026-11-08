@@ -232,6 +232,7 @@ class SatMonitor(models.Model):
     last_run_at = models.DateTimeField("آخرین بررسی", null=True, blank=True)
     last_scene_date = models.DateField("تاریخ آخرین تصویر پردازش‌شده", null=True, blank=True)
     last_alert_at = models.DateTimeField("آخرین هشدار", null=True, blank=True)
+    last_message = models.CharField("نتیجه‌ی آخرین بررسی", max_length=300, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -241,3 +242,12 @@ class SatMonitor(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def index_title(self) -> str:
+        return INDICES.get(self.index, (0, 0, self.index))[2]
+
+    @property
+    def mission_title(self) -> str:
+        m = MISSIONS.get(self.mission)
+        return m.title if m else self.mission

@@ -687,8 +687,8 @@ class ProbeTests(TestCase):
         with mock.patch("urllib.request.urlopen", return_value=health), \
                 mock.patch("satellite.client.call", side_effect=client.GatewayError("کلید ارتباط پنل با دروازه درست نیست", 401)):
             steps = probe.run()
-        self.assertEqual([ok for ok, _ in steps], [True, False])
-        self.assertIn("کلید", steps[1][1])
+        self.assertEqual([ok for ok, _ in steps], [True, True, False])
+        self.assertIn("کلید", steps[2][1])
 
     def test_all_steps_pass(self):
         health = mock.MagicMock()
@@ -700,7 +700,7 @@ class ProbeTests(TestCase):
                 mock.patch("satellite.client.thumb", return_value=b"x" * 20000):
             steps = probe.run()
         self.assertTrue(all(ok for ok, _ in steps), steps)
-        self.assertEqual(len(steps), 6)
+        self.assertEqual(len(steps), 7)
         self.assertTrue(any("Landsat 8/9: در دسترس" in t for _, t in steps))
 
 

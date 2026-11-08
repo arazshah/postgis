@@ -21,8 +21,8 @@ from databases.explorer import Explorer, ExplorerError
 from iranmap import basemap
 from satgate import protocol, spec
 
-from . import client, router, services, zonal_service
-from .models import SatAnalysis, SatRequest
+from . import client, monitor_service, router, services, zonal_service
+from .models import SatAnalysis, SatMonitor, SatRequest
 
 NAME_RE = re.compile(r"^[A-Za-z0-9_\-]{1,100}$")
 
@@ -59,7 +59,7 @@ def index(request, pk):
     cfg = {
         "urls": {n: reverse(f"satellite:{n}", args=[db.pk]) for n in ("cards", "layers", "extent", "quote", "search", "order", "missions")},
         "an": {"cards": reverse("satellite:an_cards", args=[db.pk]), "layers": reverse("satellite:an_layers", args=[db.pk]),
-               "quote": reverse("satellite:an_quote", args=[db.pk]), "order": reverse("satellite:an_order", args=[db.pk]),
+               "quote": reverse("satellite:an_quote", args=[db.pk]), "mon": reverse("satellite:mon_create", args=[db.pk]), "order": reverse("satellite:an_order", args=[db.pk]),
                "series": reverse("satellite:an_series", args=[db.pk, 0]), "table": reverse("databases:explore_table", args=[db.pk, "public", "TABLE"])},
         "thumb": reverse("satellite:thumb", args=[db.pk, "COLL", "ITEM"]),
         "csrf": get_token(request), "products": _products(), "status": st,
@@ -71,6 +71,7 @@ def index(request, pk):
     return render(request, "satellite/index.html", {
         "db": db, "reqs": reqs, "st": st, "cfg": cfg, "configured": client.configured(),
         "analyses": (ans := _analyses(db)), "an_active": any(a.active for a in ans), "an_cr": (acr := zonal_service.credits(db)),
+        "monitors": list(SatMonitor.objects.filter(database=db)), "mon_lim": monitor_service.limits(db),
         "an_cr_pct": _pct(acr["used"], acr["cap"]), "max_features": zonal_service.zl.MAX_FEATURES,
         "active": any(r.active for r in reqs), "base": request.build_absolute_uri("/")[:-1],
         "credit_pct": _pct(st["credits"]["used"], st["credits"]["cap"]), "space_pct": _pct(st["space"]["used"], st["space"]["cap"]),
@@ -152,7 +153,7 @@ def missions(request, pk):
 
 
 def _analyses(db):
-    return list(SatAnalysis.objects.filter(database=db)[:30])
+    return list(SatAnalysis.objects.filter(database=db, monitor__isnull=True)[:30])
 
 
 @site_user_required
@@ -214,6 +215,40 @@ def an_series(request, pk, an_id):
         return _json({"ok": True, **zonal_service.series(an, request.GET.get("feature", "")[:80])})
     except (ExplorerError, Exception):  # noqa: BLE001  جدول حذف شده یا اتصال
         return _json({"ok": False, "error": "جدول نتیجه خوانده نشد؛ شاید حذف یا تغییر نام داده شده است."}, 404)
+
+
+@site_user_required
+@require_POST
+def mon_create(request, pk):
+    db = team.get_db(request, pk, "editor")
+    try:
+        m = monitor_service.create(db, request.user, _body(request))
+    except services.SatError as exc:
+        return _err(exc, 409 if exc.code in ("limit", "exists", "area") else 400)
+    return _json({"ok": True, "id": m.pk})
+
+
+@site_user_required
+@require_POST
+def mon_action(request, pk, mon_id, action):
+    db = team.get_db(request, pk, "editor")
+    m = get_object_or_404(SatMonitor, pk=mon_id, database=db)
+    if action == "toggle":
+        m.enabled = not m.enabled
+        m.save(update_fields=["enabled"])
+        messages.success(request, "پایش فعال شد." if m.enabled else "پایش متوقف شد.")
+    elif action == "run":
+        if not m.runs.filter(status__in=[SatAnalysis.Status.PROCESSING, SatAnalysis.Status.DOWNLOADING]).exists():
+            monitor_service.start_run(m)
+            messages.success(request, "بررسی تازه شروع شد؛ نتیجه در همین کارت و (در صورت افت) در اعلان‌ها می‌آید.")
+        else:
+            messages.error(request, "یک بررسی همین حالا در جریان است.")
+    elif action == "delete":
+        m.delete()
+        messages.success(request, "پایش حذف شد؛ جدول نتیجه در پایگاه داده‌ی شما می‌ماند.")
+    else:
+        raise Http404
+    return redirect(reverse("satellite:index", args=[db.pk]) + "#analysis")
 
 
 @site_user_required

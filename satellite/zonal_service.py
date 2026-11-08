@@ -238,6 +238,9 @@ def _fail(an: SatAnalysis, message: str, refund: bool = True) -> None:
     if refund:
         an.charged = False
     an.save(update_fields=["status", "message", "finished_at", "charged", "updated_at"])
+    if an.monitor_id:
+        from . import monitor_service
+        monitor_service.run_failed(an)
 
 
 # ---------------------------------------------------------------------- پاسخ دروازه
@@ -297,23 +300,28 @@ def write_table(an: SatAnalysis, rows: list[dict]) -> None:
         with ex.connect(read_only=False) as conn:
             conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
             conn.execute("SET statement_timeout = 120000")
-            if conn.execute("SELECT to_regclass(%s)", (f"{SCHEMA}.{an.name}",)).fetchone()[0]:
+            have = conn.execute("SELECT to_regclass(%s)", (f"{SCHEMA}.{an.name}",)).fetchone()[0]
+            if have and not an.monitor_id:
                 raise SatError(f"جدولی به نام {an.name} از قبل هست.", "exists")
-            conn.execute(sql.SQL("CREATE TABLE {} ({}, PRIMARY KEY (feature_id, scene_date, scene))").format(
-                tbl, sql.SQL(", ").join(sql.SQL("{} {}").format(sql.Identifier(c), sql.SQL(t)) for c, t in COLS)))
+            if not have:
+                conn.execute(sql.SQL("CREATE TABLE {} ({}, PRIMARY KEY (feature_id, scene_date, scene))").format(
+                    tbl, sql.SQL(", ").join(sql.SQL("{} {}").format(sql.Identifier(c), sql.SQL(t)) for c, t in COLS)))
+                conn.execute(sql.SQL("CREATE INDEX ON {} (scene_date)").format(tbl))
             with conn.cursor() as cur:
                 cur.executemany(
-                    sql.SQL("INSERT INTO {} VALUES ({})").format(tbl, sql.SQL(", ").join([sql.Placeholder()] * len(COLS))),
+                    sql.SQL("INSERT INTO {} VALUES ({}) ON CONFLICT DO NOTHING").format(
+                        tbl, sql.SQL(", ").join([sql.Placeholder()] * len(COLS))),
                     [(r["feature"], r["date"], r["scene"], r.get("mean"), r.get("median"), r.get("min"), r.get("max"),
                       r.get("std"), r.get("valid_pct"), r.get("count"), r.get("valid")) for r in rows])
-            conn.execute(sql.SQL("CREATE INDEX ON {} (scene_date)").format(tbl))
-            conn.execute(sql.SQL(
-                "CREATE VIEW {v} AS SELECT s.*, r.scene_date AS sat_date, r.mean AS sat_{idx}, r.valid_pct AS sat_valid_pct "
-                "FROM {src} s JOIN (SELECT DISTINCT ON (feature_id) feature_id, scene_date, mean, valid_pct FROM {t} "
-                "WHERE mean IS NOT NULL ORDER BY feature_id, scene_date DESC) r ON r.feature_id = s.{i}::text").format(
-                    v=view, idx=sql.SQL(an.index), src=sql.Identifier(src_schema, src_name), t=tbl, i=sql.Identifier(an.id_column)))
-            note = f"{an.index_title} برای {an.layer} (تحلیل ماهواره‌ای)"
-            conn.execute(sql.SQL("COMMENT ON TABLE {} IS {}").format(tbl, sql.Literal(note)))
+            if not conn.execute("SELECT to_regclass(%s)", (f"{SCHEMA}.{an.name}_latest",)).fetchone()[0]:
+                conn.execute(sql.SQL(
+                    "CREATE VIEW {v} AS SELECT s.*, r.scene_date AS sat_date, r.mean AS sat_{idx}, r.valid_pct AS sat_valid_pct "
+                    "FROM {src} s JOIN (SELECT DISTINCT ON (feature_id) feature_id, scene_date, mean, valid_pct FROM {t} "
+                    "WHERE mean IS NOT NULL ORDER BY feature_id, scene_date DESC) r ON r.feature_id = s.{i}::text").format(
+                        v=view, idx=sql.SQL(an.index), src=sql.Identifier(src_schema, src_name), t=tbl,
+                        i=sql.Identifier(an.id_column)))
+                note = f"{an.index_title} برای {an.layer} (تحلیل ماهواره‌ای)"
+                conn.execute(sql.SQL("COMMENT ON TABLE {} IS {}").format(tbl, sql.Literal(note)))
             conn.execute(sql.SQL("ANALYZE {}").format(tbl))
             conn.commit()
     except psycopg.Error as exc:
@@ -323,6 +331,9 @@ def write_table(an: SatAnalysis, rows: list[dict]) -> None:
 
 def _finish(an: SatAnalysis, rows: list[dict], scenes: list[dict], skipped=()) -> str:
     write_table(an, rows)
+    if an.monitor_id:
+        from . import monitor_service
+        monitor_service.after_run(an, rows)
     an.status, an.message, an.rows, an.finished_at = SatAnalysis.Status.READY, "", len(rows), timezone.now()
     an.scenes = [{"date": s["date"], "cloud": s.get("cloud"), "id": s.get("id", "")} for s in scenes]
     if skipped:
