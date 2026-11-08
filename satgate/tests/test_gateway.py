@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import tempfile
@@ -50,6 +51,43 @@ class ProtocolTests(unittest.TestCase):
         self.assertFalse(protocol.verify("", "POST", "/v1/jobs", b"x", t, s))
         old = protocol.sign("k", "POST", "/p", b"", ts=time.time() - 600)
         self.assertFalse(protocol.verify("k", "POST", "/p", b"", old[protocol.H_TIME], old[protocol.H_SIG]))
+
+
+class CheckReasonTests(unittest.TestCase):
+    """علت دقیق رد شدن: ساعت، کلید، مسیر/بدنه یا امضای نبود."""
+
+    def chk(self, secret="k", **kw):
+        h = protocol.sign("k", "POST", "/v1/jobs", b"x", ts=kw.pop("ts", None))
+        return protocol.check(secret, "POST", kw.pop("target", "/v1/jobs"), kw.pop("body", b"x"), h[protocol.H_TIME],
+                              kw.pop("sig", h[protocol.H_SIG]), kw.pop("kid", h[protocol.H_KID]))
+
+    def test_ok(self):
+        self.assertEqual(self.chk().reason, "ok")
+
+    def test_clock_skew_reports_direction_and_seconds(self):
+        c = self.chk(ts=time.time() + 600)
+        self.assertEqual((c.reason, c.ok), ("skew", False))
+        self.assertAlmostEqual(c.skew_s, 600, delta=3)
+        self.assertLess(self.chk(ts=time.time() - 900).skew_s, 0)
+
+    def test_wrong_key_is_named_not_just_bad_signature(self):
+        self.assertEqual(self.chk(secret="other").reason, "key")
+
+    def test_same_key_but_tampered_path_or_body_is_signature(self):
+        self.assertEqual(self.chk(target="/v1/other").reason, "signature")
+        self.assertEqual(self.chk(body=b"y").reason, "signature")
+
+    def test_missing_and_no_secret(self):
+        self.assertEqual(protocol.check("k", "GET", "/", b"", None, None).reason, "missing")
+        self.assertEqual(self.chk(secret="").reason, "no_secret")
+
+    def test_old_sender_without_kid_still_checked_by_signature(self):
+        self.assertEqual(self.chk(secret="other", kid=None).reason, "signature")
+        self.assertEqual(self.chk(kid=None).reason, "ok")
+
+    def test_key_id_is_short_and_salted(self):
+        self.assertEqual(len(protocol.key_id("k")), 8)
+        self.assertNotEqual(protocol.key_id("k"), hashlib.sha256(b"k").hexdigest()[:8])
 
 
 class SpecTests(unittest.TestCase):
@@ -201,6 +239,25 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.call("GET", "/v1/health", secret=None)["status"], 200)
         self.assertEqual(self.call("GET", "/v1/jobs/" + "a" * 32, secret=None)["status"], 401)
         self.assertEqual(self.call("GET", "/v1/jobs/" + "a" * 32, secret="wrong")["status"], 401)
+
+    def test_401_tells_the_exact_reason(self):
+        def reason(**hdr):
+            r = self.call("GET", "/v1/jobs/" + "a" * 32, secret=None, headers=hdr)
+            self.assertEqual(r["status"], 401)
+            return json.loads(r["body"])
+        old = protocol.sign(SECRET, "GET", "/v1/jobs/" + "a" * 32, ts=time.time() - 700)
+        j = reason(HTTP_X_SAT_TIME=old[protocol.H_TIME], HTTP_X_SAT_SIG=old[protocol.H_SIG], HTTP_X_SAT_KID=old[protocol.H_KID])
+        self.assertEqual(j["reason"], "skew")
+        self.assertLess(j["skew_s"], -600)
+        self.assertIn("ساعت", j["error"])
+        bad = protocol.sign("wrong", "GET", "/v1/jobs/" + "a" * 32)
+        j = reason(HTTP_X_SAT_TIME=bad[protocol.H_TIME], HTTP_X_SAT_SIG=bad[protocol.H_SIG], HTTP_X_SAT_KID=bad[protocol.H_KID])
+        self.assertEqual(j["reason"], "key")
+        self.assertIn("یکی نیست", j["error"])
+        moved = protocol.sign(SECRET, "GET", "/proxied/v1/jobs/" + "a" * 32)
+        j = reason(HTTP_X_SAT_TIME=moved[protocol.H_TIME], HTTP_X_SAT_SIG=moved[protocol.H_SIG], HTTP_X_SAT_KID=moved[protocol.H_KID])
+        self.assertEqual(j["reason"], "signature")
+        self.assertEqual(reason()["reason"], "missing")
 
     def test_full_job_flow_with_range_and_delete(self):
         jid = "b" * 32

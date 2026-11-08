@@ -18,6 +18,26 @@ class GatewayError(Exception):
         self.status = status
 
 
+_FA = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
+
+def reject_message(info: dict) -> str:
+    """علت دقیق رد شدن امضا (پاسخ ۴۰۱ دروازه) به فارسی و با راه‌حل."""
+    reason, skew = info.get("reason"), int(info.get("skew_s") or 0)
+    if reason == "skew":
+        who = "جلوتر از" if skew > 0 else "عقب‌تر از"
+        return (f"ساعت سرور پنل حدود {abs(skew)} ثانیه {who} ساعت دروازه است (حداکثر مجاز ۱۲۰). "
+                "ساعت هر دو سرور را با NTP همگام کنید.").translate(_FA)
+    if reason == "key":
+        return "کلید پنل با کلید دروازه یکی نیست؛ همان کلید را در تنظیمات سایت و در SATGATE_SECRET دروازه بگذارید و دروازه را دوباره بسازید."
+    if reason == "signature":
+        return ("کلیدها یکی‌اند ولی امضا نخورد؛ احتمالاً پراکسی یا CDN بین پنل و دروازه مسیر یا بدنه‌ی درخواست را عوض می‌کند. "
+                "نشانی دروازه را بدون مسیر اضافه و بدون بازنویسی بدهید.")
+    if reason == "no_secret":
+        return "روی دروازه SATGATE_SECRET تنظیم نشده است."
+    return "دروازه امضای درخواست را نپذیرفت؛ کلید و ساعت هر دو سرور را بررسی کنید."
+
+
 def config() -> tuple[str, str]:
     """(نشانی، کلید): اول تنظیمات سایت در پنل مدیریت، اگر خالی بود متغیر محیطی SATGATE_URL و SATGATE_SECRET."""
     from core.models import SiteSettings
@@ -45,11 +65,12 @@ def _open(method: str, path: str, body: bytes = b"", timeout: int | None = None)
         return urllib.request.urlopen(req, timeout=timeout or settings.SATGATE_TIMEOUT)  # noqa: S310 آدرس از تنظیمات
     except urllib.error.HTTPError as exc:
         try:
-            msg = json.loads(exc.read()).get("error", "")
+            info = json.loads(exc.read())
         except (ValueError, OSError):
-            msg = ""
+            info = {}
+        msg = info.get("error", "") if isinstance(info, dict) else ""
         if exc.code == 401:
-            msg = "کلید ارتباط پنل با دروازه درست نیست؛ مدیر سایت باید کلید را در تنظیمات سایت (تصویر ماهواره‌ای) بررسی کند."
+            msg = reject_message(info if isinstance(info, dict) else {})
         raise GatewayError(msg or f"دروازه‌ی ماهواره پاسخ {exc.code} داد.", exc.code) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise GatewayError("دروازه‌ی ماهواره موقتاً در دسترس نیست؛ کمی بعد دوباره امتحان کنید.") from exc

@@ -175,6 +175,13 @@ def _resp(start, status: int, data, ctype="application/json; charset=utf-8", hea
     return [body]
 
 
+REJECT = {
+    "no_secret": "روی دروازه SATGATE_SECRET تنظیم نشده است.",
+    "missing": "درخواست امضا ندارد.",
+    "skew": "ساعت فرستنده با ساعت دروازه بیش از ۲ دقیقه اختلاف دارد.",
+    "key": "کلید فرستنده با کلید دروازه یکی نیست.",
+    "signature": "کلیدها یکی‌اند ولی امضا نخورد؛ مسیر یا بدنه‌ی درخواست در راه تغییر کرده است.",
+}
 _REASON = {200: "OK", 202: "Accepted", 206: "Partial Content", 400: "Bad Request", 401: "Unauthorized", 404: "Not Found",
            405: "Method Not Allowed", 416: "Range Not Satisfiable", 422: "Unprocessable", 503: "Unavailable"}
 
@@ -195,9 +202,12 @@ def make_app(gw: Gateway):
             return _resp(start, 400, {"error": "بدنه‌ی درخواست بزرگ است."})
         body = environ["wsgi.input"].read(n) if n else b""
         target = path + (f"?{query}" if query else "")
-        if not protocol.verify(gw.cfg.secret, method, target, body, environ.get("HTTP_X_SAT_TIME"),
-                               environ.get("HTTP_X_SAT_SIG")):
-            return _resp(start, 401, {"error": "امضای درخواست معتبر نیست."})
+        chk = protocol.check(gw.cfg.secret, method, target, body, environ.get("HTTP_X_SAT_TIME"),
+                             environ.get("HTTP_X_SAT_SIG"), environ.get("HTTP_X_SAT_KID"))
+        if not chk.ok:
+            log.warning("rejected %s %s: %s (skew %ss)", method, path, chk.reason, chk.skew_s)
+            return _resp(start, 401, {"error": REJECT.get(chk.reason, "امضای درخواست معتبر نیست."), "reason": chk.reason,
+                                      "skew_s": chk.skew_s})
         try:
             data = json.loads(body) if body else {}
         except ValueError:
