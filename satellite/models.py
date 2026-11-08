@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from satgate.spec import PRODUCTS
+from satgate.spec import PRODUCTS, satellite_of
 
 FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
 
@@ -66,6 +66,30 @@ class SatRequest(models.Model):
         if dt:
             when = " · " + jdatetime.date.fromgregorian(date=dt.date()).strftime("%Y/%m/%d").translate(FA_DIGITS)
         return f"{self.spec.title}{when}"
+
+    @property
+    def satellite(self) -> str:
+        return satellite_of(self.scene_id)[0]
+
+    @property
+    def agency(self) -> str:
+        return satellite_of(self.scene_id)[1]
+
+    @property
+    def info(self) -> dict:
+        """ویژگی‌های تصویر برای دیالوگ «ویژگی‌های تصویر» (مقدارهای خام؛ قالب‌بندی در مرورگر)."""
+        r = self.raster
+        dt = self.scene_dt
+        return {
+            "title": self.title, "satellite": self.satellite, "agency": self.agency, "product": self.spec.title,
+            "date": jdatetime.date.fromgregorian(date=dt.date()).strftime("%Y/%m/%d").translate(FA_DIGITS) if dt else "",
+            "cloud": self.cloud, "area": self.area_km2, "res": self.spec.res_m, "scene": self.scene_id,
+            "bbox": self.bbox, "bands": r.bands if r else None, "dtype": r.dtype if r else "", "crs": r.crs if r else "",
+            "size": r.size_bytes if r else None, "width": r.width if r else None, "height": r.height if r else None,
+            "attribution": (r.meta or {}).get("attribution", "") if r else "",
+            "created": jdatetime.datetime.fromgregorian(datetime=timezone.localtime(self.created_at)).strftime("%Y/%m/%d %H:%M")
+            .translate(FA_DIGITS),
+        }
 
     @property
     def scene_dt(self):

@@ -104,6 +104,23 @@ class SpecTests(unittest.TestCase):
             self.assertFalse(spec.valid_bbox(bad))
 
 
+class SatelliteNameTests(unittest.TestCase):
+    def test_names_from_scene_ids(self):
+        self.assertEqual(spec.satellite_of("S2B_38SMG_20261024_0_L2A"), ("Sentinel-2B", "ESA / Copernicus"))
+        self.assertEqual(spec.satellite_of("S2C_38SMG_20261009_0_L2A")[0], "Sentinel-2C")
+        self.assertEqual(spec.satellite_of("LC08_L2SP_164035_20260101_02_T1")[0], "Landsat 8")
+        self.assertEqual(spec.satellite_of("LC09_L2SP_164035_20260101_02_T1")[0], "Landsat 9")
+        self.assertEqual(spec.satellite_of("cop-dem-glo-30")[0], "Copernicus DEM GLO-30")
+        self.assertEqual(spec.satellite_of("whatever"), ("", ""))
+        self.assertEqual(spec.satellite_of(""), ("", ""))
+
+    def test_search_results_carry_satellite(self):
+        full = {"type": "Polygon", "coordinates": [[[51, 35], [52, 35], [52, 36], [51, 36], [51, 35]]]}
+        feats = [{"id": "S2A_39SUQ_20260601_0_L2A", "geometry": full, "properties": {"datetime": "2026-06-01T00:00:00Z"}}]
+        res = stac.search(BBOX, "2026-06-01", "2026-06-30", fetch=lambda *a, **k: {"features": feats})
+        self.assertEqual((res[0]["satellite"], res[0]["agency"]), ("Sentinel-2A", "ESA / Copernicus"))
+
+
 class StacTests(unittest.TestCase):
     def test_coverage_full_partial_none(self):
         poly = {"type": "Polygon", "coordinates": [[[51.0, 35.0], [52.0, 35.0], [52.0, 36.0], [51.0, 36.0], [51.0, 35.0]]]}

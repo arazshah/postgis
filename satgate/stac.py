@@ -6,7 +6,7 @@ import os
 import urllib.error
 import urllib.request
 
-from .spec import COLLECTION_DEM, COLLECTION_S2, valid_bbox
+from .spec import COLLECTION_DEM, COLLECTION_S2, satellite_of, valid_bbox
 
 STAC_URL = os.environ.get("SATGATE_STAC_URL", "https://earth-search.aws.element84.com/v1").rstrip("/")
 UA = "postgis.ir satgate"
@@ -81,7 +81,9 @@ def coverage(geometry: dict | None, bbox) -> float:
 # ------------------------------------------------------------------ جست‌وجو
 def _scene(it: dict, bbox) -> dict:
     p = it.get("properties", {})
+    sat, agency = satellite_of(it["id"])
     return {"id": it["id"], "collection": it.get("collection", COLLECTION_S2), "datetime": p.get("datetime", ""),
+            "satellite": sat, "agency": agency, "gsd": p.get("gsd"),
             "cloud": round(float(p.get("eo:cloud_cover", 0) or 0), 1), "tile": p.get("grid:code") or p.get("s2:mgrs_tile", ""),
             "coverage": coverage(it.get("geometry"), bbox), "thumb": "thumbnail" in it.get("assets", {})}
 

@@ -45,6 +45,30 @@
     d.showModal();
   });
 
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sat-info]");
+    if (!b) return;
+    const i = JSON.parse(b.dataset.info), d = document.getElementById("sat-info");
+    const fa = (n, o) => Number(n).toLocaleString("fa-IR", o || {maximumFractionDigits: 1});
+    const rows = [
+      ["ماهواره", i.satellite ? `${i.satellite}${i.agency ? " (" + i.agency + ")" : ""}` : "—"],
+      ["محصول", i.product], ["تاریخ تصویر", i.date || "—"],
+      ["ابر", i.cloud == null ? "—" : fa(i.cloud, {maximumFractionDigits: 0}) + "٪"],
+      ["مساحت", fa(i.area) + " کیلومتر مربع"], ["وضوح", fa(i.res) + " متر"],
+      ["ابعاد", i.width ? `${fa(i.width, {maximumFractionDigits: 0})} × ${fa(i.height, {maximumFractionDigits: 0})} پیکسل` : "—"],
+      ["باندها", i.bands ? `${fa(i.bands, {maximumFractionDigits: 0})} باند (${i.dtype})` : "—"],
+      ["سیستم مختصات", i.crs || "—", "ltr"],
+      ["حجم", i.size ? (i.size >= 2 ** 20 ? fa(i.size / 2 ** 20) + " مگابایت" : fa(i.size / 1024) + " کیلوبایت") : "—"],
+      ["محدوده (غرب، جنوب، شرق، شمال)", (i.bbox || []).map((v) => Number(v).toFixed(4)).join("، "), "ltr"],
+      ["شناسه‌ی تصویر", i.scene || "—", "ltr"], ["ثبت در پایگاه", i.created],
+      ["منبع و مجوز", i.attribution || "—", "ltr"],
+    ];
+    d.querySelector("#sat-info-t").textContent = i.title;
+    d.querySelector("#sat-info-body").innerHTML = rows.map(([k, v, c]) => `<tr><th>${esc(k)}</th><td${c ? ` class="${c}"` : ""}>${esc(v)}</td></tr>`).join("");
+    document.querySelectorAll(".pop-m").forEach((m) => { m.hidden = true; });
+    d.showModal();
+  });
+
   if (!cfgEl) return;  // بیننده بدون اجازه‌ی دریافت: فقط کارت‌ها
   const cfg = JSON.parse(cfgEl.textContent);
 
@@ -237,7 +261,7 @@
       const low = s.coverage < 95;
       const lab = el(`<label class="sat-scene"><input type="radio" name="scene" value="${esc(s.id)}" ${S.scene && S.scene.id === s.id ? "checked" : ""}>
         <span class="th">${s.thumb ? `<img loading="lazy" alt="" src="${cfg.thumb.replace("ITEM", encodeURIComponent(s.id))}">` : icon("satellite", 28)}</span>
-        <span class="tx"><b>${fmtDate(s.datetime)}</b><span>ابر ${faN(s.cloud, {maximumFractionDigits: 0})}٪</span>
+        <span class="tx"><b>${fmtDate(s.datetime)}</b>${s.satellite ? `<span class="sn">${esc(s.satellite)}</span>` : ""}<span>ابر ${faN(s.cloud, {maximumFractionDigits: 0})}٪</span>
         <span class="${low ? "low" : ""}">${low ? "پوشش ناقص: " : "پوشش محدوده: "}${faN(s.coverage, {maximumFractionDigits: 0})}٪</span></span></label>`);
       lab.querySelector("input").addEventListener("change", () => { S.scene = s; S.quote = null; renderNav(); });
       lab.querySelector("img")?.addEventListener("error", (e) => { e.target.replaceWith(el(icon("satellite", 28))); });

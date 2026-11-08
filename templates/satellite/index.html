@@ -46,6 +46,12 @@
   <p class="small muted sat-attr">منبع تصویرها: Contains modified Copernicus Sentinel data (ESA) · ارتفاع: Copernicus DEM GLO-30. استفاده از این داده‌ها رایگان است و ذکر منبع لازم است.</p>
 </div>
 
+<dialog class="dlg sat-info" id="sat-info" aria-labelledby="sat-info-t">
+  <div class="dlg-h"><span class="dlg-i">{% icon "info" 22 %}</span><h2 id="sat-info-t">ویژگی‌های تصویر</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
+  <div class="dlg-b"><table class="kv sat-kv" id="sat-info-body"></table></div>
+  <div class="dlg-f"><button class="btn ghost" type="button" data-dialog-close>بستن</button></div>
+</dialog>
+
 <dialog class="dlg sat-conn" id="sat-conn" aria-labelledby="sat-conn-t">
   <div class="dlg-h"><span class="dlg-i">{% icon "link" 22 %}</span><h2 id="sat-conn-t">اتصال به QGIS و نرم‌افزارهای دیگر</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
   <div class="dlg-b">

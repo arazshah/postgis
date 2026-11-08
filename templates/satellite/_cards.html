@@ -17,6 +17,7 @@
           {% if r.status == 'ready' and r.raster %}
           <a role="menuitem" href="{% url 'enterprise:raster_view' r.raster.slug %}" target="_blank" rel="noopener">{% icon "eye" 18 %}<span>نمایش روی نقشه</span></a>
           <a role="menuitem" href="{% url 'enterprise:raster_file' r.raster.slug %}?download=1">{% icon "download" 18 %}<span>دانلود GeoTIFF</span></a>
+          <button role="menuitem" type="button" data-sat-info data-info="{{ r.info|json_attr }}">{% icon "info" 18 %}<span>ویژگی‌های تصویر</span></button>
           <button role="menuitem" type="button" data-sat-conn data-name="{{ r.title }}" data-cog="{{ base }}{% url 'enterprise:raster_file' r.raster.slug %}" data-xyz="{{ base }}/raster/{{ r.raster.slug }}/{z}/{x}/{y}.png" data-public="{{ r.raster.is_public|yesno:'1,0' }}">{% icon "link" 18 %}<span>اتصال به QGIS و نرم‌افزارهای دیگر</span></button>
           {% endif %}
           {% if db.can_edit and not r.active %}
@@ -27,6 +28,7 @@
       </div>
       {% endif %}
     </div>
+    {% if r.satellite %}<p class="sat-sat">{% icon "satellite" 14 %}<b>{{ r.satellite }}</b><span class="muted">{{ r.agency }}</span></p>{% endif %}
     <p class="small muted sat-meta">
       {% if r.scene_dt %}<span>{% icon "clock" 14 %}{{ r.scene_dt|jdate }}</span>{% endif %}
       {% if r.cloud is not None %}<span>{% icon "cloud" 14 %}ابر {{ r.cloud|floatformat:"0"|fanum }}٪</span>{% endif %}
