@@ -298,6 +298,23 @@ class AppTests(unittest.TestCase):
         self.assertIn("باند", job["message"])
         self.assertEqual(self.call("GET", f"/v1/jobs/{jid}/file")["status"], 404)
 
+    def test_install_errors_keep_their_detail_other_errors_do_not(self):
+        import satgate.app as app_mod
+        for exc, expect_detail in ((ImportError("libexpat.so.1: cannot open shared object file"), True),
+                                   (RuntimeError("secret /internal/path"), False)):
+            jid = ("f" if expect_detail else "9") * 32
+            orig = app_mod.build_s2
+            app_mod.build_s2 = lambda *a, _e=exc, **k: (_ for _ in ()).throw(_e)
+            try:
+                self.call("POST", "/v1/jobs", {"id": jid, "product": "ndvi", "scene": "s", "bbox": BBOX})
+                job = self.wait(jid)
+            finally:
+                app_mod.build_s2 = orig
+            self.assertEqual(job["status"], "failed")
+            self.assertIn(exc.__class__.__name__, job["message"])
+            self.assertEqual("libexpat" in job["message"], expect_detail)
+            self.assertNotIn("/internal/path", job["message"])
+
     def test_cleanup_removes_old_files(self):
         self.gw.store.put({"id": "e" * 32, "status": "ready"})
         self.assertEqual(self.gw.store.cleanup(24, now=time.time() + 25 * 3600), 1)

@@ -106,6 +106,21 @@ jobs:
           docker run -d --name sg -p 8080:8080 -e SATGATE_SECRET=ci satgate:ci
           for i in $(seq 1 20); do curl -fsS http://localhost:8080/v1/health && exit 0; sleep 2; done
           docker logs sg; exit 1
+      - name: Image can really read and write rasters (rasterio + GDAL + numpy)
+        run: |
+          docker run --rm --entrypoint python satgate:ci -c "
+          import numpy as np, rasterio, rasterio.warp, rasterio.windows, rasterio.merge
+          from rasterio.enums import Resampling
+          from rasterio.transform import from_origin
+          p = '/tmp/t.tif'
+          with rasterio.open(p, 'w', driver='GTiff', width=64, height=64, count=1, dtype='float32', crs='EPSG:4326',
+                             transform=from_origin(51, 36, .001, .001), tiled=True, blockxsize=16, blockysize=16,
+                             compress='DEFLATE', predictor=3) as d:
+              d.write(np.ones((64, 64), 'float32'), 1)
+          with rasterio.open(p) as s:
+              print(rasterio.__version__, s.read(1, out_shape=(32, 32), resampling=Resampling.bilinear).mean())
+          from satgate import process, app
+          "
       - name: Unsigned requests are rejected
         run: test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/v1/jobs/$(printf 'a%.0s' $(seq 32)))" = 401
 
