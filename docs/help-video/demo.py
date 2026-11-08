@@ -158,6 +158,8 @@ def init_main():
     conf.set_assistant_api_key("demo")
     conf.pay_enabled, conf.pay_gateway_enabled, conf.gateway_sandbox = True, True, True  # صفحه‌ی پلن‌ها و فاکتور (پرداخت واقعی انجام نمی‌شود)
     conf.pay_manual_enabled, conf.pay_card_number, conf.pay_card_holder, conf.pay_bank_name = True, "6037991122334455", "شرکت نمونه", "ملی"
+    conf.satgate_url = f"http://127.0.0.1:{int(os.environ.get('PORT', '8765')) + 334}"      # دروازه‌ی ساختگی (fake_satgate.py)
+    conf.set_satgate_secret("demo-secret")
     conf.save()
     real_server()
     from databases.models import Plan as _Plan
@@ -192,6 +194,14 @@ def init_main():
         for i in range(40):
             c.execute("INSERT INTO health_centers(name,type,beds,geom) VALUES (%s,%s,%s,ST_SetSRID(ST_MakePoint(%s,%s),4326))",
                       (f"مرکز {i + 1}", ["بیمارستان", "درمانگاه", "کلینیک"][i % 3], (i * 7) % 90, 51.33 + (i % 8) * .028, 35.68 + (i // 8) * .03))
+        # قطعه‌های زمین کشاورزی (ویدیوی «تصویر ماهواره‌ای»)
+        import satdemo
+
+        c.execute("CREATE TABLE parcels (id text PRIMARY KEY, name text, geom geometry(Polygon,4326))")
+        for pid, pname, ring in satdemo.parcels():
+            c.execute("INSERT INTO parcels VALUES (%s,%s,ST_SetSRID(ST_GeomFromGeoJSON(%s),4326))",
+                      (pid, pname, json.dumps({"type": "Polygon", "coordinates": [ring]})))
+        c.execute("CREATE INDEX ON parcels USING gist(geom)")
     # «داده آماده ایران»: فهرست نواحی و یک فایل منبع خالی تا صفحه آماده نمایش باشد (واردکردن واقعی لازم نیست)
     from iranmap import osm as _osm
     from iranmap.models import Area
@@ -224,6 +234,10 @@ def serve():
         import fake_llm
 
         fake_llm.start(int(os.environ.get("PORT", "8765")) + 100)
+        import fake_satgate
+
+        port = int(os.environ.get("PORT", "8765"))
+        fake_satgate.start(port + 334, f"http://localhost:{port}")
         call_command("runserver", os.environ.get("PORT", "8765"), "--noreload")
         return
     from classroom import services as cs
