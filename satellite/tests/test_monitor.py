@@ -193,7 +193,7 @@ class MonitorViewTests(MonitorBase):
         self.assertEqual(r.status_code, 409)
         self.assertIn("سقف", r.json()["error"])
         html = self.client.get(self.u("index")).content.decode()
-        for needle in ("پایش خودکار", "mon_ndvi_parcels", 'id="mon-dlg"', "satellite-monitor.js", "هفتگی"):
+        for needle in ("پایش خودکار", "mon_ndvi_parcels", 'id="mon-dlg"', "satellite-monitor.js", "هفتگی", "hash-tabs.js"):
             self.assertIn(needle, html)
 
     def test_runs_hidden_from_analysis_list_and_actions(self):
