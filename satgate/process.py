@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .spec import PRODUCTS, area_km2, pixels
+from .spec import MISSIONS, area_km2, get_product, pixels
 
 MAX_PIXELS = int(os.environ.get("SATGATE_MAX_PIXELS", str(30_000 * 30_000 // 4)))
 REFLECT_MAX = 0.30   # بازتابِ معادل ۲۵۵ در تصویر رنگی
@@ -16,20 +16,24 @@ class ProcessError(Exception):
     pass
 
 
-def _refl(asset: dict, date: str = "") -> tuple[float, float]:
-    """مقیاس و جابه‌جایی بازتاب: نسخه‌های پس از ۲۰۲۲ از ۱۰۰۰ شروع می‌شوند."""
+def _refl(asset: dict, mission: str = "sentinel2", date: str = "") -> tuple[float, float]:
+    """مقیاس و جابه‌جایی بازتاب: از خود دارایی (raster:bands) و در غیر این صورت پیش‌فرض ماموریت.
+    Sentinel-2 پس از ۲۰۲۲ از ۱۰۰۰ شروع می‌شود."""
     for b in asset.get("raster:bands", []):
         if "scale" in b:
             return float(b["scale"]), float(b.get("offset", 0))
-    return 0.0001, (-0.1 if date >= "2022-01-25" else 0.0)
+    m = MISSIONS[mission]
+    if mission == "sentinel2" and date < "2022-01-25":
+        return m.scale, 0.0
+    return m.scale, m.offset
 
 
-def _open(href: str):
+def _open(href: str, sign=None):
     import rasterio
 
     if href.startswith("s3://"):
         href = "https://" + href[5:].replace("/", ".s3.amazonaws.com/", 1)
-    return rasterio.open(href)
+    return rasterio.open(sign(href) if sign else href)
 
 
 def _read(src, window, shape, resampling):
@@ -55,18 +59,23 @@ def _write(path: Path, arrays, profile: dict, descriptions=()) -> None:
 
 
 def build_s2(item: dict, product: str, bbox, out: Path) -> Path:
-    """برش تصویر Sentinel-2؛ باندهای ۲۰ متری روی شبکه‌ی ۱۰ متری نمونه‌برداری می‌شوند."""
+    return build_scene(item, "sentinel2", product, bbox, out)
+
+
+def build_scene(item: dict, mission: str, product: str, bbox, out: Path, sign=None) -> Path:
+    """برش تصویر یک ماموریت (Sentinel-2 یا Landsat)؛ باندهای با وضوح کمتر روی شبکه‌ی باند اول نمونه‌برداری می‌شوند."""
     import numpy as np
     from rasterio.enums import Resampling
     from rasterio.windows import transform as win_transform
 
-    spec = PRODUCTS[product]
+    spec = get_product(mission, product)
+    names = MISSIONS[mission].assets
     assets = item.get("assets", {})
-    missing = [b for b in spec.bands if b not in assets]
+    missing = [names.get(b, b) for b in spec.bands if names.get(b, b) not in assets]
     if missing:
         raise ProcessError("باند لازم در این تصویر نیست: " + "، ".join(missing))
     date = (item.get("properties", {}).get("datetime") or "")[:10]
-    ref = _open(assets[spec.bands[0]]["href"])
+    ref = _open(assets[names[spec.bands[0]]]["href"], sign)
     with ref:
         win = _clip_window(ref, bbox)
         w, h = int(round(win.width)), int(round(win.height))
@@ -76,9 +85,10 @@ def build_s2(item: dict, product: str, bbox, out: Path) -> Path:
             raise ProcessError("محدوده بیش از سقف پردازش است.")
         transform, crs = win_transform(win, ref.transform), ref.crs
 
-    def band(name):
-        with _open(assets[name]["href"]) as s:
-            sc, off = _refl(assets[name], date)
+    def band(logical):
+        asset = assets[names[logical]]
+        with _open(asset["href"], sign) as s:
+            sc, off = _refl(asset, mission, date)
             data = _read(s, _clip_window(s, bbox), (h, w), Resampling.bilinear if s.res[0] > 15 else Resampling.nearest)
             valid = data > 0
             return (data.astype("float32") * sc + off).clip(0, None), valid
@@ -129,9 +139,9 @@ def build_dem(items: list[dict], bbox, out: Path) -> Path:
     return out
 
 
-def check_limits(bbox, product: str, max_km2: float) -> None:
+def check_limits(bbox, product: str, max_km2: float, mission: str = "sentinel2") -> None:
     km2 = area_km2(bbox)
     if km2 > max_km2:
         raise ProcessError(f"مساحت {km2:,.0f} کیلومتر مربع از سقف {max_km2:,.0f} بیشتر است.")
-    if pixels(bbox, product) > MAX_PIXELS:
+    if pixels(bbox, product, mission) > MAX_PIXELS:
         raise ProcessError("محدوده بیش از سقف پردازش است.")

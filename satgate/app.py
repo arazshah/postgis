@@ -16,12 +16,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import protocol, stac
-from .process import ProcessError, build_dem, build_s2, check_limits
-from .spec import COLLECTION_DEM, COLLECTION_S2, PRODUCTS, valid_bbox
+from .process import ProcessError, build_dem, build_scene, check_limits
+from .spec import COLLECTION_DEM, COLLECTION_LANDSAT, COLLECTION_S2, DEM_MISSION, MISSIONS, get_product, valid_bbox
 from .store import ID_RE, Store
 
 log = logging.getLogger("satgate")
-VERSION = "1.0"
+VERSION = "1.1"
 MAX_BODY = 64 * 1024
 
 
@@ -44,6 +44,7 @@ class Gateway:
         self.pool = ThreadPoolExecutor(max_workers=max(cfg.workers, 1))
         self._post = post or self._http_post
         self._last_clean = 0.0
+        self._missions: tuple[float, dict] | None = None
 
     # ------------------------------------------------------------ کار
     def submit(self, body: dict) -> tuple[int, dict]:
@@ -53,22 +54,23 @@ class Gateway:
         old = self.store.get(jid)
         if old:
             return 200, _public(old)  # درخواست تکراری (پنل دوباره فرستاده)
-        if product not in PRODUCTS:
-            return 400, {"error": "محصول ناشناخته است."}
+        mission = DEM_MISSION if product == "dem" else str(body.get("mission") or "sentinel2")
+        spec = get_product(mission, product) if isinstance(product, str) else None
+        if spec is None or (mission != DEM_MISSION and mission not in MISSIONS):
+            return 400, {"error": "ماهواره یا محصول ناشناخته است."}
         bbox = body.get("bbox")
         if not valid_bbox(bbox):
             return 400, {"error": "محدوده نامعتبر است."}
-        spec = PRODUCTS[product]
         if spec.needs_scene and not str(body.get("scene", "")).strip():
             return 400, {"error": "تصویر انتخاب نشده است."}
         try:
             cap = min(float(body.get("max_km2") or self.cfg.max_km2), self.cfg.max_km2)
-            check_limits(bbox, product, cap)
+            check_limits(bbox, product, cap, mission)
         except (ProcessError, ValueError) as exc:
             return 422, {"error": str(exc)}
         if self.store.active() >= self.cfg.max_active:
             return 503, {"error": "صف دروازه پر است؛ کمی بعد دوباره امتحان کنید."}
-        job = {"id": jid, "status": "queued", "product": product, "bbox": [float(v) for v in bbox],
+        job = {"id": jid, "status": "queued", "product": product, "mission": mission, "bbox": [float(v) for v in bbox],
                "scene": str(body.get("scene", ""))[:120], "created": int(time.time()), "message": ""}
         self.store.put(job)
         self.pool.submit(self.run, jid)
@@ -79,12 +81,14 @@ class Gateway:
         out = self.store.file(jid)
         part = out.with_suffix(".part.tif")
         try:
-            spec = PRODUCTS[job["product"]]
+            mission = job.get("mission") or "sentinel2"
+            spec = get_product(mission, job["product"])
             if spec.collection == COLLECTION_DEM:
                 build_dem(stac.dem_items(job["bbox"], self.fetch), job["bbox"], part)
             else:
-                item = stac.get_item(COLLECTION_S2, job["scene"], self.fetch)
-                build_s2(item, job["product"], job["bbox"], part)
+                item = stac.get_item(spec.collection, job["scene"], self.fetch)
+                build_scene(item, mission, job["product"], job["bbox"], part,
+                            sign=lambda href, c=spec.collection: stac.sign_href(c, href, self.fetch))
             size = part.stat().st_size
             if size > self.cfg.max_mb * 1024 * 1024:
                 raise ProcessError(f"خروجی {size // 1048576} مگابایت شد و از سقف {self.cfg.max_mb} بیشتر است.")
@@ -126,7 +130,7 @@ class Gateway:
 
     # ------------------------------------------------------------ پیش‌نمایش و سنجش
     def thumb(self, collection: str, item_id: str) -> bytes | None:
-        if collection not in (COLLECTION_S2,) or not all(c.isalnum() or c in "_-" for c in item_id):
+        if collection not in (COLLECTION_S2, COLLECTION_LANDSAT) or not all(c.isalnum() or c in "_-" for c in item_id):
             return None
         cache = self.store.thumbs / f"{item_id}.jpg"
         if cache.exists():
@@ -134,11 +138,20 @@ class Gateway:
         href = stac.get_item(collection, item_id, self.fetch).get("assets", {}).get("thumbnail", {}).get("href", "")
         if not href.startswith("https://"):
             return None
-        req = urllib.request.Request(href, headers={"User-Agent": stac.UA})
+        req = urllib.request.Request(stac.sign_href(collection, href, self.fetch), headers={"User-Agent": stac.UA})
         with urllib.request.urlopen(req, timeout=20) as r:  # noqa: S310 فقط https
             data = r.read(2_000_000)
         cache.write_bytes(data)
         return data
+
+    def missions(self, force: bool = False) -> dict:
+        """وضعیت هر ماهواره (در دسترس یا نه)؛ ۱۰ دقیقه کش تا هر بار پنل کاتالوگ بیرونی را نزند."""
+        now = time.time()
+        if not force and self._missions and now - self._missions[0] < 600:
+            return self._missions[1]
+        res = {k: stac.check_mission(k, self.fetch) for k in MISSIONS}
+        self._missions = (now, res)
+        return res
 
     def probe(self) -> dict:
         res: dict = {"version": VERSION}
@@ -218,7 +231,8 @@ def make_app(gw: Gateway):
         if path == "/v1/search" and method == "POST":
             try:
                 scenes = stac.search(data.get("bbox"), str(data.get("start", ""))[:10], str(data.get("end", ""))[:10],
-                                     float(data.get("max_cloud", 30)), int(data.get("limit", 24)), gw.fetch)
+                                     float(data.get("max_cloud", 30)), int(data.get("limit", 24)), gw.fetch,
+                                     mission=str(data.get("mission") or "sentinel2"))
             except stac.StacError as exc:
                 return _resp(start, 503, {"error": str(exc)})
             except (TypeError, ValueError):
@@ -227,6 +241,8 @@ def make_app(gw: Gateway):
         if path == "/v1/jobs" and method == "POST":
             code, out = gw.submit(data)
             return _resp(start, code, out)
+        if path == "/v1/missions" and method == "GET":
+            return _resp(start, 200, {"missions": gw.missions(force="refresh=1" in query)})
         if path == "/v1/probe" and method == "POST":
             return _resp(start, 200, gw.probe())
         if path.startswith("/v1/thumb/") and method == "GET":

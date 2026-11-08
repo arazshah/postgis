@@ -5,7 +5,7 @@
     {% if r.status == 'ready' and r.raster %}<img loading="lazy" alt="" src="{% url 'enterprise:raster_tile' r.raster.slug r.tile.0 r.tile.1 r.tile.2 %}" onerror="this.remove()">
     {% elif r.active %}<span class="sat-spin" aria-hidden="true"></span>
     {% else %}{% icon "warn" 30 %}{% endif %}
-    <span class="badge {% if r.status == 'ready' %}active{% elif r.status == 'failed' %}error{% else %}warn{% endif %}">{{ r.get_status_display }}</span>
+    {% if r.raster.is_public %}<span class="sat-pub">{% icon "globe" 14 %}عمومی</span>{% endif %}<span class="badge {% if r.status == 'ready' %}active{% elif r.status == 'failed' %}error{% else %}warn{% endif %}">{{ r.get_status_display }}</span>
   </div>
   <div class="sat-body">
     <div class="sat-row">
@@ -19,6 +19,9 @@
           <a role="menuitem" href="{% url 'enterprise:raster_file' r.raster.slug %}?download=1">{% icon "download" 18 %}<span>دانلود GeoTIFF</span></a>
           <button role="menuitem" type="button" data-sat-info data-info="{{ r.info|json_attr }}">{% icon "info" 18 %}<span>ویژگی‌های تصویر</span></button>
           <button role="menuitem" type="button" data-sat-conn data-name="{{ r.title }}" data-cog="{{ base }}{% url 'enterprise:raster_file' r.raster.slug %}" data-xyz="{{ base }}/raster/{{ r.raster.slug }}/{z}/{x}/{y}.png" data-public="{{ r.raster.is_public|yesno:'1,0' }}">{% icon "link" 18 %}<span>اتصال به QGIS و نرم‌افزارهای دیگر</span></button>
+          {% endif %}
+          {% if db.can_edit and r.raster %}
+          <form method="post" action="{% url 'satellite:toggle_public' db.pk r.pk %}">{% csrf_token %}<button role="menuitem" type="submit">{% if r.raster.is_public %}{% icon "lock" 18 %}<span>خصوصی کردن (با کلید API)</span>{% else %}{% icon "globe" 18 %}<span>عمومی کردن (بدون کلید)</span>{% endif %}</button></form>
           {% endif %}
           {% if db.can_edit and not r.active %}
           <div class="msep"></div>
