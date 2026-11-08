@@ -73,7 +73,8 @@ class PlanAndPageTests(_Base):
         self.assertTrue(self.ent.dedicated_geoserver and self.ent.clone_enabled)
         self.assertGreater(self.ent.raster_mb, 0)
         self.assertGreater(self.ent.snapshot_hours, 0)
-        self.assertFalse(self.free.dedicated_geoserver or self.free.raster_mb or self.free.snapshot_hours)
+        self.assertFalse(self.free.dedicated_geoserver or self.free.snapshot_hours)
+        self.assertGreater(self.free.raster_mb, 0)   # سرویس رستر برای همه‌ی پلن‌هاست
 
     def test_page_owner_only_and_free_plan_message(self):
         self.client.force_login(self.user)
@@ -283,10 +284,13 @@ class RasterTests(_Base):
         r = self._upload(vrt)
         self.assertFalse(Raster.objects.exists())
         self.assertContains(self.client.get(r.url), "GeoTIFF نیست")
+        self.free.raster_mb = 0   # پلنی که سرویس رستر ندارد (۰ = غیرفعال)
+        self.free.save()
         self.db.plan = self.free
         self.db.save()
         r = self._upload(make_tif(self.tmp / "a.tif"))
         self.assertFalse(Raster.objects.exists())
+        self.assertContains(self.client.get(r.url), "فعال نیست")
 
     def test_no_crs_fails_cleanly(self):
         p = self.tmp / "nocrs.tif"

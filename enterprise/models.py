@@ -74,6 +74,8 @@ class Raster(models.Model):
     colormap = models.CharField("رنگ‌بندی", max_length=12, choices=COLORMAPS, default="terrain")
     rgb = models.BooleanField("نمایش رنگی (باندهای ۱، ۲، ۳)", default=False)
     is_public = models.BooleanField("عمومی", default=False)
+    # منشأ: آپلود دستی خالی است؛ تصویر ماهواره‌ای {"source":"sentinel-2","product":…,"scene":…,"datetime":…,"attribution":…}
+    meta = models.JSONField("منشأ", default=dict, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -21,6 +21,7 @@ class Job(models.Model):
         CLONE = "clone", "کپی پایگاه داده"
         TOOL = "tool", "ابزار تحلیل"
         FIND = "find", "ذخیره‌ی نتیجه‌ی یافتن عارضه"
+        SATELLITE = "satellite", "دریافت تصویر ماهواره‌ای"
 
     class Status(models.TextChoices):
         DRAFT = "draft", "منتظر تأیید کاربر"

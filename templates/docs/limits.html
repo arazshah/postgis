@@ -11,6 +11,7 @@
   <tr><td>بکاپ</td><td>روزانه، {{ plan.backup_retention_days|fanum }} روز نگهداری</td></tr>
   <tr><td>برداشت میدانی</td><td>{{ plan.survey_projects|fanum }} پروژه، حداکثر {{ plan.survey_max_points|fanum }} نقطه{% if not plan.gnss_external %}، فقط GPS گوشی{% endif %}</td></tr>
   <tr><td>یافتن عارضه</td><td>شرط توصیفی و شکل کشیده‌شده نامحدود؛ شرط مکانی بین دو لایه {{ plan.find_layer_credits|fanum }} بار در ۳۰ روز</td></tr>
+  <tr><td>رستر و تصویر ماهواره‌ای</td><td>فضای رستر {{ plan.raster_mb|fanum }} مگابایت؛ دریافت تصویر ماهواره‌ای {{ plan.sat_credits|fanum }} بار در ۳۰ روز، هر بار تا {{ plan.sat_max_km2|fanum }} کیلومتر مربع</td></tr>
 </table>
 {% endif %}
 <h2>وقتی حجم پر شود</h2>

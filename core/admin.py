@@ -79,6 +79,15 @@ class SiteSettingsForm(forms.ModelForm):
         help_text="فقط هنگام تغییر وارد کنید. رمزنگاری‌شده ذخیره می‌شود و دوباره نمایش داده نمی‌شود.")
     clear_offsite_keys = forms.BooleanField(label="حذف کلیدهای فعلی فضای ابری", required=False)
 
+    satgate_secret = forms.CharField(
+        label="کلید مشترک دروازه", required=False,
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
+        help_text="همان کلیدی که روی سرور دروازه (SATGATE_SECRET) گذاشته‌اید. فقط هنگام تغییر وارد کنید؛ رمزنگاری‌شده ذخیره می‌شود و دوباره نمایش داده نمی‌شود.")
+    generate_satgate_secret = forms.BooleanField(
+        label="ساخت کلید تصادفی تازه", required=False,
+        help_text="کلید یک‌بار بعد از ذخیره نشان داده می‌شود تا روی دروازه بگذارید. اگر دروازه از قبل بالاست، کلید آن را هم عوض کنید.")
+    clear_satgate_secret = forms.BooleanField(label="حذف کلید فعلی دروازه", required=False)
+
     class Meta:
         model = SiteSettings
         fields = "__all__"
@@ -87,6 +96,7 @@ class SiteSettingsForm(forms.ModelForm):
             "enamad_badge_html": forms.Textarea(attrs={"dir": "ltr", "rows": 4, "cols": 80, "spellcheck": "false"}),
             "footer_badges_html": forms.Textarea(attrs={"dir": "ltr", "rows": 4, "cols": 80, "spellcheck": "false"}),
             "umami_website_id": forms.TextInput(attrs={"dir": "ltr", "size": 50, "autocomplete": "off"}),
+            "satgate_url": forms.TextInput(attrs={"dir": "ltr", "size": 50, "autocomplete": "off", "placeholder": "https://sat.example.com"}),
             "footer_about": forms.Textarea(attrs={"rows": 3, "cols": 80}),
             "footer_address": forms.Textarea(attrs={"rows": 2, "cols": 80}),
             "footer_links": forms.Textarea(attrs={"rows": 4, "cols": 80}),
@@ -188,6 +198,19 @@ class SiteSettingsForm(forms.ModelForm):
             raise ValidationError("نام پوشه فقط حروف انگلیسی، عدد، نقطه، خط تیره و / دارد.")
         return p
 
+    def clean_satgate_url(self):
+        import re
+
+        url = (self.cleaned_data.get("satgate_url") or "").strip().rstrip("/")
+        if url and not re.fullmatch(r"https?://[A-Za-z0-9.\-]+(:\d+)?", url):
+            raise ValidationError("نشانی فقط دامنه (و پورت) است، بدون مسیر؛ مثلاً https://sat.example.com")
+        if url.startswith("http://") and not re.search(r"://(localhost|127\.|10\.|192\.168\.)", url):
+            raise ValidationError("نشانی دروازه باید با https:// شروع شود (کلید و داده نباید بدون رمزنگاری رد شوند).")
+        return url
+
+    def clean_satgate_secret(self):
+        return "".join((self.cleaned_data.get("satgate_secret") or "").split())
+
     def clean_assistant_api_key(self):
         return "".join((self.cleaned_data.get("assistant_api_key") or "").split())
 
@@ -232,6 +255,15 @@ class SiteSettingsForm(forms.ModelForm):
             obj.offsite_access_key_encrypted = obj.offsite_secret_key_encrypted = ""
             obj.offsite_enabled = False
         obj.set_offsite_keys(self.cleaned_data.get("offsite_access_key", ""), self.cleaned_data.get("offsite_secret_key", ""))
+        if self.cleaned_data.get("clear_satgate_secret"):
+            obj.satgate_secret_encrypted = ""
+        elif self.cleaned_data.get("generate_satgate_secret"):
+            import secrets
+
+            obj._new_satgate_secret = secrets.token_urlsafe(48)
+            obj.set_satgate_secret(obj._new_satgate_secret)
+        elif self.cleaned_data.get("satgate_secret"):
+            obj.set_satgate_secret(self.cleaned_data["satgate_secret"])
         if commit:
             obj.save()
         return obj
@@ -279,6 +311,12 @@ class HomeTrustButtonInline(admin.TabularInline):
     verbose_name_plural = "دکمه‌های زیر کارت‌ها"
 
 
+def _sat_configured() -> bool:
+    from satellite import client
+
+    return client.configured()
+
+
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
     form = SiteSettingsForm
@@ -286,7 +324,7 @@ class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
     tabs = [("site", "سایت و برند", "globe"), ("home", "صفحه‌ی اول", "home"), ("users", "کاربران و کلاس", "users"), ("pay", "پرداخت", "card"),
             ("sms", "پیامک و ورود", "bell"), ("assistant", "دستیار هوشمند", "spark"),
             ("track", "آمار و اعتماد", "chart"), ("backup", "بکاپ خارج از سرور", "db"),
-            ("map", "نقشه و برداشت", "pin")]
+            ("map", "نقشه و برداشت", "pin"), ("sat", "ماهواره", "satellite")]
 
     def tab_status(self, request, obj):
         sms = ("warn", "آزمایشی") if obj.sms_backend == "console" else (
@@ -303,11 +341,13 @@ class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
             "users": ("ok", "") if obj.signup_open and obj.allow_new_databases else ("warn", "محدود"),
             "backup": ("ok", "فعال") if obj.offsite_ready else (
                 ("bad", "ناقص") if obj.offsite_enabled else ("warn", "خاموش")),
+            "sat": ("ok", "فعال") if _sat_configured() else (
+                ("bad", "ناقص") if (obj.satgate_url or obj.satgate_secret_encrypted) else ("warn", "خاموش")),
         }
 
     readonly_fields = ["api_key_status", "gateway_status", "gateway_tools", "sms_tools",
                        "enamad_status", "logo_preview", "assistant_status", "assistant_tools", "updated_at",
-                       "offsite_status", "offsite_tools"]
+                       "offsite_status", "offsite_tools", "satgate_status", "satgate_tools"]
     fieldsets = (
         ("سایت", {"classes": ("ap-tab-site",), "fields": ("site_name", "logo_preview", "logo_file", "clear_logo", "tagline", "announcement", "announcement_level")}),
         ("پشتیبانی", {"classes": ("ap-tab-site",), "fields": ("support_phone", "support_telegram", "support_email")}),
@@ -354,6 +394,14 @@ class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
             "description": "بعد از هر بکاپ موفق، نسخه‌ی دومی در باکت S3 (مثلاً پارس‌پک) ذخیره می‌شود. مدت نگهداری در باکت همان "
                            "مدت نگهداری بکاپ در پلن است. ابتدا ذخیره کنید، سپس «آزمایش اتصال» را بزنید. "
                            "کلیدها رمزنگاری‌شده ذخیره می‌شوند و هرگز دوباره نمایش داده نمی‌شوند.",
+        }),
+        ("دروازه‌ی ماهواره (دریافت تصویر ماهواره‌ای)", {
+            "classes": ("ap-tab-sat",),
+            "fields": ("satgate_status", "satgate_url", "satgate_secret", "generate_satgate_secret", "clear_satgate_secret",
+                       "satgate_tools"),
+            "description": "کار سنگین تصویر ماهواره‌ای روی یک سرور کوچک خارج از ایران (دروازه) انجام می‌شود؛ راه‌اندازی آن در "
+                           "satgate/README.md آمده است. نشانی و کلید را اینجا بدهید، ذخیره کنید و «آزمایش اتصال» را بزنید. "
+                           "نیازی به تغییر متغیرهای Coolify یا اجرای دوباره‌ی سرویس نیست.",
         }),
         ("فوتر سایت", {
             "classes": ("ap-tab-site",),
@@ -473,6 +521,25 @@ class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
         return format_html('<a class="button" href="{}">آزمایش اتصال به فضای ابری</a>',
                            reverse("admin:core_sitesettings_offsitetest"))
 
+    @admin.display(description="وضعیت دروازه")
+    def satgate_status(self, obj):
+        from django.conf import settings
+
+        from satellite.models import SatRequest
+
+        if not _sat_configured():
+            return format_html('<b style="color:#b54708">تنظیم نشده — بخش «تصویر ماهواره‌ای» برای کاربران «به‌زودی» نشان داده می‌شود.</b>')
+        env = " (از متغیر محیطی)" if not obj.satgate_url and settings.SATGATE_URL else ""
+        n = SatRequest.objects.exclude(status=SatRequest.Status.FAILED).count()
+        bad = SatRequest.objects.filter(status=SatRequest.Status.FAILED).count()
+        return format_html('<b style="color:#1a7f4b">تنظیم شده{}</b> — {} درخواست موفق یا در جریان، {} ناموفق.', env, n, bad)
+
+    @admin.display(description="ابزار دروازه")
+    def satgate_tools(self, obj):
+        return format_html('<a class="button" href="{}">آزمایش اتصال به دروازه</a> '
+                           '<span class="help">اول تغییرها را ذخیره کنید؛ آزمون با مقدار ذخیره‌شده انجام می‌شود.</span>',
+                           reverse("admin:core_sitesettings_satgatetest"))
+
     @admin.display(description="وضعیت دستیار")
     def assistant_status(self, obj):
         from kb import vectors
@@ -518,6 +585,8 @@ class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
             path("test-sms/", self.admin_site.admin_view(self.test_sms_view), name="core_sitesettings_testsms"),
             path("offsite-test/", self.admin_site.admin_view(self.offsite_test_view),
                  name="core_sitesettings_offsitetest"),
+            path("satgate-test/", self.admin_site.admin_view(self.satgate_test_view),
+                 name="core_sitesettings_satgatetest"),
             path("assistant-test/", self.admin_site.admin_view(self.assistant_test_view),
                  name="core_sitesettings_assistanttest"),
             path("assistant-embed/", self.admin_site.admin_view(self.assistant_embed_view),
@@ -543,6 +612,24 @@ class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
             messages.success(request, format_html(
                 "اتصال به {}{} درست است. <a href=\"{}\" target=\"_blank\">صفحه پرداخت آزمایشی</a> "
                 "(پرداخت نکنید).", gw.title, mode, res.pay_url))
+        return self._back()
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        new = getattr(obj, "_new_satgate_secret", "")
+        if new:
+            messages.warning(request, format_html(
+                "کلید تازه‌ی دروازه ساخته شد؛ همین حالا کپی کنید، دوباره نمایش داده نمی‌شود و روی دروازه به‌عنوان "
+                "<code>SATGATE_SECRET</code> بگذارید: <code dir=\"ltr\" style=\"user-select:all\">{}</code>", new))
+
+    def satgate_test_view(self, request):
+        from satellite import probe
+
+        steps = probe.run()
+        for ok, text in steps:
+            (messages.success if ok else messages.error)(request, text)
+        if all(ok for ok, _ in steps):
+            messages.success(request, "همه‌ی مراحل موفق بود؛ دروازه آماده‌ی کار است.")
         return self._back()
 
     def offsite_test_view(self, request):

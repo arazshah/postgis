@@ -3,9 +3,9 @@ title: چطور GeoTIFF (رستر) آپلود و به‌صورت کاشی تصو
 summary: در پلن سازمانی فایل GeoTIFF را در بخش رستر آپلود کنید؛ پردازش در پس‌زمینه انجام و به کاشی تصویری تبدیل می‌شود. حجم هر فایل محدودیت دارد (حدود ۱ گیگابایت).
 kind: howto
 keywords: رستر, geotiff, tif, tiff, کاشی تصویری, raster tiles, عکس هوایی, dem, آپلود تصویر ماهواره
-related: vector-vs-raster, enterprise-overview, quota-and-readonly
+related: vector-vs-raster, enterprise-overview, quota-and-readonly, satellite-imagery, satellite-quota
 order: 70
-reviewed: 2026-10-21
+reviewed: 2026-11-08
 ---
 1. صفحه پایگاه داده ← **رستر** ← فایل `.tif` / `.tiff` را بدهید و عنوان بنویسید.
 2. پردازش در پس‌زمینه انجام می‌شود؛ وضعیت را در همین صفحه ببینید.
@@ -13,5 +13,6 @@ reviewed: 2026-10-21
 
 - فقط GeoTIFF معتبر پذیرفته می‌شود.
 - حداکثر حجم هر فایل: ۱ گیگابایت (طبق تنظیم سایت).
-- فایل رستر در [سهمیه حجم](kb:quota-and-readonly) حساب می‌شود.
+- سرویس رستر برای همه‌ی پلن‌هاست و فضایش {{plan_raster_mb}} مگابایت در پلن پیش‌فرض است؛ [سهمیه‌ی رستر و تصویر ماهواره‌ای](kb:satellite-quota) را ببینید.
+- اگر تصویر ماهواره‌ای می‌خواهید لازم نیست خودتان فایل بگیرید: [دریافت Sentinel-2 برای محدوده‌ی شما](kb:satellite-imagery).
 - تفاوت رستر و برداری: [رستر و برداری](kb:vector-vs-raster).

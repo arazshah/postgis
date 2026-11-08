@@ -1,7 +1,7 @@
 """صفحه «امکانات سازمانی» هر پایگاه داده، کاشی و نمایشگر رستر."""
 from django.contrib import messages
 from django.core.cache import cache
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
 from django.views.decorators.clickjacking import xframe_options_exempt
@@ -104,6 +104,61 @@ def raster_tile(request, slug, z, x, y):
         return HttpResponse(status=204)
     resp = HttpResponse(data, content_type="image/png")
     resp["Cache-Control"] = f"{'public' if r.is_public else 'private'}, max-age=3600"
+    resp["Access-Control-Allow-Origin"] = "*"
+    return resp
+
+
+def _range(header: str, size: int):
+    """«bytes=a-b» ← (شروع، پایان) یا None اگر قابل‌فهم نبود؛ ValueError اگر خارج از فایل است."""
+    if not header.startswith("bytes=") or "," in header:
+        return None
+    a, _, b = header[6:].partition("-")
+    try:
+        lo = int(a) if a else max(size - int(b), 0)
+        hi = min(int(b), size - 1) if (a and b) else size - 1
+    except ValueError:
+        return None
+    if lo > hi or lo >= size:
+        raise ValueError
+    return lo, hi
+
+
+def raster_file(request, slug):
+    """خود فایل COG؛ با Range تا QGIS و GDAL (/vsicurl/) فقط تکه‌ی لازم را بخوانند. دسترسی مثل کاشی است."""
+    r = _raster(request, slug, count=False)
+    try:
+        f = open(r.path, "rb")  # noqa: SIM115 FileResponse می‌بندد
+    except OSError:
+        raise Http404 from None
+    size = r.path.stat().st_size
+    try:
+        rng = _range(request.headers.get("Range", ""), size)
+    except ValueError:
+        f.close()
+        resp = HttpResponse(status=416)
+        resp["Content-Range"] = f"bytes */{size}"
+        return resp
+    lo, hi = rng or (0, size - 1)
+    f.seek(lo)
+
+    def chunks():
+        left = hi - lo + 1
+        with f:
+            while left > 0:
+                data = f.read(min(1 << 20, left))
+                if not data:
+                    break
+                left -= len(data)
+                yield data
+
+    resp = FileResponse(chunks(), status=206 if rng else 200, content_type="image/tiff")
+    resp["Content-Length"] = str(hi - lo + 1)
+    resp["Accept-Ranges"] = "bytes"
+    if rng:
+        resp["Content-Range"] = f"bytes {lo}-{hi}/{size}"
+    if request.GET.get("download"):
+        resp["Content-Disposition"] = f'attachment; filename="{r.slug}.tif"'
+    resp["Cache-Control"] = "private, max-age=300"
     resp["Access-Control-Allow-Origin"] = "*"
     return resp
 
