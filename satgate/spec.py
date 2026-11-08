@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 
 COLLECTION_S2 = "sentinel-2-l2a"
@@ -41,6 +42,24 @@ PRODUCTS: dict[str, Product] = {p.key: p for p in (
 
 OVERVIEW_FACTOR = 1.35   # نمای کوچک‌شده‌ی COG که پنل می‌سازد
 MIN_BYTES = 200_000
+
+
+_SAT_PATTERNS = (
+    (re.compile(r"^S2([ABC])_"), lambda m: (f"Sentinel-2{m.group(1)}", "ESA / Copernicus")),
+    (re.compile(r"^S1([ABC])_"), lambda m: (f"Sentinel-1{m.group(1)}", "ESA / Copernicus")),
+    (re.compile(r"^L([CEOT])0?([4-9])_"), lambda m: (f"Landsat {m.group(2)}", "USGS / NASA")),
+)
+
+
+def satellite_of(scene_id: str) -> tuple[str, str]:
+    """(نام ماهواره، سازمان) از روی شناسه‌ی تصویر؛ برای ناشناخته (نام خالی، سازمان خالی)."""
+    if scene_id == COLLECTION_DEM:
+        return "Copernicus DEM GLO-30", "ESA / Copernicus"
+    for rx, fn in _SAT_PATTERNS:
+        m = rx.match(scene_id or "")
+        if m:
+            return fn(m)
+    return "", ""
 
 
 def area_km2(bbox) -> float:

@@ -7,13 +7,18 @@
 .sat-q-h b{font-weight:700}
 .sat-q p{margin:0}
 .sat-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:var(--s4)}
-.sat-card{padding:0;overflow:hidden;gap:0}
-.sat-th{position:relative;aspect-ratio:16/8;background:var(--teal-soft);color:var(--teal);display:grid;place-items:center;overflow:hidden}
+.sat-card{padding:0;overflow:visible;gap:0}  /* منوی ⋯ نباید زیر کارت بریده شود */
+.sat-th{border-radius:var(--r-card) var(--r-card) 0 0;position:relative;aspect-ratio:16/8;background:var(--teal-soft);color:var(--teal);display:grid;place-items:center;overflow:hidden}
 .sat-th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .sat-th .badge{position:absolute;inset-block-start:10px;inset-inline-start:10px}
 .sat-body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:8px}
 .sat-row{display:flex;align-items:flex-start;gap:8px}
 .sat-row h2{flex:1;margin:0;font:800 15px/1.6 var(--f-display);min-width:0}
+.sat-sat{display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--teal-dark)}
+.sat-sat span{font-size:12px}
+.sat-kv th{white-space:nowrap;color:var(--ink-3);font-weight:400;padding-inline-end:16px;vertical-align:top}
+.sat-kv td{font-family:var(--f-body);direction:rtl;text-align:start;overflow-wrap:anywhere}
+.sat-kv td.ltr{direction:ltr;text-align:left;font-family:var(--f-mono)}
 .sat-meta{display:flex;flex-wrap:wrap;gap:4px 12px;margin:0}
 .sat-meta span{display:inline-flex;align-items:center;gap:4px}
 .sat-foot{display:flex;gap:8px}
@@ -57,6 +62,7 @@ dialog.sat-dlg{width:min(960px,calc(100vw - 32px));height:min(720px,calc(100vh -
 .sat-scene .th img{width:100%;height:100%;object-fit:cover;display:block}
 .sat-scene .tx{padding:8px 10px;display:flex;flex-direction:column;gap:2px}
 .sat-scene .tx b{font-weight:700;font-size:13px}
+.sat-scene .sn{color:var(--teal-dark);font-size:12px}
 .sat-scene:hover{border-color:var(--teal)}
 .sat-scene:has(input:checked){border-color:var(--teal);box-shadow:0 0 0 2px var(--teal)}
 .sat-scene:has(input:focus-visible){outline:3px solid var(--ochre);outline-offset:2px}

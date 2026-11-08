@@ -439,6 +439,28 @@ class ViewTests(_Base):
         self.assertEqual(th.call_count, 1)   # کش
         self.assertEqual(self.client.get(self.url("thumb", "other", "S2A_X_1")).status_code, 404)
 
+    def test_card_shows_satellite_and_info_menu(self):
+        r = self.req(status=SatRequest.Status.READY, scene_id="S2B_38SMG_20261024_0_L2A", cloud=3.2)
+        rr = Raster.objects.create(database=self.db, title="t", status=Raster.Status.READY, bounds=BBOX, size_bytes=2048,
+                                   bands=1, dtype="Float32", crs="EPSG:32639", width=300, height=200,
+                                   meta={"attribution": "Contains modified Copernicus Sentinel data (ESA)"})
+        r.raster = rr
+        r.save()
+        self.assertEqual((r.satellite, r.agency), ("Sentinel-2B", "ESA / Copernicus"))
+        info = r.info
+        self.assertEqual((info["satellite"], info["bands"], info["crs"], info["width"]), ("Sentinel-2B", 1, "EPSG:32639", 300))
+        self.assertIn("۱۴۰", info["date"])
+        html = self.client.get(self.url("index")).content.decode()
+        self.assertIn("Sentinel-2B", html)
+        self.assertIn("data-sat-info", html)
+        self.assertIn("ویژگی‌های تصویر", html)
+        self.assertIn('id="sat-info"', html)
+
+    def test_dem_card_names_copernicus(self):
+        r = self.req(product="dem", scene_id="cop-dem-glo-30", scene_date="")
+        self.assertEqual(r.satellite, "Copernicus DEM GLO-30")
+        self.assertEqual(r.info["date"], "")
+
     def test_card_has_qgis_connect_and_download(self):
         r = self.req(status=SatRequest.Status.READY)
         rr = Raster.objects.create(database=self.db, title="t", status=Raster.Status.READY, bounds=BBOX, size_bytes=2048)

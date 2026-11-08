@@ -100,7 +100,9 @@ class Gateway:
         except Exception as exc:  # noqa: BLE001 هر خطای ناشناخته کار را ناموفق می‌کند، نه کل دروازه را
             log.exception("job %s failed", jid)
             part.unlink(missing_ok=True)
-            job = self.store.update(jid, status="failed", message=f"پردازش ناموفق بود ({exc.__class__.__name__}).")
+            # خطای نصب (کتابخانه‌ی سیستمی گم‌شده و مانند آن) برای مدیر قابل‌فهم بماند؛ بقیه فقط نام خطا
+            detail = f": {exc}"[:160] if isinstance(exc, (ImportError, OSError)) else ""
+            job = self.store.update(jid, status="failed", message=f"پردازش ناموفق بود ({exc.__class__.__name__}{detail}).")
         self.notify(job)
 
     def notify(self, job: dict) -> None:

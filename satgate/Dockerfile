@@ -4,6 +4,10 @@ ARG BASE_IMAGE=python:3.13-slim
 FROM ${BASE_IMAGE}
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 SATGATE_DATA=/data
 WORKDIR /app
+# rasterio (چرخ آماده) GDAL را همراه دارد ولی libexpat را از سیستم می‌خواهد و ایمیج slim آن را ندارد
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libexpat1 libstdc++6 zlib1g \
+ && rm -rf /var/lib/apt/lists/*
 COPY satgate/requirements.txt satgate/requirements.txt
 RUN pip install -r satgate/requirements.txt && useradd --create-home --uid 1000 sat && mkdir /data && chown sat /data
 COPY satgate/*.py satgate/
