@@ -15,14 +15,15 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import protocol, stac
+from . import analysis, protocol, stac
 from .process import ProcessError, build_composite, build_dem, build_scene, check_limits
 from .spec import COLLECTION_DEM, COLLECTION_LANDSAT, COLLECTION_S2, DEM_MISSION, MISSIONS, get_product, valid_bbox
 from .store import ID_RE, Store
 
 log = logging.getLogger("satgate")
-VERSION = "1.1"
+VERSION = "1.2"
 MAX_BODY = 64 * 1024
+MAX_BODY_ANALYZE = 4 * 1024 * 1024   # عارضه‌های کاربر برای آمار هر ناحیه
 
 
 class Config:
@@ -82,8 +83,51 @@ class Gateway:
         self.pool.submit(self.run, jid)
         return 202, _public(job)
 
+    def submit_analysis(self, body: dict) -> tuple[int, dict]:
+        jid = str(body.get("id", ""))
+        if not ID_RE.match(jid):
+            return 400, {"error": "شناسه نامعتبر است."}
+        old = self.store.get(jid)
+        if old:
+            return 200, _public(old)
+        try:
+            cap = min(float(body.get("max_km2") or self.cfg.max_km2), self.cfg.max_km2)
+        except (TypeError, ValueError):
+            return 400, {"error": "سقف مساحت نامعتبر است."}
+        params, err = analysis.validate(body, cap)
+        if err:
+            return 422, {"error": err}
+        if self.store.active() >= self.cfg.max_active:
+            return 503, {"error": "صف دروازه پر است؛ کمی بعد دوباره امتحان کنید."}
+        job = {"id": jid, "kind": "zonal", "status": "queued", "product": params["index"], "mission": params["mission"],
+               "params": params, "created": int(time.time()), "message": ""}
+        self.store.put(job)
+        self.pool.submit(self.run, jid)
+        return 202, _public(job)
+
+    def _run_zonal(self, jid: str, job: dict) -> dict:
+        sign_for = lambda c: (lambda href: stac.sign_href(c, href, self.fetch))  # noqa: E731
+        res = analysis.run_zonal(job["params"], self.fetch, sign_for)
+        data = json.dumps(res, ensure_ascii=False).encode()
+        self.store.result(jid).write_bytes(data)
+        return self.store.update(jid, status="ready", size=len(data), sha256=hashlib.sha256(data).hexdigest(), message="",
+                                 used=len(res["scenes"]), of=len(res["scenes"]) + len(res["skipped"]), rows=len(res["rows"]),
+                                 params=None)       # عارضه‌های کاربر بعد از اتمام روی دروازه نمی‌ماند
+
     def run(self, jid: str) -> None:
         job = self.store.update(jid, status="running")
+        if job.get("kind") == "zonal":
+            try:
+                job = self._run_zonal(jid, job)
+            except (ProcessError, stac.StacError, analysis.ZonalError) as exc:
+                job = self.store.update(jid, status="failed", message=str(exc)[:300], params=None)
+            except Exception as exc:  # noqa: BLE001
+                log.exception("analysis %s failed", jid)
+                detail = f": {exc}"[:160] if isinstance(exc, (ImportError, OSError)) else ""
+                job = self.store.update(jid, status="failed", params=None,
+                                        message=f"تحلیل ناموفق بود ({exc.__class__.__name__}{detail}).")
+            self.notify(job)
+            return
         out = self.store.file(jid)
         part = out.with_suffix(".part.tif")
         try:
@@ -221,7 +265,7 @@ def _composite_params(c, spec) -> tuple[dict | None, str]:
 
 
 def _public(job: dict) -> dict:
-    keys = ("id", "status", "message", "size", "sha256", "product", "used", "of")
+    keys = ("id", "kind", "status", "message", "size", "sha256", "product", "used", "of", "rows")
     return {k: job[k] for k in keys if k in job}
 
 
@@ -256,7 +300,7 @@ def make_app(gw: Gateway):
             n = int(environ.get("CONTENT_LENGTH") or 0)
         except ValueError:
             n = 0
-        if n > MAX_BODY:
+        if n > (MAX_BODY_ANALYZE if path == "/v1/analyze" else MAX_BODY):
             return _resp(start, 400, {"error": "بدنه‌ی درخواست بزرگ است."})
         body = environ["wsgi.input"].read(n) if n else b""
         target = path + (f"?{query}" if query else "")
@@ -281,6 +325,9 @@ def make_app(gw: Gateway):
             except (TypeError, ValueError):
                 return _resp(start, 400, {"error": "پارامتر نامعتبر است."})
             return _resp(start, 200, {"scenes": scenes})
+        if path == "/v1/analyze" and method == "POST":
+            code, out = gw.submit_analysis(data)
+            return _resp(start, code, out)
         if path == "/v1/jobs" and method == "POST":
             code, out = gw.submit(data)
             return _resp(start, code, out)
@@ -310,6 +357,11 @@ def make_app(gw: Gateway):
             if len(rest) == 1 and method == "DELETE":
                 gw.store.delete(jid)
                 return _resp(start, 200, {"ok": True})
+            if rest[1:] == ["result"] and method == "GET":
+                f = gw.store.result(jid)
+                if job.get("status") != "ready" or not f.exists():
+                    return _resp(start, 404, {"error": "نتیجه آماده نیست."})
+                return _resp(start, 200, f.read_bytes())
             if rest[1:] == ["file"] and method == "GET":
                 return _file(environ, start, gw.store.file(jid), job)
         return _resp(start, 404, {"error": "پیدا نشد."})

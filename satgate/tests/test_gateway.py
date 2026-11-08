@@ -273,6 +273,151 @@ class MaskAndCompositeTests(unittest.TestCase):
             self.assertTrue((arr == -9999).any() and (arr != -9999).any())
 
 
+POLY_N = {"type": "Polygon", "coordinates": [[[51.305, 35.720], [51.335, 35.720], [51.335, 35.728], [51.305, 35.728], [51.305, 35.720]]]}
+POLY_S = {"type": "Polygon", "coordinates": [[[51.305, 35.702], [51.335, 35.702], [51.335, 35.710], [51.305, 35.710], [51.305, 35.702]]]}
+FEATS = [{"id": "plot-A", "geometry": POLY_N}, {"id": "plot-B", "geometry": POLY_S}]
+
+
+class ZonalModuleTests(unittest.TestCase):
+    def test_index_formulas_and_invalid_pixels(self):
+        from satgate.zonal import index_array, index_bands
+        r = {"nir": np.array([.4, .4, np.nan, .0], "float32"), "red": np.array([.1, .4, .1, .0], "float32"),
+             "green": np.array([.2, .2, .2, .2], "float32"), "swir16": np.array([.2, .1, .1, .1], "float32"),
+             "swir22": np.array([.1, .1, .1, .1], "float32")}
+        nd = index_array(r, "ndvi")
+        self.assertAlmostEqual(float(nd[0]), 0.6, places=5)
+        self.assertAlmostEqual(float(nd[1]), 0.0, places=5)
+        self.assertTrue(np.isnan(nd[2]) and np.isnan(nd[3]))              # بی‌اعتبار و مخرج صفر
+        self.assertAlmostEqual(float(index_array(r, "ndwi")[0]), (.2 - .4) / (.2 + .4), places=5)
+        self.assertEqual(index_bands("ndmi"), ("nir", "swir16"))
+        from satgate.zonal import ZonalError
+        with self.assertRaises(ZonalError):
+            index_array(r, "nope")
+
+    def test_zonal_stats_per_feature_with_gaps(self):
+        from satgate.zonal import zonal_stats
+        labels = np.array([[1, 1, 2, 0], [1, 1, 2, 3], [0, 0, 0, 3]], dtype="uint32")
+        vals = np.array([[.2, .4, np.nan, 9], [.6, np.nan, np.nan, 1], [5, 5, 5, 3]], dtype="float32")
+        st = zonal_stats(labels, vals, 4)
+        a = st[0]
+        self.assertEqual((a["count"], a["valid"], a["valid_pct"]), (4, 3, 75.0))
+        self.assertAlmostEqual(a["mean"], 0.4, places=5)
+        self.assertAlmostEqual(a["median"], 0.4, places=5)
+        self.assertEqual((round(a["min"], 3), round(a["max"], 3)), (0.2, 0.6))
+        self.assertGreater(a["std"], 0)
+        self.assertEqual(st[1]["valid"], 0)                                # همه ابر: فقط شمارش، بدون میانگین
+        self.assertNotIn("mean", st[1])
+        self.assertEqual((st[2]["count"], st[2]["mean"]), (2, 2.0))
+        self.assertIsNone(st[3])                                           # عارضه‌ای که روی شبکه نیست
+
+    def test_bbox_and_labels(self):
+        from satgate.process import utm_grid
+        from satgate.zonal import bbox_of, feature_labels
+        bb = bbox_of(FEATS)
+        self.assertEqual([round(v, 3) for v in bb], [51.305, 35.702, 51.335, 35.728])
+        g = utm_grid(BBOX, 10)
+        lab = feature_labels(FEATS, (g["height"], g["width"]), g["transform"], g["crs"])
+        self.assertEqual(set(np.unique(lab).tolist()), {0, 1, 2})
+        self.assertGreater(int((lab == 1).sum()), 1000)
+        self.assertGreater(int((lab == 2).sum()), 1000)
+
+
+class ZonalJobTests(unittest.TestCase):
+    """سری زمانی روی دروازه: سه تصویر، یکی با ابر روی نیمه‌ی شمالی؛ آمار هر قطعه جدا و درصد معتبر درست."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        full = {"type": "Polygon", "coordinates": [[[51.0, 35.4], [51.7, 35.4], [51.7, 36.1], [51.0, 36.1], [51.0, 35.4]]]}
+        self.scenes = {}
+        for k, (nir, cloud, cc) in enumerate([(3000, None, 5), (4000, ("north", 35.715), 12), (5000, None, 8)]):
+            it = make_scene(self.root, nir_v=nir, red_v=2000, tag=f"z{k}_", cloud=cloud)
+            it["id"] = f"S2A_39SUQ_2026060{k + 1}_0_L2A"
+            it["properties"].update(datetime=f"2026-06-0{k + 1}T07:00:00Z", **{"eo:cloud_cover": cc})
+            self.scenes[it["id"]] = it
+        self.full = full
+
+        def fetch(url, body=None, timeout=30):
+            if "/items/" in url:
+                return self.scenes[url.rsplit("/", 1)[1]]
+            return {"features": [{"id": i, "collection": "sentinel-2-l2a", "geometry": full,
+                                  "properties": {"datetime": it["properties"]["datetime"],
+                                                 "eo:cloud_cover": it["properties"]["eo:cloud_cover"]}}
+                                 for i, it in self.scenes.items()]}
+        self.fetch = fetch
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def params(self, **kw):
+        from satgate import analysis
+        body = {"features": FEATS, "index": "ndvi", "mission": "sentinel2", "start": "2026-06-01", "end": "2026-06-30",
+                "max_cloud": 50, "max_scenes": 5, "mask": True, **kw}
+        p, err = analysis.validate(body, 500)
+        self.assertEqual(err, "", err)
+        return p
+
+    def test_time_series_with_cloud_gaps(self):
+        from satgate import analysis
+        res = analysis.run_zonal(self.params(), self.fetch)
+        self.assertEqual([s["date"] for s in res["scenes"]], ["2026-06-01", "2026-06-02", "2026-06-03"])   # به ترتیب تاریخ
+        by = {(r["feature"], r["date"]): r for r in res["rows"]}
+        # NDVI: روز۱ NIR .2 قرمز .1 ← .3333 ؛ روز۲ NIR .3 ← .5 ؛ روز۳ NIR .4 ← .6
+        self.assertAlmostEqual(by[("plot-B", "2026-06-01")]["mean"], 0.3333, places=3)
+        self.assertAlmostEqual(by[("plot-B", "2026-06-02")]["mean"], 0.5, places=3)
+        self.assertAlmostEqual(by[("plot-B", "2026-06-03")]["mean"], 0.6, places=3)
+        self.assertEqual(by[("plot-B", "2026-06-02")]["valid_pct"], 100.0)
+        a2 = by[("plot-A", "2026-06-02")]                                    # شمال در روز ۲ ابری
+        self.assertEqual((a2["valid"], a2["valid_pct"]), (0, 0.0))
+        self.assertNotIn("mean", a2)
+        self.assertAlmostEqual(by[("plot-A", "2026-06-03")]["mean"], 0.6, places=3)
+        self.assertEqual(res["features"], 2)
+        self.assertEqual(res["skipped"], [])
+
+    def test_mask_off_ignores_clouds(self):
+        from satgate import analysis
+        res = analysis.run_zonal(self.params(mask=False), self.fetch)
+        by = {(r["feature"], r["date"]): r for r in res["rows"]}
+        self.assertEqual(by[("plot-A", "2026-06-02")]["valid_pct"], 100.0)
+        self.assertAlmostEqual(by[("plot-A", "2026-06-02")]["mean"], 0.5, places=3)
+
+    def test_other_indices_use_other_bands(self):
+        from satgate import analysis
+        res = analysis.run_zonal(self.params(index="ndwi", max_scenes=1), self.fetch)
+        row = res["rows"][0]
+        # NDWI=(green-nir)/(green+nir): سبز DN 1200 ← .02 ، NIR کمتر ← منفی (خشکی)
+        self.assertLess(row["mean"], 0)
+
+    def test_skips_broken_scene_but_keeps_others(self):
+        from satgate import analysis
+        first = next(iter(self.scenes.values()))
+        del first["assets"]["nir"]
+        res = analysis.run_zonal(self.params(), self.fetch)
+        self.assertEqual(len(res["scenes"]), 2)
+        self.assertEqual(len(res["skipped"]), 1)
+        self.assertIn("nir", res["skipped"][0]["reason"])
+
+    def test_validation_rules(self):
+        from satgate import analysis
+        ok = {"features": FEATS, "index": "ndvi", "start": "2026-06-01", "end": "2026-06-30"}
+        self.assertEqual(analysis.validate(ok, 500)[1], "")
+        bad = [({**ok, "index": "nope"}, "شاخص"), ({**ok, "mission": "nope"}, "ماهواره"), ({**ok, "features": []}, "عارضه"),
+               ({**ok, "features": [{"id": 1, "geometry": {"type": "Point", "coordinates": [51, 35]}}]}, "چندضلعی"),
+               ({**ok, "features": [{"geometry": POLY_N}]}, "چندضلعی"), ({**ok, "start": "2026-07-01"}, "بازه"),
+               ({**ok, "start": "2024-01-01"}, "بازه"), ({**ok, "features": FEATS * 600}, "حداکثر")]
+        for body, word in bad:
+            self.assertIn(word, analysis.validate(body, 500)[1], body.get("index"))
+        self.assertIn("سقف", analysis.validate(ok, 1)[1])                    # محدوده‌ی عارضه‌ها از سقف پلن بزرگ‌تر
+        self.assertEqual(analysis.validate({**ok, "max_scenes": 999}, 500)[0]["max_scenes"], 24)
+
+    def test_no_scenes_message(self):
+        from satgate import analysis
+        from satgate.process import ProcessError
+        with self.assertRaises(ProcessError) as cm:
+            analysis.run_zonal(self.params(), lambda *a, **k: {"features": []})
+        self.assertIn("تصویری با این شرایط", str(cm.exception))
+
+
 class ThumbTests(unittest.TestCase):
     """پیش‌نمایش هر ماهواره: نام دارایی بین مجموعه‌ها فرق دارد و فقط https تصویری پذیرفته می‌شود."""
 
@@ -664,6 +809,38 @@ class AppTests(unittest.TestCase):
             self.assertTrue((ds.read(1) != -9999).all())            # ابرها با تصویرهای دیگر پر شد
         stored = self.gw.store.get("5" * 32)
         self.assertEqual(stored["composite"]["max_scenes"], 3)
+
+    def test_analyze_job_via_api_returns_small_result_and_forgets_polygons(self):
+        z = ZonalJobTests("test_time_series_with_cloud_gaps")
+        z.setUp()
+        try:
+            self.gw.fetch = z.fetch
+            body = {"id": "a" * 32, "features": FEATS, "index": "ndvi", "mission": "sentinel2", "start": "2026-06-01",
+                    "end": "2026-06-30", "max_cloud": 50, "max_scenes": 5, "mask": True, "max_km2": 100}
+            r = self.call("POST", "/v1/analyze", body)
+            self.assertEqual(r["status"], 202, r["body"])
+            job = self.wait("a" * 32)
+            self.assertEqual((job["status"], job["used"], job["of"]), ("ready", 3, 3), job)
+            self.assertEqual(job["rows"], 6)
+            self.assertIn(("/hooks/satellite/", {"id": "a" * 32, "status": "ready"}), self.calls)
+            res = self.call("GET", f"/v1/jobs/{'a' * 32}/result")
+            self.assertEqual(res["status"], 200)
+            data = json.loads(res["body"])
+            self.assertEqual(len(data["rows"]), 6)
+            self.assertLess(len(res["body"]), 5000)
+            self.assertIsNone(self.gw.store.get("a" * 32).get("params"))          # چندضلعی‌های کاربر روی دروازه نمی‌ماند
+            self.assertEqual(self.call("POST", "/v1/analyze", body)["status"], 200)  # تکراری
+            self.call("DELETE", f"/v1/jobs/{'a' * 32}")
+            self.assertFalse(self.gw.store.result("a" * 32).exists())
+        finally:
+            z.tearDown()
+
+    def test_analyze_rejects_bad_input_and_unsigned(self):
+        r = self.call("POST", "/v1/analyze", {"id": "b" * 32, "features": [], "index": "ndvi"})
+        self.assertEqual(r["status"], 422)
+        self.assertEqual(self.call("POST", "/v1/analyze", {"id": "zz"})["status"], 400)
+        self.assertEqual(self.call("POST", "/v1/analyze", {"id": "c" * 32}, secret=None)["status"], 401)
+        self.assertEqual(self.call("GET", "/v1/jobs/" + "d" * 32 + "/result")["status"], 404)
 
     def test_composite_params_are_validated(self):
         base = {"id": "6" * 32, "product": "ndvi", "bbox": BBOX}

@@ -28,6 +28,12 @@ class Store:
             raise ValueError("شناسه نامعتبر")
         return self.out / f"{job_id}.tif"
 
+    def result(self, job_id: str) -> Path:
+        """خروجی JSON تحلیل (آمار هر ناحیه)؛ کنار فایل‌های دیگر و با همان پاک‌سازی."""
+        if not ID_RE.match(job_id):
+            raise ValueError("شناسه نامعتبر")
+        return self.out / f"{job_id}.result.json"
+
     def get(self, job_id: str) -> dict | None:
         try:
             return json.loads(self.path(job_id).read_text())
@@ -54,6 +60,7 @@ class Store:
     def delete(self, job_id: str) -> None:
         self.file(job_id).unlink(missing_ok=True)
         self.file(job_id).with_suffix(".part.tif").unlink(missing_ok=True)
+        self.result(job_id).unlink(missing_ok=True)
         self.path(job_id).unlink(missing_ok=True)
 
     def cleanup(self, keep_hours: float, now: float | None = None) -> int:
