@@ -1,0 +1,210 @@
+/* کتاب «پایگاه داده مکانی ابری» — صفحه‌آرایی چاپی (قطع وزیری ۱۷×۲۴) */
+@font-face { font-family: "Vazirmatn"; font-weight: 400; src: url("../../../static/fonts/vazirmatn-arabic-400-normal.woff2") format("woff2"); unicode-range: U+0600-06FF, U+200C-200F, U+FB50-FDFF, U+FE70-FEFF; }
+@font-face { font-family: "Vazirmatn"; font-weight: 400; src: url("../../../static/fonts/vazirmatn-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Vazirmatn"; font-weight: 500; src: url("../../../static/fonts/vazirmatn-arabic-500-normal.woff2") format("woff2"); unicode-range: U+0600-06FF, U+200C-200F, U+FB50-FDFF, U+FE70-FEFF; }
+@font-face { font-family: "Vazirmatn"; font-weight: 500; src: url("../../../static/fonts/vazirmatn-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Vazirmatn"; font-weight: 700; src: url("../../../static/fonts/vazirmatn-arabic-700-normal.woff2") format("woff2"); unicode-range: U+0600-06FF, U+200C-200F, U+FB50-FDFF, U+FE70-FEFF; }
+@font-face { font-family: "Vazirmatn"; font-weight: 700; src: url("../../../static/fonts/vazirmatn-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Kufi"; font-weight: 700; src: url("../../../static/fonts/noto-kufi-arabic-arabic-700-normal.woff2") format("woff2"); unicode-range: U+0600-06FF, U+200C-200F, U+FB50-FDFF, U+FE70-FEFF; }
+@font-face { font-family: "Kufi"; font-weight: 700; src: url("../../../static/fonts/noto-kufi-arabic-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Kufi"; font-weight: 800; src: url("../../../static/fonts/noto-kufi-arabic-arabic-800-normal.woff2") format("woff2"); unicode-range: U+0600-06FF, U+200C-200F, U+FB50-FDFF, U+FE70-FEFF; }
+@font-face { font-family: "Kufi"; font-weight: 800; src: url("../../../static/fonts/noto-kufi-arabic-latin-800-normal.woff2") format("woff2"); }
+@font-face { font-family: "Mono"; font-weight: 400; src: url("../../../static/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Mono"; font-weight: 500; src: url("../../../static/fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2"); }
+
+:root {
+  --ink: #1d2a2c; --ink-2: #4a5759; --ink-3: #7b8789;
+  --line: #c9d2d2; --line-2: #e4e9e8; --paper: #ffffff;
+  --teal: #0f6e6e; --teal-dark: #0a4f50; --teal-soft: #e3f1ef;
+  --ochre: #b8741a; --ochre-soft: #fbf1e1;
+  --red: #b23a35; --red-soft: #fbeaea; --green: #2e7d4f; --green-soft: #e6f3eb;
+  --violet: #5b4a9e; --violet-soft: #efecf8;
+  --f-body: "Vazirmatn", sans-serif; --f-display: "Kufi", "Vazirmatn", sans-serif; --f-mono: "Mono", "Vazirmatn", monospace;
+}
+
+/* ---------- صفحه ---------- */
+@page {
+  size: 170mm 240mm;
+  margin: 20mm 18mm 20mm 18mm;
+  @bottom-center { content: counter(page, persian); font: 500 9pt var(--f-body); color: #4a5759; }
+}
+@page :right { margin-left: 16mm; margin-right: 21mm; }   /* راست‌به‌چپ: صفحه‌ی فرد سمت چپِ کتاب باز است؛ عطف سمت راست */
+@page :left  { margin-left: 21mm; margin-right: 16mm; }
+@page plain   { @bottom-center { content: none; } }
+@page opener  { margin: 0; @bottom-center { content: none; } }
+@page part    { margin: 0; @bottom-center { content: none; } }
+
+html { direction: rtl; }
+body {
+  margin: 0; font-family: var(--f-body); font-size: 10.4pt; line-height: 1.95; color: var(--ink);
+  text-align: justify; text-justify: inter-word; hyphens: none;
+  font-feature-settings: "ss01";
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+p { margin: 0 0 .55em; orphans: 2; widows: 2; }
+a { color: inherit; text-decoration: none; }
+strong { font-weight: 700; color: #102224; }
+em { font-style: normal; color: var(--teal-dark); font-weight: 500; }
+.mk { font-size: 1px; color: #fff; line-height: 0; position: absolute; }
+
+/* ---------- صفحه‌های آغاز ---------- */
+.front { page: plain; break-after: page; }
+.title-page { height: 200mm; display: flex; flex-direction: column; justify-content: center; text-align: center; }
+.title-page h1 { font: 800 25pt/1.5 var(--f-display); color: var(--teal-dark); margin: 0 0 6mm; }
+.title-page .sub { font-size: 12.5pt; color: var(--ink-2); line-height: 1.8; }
+.title-page .rule { width: 34mm; height: 1.4mm; background: var(--ochre); margin: 9mm auto; border-radius: 1mm; }
+.title-page .author { font: 700 12pt var(--f-display); margin-top: 6mm; }
+.title-page .ed { margin-top: auto; color: var(--ink-3); font-size: 9.5pt; }
+.colophon { font-size: 8.8pt; line-height: 1.9; color: var(--ink-2); }
+.colophon table { width: 100%; border-collapse: collapse; margin-top: 50mm; }
+.colophon td { padding: 1.2mm 2mm; border-bottom: .3pt solid var(--line-2); vertical-align: top; }
+.colophon td:first-child { width: 30mm; color: var(--ink-3); white-space: nowrap; }
+.dedication { height: 180mm; display: flex; align-items: center; justify-content: center; text-align: center;
+  font: 500 12pt/2.2 var(--f-body); color: var(--ink-2); }
+
+/* فهرست */
+.toc h1, .front-chapter h1 { font: 800 19pt/1.6 var(--f-display); color: var(--teal-dark); margin: 0 0 6mm; }
+.toc { page: plain; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc .t-part { font: 800 11pt var(--f-display); color: var(--teal); margin: 5mm 0 1.5mm; break-after: avoid; }
+.toc .t-ch, .toc .t-sec { display: flex; gap: 2mm; align-items: baseline; }
+.toc .t-ch { font-weight: 700; margin-top: 1.2mm; }
+.toc .t-sec { font-size: 9.2pt; color: var(--ink-2); padding-right: 7mm; line-height: 1.75; }
+.toc .t-ch .n { min-width: 7mm; color: var(--ochre); }
+.toc .dots { flex: 1; border-bottom: .8pt dotted var(--line); transform: translateY(-1.2mm); }
+.toc .pg { min-width: 7mm; text-align: left; font-weight: 500; }
+
+/* ---------- بخش (Part) ---------- */
+.part-page { page: part; break-before: right; height: 240mm; position: relative; overflow: hidden;
+  background: linear-gradient(160deg, var(--teal-dark), var(--teal) 70%); color: #fff; }
+.part-page .art { position: absolute; inset: 0; opacity: .22; }
+.part-page .in { position: absolute; right: 22mm; left: 22mm; top: 70mm; }
+.part-page .pno { font: 700 12pt var(--f-display); color: #f4c98a; letter-spacing: .5pt; }
+.part-page h1 { font: 800 27pt/1.45 var(--f-display); margin: 3mm 0 8mm; }
+.part-page .pin { font-size: 10.5pt; line-height: 2; color: #e3f1ef; text-align: justify; }
+.part-page .pch { margin-top: 10mm; font-size: 9.6pt; line-height: 2.1; color: #fff; }
+.part-page .pch span { color: #f4c98a; margin-left: 2mm; }
+
+/* ---------- آغاز فصل ---------- */
+.opener { page: opener; break-before: right; height: 240mm; position: relative; overflow: hidden; background: #fff; }
+.opener .band { position: absolute; top: 0; right: 0; left: 0; height: 92mm; background: var(--teal-soft); overflow: hidden; }
+.opener .band svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.opener .no { position: absolute; top: 24mm; right: 21mm; font: 800 54pt/1 var(--f-display); color: var(--teal); }
+.opener .kicker { position: absolute; top: 18mm; right: 21mm; font: 700 10pt var(--f-display); color: var(--ochre); }
+.opener h1 { position: absolute; top: 58mm; right: 21mm; left: 21mm; font: 800 22pt/1.55 var(--f-display); color: var(--ink); margin: 0; }
+.opener .card { position: absolute; top: 112mm; right: 21mm; left: 21mm; }
+.opener .meta { display: flex; gap: 3mm; flex-wrap: wrap; margin-bottom: 6mm; }
+.opener .meta span { border: .6pt solid var(--line); border-radius: 10mm; padding: .6mm 3.5mm; font-size: 8.8pt; color: var(--ink-2); }
+.opener .meta span b { color: var(--teal-dark); font-weight: 700; }
+.opener .goals h3 { font: 700 10.5pt var(--f-display); color: var(--teal-dark); margin: 0 0 2mm; }
+.opener .goals ul { margin: 0; padding-right: 5mm; font-size: 9.8pt; line-height: 2; }
+.opener .goals li::marker { color: var(--ochre); }
+.lvl { display: inline-flex; gap: .8mm; vertical-align: middle; margin-right: 1mm; }
+.lvl i { width: 2.2mm; height: 2.2mm; border-radius: 50%; background: var(--line); display: inline-block; }
+.lvl i.on { background: var(--ochre); }
+
+/* ---------- بدنه‌ی فصل ---------- */
+.chapter-body { break-before: page; }
+h2 { font: 800 14pt/1.6 var(--f-display); color: var(--teal-dark); margin: 7mm 0 2.5mm; break-after: avoid; }
+h2 .sn { color: var(--ochre); margin-left: 2.5mm; }
+h3 { font: 700 11.5pt/1.6 var(--f-display); color: var(--ink); margin: 5mm 0 1.8mm; break-after: avoid; }
+h4 { font: 700 10.4pt/1.6 var(--f-body); color: var(--teal-dark); margin: 3.5mm 0 1mm; break-after: avoid; }
+ul, ol { margin: 0 0 .6em; padding-right: 6mm; }
+li { margin-bottom: .2em; }
+li::marker { color: var(--teal); }
+hr { border: 0; border-top: .6pt solid var(--line); margin: 5mm 20mm; }
+sup.fn { font-size: 7pt; }
+
+/* اصطلاح انگلیسی داخل متن فارسی */
+.en, code { direction: ltr; unicode-bidi: isolate; }
+code { font-family: var(--f-mono); font-size: 8.6pt; background: #f1f4f3; border-radius: 1mm; padding: 0 1mm; color: #0d3f40; }
+
+/* کد */
+pre { direction: ltr; text-align: left; font-family: var(--f-mono); font-size: 8.3pt; line-height: 1.6;
+  background: #f6f8f7; border: .5pt solid var(--line-2); border-right: 1.4mm solid var(--teal);
+  border-radius: 1.6mm; padding: 2.6mm 3.4mm; margin: 2.5mm 0 3.5mm; white-space: pre-wrap; word-break: break-word;
+  break-inside: avoid; }
+pre code { background: none; padding: 0; font-size: inherit; color: #1d2a2c; }
+div.sourceCode { margin: 0; }
+pre.sql::before, div.sql pre::before { content: "SQL"; float: right; font: 700 6.5pt var(--f-mono); color: var(--teal); letter-spacing: .6pt; }
+code span.kw { color: #0a5d8a; font-weight: 500; }   /* کلیدواژه */
+code span.fu, code span.bu { color: #8a4b08; }      /* تابع */
+code span.st, code span.ss, code span.ch { color: #2e7d4f; }
+code span.co { color: #7b8789; font-style: normal; } /* توضیح */
+code span.dv, code span.fl, code span.bn { color: #a2341e; }
+code span.dt { color: #5b4a9e; }
+code span.op { color: #4a5759; }
+.result { direction: ltr; font-family: var(--f-mono); font-size: 7.8pt; border-collapse: collapse; margin: -1mm 0 4mm; }
+.result th, .result td { border: .4pt solid var(--line); padding: .6mm 2mm; text-align: left; }
+.result th { background: var(--line-2); }
+
+/* جدول */
+table { border-collapse: collapse; width: 100%; margin: 2mm 0 4mm; font-size: 8.9pt; line-height: 1.7; break-inside: avoid; }
+th { background: var(--teal-soft); color: var(--teal-dark); font-weight: 700; text-align: right; }
+th, td { border-bottom: .5pt solid var(--line); padding: 1.3mm 2mm; vertical-align: top; }
+tr:nth-child(even) td { background: #fafbfb; }
+caption, .tcap { caption-side: top; font: 700 8.8pt var(--f-body); color: var(--ink-2); text-align: right; padding-bottom: 1mm; }
+
+/* تصویر */
+figure { margin: 3mm 0 4.5mm; text-align: center; break-inside: avoid; }
+figure img, figure svg { max-width: 100%; max-height: 120mm; border-radius: 1.6mm; }
+figure img.shot { border: .5pt solid var(--line); box-shadow: 0 .6mm 2mm rgba(15,40,40,.12); }
+figure.phone img { max-height: 100mm; border-radius: 3mm; }
+figure.wide img { max-height: 150mm; }
+figcaption { font-size: 8.6pt; color: var(--ink-2); margin-top: 1.8mm; line-height: 1.7; text-align: center; }
+figcaption .fno { font-weight: 700; color: var(--teal-dark); margin-left: 1.5mm; }
+.figrow { display: flex; gap: 4mm; align-items: flex-start; }
+.figrow figure { flex: 1; }
+
+/* کادرها */
+.note, .warn, .know, .pro, .real, .try, .teach, .sqlbox, .summary {
+  border-radius: 2mm; padding: 2.6mm 4mm 2mm; margin: 3mm 0 4mm; break-inside: avoid; font-size: 9.7pt; line-height: 1.9; }
+.note::before, .warn::before, .know::before, .pro::before, .real::before, .try::before, .teach::before, .summary::before {
+  display: block; font: 700 9pt var(--f-display); margin-bottom: 1mm; }
+.note { background: var(--teal-soft); } .note::before { content: "نکته"; color: var(--teal-dark); }
+.warn { background: var(--red-soft); } .warn::before { content: "هشدار"; color: var(--red); }
+.know { background: var(--ochre-soft); } .know::before { content: "بدانید"; color: var(--ochre); }
+.pro  { background: var(--violet-soft); } .pro::before { content: "سطح حرفه‌ای"; color: var(--violet); }
+.real { background: var(--green-soft); } .real::before { content: "در دنیای واقعی"; color: var(--green); }
+.try  { border: .7pt dashed var(--teal); } .try::before { content: "خودتان امتحان کنید"; color: var(--teal); }
+.teach { border: .7pt solid var(--ochre); background: #fffdf8; } .teach::before { content: "برای مدرس"; color: var(--ochre); }
+.summary { background: #f3f5f5; border-right: 1.4mm solid var(--ochre); } .summary::before { content: "خلاصه‌ی فصل"; color: var(--ink); }
+.note > :last-child, .warn > :last-child, .know > :last-child, .pro > :last-child, .real > :last-child,
+.try > :last-child, .teach > :last-child, .summary > :last-child { margin-bottom: 0; }
+
+/* گام‌ها */
+.steps ol { counter-reset: st; list-style: none; padding-right: 0; }
+.steps li { counter-increment: st; position: relative; padding-right: 8.5mm; margin-bottom: 1.4mm; }
+.steps li::before { content: counter(st, persian); position: absolute; right: 0; top: .4mm; width: 5.8mm; height: 5.8mm;
+  border-radius: 50%; background: var(--teal); color: #fff; font: 700 8.4pt/5.8mm var(--f-body); text-align: center; }
+
+/* تمرین‌ها و پرسش‌ها */
+.exercises { border-top: 1pt solid var(--line); margin-top: 6mm; padding-top: 2mm; }
+.exercises h3 { color: var(--teal-dark); }
+.exercises ol { counter-reset: ex; list-style: none; padding-right: 0; }
+.exercises li { counter-increment: ex; position: relative; padding-right: 8mm; }
+.exercises li::before { content: counter(ex, persian) "."; position: absolute; right: 0; font-weight: 700; color: var(--ochre); }
+.badge { display: inline-block; font-size: 7.5pt; border-radius: 1mm; padding: 0 1.5mm; margin-left: 1mm; vertical-align: 1pt; }
+.b1 { background: var(--green-soft); color: var(--green); } .b2 { background: var(--ochre-soft); color: var(--ochre); } .b3 { background: var(--red-soft); color: var(--red); }
+
+/* فرمول */
+math[display="block"] { margin: 2mm auto 3mm; font-size: 11pt; direction: ltr; }
+.eq { direction: ltr; text-align: center; margin: 2mm 0 3mm; }
+
+/* پیوست و واژه‌نامه */
+dl.gloss { columns: 2; column-gap: 7mm; font-size: 8.8pt; line-height: 1.75; }
+dl.gloss dt { font-weight: 700; break-after: avoid; }
+dl.gloss dd { margin: 0 0 1.6mm; color: var(--ink-2); break-inside: avoid; }
+
+/* پیوست‌ها */
+.back-matter { break-before: right; }
+.front-chapter.front { break-after: page; }
+.opener .outline { margin-top: 7mm; border-top: .6pt solid var(--line); padding-top: 4mm; }
+.opener .outline h3 { font: 700 10.5pt var(--f-display); color: var(--teal-dark); margin: 0 0 2mm; }
+.opener .outline ol { list-style: none; margin: 0; padding: 0; columns: 2; column-gap: 8mm; font-size: 9.2pt; line-height: 2; }
+.opener .outline li { break-inside: avoid; }
+.opener .outline li .n { color: var(--ochre); font-weight: 700; margin-left: 1.5mm; }
+.opener h1 { text-shadow: 0 0 3mm var(--teal-soft), 0 0 1mm var(--teal-soft); }
+td, th { text-align: right; text-align-last: auto; }
+td { text-justify: none; }
+table td { text-align: start; }

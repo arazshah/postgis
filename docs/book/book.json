@@ -1,0 +1,61 @@
+{
+  "title": "پایگاه داده مکانی ابری",
+  "subtitle": "مرجع جامع سامانه‌ی اطلاعات مکانی، سنجش از دور و SQL مکانی؛ از صفر تا متخصص",
+  "cover_kicker": "GIS · سنجش از دور · PostGIS · SQL مکانی",
+  "cover_chips": ["مبانی علمی", "SQL مکانی گام‌به‌گام", "تصویر ماهواره‌ای", "نقشه و انتشار وب", "برداشت میدانی", "تمرین و پروژه"],
+  "author": "",
+  "publisher": "",
+  "edition": "ویرایش نخست · ۱۴۰۵",
+  "isbn": "",
+  "colophon": {
+    "عنوان": "پایگاه داده مکانی ابری: مرجع جامع سامانه‌ی اطلاعات مکانی، سنجش از دور و SQL مکانی",
+    "پدیدآور": "—",
+    "ناشر": "—",
+    "نوبت و سال چاپ": "نخست، ۱۴۰۵",
+    "قطع": "وزیری (۱۷ × ۲۴ سانتی‌متر)",
+    "شابک": "—",
+    "داده‌ها و تصویرها": "تصویرهای رابط از محیط نمایشی سامانه؛ داده‌ی OpenStreetMap با مجوز ODbL؛ تصویرهای Sentinel از برنامه‌ی Copernicus (ESA) و Landsat از USGS",
+    "حق نشر": "همه‌ی حقوق برای پدیدآور محفوظ است. استفاده‌ی آموزشی از تمرین‌ها و کدها با ذکر منبع آزاد است."
+  },
+  "back_cover": {
+    "headline": "از اولین نقشه تا SQL مکانی حرفه‌ای و تحلیل تصویر ماهواره‌ای",
+    "blurb": [
+      "این کتاب شما را از نقطه‌ی صفر، بدون پیش‌زمینه‌ی برنامه‌نویسی یا نقشه‌برداری، تا سطح متخصصی می‌برد که پایگاه داده‌ی مکانی می‌سازد، با SQL مکانی پرسش‌های پیچیده می‌پرسد، تصویر ماهواره‌ای را تحلیل می‌کند و نتیجه را روی نقشه‌ی وب منتشر می‌کند.",
+      "هر فصل سه لایه دارد: مفهوم علمی مستقل از نرم‌افزار، اجرای گام‌به‌گام در پایگاه داده مکانی ابری با تصویر واقعی رابط، و همان کار با SQL. همه‌ی کدهای کتاب روی داده‌ی نمونه اجرا و نتیجه‌شان کنار کد چاپ شده است."
+    ],
+    "learn": ["مبانی GIS، سیستم مختصات و داده‌نمای ایران", "طراحی پایگاه داده‌ی مکانی و ورود داده", "SQL از صفر تا پیشرفته", "SQL مکانی و PostGIS", "تحلیل شبکه و مسیریابی", "سنجش از دور و شاخص‌های طیفی", "پایش زمانی با Sentinel-2 و Landsat", "کارتوگرافی، نمودار و داشبورد", "انتشار OGC، کاشی برداری و API", "برداشت GNSS، RTK و COGO", "امنیت، بکاپ و کارایی", "پروژه‌های جامع صنعتی"],
+    "audience": ["دانشجو", "مدرس و استاد", "کارشناس شهری و منابع طبیعی", "کشاورزی و آب", "نقشه‌بردار", "توسعه‌دهنده‌ی وب", "مدیر داده"],
+    "code": "SELECT n.name, count(s.*) AS schools\nFROM neighborhoods n\nJOIN schools s ON ST_Contains(n.geom, s.geom)\nGROUP BY n.name ORDER BY schools DESC;"
+  },
+  "front": ["front/preface.md", "front/how-to-read.md"],
+  "parts": [
+    {"title": "مبانی علم اطلاعات مکانی",
+     "intro": "پیش از هر کلیک و هر خط کد، باید بدانیم «مکان» چگونه به عدد تبدیل می‌شود. این بخش زبان مشترک همه‌ی فصل‌های بعد را می‌سازد: داده‌ی مکانی چیست، زمین چگونه روی صفحه می‌آید و چرا پایگاه داده‌ی مکانی در فضای ابری جای فایل‌های پراکنده را گرفته است.",
+     "chapters": ["chapters/01-what-is-gis.md", "chapters/02-spatial-data.md", "chapters/03-coordinates.md", "chapters/04-spatial-database.md"]},
+    {"title": "آغاز کار با پایگاه داده مکانی ابری",
+     "intro": "در این بخش پایگاه داده‌ی خودتان را می‌سازید، از QGIS و نرم‌افزارهای دیگر به آن وصل می‌شوید، داده وارد می‌کنید، آن را مرور و جست‌وجو می‌کنید و جدول تازه می‌سازید. پایان این بخش، یک پایگاه داده‌ی مکانی کارا در اختیار دارید.",
+     "chapters": ["chapters/05-first-database.md", "chapters/06-connect.md", "chapters/07-import.md", "chapters/08-explore.md", "chapters/09-edit.md"]},
+    {"title": "زبان SQL از صفر",
+     "intro": "SQL زبان گفت‌وگو با پایگاه داده است و قلب این کتاب. این بخش بدون هیچ پیش‌فرض برنامه‌نویسی شروع می‌کند و تا پیوند جدول‌ها، زیرپرسش و تراکنش پیش می‌رود؛ همه با داده‌ی مکانی واقعی.",
+     "chapters": ["chapters/10-relational-sql.md", "chapters/11-select.md", "chapters/12-aggregate.md", "chapters/13-joins.md", "chapters/14-ddl-dml.md"]},
+    {"title": "SQL مکانی با PostGIS",
+     "intro": "اینجا SQL «مکان» را می‌فهمد: هندسه می‌سازیم، فاصله و مساحت را درست اندازه می‌گیریم، روابط مکانی را می‌پرسیم، لایه‌ها را برش و ادغام می‌کنیم، نزدیک‌ترین همسایه را پیدا می‌کنیم و پرسش‌ها را با شاخص مکانی سریع می‌کنیم.",
+     "chapters": ["chapters/15-geometry.md", "chapters/16-measure.md", "chapters/17-relations.md", "chapters/18-processing.md", "chapters/19-nearest.md", "chapters/20-index-performance.md", "chapters/21-spatial-stats-sql.md", "chapters/22-validity-topology-3d.md", "chapters/23-raster-sql.md", "chapters/24-routing-sql.md"]},
+    {"title": "تحلیل مکانی بدون کد",
+     "intro": "ابزارهای آماده‌ی تحلیل همان SQL مکانی را پشت یک فرم ساده پنهان کرده‌اند. در این بخش هر ابزار را با پرسش واقعی، نظریه‌ی پشتش و SQL معادلش یاد می‌گیرید.",
+     "chapters": ["chapters/25-proximity.md", "chapters/26-aggregate-density.md", "chapters/27-overlay-change.md", "chapters/28-network-tools.md", "chapters/29-ask-persian.md", "chapters/30-iran-data.md"]},
+    {"title": "سنجش از دور",
+     "intro": "از فیزیک نور تا پایش خودکار مزرعه: طیف الکترومغناطیس، سنجنده‌ها، تفکیک‌ها، شاخص‌های طیفی، آمار هر قطعه، سری زمانی و مدل رقومی ارتفاع؛ همه با تصویرهای Sentinel-2 و Landsat.",
+     "chapters": ["chapters/31-rs-physics.md", "chapters/32-sensors.md", "chapters/33-preprocessing.md", "chapters/34-imagery.md", "chapters/35-indices.md", "chapters/36-zonal.md", "chapters/37-timeseries-monitor.md", "chapters/38-dem.md", "chapters/39-classification-change.md", "chapters/40-radar-thermal.md"]},
+    {"title": "کارتوگرافی و انتشار",
+     "intro": "نقشه‌ی خوب داستان داده را می‌گوید. اصول طراحی نقشه، استودیوی چندلایه، نمودار و داشبورد، چاپ و ارائه، و انتشار داده با استانداردهای OGC، کاشی برداری و API.",
+     "chapters": ["chapters/41-cartography.md", "chapters/42-map-studio.md", "chapters/43-charts.md", "chapters/44-present-print.md", "chapters/45-publish.md", "chapters/46-web-apps.md"]},
+    {"title": "برداشت میدانی و نقشه‌برداری",
+     "intro": "GNSS، تصحیح RTK و NTRIP، برداشت آفلاین، محاسبات COGO، سطح و منحنی میزان و حجم؛ از گوشی تا گیرنده‌ی دوفرکانسه.",
+     "chapters": ["chapters/47-gnss.md", "chapters/48-survey-project.md", "chapters/49-cogo-surface.md"]},
+    {"title": "حرفه‌ای و سازمانی",
+     "intro": "تیم و نقش‌ها، امنیت، بکاپ و بازگردانی، کارایی، برنامه‌نویسی با Python و Node.js، امکانات سازمانی، تدریس با کلاس و پروژه‌های جامع پایانی.",
+     "chapters": ["chapters/50-team-security.md", "chapters/51-backup-performance.md", "chapters/52-enterprise.md", "chapters/53-developers.md", "chapters/54-classroom.md", "chapters/55-capstone.md"]}
+  ],
+  "back": ["back/glossary.md", "back/postgis-reference.md", "back/iran-srid.md"]
+}
