@@ -1,0 +1,18 @@
+{
+"cols": [
+"gid",
+"code",
+"shelters",
+"status"
+],
+"rows": [
+[
+"1",
+"BS-001",
+"0",
+"active"
+]
+],
+"total": 1,
+"msg": ""
+}

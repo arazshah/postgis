@@ -1,0 +1,22 @@
+{
+"cols": [
+"layer",
+"count"
+],
+"rows": [
+[
+"schools",
+"180"
+],
+[
+"metro_stations",
+"80"
+],
+[
+"parks",
+"35"
+]
+],
+"total": 3,
+"msg": ""
+}

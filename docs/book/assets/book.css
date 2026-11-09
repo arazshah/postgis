@@ -208,3 +208,6 @@ dl.gloss dd { margin: 0 0 1.6mm; color: var(--ink-2); break-inside: avoid; }
 td, th { text-align: right; text-align-last: auto; }
 td { text-justify: none; }
 table td { text-align: start; }
+blockquote { margin: 3mm 8mm; padding: 2mm 4mm; border-right: 1mm solid var(--ochre); background: var(--ochre-soft);
+  font: 700 10.6pt/1.9 var(--f-body); color: var(--ink); border-radius: 1.4mm; }
+blockquote p { margin: 0; }

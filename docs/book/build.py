@@ -68,7 +68,8 @@ def run_sql(sql: str, limit: int) -> dict:
             cur.execute(st)
             if cur.description:
                 rows = cur.fetchall()
-                res = {"cols": [d.name for d in cur.description], "rows": [[cell(v) for v in r] for r in rows[:limit]],
+                shown = [[wkt(conn, v) for v in r] for r in rows[:limit]]
+                res = {"cols": [d.name for d in cur.description], "rows": [[cell(v) for v in r] for r in shown],
                        "total": len(rows), "msg": ""}
             else:
                 res = {"cols": [], "rows": [], "total": 0, "msg": cur.statusmessage or ""}
@@ -92,6 +93,16 @@ def split_sql(sql: str) -> list[str]:
         buf.append(ch)
     out.append("".join(buf))
     return [re.sub(r"^\s*--.*$", "", s, flags=re.M).strip() and s for s in out]
+
+
+HEXGEOM = re.compile(r"^0[01][0-9A-F]{16,}$")
+
+
+def wkt(conn, v):
+    """هندسه‌ی خام (EWKB هگز) را مثل کنسول سامانه به WKT خوانا تبدیل می‌کند."""
+    if isinstance(v, str) and HEXGEOM.match(v):
+        return conn.execute("SELECT ST_AsText(%s::geometry)", (v,)).fetchone()[0]
+    return v
 
 
 def cell(v) -> str:

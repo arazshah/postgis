@@ -1,0 +1,18 @@
+{
+"cols": [
+"null_equals_null",
+"null_plus_5",
+"is_null",
+"coalesce_zero"
+],
+"rows": [
+[
+"NULL",
+"NULL",
+"True",
+"0"
+]
+],
+"total": 1,
+"msg": ""
+}

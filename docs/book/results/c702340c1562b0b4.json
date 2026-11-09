@@ -1,0 +1,22 @@
+{
+"cols": [
+"schools",
+"total_students",
+"avg_students",
+"smallest",
+"largest",
+"levels"
+],
+"rows": [
+[
+"180",
+"91520",
+"508.4",
+"151",
+"898",
+"3"
+]
+],
+"total": 1,
+"msg": ""
+}
