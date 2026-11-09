@@ -62,7 +62,7 @@
   <div class="pop-wrap">
     <button class="app-av" type="button" data-pop="pop-acct" aria-haspopup="menu" aria-expanded="false" aria-label="حساب کاربری" title="{{ user.display_name }}">{% if user.initial %}<span class="app-av-i" aria-hidden="true">{{ user.initial }}</span>{% else %}{% icon "user" 18 %}{% endif %}</button>
     <div class="pop-m" id="pop-acct" role="menu" hidden>
-      <div class="pop-who">{% if user.full_name %}<b>{{ user.full_name }}</b><span class="small muted">{{ user.organization|default:"دانشگاه / شرکت را در پروفایل بنویسید" }}</span>{% else %}<b class="ltr">{{ user.phone|default:user.get_username }}</b><a class="small" href="{% url 'accounts:profile' %}">نام و دانشگاه / شرکت را کامل کنید</a>{% endif %}</div>
+      <div class="pop-who">{% if user.full_name %}<b>{{ user.full_name }}</b><span class="small muted">{{ user.organization|default:"دانشگاه / شرکت را در پروفایل بنویسید" }}</span>{% else %}<b class="ltr">{{ user.phone|default:user.email|default:user.get_username }}</b><a class="small" href="{% url 'accounts:profile' %}">نام و دانشگاه / شرکت را کامل کنید</a>{% endif %}</div>
       <div class="msep"></div>
       <a role="menuitem" href="{% url 'databases:dashboard' %}">{% icon "db" 18 %}<span>پایگاه‌های داده من</span></a>
       <a role="menuitem" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}<span>صورتحساب‌ها و پلن</span></a>

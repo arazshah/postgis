@@ -36,19 +36,25 @@ def normalize_mobile(value: str) -> str:
 class UserManager(BaseUserManager):
     """
     دو نوع حساب جدا:
-    - کاربر سایت: فقط موبایل، ورود با رمز یک‌بار مصرف، بدون رمز عبور
+    - کاربر سایت: موبایل (رمز یک‌بار مصرف پیامکی) یا ایمیل و رمز عبور؛ هر کدام برای کاربر راحت‌تر بود
     - مدیر: نام کاربری و رمز عبور، فقط برای پنل مدیریت
     """
 
     use_in_migrations = True
 
-    def create_user(self, phone, password=None, **extra):
+    def create_user(self, phone=None, password=None, **extra):
+        """موبایل (بدون رمز) یا، با ندادن موبایل، حساب ایمیلی که `password` و `email` می‌خواهد."""
         extra.setdefault("is_staff", False)
         extra.setdefault("is_superuser", False)
         email = extra.pop("email", None)
-        user = self.model(phone=normalize_mobile(phone),
-                          email=(self.normalize_email(email).lower() if email else None), **extra)
-        user.set_unusable_password()
+        email = self.normalize_email(email).lower() if email else None
+        if not phone and not email:
+            raise ValueError("موبایل یا ایمیل الزامی است")
+        user = self.model(phone=normalize_mobile(phone) if phone else None, email=email, **extra)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
         user.save(using=self._db)
         return user
 
@@ -94,13 +100,14 @@ class User(AbstractUser):
         verbose_name_plural = "کاربران"
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(username__isnull=False) | models.Q(phone__isnull=False),
-                name="user_has_username_or_phone",
+                condition=(models.Q(username__isnull=False) | models.Q(phone__isnull=False)
+                           | models.Q(email__isnull=False)),
+                name="user_has_login_identity",
             ),
         ]
 
     def __str__(self):
-        return self.full_name or self.phone or self.username or f"#{self.pk}"
+        return self.full_name or self.phone or self.email or self.username or f"#{self.pk}"
 
     def save(self, *args, **kwargs):
         for f in ("email", "username", "phone"):
@@ -114,7 +121,7 @@ class User(AbstractUser):
 
     @property
     def display_name(self):
-        return self.full_name or self.phone or self.username
+        return self.full_name or self.phone or self.email or self.username
 
     @property
     def initial(self) -> str:

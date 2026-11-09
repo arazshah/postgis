@@ -8,6 +8,8 @@ app_name = "accounts"
 
 urlpatterns = [
     path("login/", views.login_start, name="login"),
+    path("login/password/", views.login_password, name="login_password"),
+    path("signup/email/", views.signup_email, name="signup_email"),
     path("signup/", RedirectView.as_view(pattern_name="accounts:login", query_string=True), name="signup"),
     path("verify/", views.verify, name="verify"),
     path("verify/resend/", views.resend, name="resend"),

@@ -12,12 +12,12 @@
   </header>
 
   <div class="tabs" role="tablist" aria-label="بخش‌های پروفایل" data-hash-tabs>
-    <button type="button" role="tab" id="t-info" aria-selected="true" aria-controls="p-info">مشخصات</button>
+    <button type="button" role="tab" id="t-info" aria-selected="{% if open_tab == 'account' %}false{% else %}true{% endif %}" aria-controls="p-info"{% if open_tab == 'account' %} tabindex="-1"{% endif %}>مشخصات</button>
     <button type="button" role="tab" id="t-ai" aria-selected="false" aria-controls="p-ai" tabindex="-1">مدل زبانی{% if cfg %} <span class="prof-ok" title="کلید ثبت شده">{% icon "check" 16 %}</span>{% endif %}</button>
-    <button type="button" role="tab" id="t-account" aria-selected="false" aria-controls="p-account" tabindex="-1">حساب و امنیت</button>
+    <button type="button" role="tab" id="t-account" aria-selected="{% if open_tab == 'account' %}true{% else %}false{% endif %}" aria-controls="p-account"{% if open_tab != 'account' %} tabindex="-1"{% endif %}>حساب و امنیت</button>
   </div>
 
-  <section class="tabpanel" id="p-info" role="tabpanel" aria-labelledby="t-info">
+  <section class="tabpanel" id="p-info" role="tabpanel" aria-labelledby="t-info"{% if open_tab == 'account' %} hidden{% endif %}>
     <form method="post" class="card">
       {% csrf_token %}<input type="hidden" name="action" value="profile">
       {% for field in form %}{% include "partials/field.html" %}{% endfor %}
@@ -52,14 +52,20 @@
     </div>
   </section>
 
-  <section class="tabpanel" id="p-account" role="tabpanel" aria-labelledby="t-account" hidden>
+  <section class="tabpanel" id="p-account" role="tabpanel" aria-labelledby="t-account"{% if open_tab != 'account' %} hidden{% endif %}>
     <div class="card">
       <h2 class="prof-h">{% icon "lock" 20 %}حساب و امنیت</h2>
       <table class="kv"><tbody>
-        <tr><th>شماره‌ی ورود</th><td>{{ user.phone }}</td></tr>
+        {% if user.phone %}<tr><th>شماره‌ی ورود</th><td class="ltr">{{ user.phone }}</td></tr>{% endif %}
+        {% if user.email %}<tr><th>ایمیل ورود</th><td class="ltr">{{ user.email }}</td></tr>{% endif %}
         <tr><th>عضو از</th><td style="direction:rtl;text-align:right">{{ user.date_joined|jdate }}</td></tr>
       </tbody></table>
-      <p class="small muted">ورود فقط با رمز یک‌بارمصرفی است که به همین شماره پیامک می‌شود؛ رمز عبوری برای نگهداری ندارید.</p>
+      {% if user.phone %}<p class="small muted">با موبایل می‌توانید با کد پیامکی وارد شوید{% if user.has_usable_password %}؛ رمز عبور هم دارید و می‌توانید با آن وارد شوید{% endif %}.</p>{% endif %}
+      <h3 class="prof-h" style="font-size:15px">{% if user.has_usable_password %}تغییر رمز عبور{% else %}تعیین رمز عبور (اختیاری){% endif %}</h3>
+      <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="password">
+        {% for field in pw_form %}{% include "partials/field.html" %}{% endfor %}
+        <button class="btn" type="submit">{% icon "check" 18 %}ذخیره رمز عبور</button>
+      </form>
       <div class="prof-acts">
         <a class="btn ghost" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}صورتحساب‌ها و پلن</a>
         <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="btn ghost" type="submit">{% icon "logout" 18 %}خروج</button></form>

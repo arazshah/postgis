@@ -5,7 +5,8 @@
   <div class="auth">
     <span class="auth-ico">{% icon "users" 26 %}</span>
     <h1>ورود یا ثبت‌نام</h1>
-    <p class="muted">شماره موبایل خود را وارد کنید تا کد تأیید برایتان پیامک شود. اگر حساب ندارید، با همین کد ساخته می‌شود.</p>
+    {% include "accounts/_methods.html" with active="mobile" %}
+    <p class="muted" style="margin-top:var(--s3)">شماره موبایل خود را وارد کنید تا کد تأیید برایتان پیامک شود. اگر حساب ندارید، با همین کد ساخته می‌شود.</p>
     <form method="post" class="card" novalidate>
       {% csrf_token %}
       {% include "partials/form_errors.html" %}
@@ -14,7 +15,7 @@
       {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       <button class="btn" type="submit" style="width:100%">دریافت کد تأیید</button>
     </form>
-    <p class="muted small" style="margin-top:16px">با ورود، <a href="{% url 'core:terms' %}">قوانین استفاده</a> را می‌پذیرید.</p>
+    <p class="muted small" style="margin-top:16px">پیامک برایتان نمی‌رسد (مثلاً شماره‌ی خارج از ایران)؟ با <a href="{% url 'accounts:signup_email' %}">ایمیل و رمز عبور</a> ثبت‌نام کنید. با ورود، <a href="{% url 'core:terms' %}">قوانین استفاده</a> را می‌پذیرید.</p>
   </div>
 </div>
 {% endblock %}

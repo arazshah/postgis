@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% load ws %}
+{% block title %}ثبت‌نام با ایمیل — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <div class="auth">
+    <span class="auth-ico">{% icon "mail" 26 %}</span>
+    <h1>ثبت‌نام با ایمیل</h1>
+    {% include "accounts/_methods.html" with active="signup" %}
+    <p class="muted" style="margin-top:var(--s3)">بدون نیاز به پیامک؛ با هر ایمیلی ثبت‌نام کنید. فعلاً ایمیل تأیید نمی‌شود.</p>
+    <form method="post" class="card" novalidate>
+      {% csrf_token %}
+      {% include "partials/form_errors.html" %}
+      {% include "partials/field.html" with field=form.full_name %}
+      {% include "partials/field.html" with field=form.email %}
+      {% include "partials/field.html" with field=form.password %}
+      {% include "partials/field.html" with field=form.organization %}
+      <div class="field{% if form.accept_terms.errors %} has-error{% endif %}">
+        <label class="check" style="font-weight:400">{{ form.accept_terms }}<span><a href="{% url 'core:terms' %}" target="_blank">قوانین استفاده</a> را خوانده‌ام و می‌پذیرم.</span></label>
+        {% if form.accept_terms.errors %}<ul class="errorlist">{% for e in form.accept_terms.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+      {{ form.website }}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <button class="btn" type="submit" style="width:100%">ساخت حساب و ورود</button>
+    </form>
+    <p class="muted small" style="margin-top:16px">قبلاً ثبت‌نام کرده‌اید؟ <a href="{% url 'accounts:login_password' %}">وارد شوید</a>.</p>
+  </div>
+</div>
+{% endblock %}
