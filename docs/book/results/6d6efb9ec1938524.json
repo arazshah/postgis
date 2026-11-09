@@ -1,0 +1,20 @@
+{
+"cols": [
+"gid",
+"name",
+"depth_m",
+"active",
+"st_astext"
+],
+"rows": [
+[
+"1",
+"چاه ۱",
+"120.5",
+"True",
+"POINT(51.3 35.62)"
+]
+],
+"total": 1,
+"msg": ""
+}

@@ -19,3 +19,7 @@ import demo  # noqa: E402
 
 demo.plan("pro")  # همه‌ی امکانات (برداشت، سازمانی، تیم) در تصویرها دیده شوند
 print("site_name:", SiteSettings.get().site_name)
+
+from databases.models import DatabaseServer  # noqa: E402
+
+DatabaseServer.objects.update(public_host="db.example.com")  # نشانی نمونه در تصویرها، نه دامنه‌ی واقعی

@@ -19,10 +19,17 @@ const SHOTS = [
   { name: "dashboard", url: "/dashboard/", user: "main" },
   { name: "db-home", url: `/dashboard/${DB}/`, user: "main", full: true },
   { name: "db-home-phone", url: `/dashboard/${DB}/`, user: "main", phone: true },
+  { name: "conn-card", url: `/dashboard/${DB}/`, user: "main", clip: "section:has(#conn-title), .card:has(#conn-title)" },
+  { name: "howto-py", url: `/dashboard/${DB}/`, user: "main", clip: "section:has(#howto-title), .card:has(#howto-title)",
+    act: async (p) => { await p.click("#t-py"); } },
   { name: "explore", url: `/dashboard/${DB}/explore/`, user: "main" },
   { name: "table-data", url: T("schools"), user: "main" },
   { name: "table-map", url: T("schools") + "?tab=map", user: "main", wait: 2500 },
   { name: "table-columns", url: T("schools") + "?tab=columns", user: "main" },
+  { name: "table-new", url: `/dashboard/${DB}/explore/`, user: "main", wait: 1200,
+    act: async (p) => { await p.click('a:has-text("جدول جدید"), button:has-text("جدول جدید")'); await p.waitForLoadState("networkidle"); } },
+  { name: "add-column", url: T("schools") + "?tab=columns", user: "main", wait: 900,
+    act: async (p) => { await p.click('button:has-text("افزودن ستون")'); } },
   { name: "health", url: `/dashboard/${DB}/explore/health/`, user: "main", full: true },
   { name: "sql", url: `/dashboard/${DB}/explore/sql/`, user: "main",
     act: async (p) => {
@@ -32,6 +39,45 @@ const SHOTS = [
       await run.click(); await p.waitForLoadState("networkidle");
     }, wait: 1500 },
   { name: "import", url: `/dashboard/${DB}/import/`, user: "main", full: true },
+  { name: "import-review", url: `/dashboard/${DB}/import/`, user: "main", full: true,
+    act: async (p) => {
+      await p.setInputFiles("#imp-file", path.join(__dirname, "../help-video/assets/clinics.geojson"));
+      await p.click('button:has-text("بررسی فایل")'); await p.waitForLoadState("networkidle"); await p.waitForTimeout(2500);
+    } },
+  { name: "edit-confirm", url: T("schools"), user: "main",
+    act: async (p) => { await p.click("#edit-enter"); await p.waitForTimeout(900); } },
+  { name: "edit-row", url: T("schools"), user: "main",
+    act: async (p) => {
+      await p.click("#edit-enter"); await p.waitForTimeout(700);
+      await p.click("[role=dialog] input[type=checkbox]");
+      await p.click('button:has-text("روشن کردن حالت ویرایش")'); await p.waitForLoadState("networkidle"); await p.waitForTimeout(1200);
+      await p.click(".row-edit >> nth=0"); await p.waitForTimeout(900);
+      const f = p.locator("[role=dialog] input[type=text] >> nth=2"); await f.fill("مدرسه شهید رجایی");
+    } },
+  { name: "edit-review", url: T("schools"), user: "main",
+    act: async (p) => {
+      await p.click("#edit-enter"); await p.waitForTimeout(700);
+      await p.click("[role=dialog] input[type=checkbox]");
+      await p.click('button:has-text("روشن کردن حالت ویرایش")'); await p.waitForLoadState("networkidle"); await p.waitForTimeout(1200);
+      for (const [i, n, v] of [[0, 2, "مدرسه شهید رجایی"], [2, 4, "320"]]) {
+        await p.click(`.row-edit >> nth=${i}`); await p.waitForTimeout(700);
+        await p.locator(`[role=dialog] input[type=text] >> nth=${n}`).fill(v);
+        await p.click('[role=dialog] button:has-text("ثبت در فهرست")'); await p.waitForTimeout(900);
+      }
+      await p.click('button:has-text("بازبینی و ذخیره")'); await p.waitForTimeout(1500);
+    } },
+  { name: "find-result", url: `/dashboard/${DB}/find/`, user: "main", wait: 2500,
+    act: async (p) => {
+      const v = await p.$$eval("#fq-layer option", (os) => (os.find((o) => o.textContent.includes("schools")) || {}).value);
+      await p.selectOption("#fq-layer", v); await p.waitForTimeout(800);
+      await p.check("#fq-sp"); await p.waitForTimeout(500);
+      const rel = p.locator("#fq-rel button", { hasText: "فاصله" }).first();
+      if (await rel.count()) await rel.click();
+      await p.fill("#fq-dist", "700").catch(() => {});
+      const b = await p.$$eval("#fq-blayer option", (os) => (os.find((o) => o.textContent.includes("metro")) || {}).value);
+      await p.selectOption("#fq-blayer", b); await p.waitForTimeout(500);
+      await p.click('button:has-text("یافتن")'); await p.waitForLoadState("networkidle");
+    } },
   { name: "find", url: `/dashboard/${DB}/find/`, user: "main" },
   { name: "analysis", url: `/dashboard/${DB}/analysis/`, user: "main", full: true },
   { name: "tools", url: `/dashboard/${DB}/tools/`, user: "main", full: true },
@@ -60,7 +106,7 @@ const SHOTS = [
     try {
       const r = await page.goto(BASE + s.url, { waitUntil: "networkidle", timeout: 30000 });
       if (!r || r.status() >= 400) console.log(`WARN ${s.name}: HTTP ${r && r.status()}`);
-      await page.addStyleTag({ content: "*{caret-color:transparent!important} .assistant-fab,#assistant-fab{display:none!important}" });
+      await page.addStyleTag({ content: "*{caret-color:transparent!important} .gpa-fab:not(.gpa-docked),.gpa-panel{display:none!important}" });
       if (s.act) await s.act(page);
       await page.waitForTimeout(s.wait || 600);
       const file = path.join(OUT, `${s.name}.jpg`);

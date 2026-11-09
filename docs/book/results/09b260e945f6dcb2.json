@@ -1,0 +1,16 @@
+{
+"cols": [
+"database",
+"postgis",
+"today"
+],
+"rows": [
+[
+"gp_tehran_gis",
+"3.4.2",
+"2026-11-09"
+]
+],
+"total": 1,
+"msg": ""
+}
