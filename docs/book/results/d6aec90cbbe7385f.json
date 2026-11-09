@@ -1,0 +1,18 @@
+{
+"cols": [
+"geography_m",
+"utm39_m",
+"webmercator_m",
+"sphere_m"
+],
+"rows": [
+[
+"23690.0",
+"23681.0",
+"29120.0",
+"23641.0"
+]
+],
+"total": 1,
+"msg": ""
+}

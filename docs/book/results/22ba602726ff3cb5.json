@@ -1,0 +1,18 @@
+{
+"cols": [
+"centroid",
+"centroid_inside",
+"point_on_surface",
+"pos_inside"
+],
+"rows": [
+[
+"POINT(5 4.076923076923077)",
+"False",
+"POINT(1 6)",
+"True"
+]
+],
+"total": 1,
+"msg": ""
+}

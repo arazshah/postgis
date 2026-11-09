@@ -1,0 +1,16 @@
+{
+"cols": [
+"geojson",
+"kml",
+"geohash"
+],
+"rows": [
+[
+"{\"type\":\"Point\",\"coordinates\":[51.43,35.8]}",
+"<Point><coordinates>51.43,35.8</coordinates></Point>",
+"tnkedm4n"
+]
+],
+"total": 1,
+"msg": ""
+}

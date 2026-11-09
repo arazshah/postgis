@@ -1,0 +1,18 @@
+{
+"cols": [
+"contains_center",
+"contains_on_edge",
+"covers_on_edge",
+"intersects_on_edge"
+],
+"rows": [
+[
+"True",
+"False",
+"True",
+"True"
+]
+],
+"total": 1,
+"msg": ""
+}

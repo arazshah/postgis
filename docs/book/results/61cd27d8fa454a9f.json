@@ -1,0 +1,18 @@
+{
+"cols": [
+"no_srid",
+"srid_0",
+"with_srid",
+"shortcut"
+],
+"rows": [
+[
+"POINT(51.389 35.689)",
+"0",
+"SRID=4326;POINT(51.389 35.689)",
+"SRID=4326;POINT(51.389 35.689)"
+]
+],
+"total": 1,
+"msg": ""
+}
