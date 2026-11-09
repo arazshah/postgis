@@ -81,6 +81,24 @@ const SHOTS = [
   { name: "find", url: `/dashboard/${DB}/find/`, user: "main" },
   { name: "analysis", url: `/dashboard/${DB}/analysis/`, user: "main", full: true },
   { name: "tools", url: `/dashboard/${DB}/tools/`, user: "main", full: true },
+  { name: "tool-buffer", url: `/dashboard/${DB}/tools/buffer/`, user: "main", full: true },
+  { name: "tool-count", url: `/dashboard/${DB}/tools/count/`, user: "main", full: true },
+  { name: "tool-count-run", url: `/dashboard/${DB}/tools/count/`, user: "main", only: true,
+    act: async (p, snap) => {
+      const pick = async (sel, txt) => { const v = await p.$$eval(sel + " option", (os, t) => (os.find((o) => o.textContent.includes(t)) || {}).value, txt); await p.selectOption(sel, v); };
+      await pick("#f-layer", "neighborhoods"); await pick("#f-other", "schools");
+      await p.fill("#f-value", "students"); await p.check('input[name=agg][value=avg]', { force: true }).catch(() => p.click('label:has(input[name=agg][value=avg])'));
+      await p.fill("#f-output", "schools_per_neighborhood"); await p.check('input[name=replace]').catch(() => {});
+      await snap("tool-count-filled");
+      await p.click('button:has-text("اجرای تحلیل")'); await p.waitForTimeout(3000);
+      for (let i = 0; i < 40; i++) { await p.waitForTimeout(1500); await p.reload({ waitUntil: "networkidle" });
+        if ((await p.content()).includes("schools_per_neighborhood") && !(await p.content()).includes("در حال اجرا")) break; }
+      await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await p.waitForTimeout(600);
+      await snap("tool-count-done");
+    } },
+  { name: "tool-overlap", url: `/dashboard/${DB}/tools/overlap/`, user: "main" },
+  { name: "tool-change", url: `/dashboard/${DB}/tools/change/`, user: "main" },
+  { name: "tool-isochrone", url: `/dashboard/${DB}/tools/isochrone/`, user: "main" },
   { name: "maps", url: `/dashboard/${DB}/maps/`, user: "main" },
   { name: "satellite", url: `/dashboard/${DB}/satellite/`, user: "main", wait: 2500 },
   { name: "sat-flow", url: `/dashboard/${DB}/satellite/`, user: "main", only: true,
