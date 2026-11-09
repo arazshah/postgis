@@ -1,0 +1,18 @@
+{
+"cols": [
+"deg_area_x1e6",
+"utm_buffer_100m_m2",
+"utm_shrink_100m_m2",
+"original_m2"
+],
+"rows": [
+[
+"32.83",
+"326479.0",
+"17220.0",
+"128925.0"
+]
+],
+"total": 1,
+"msg": ""
+}

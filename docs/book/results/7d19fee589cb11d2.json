@@ -1,0 +1,16 @@
+{
+"cols": [
+"original_vertices",
+"simplified_vertices",
+"area_loss_pct"
+],
+"rows": [
+[
+"129",
+"17",
+"2.51"
+]
+],
+"total": 1,
+"msg": ""
+}

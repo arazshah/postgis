@@ -1,0 +1,31 @@
+{
+"cols": [
+"line",
+"type",
+"parts"
+],
+"rows": [
+[
+"خط ۱",
+"MULTIPOLYGON",
+"19"
+],
+[
+"خط ۲",
+"MULTIPOLYGON",
+"27"
+],
+[
+"خط ۳",
+"MULTIPOLYGON",
+"15"
+],
+[
+"خط ۴",
+"MULTIPOLYGON",
+"19"
+]
+],
+"total": 4,
+"msg": ""
+}

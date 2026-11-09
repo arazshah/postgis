@@ -1,0 +1,16 @@
+{
+"cols": [
+"buffers",
+"sum_of_areas_km2",
+"union_area_km2"
+],
+"rows": [
+[
+"80",
+"62.48",
+"62.01"
+]
+],
+"total": 1,
+"msg": ""
+}

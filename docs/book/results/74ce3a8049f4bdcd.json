@@ -1,0 +1,14 @@
+{
+"cols": [
+"neighborhood_km2",
+"without_parks_km2"
+],
+"rows": [
+[
+"16.055",
+"15.840"
+]
+],
+"total": 1,
+"msg": ""
+}

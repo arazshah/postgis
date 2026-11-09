@@ -1,0 +1,18 @@
+{
+"cols": [
+"line_km",
+"midpoint",
+"school1_fraction",
+"middle_half_km"
+],
+"rows": [
+[
+"24.53",
+"POINT(51.42821848640793 35.68931091620407)",
+"0.574",
+"12.26"
+]
+],
+"total": 1,
+"msg": ""
+}

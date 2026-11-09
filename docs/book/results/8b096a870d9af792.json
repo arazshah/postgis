@@ -1,0 +1,16 @@
+{
+"cols": [
+"convex_hull_km2",
+"concave_hull_km2",
+"envelope_km2"
+],
+"rows": [
+[
+"638.9",
+"576.4",
+"871.6"
+]
+],
+"total": 1,
+"msg": ""
+}
