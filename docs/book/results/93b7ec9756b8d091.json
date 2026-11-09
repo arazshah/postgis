@@ -4,10 +4,10 @@
 ],
 "rows": [
 [
-"Finalize Aggregate  (cost=1602139.37..1602139.38 rows=1 width=8) (actual time=208.544..2…"
+"Finalize Aggregate  (cost=1602139.37..1602139.38 rows=1 width=8) (actual time=227.925..2…"
 ],
 [
-"  ->  Gather  (cost=1602139.26..1602139.37 rows=1 width=8) (actual time=208.409..213.696…"
+"  ->  Gather  (cost=1602139.26..1602139.37 rows=1 width=8) (actual time=227.699..234.938…"
 ],
 [
 "        Workers Planned: 1"
@@ -19,7 +19,7 @@
 "        ->  Partial Aggregate  (cost=1601139.26..1601139.27 rows=1 width=8) (actual time…"
 ],
 [
-"              ->  Nested Loop  (cost=0.00..1601138.97 rows=118 width=0) (actual time=106…"
+"              ->  Nested Loop  (cost=0.00..1601138.97 rows=118 width=0) (actual time=101…"
 ],
 [
 "                    Join Filter: st_contains(n.geom, p.geom)"
@@ -52,10 +52,10 @@
 "  Options: Inlining true, Optimization true, Expressions true, Deforming true"
 ],
 [
-"  Timing: Generation 0.722 ms, Inlining 107.741 ms, Optimization 64.521 ms, Emission 41.…"
+"  Timing: Generation 0.627 ms, Inlining 103.571 ms, Optimization 58.341 ms, Emission 41.…"
 ],
 [
-"Execution Time: 229.397 ms"
+"Execution Time: 250.409 ms"
 ]
 ],
 "total": 18,
