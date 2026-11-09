@@ -4,10 +4,10 @@
 ],
 "rows": [
 [
-"Finalize Aggregate  (cost=1602139.37..1602139.38 rows=1 width=8) (actual time=214.776..2…"
+"Finalize Aggregate  (cost=1602139.37..1602139.38 rows=1 width=8) (actual time=211.517..2…"
 ],
 [
-"  ->  Gather  (cost=1602139.26..1602139.37 rows=1 width=8) (actual time=214.551..221.062…"
+"  ->  Gather  (cost=1602139.26..1602139.37 rows=1 width=8) (actual time=211.292..216.756…"
 ],
 [
 "        Workers Planned: 1"
@@ -19,13 +19,13 @@
 "        ->  Partial Aggregate  (cost=1601139.26..1601139.27 rows=1 width=8) (actual time…"
 ],
 [
-"              ->  Nested Loop  (cost=0.00..1601138.97 rows=118 width=0) (actual time=96.…"
+"              ->  Nested Loop  (cost=0.00..1601138.97 rows=118 width=0) (actual time=93.…"
 ],
 [
 "                    Join Filter: st_contains(n.geom, p.geom)"
 ],
 [
-"                    Rows Removed by Join Filter: 98652"
+"                    Rows Removed by Join Filter: 98601"
 ],
 [
 "                    ->  Parallel Seq Scan on pts p  (cost=0.00..2904.47 rows=117647 widt…"
@@ -40,7 +40,7 @@
 "                          Rows Removed by Filter: 5"
 ],
 [
-"Planning Time: 0.527 ms"
+"Planning Time: 0.486 ms"
 ],
 [
 "JIT:"
@@ -52,10 +52,10 @@
 "  Options: Inlining true, Optimization true, Expressions true, Deforming true"
 ],
 [
-"  Timing: Generation 0.566 ms, Inlining 94.446 ms, Optimization 57.537 ms, Emission 41.2…"
+"  Timing: Generation 0.546 ms, Inlining 89.280 ms, Optimization 55.731 ms, Emission 40.9…"
 ],
 [
-"Execution Time: 238.136 ms"
+"Execution Time: 232.508 ms"
 ]
 ],
 "total": 18,

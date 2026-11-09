@@ -1,0 +1,55 @@
+{
+"cols": [
+"table_name",
+"total_size",
+"seq_scan",
+"idx_scan",
+"live_rows"
+],
+"rows": [
+[
+"schools",
+"104 kB",
+"2025",
+"6511",
+"180"
+],
+[
+"parks",
+"96 kB",
+"503",
+"307",
+"35"
+],
+[
+"parcels",
+"80 kB",
+"118",
+"336",
+"12"
+],
+[
+"ndvi_parcels",
+"80 kB",
+"134",
+"167",
+"96"
+],
+[
+"metro_stations",
+"40 kB",
+"910",
+"15396",
+"80"
+],
+[
+"neighborhoods",
+"40 kB",
+"6000734",
+"6749",
+"6"
+]
+],
+"total": 6,
+"msg": ""
+}

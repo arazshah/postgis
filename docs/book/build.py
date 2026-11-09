@@ -80,19 +80,42 @@ def run_sql(sql: str, limit: int) -> dict:
 
 
 def split_sql(sql: str) -> list[str]:
-    out, buf, q = [], [], None
-    for ch in sql:
-        if q:
+    """جدا کردن دستورها با «;»، با احترام به رشته‌ها، توضیح‌ها و بدنه‌ی $$…$$ تابع‌ها."""
+    out, buf, i, q, dollar = [], [], 0, None, None
+    while i < len(sql):
+        ch = sql[i]
+        if dollar:
+            if sql.startswith(dollar, i):
+                buf.append(dollar)
+                i += len(dollar)
+                dollar = None
+                continue
+        elif q:
             q = None if ch == q else q
+        elif ch == "-" and sql.startswith("--", i):
+            j = sql.find("\n", i)
+            j = len(sql) if j < 0 else j
+            buf.append(sql[i:j])
+            i = j
+            continue
+        elif ch == "$":
+            m = re.match(r"\$[A-Za-z_]*\$", sql[i:])
+            if m:
+                dollar = m.group(0)
+                buf.append(dollar)
+                i += len(dollar)
+                continue
         elif ch in "'\"":
             q = ch
         elif ch == ";":
             out.append("".join(buf))
             buf = []
+            i += 1
             continue
         buf.append(ch)
+        i += 1
     out.append("".join(buf))
-    return [re.sub(r"^\s*--.*$", "", s, flags=re.M).strip() and s for s in out]
+    return [st for st in out if re.sub(r"--.*$", "", st, flags=re.M).strip()]
 
 
 HEXGEOM = re.compile(r"^0[01][0-9A-F]{16,}$")
