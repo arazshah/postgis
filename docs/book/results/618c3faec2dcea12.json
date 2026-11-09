@@ -1,0 +1,20 @@
+{
+"cols": [
+"minutes",
+"km",
+"edges",
+"main_road_pct",
+"route_line_km"
+],
+"rows": [
+[
+"25.0",
+"24.13",
+"26",
+"93.0",
+"24.13"
+]
+],
+"total": 1,
+"msg": ""
+}

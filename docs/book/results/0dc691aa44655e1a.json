@@ -1,0 +1,18 @@
+{
+"cols": [
+"from_node",
+"to_node",
+"drive_minutes",
+"air_km"
+],
+"rows": [
+[
+"2806",
+"301",
+"31.1",
+"23.69"
+]
+],
+"total": 1,
+"msg": ""
+}
