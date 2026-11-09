@@ -1,0 +1,18 @@
+{
+"cols": [
+"building_3d",
+"faces",
+"volume_m3",
+"surface_m2"
+],
+"rows": [
+[
+"ST_PolyhedralSurface",
+"6",
+"3600",
+"1440"
+]
+],
+"total": 1,
+"msg": ""
+}

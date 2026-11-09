@@ -1,0 +1,31 @@
+{
+"cols": [
+"name",
+"valid",
+"reason"
+],
+"rows": [
+[
+"مربع سالم",
+"True",
+"Valid Geometry"
+],
+[
+"پاپیون",
+"False",
+"Self-intersection[2 2]"
+],
+[
+"حفره‌ی بیرون‌زده",
+"False",
+"Self-intersection[3 4]"
+],
+[
+"دو بخش هم‌پوشان",
+"False",
+"Self-intersection[2 4]"
+]
+],
+"total": 4,
+"msg": ""
+}

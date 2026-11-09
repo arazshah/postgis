@@ -1,0 +1,20 @@
+{
+"cols": [
+"distance_2d",
+"distance_3d",
+"road_2d",
+"road_3d",
+"elevation_range"
+],
+"rows": [
+[
+"50.0",
+"130.0",
+"1000.0",
+"1025.6",
+"150.0"
+]
+],
+"total": 1,
+"msg": ""
+}
