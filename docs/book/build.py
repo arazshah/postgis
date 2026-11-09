@@ -190,7 +190,8 @@ LEVELS = {1: "مبتدی", 2: "متوسط", 3: "پیشرفته"}
 
 
 def opener(chno: int, meta: dict, art: str, secs=()) -> str:
-    goals = "".join(f"<li>{html.escape(g)}</li>" for g in meta.get("goals", []))
+    as_text = lambda g: "; ".join(f"{k}: {v}" for k, v in g.items()) if isinstance(g, dict) else str(g)  # noqa: E731  «:» در YAML
+    goals = "".join(f"<li>{html.escape(as_text(g))}</li>" for g in meta.get("goals", []))
     lvl = int(meta.get("level", 1))
     chips = [f'<span>سطح: <b>{LEVELS[lvl]}</b> {level_dots(lvl)}</span>']
     if meta.get("time"):
