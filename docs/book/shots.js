@@ -99,6 +99,32 @@ const SHOTS = [
   { name: "tool-overlap", url: `/dashboard/${DB}/tools/overlap/`, user: "main" },
   { name: "tool-change", url: `/dashboard/${DB}/tools/change/`, user: "main" },
   { name: "tool-isochrone", url: `/dashboard/${DB}/tools/isochrone/`, user: "main" },
+  { name: "map-studio", url: `/dashboard/${DB}/maps/`, user: "main", only: true,
+    act: async (p, snap) => {
+      await p.click('button:has-text("نقشه تازه")'); await p.waitForTimeout(1000);
+      await p.fill("#wm-title", "مدرسه‌ها، مترو و محله‌ها");
+      for (const t of ["neighborhoods", "parks", "schools", "metro_stations"]) { await p.click(`dialog[open] label:has-text("${t}")`); await p.waitForTimeout(300); }
+      await snap("map-new");
+      await p.click('button:has-text("ساخت و طراحی")'); await p.waitForLoadState("networkidle"); await p.waitForTimeout(3500);
+      await snap("map-composer", { wait: 1500 });
+      await p.click('button:has-text("neighborhoods") >> nth=0').catch(() => {}); await p.waitForTimeout(2500);
+      await snap("map-layer-style");
+      await p.click("#wm-save").catch(() => {}); await p.waitForTimeout(1500);
+      await p.click("[data-tab=charts]").catch(() => {}); await p.waitForTimeout(1500);
+      await p.click("#ch-add, #ch-add2").catch(() => {}); await p.waitForTimeout(2500);
+      await snap("map-chart-types");
+      await p.click('[role=dialog] :text-is("هیستوگرام")').catch(() => {}); await p.waitForTimeout(1200);
+      await p.click('[role=dialog] :text-is("students")').catch(() => {}); await p.waitForTimeout(3000);
+      await snap("map-chart-hist");
+      await p.click('button:has-text("افزودن به نقشه")').catch(() => {}); await p.waitForTimeout(3000);
+      await p.click("#wm-save").catch(() => {}); await p.waitForTimeout(2000);
+      await snap("map-with-chart");
+      await p.click("#st-share").catch(() => {}); await p.waitForTimeout(2500);
+      await snap("map-share");
+    } },
+  { name: "map-print", url: "/maps/f9k5q7bdve/print/", user: "main", wait: 3500 },
+  { name: "map-compare", url: "/maps/f9k5q7bdve/compare/", user: "main", wait: 3500 },
+  { name: "map-public", url: "/maps/f9k5q7bdve/", user: "main", wait: 3500 },
   { name: "maps", url: `/dashboard/${DB}/maps/`, user: "main" },
   { name: "satellite", url: `/dashboard/${DB}/satellite/`, user: "main", wait: 2500 },
   { name: "sat-flow", url: `/dashboard/${DB}/satellite/`, user: "main", only: true,
@@ -166,8 +192,13 @@ const SHOTS = [
       const r = await page.goto(BASE + s.url, { waitUntil: "networkidle", timeout: 30000 });
       if (!r || r.status() >= 400) console.log(`WARN ${s.name}: HTTP ${r && r.status()}`);
       await page.addStyleTag({ content: "*{caret-color:transparent!important} .gpa-fab:not(.gpa-docked),.gpa-panel{display:none!important}" });
+      const scrub = () => page.evaluate(() => {   // نام دامنه‌ی تجاری در اعتبار نقشه‌ی پایه دیده نشود
+        const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        for (let n; (n = w.nextNode());) if (n.nodeValue.includes("postgis.ir")) n.nodeValue = n.nodeValue.replaceAll("postgis.ir", "نقشه‌ی پایه");
+      }).catch(() => {});
       const snap = async (n, opts = {}) => {   // چند تصویر در یک صحنه
         await page.waitForTimeout(opts.wait || 700);
+        await scrub();
         const f = path.join(OUT, `${n}.jpg`);
         if (opts.clip) await page.locator(opts.clip).first().screenshot({ path: f, type: "jpeg", quality: 84 });
         else await page.screenshot({ path: f, type: "jpeg", quality: 84, fullPage: !!opts.full });
@@ -176,6 +207,7 @@ const SHOTS = [
       if (s.act) await s.act(page, snap);
       if (s.only) { await ctx.close(); continue; }
       await page.waitForTimeout(s.wait || 600);
+      await scrub();
       const file = path.join(OUT, `${s.name}.jpg`);
       if (s.clip) await page.locator(s.clip).first().screenshot({ path: file, type: "jpeg", quality: 84 });
       else await page.screenshot({ path: file, type: "jpeg", quality: 84, fullPage: !!s.full });
