@@ -125,6 +125,12 @@ def result_html(res: dict) -> str:
     return f'<table class="result"><thead><tr>{head}</tr></thead><tbody>{body}{more}</tbody></table>'
 
 
+def with_setup(attrs: str, sql: str) -> str:
+    """setup=نام: SQL آماده‌سازی (setup/نام.sql) پیش از کد در همان تراکنش اجرا می‌شود ولی چاپ نمی‌شود."""
+    m = re.search(r"setup=([a-z_]+)", attrs)
+    return ((HERE / "setup" / f"{m.group(1)}.sql").read_text(encoding="utf-8") + ";\n" + sql) if m else sql
+
+
 RUN_RE = re.compile(r"```\{\.sql \.run(?P<attrs>[^}]*)\}\n(?P<sql>.*?)\n```", re.S)
 
 
@@ -132,7 +138,7 @@ def expand_runs(md: str) -> str:
     def rep(m):
         attrs, sql = m.group("attrs"), m.group("sql")
         lim = re.search(r"rows=(\d+)", attrs)
-        res = run_sql(sql, int(lim.group(1)) if lim else 6)
+        res = run_sql(with_setup(attrs, sql), int(lim.group(1)) if lim else 6)
         return f"```sql\n{sql}\n```\n\n```{{=html}}\n{result_html(res)}\n```\n"
     return RUN_RE.sub(rep, md)
 
@@ -336,7 +342,7 @@ def check(book: dict) -> int:
             try:
                 os.environ["BOOK_RERUN"] = "1"
                 lim = re.search(r"rows=(\d+)", m.group("attrs"))
-                run_sql(m.group("sql"), int(lim.group(1)) if lim else 6)
+                run_sql(with_setup(m.group("attrs"), m.group("sql")), int(lim.group(1)) if lim else 6)
             except Exception as e:  # noqa: BLE001
                 print(f"{f}: SQL خطا داد: {str(e).splitlines()[0]}\n    {m.group('sql')[:120]}")
                 errors += 1

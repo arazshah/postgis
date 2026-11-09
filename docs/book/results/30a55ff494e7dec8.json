@@ -1,0 +1,30 @@
+{
+"cols": [
+"upperleftx",
+"upperlefty",
+"width",
+"height",
+"scalex",
+"scaley",
+"skewx",
+"skewy",
+"srid",
+"numbands"
+],
+"rows": [
+[
+"530000.0",
+"3955000.0",
+"200",
+"200",
+"30.0",
+"-30.0",
+"0.0",
+"0.0",
+"32639",
+"1"
+]
+],
+"total": 1,
+"msg": ""
+}
