@@ -1,0 +1,63 @@
+{
+"cols": [
+"QUERY PLAN"
+],
+"rows": [
+[
+"Finalize Aggregate  (cost=1602139.37..1602139.38 rows=1 width=8) (actual time=181.876..1…"
+],
+[
+"  ->  Gather  (cost=1602139.26..1602139.37 rows=1 width=8) (actual time=181.733..186.383…"
+],
+[
+"        Workers Planned: 1"
+],
+[
+"        Workers Launched: 1"
+],
+[
+"        ->  Partial Aggregate  (cost=1601139.26..1601139.27 rows=1 width=8) (actual time…"
+],
+[
+"              ->  Nested Loop  (cost=0.00..1601138.97 rows=118 width=0) (actual time=83.…"
+],
+[
+"                    Join Filter: st_contains(n.geom, p.geom)"
+],
+[
+"                    Rows Removed by Join Filter: 98679"
+],
+[
+"                    ->  Parallel Seq Scan on pts p  (cost=0.00..2904.47 rows=117647 widt…"
+],
+[
+"                    ->  Seq Scan on neighborhoods n  (cost=0.00..1.07 rows=1 width=32) (…"
+],
+[
+"                          Filter: (name = 'ونک'::text)"
+],
+[
+"                          Rows Removed by Filter: 5"
+],
+[
+"Planning Time: 0.366 ms"
+],
+[
+"JIT:"
+],
+[
+"  Functions: 18"
+],
+[
+"  Options: Inlining true, Optimization true, Expressions true, Deforming true"
+],
+[
+"  Timing: Generation 0.502 ms, Inlining 80.599 ms, Optimization 48.949 ms, Emission 36.1…"
+],
+[
+"Execution Time: 198.985 ms"
+]
+],
+"total": 18,
+"msg": ""
+}

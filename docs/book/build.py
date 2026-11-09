@@ -111,7 +111,7 @@ def cell(v) -> str:
     if isinstance(v, float):
         v = round(v, 4)
     s = str(v)
-    return s if len(s) <= 64 else s[:60] + "…"
+    return s if len(s) <= 92 else s[:88] + "…"
 
 
 def result_html(res: dict) -> str:

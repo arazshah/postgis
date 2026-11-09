@@ -8,7 +8,7 @@
 [
 "3.4.2",
 "3.12.1-CAPI-1.18.1",
-"9.4.0 NETWORK_ENABLED=OFF URL_ENDPOINT=https://cdn.proj.org …"
+"9.4.0 NETWORK_ENABLED=OFF URL_ENDPOINT=https://cdn.proj.org USER_WRITABLE_DIRECTORY=/tmp…"
 ]
 ],
 "total": 1,
