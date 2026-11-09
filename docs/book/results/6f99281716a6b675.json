@@ -1,0 +1,30 @@
+{
+"cols": [
+"srid",
+"auth_name",
+"auth_srid",
+"name"
+],
+"rows": [
+[
+"3857",
+"EPSG",
+"3857",
+"WGS 84 / Pseudo-Mercator"
+],
+[
+"4326",
+"EPSG",
+"4326",
+"WGS 84"
+],
+[
+"32639",
+"EPSG",
+"32639",
+"WGS 84 / UTM zone 39N"
+]
+],
+"total": 3,
+"msg": ""
+}

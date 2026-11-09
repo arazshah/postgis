@@ -1,0 +1,6 @@
+<svg viewBox="0 0 520 190" width="125mm" xmlns="http://www.w3.org/2000/svg" font-family="Vazirmatn" font-size="12" text-anchor="middle">
+<defs><radialGradient id="g" cx="40%" cy="35%"><stop offset="0" stop-color="#cfe7e3"/><stop offset="1" stop-color="#5a9a8a"/></radialGradient></defs>
+<g transform="translate(90,80)"><rect x="-40" y="-58" width="80" height="116" fill="#fbf1e1" stroke="#b8741a" stroke-width="1.4" opacity=".9"/><circle r="38" fill="url(#g)"/><ellipse rx="38" ry="9" fill="none" stroke="#fff" stroke-width=".8"/><text y="88" font-weight="700">استوانه‌ای</text><text y="104" font-size="10.5" fill="#4a5759">مرکاتور، UTM، 3857</text></g>
+<g transform="translate(260,80)"><polygon points="0,-70 52,40 -52,40" fill="#fbf1e1" stroke="#b8741a" stroke-width="1.4" opacity=".9"/><circle r="38" fill="url(#g)"/><ellipse cy="-6" rx="34" ry="8" fill="none" stroke="#fff" stroke-width=".8"/><text y="88" font-weight="700">مخروطی</text><text y="104" font-size="10.5" fill="#4a5759">لامبرت؛ کشورهای عرض میانه</text></g>
+<g transform="translate(430,80)"><circle r="38" fill="url(#g)"/><line x1="-56" y1="-44" x2="56" y2="-44" stroke="#b8741a" stroke-width="3"/><circle cy="-38" r="2.5" fill="#b8741a"/><text y="88" font-weight="700">آزیموتی (صفحه‌ای)</text><text y="104" font-size="10.5" fill="#4a5759">نقشه‌ی قطبی، فاصله از یک مرکز</text></g>
+</svg>

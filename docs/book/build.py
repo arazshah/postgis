@@ -48,8 +48,12 @@ def parse_md(path: Path) -> tuple[dict, str]:
 
 
 # ---------------------------------------------------------------- اجرای SQL
+USED: set[str] = set()
+
+
 def run_sql(sql: str, limit: int) -> dict:
     key = hashlib.sha1(f"{limit}\n{sql}".encode()).hexdigest()[:16]
+    USED.add(key)
     cache = RES / f"{key}.json"
     if cache.exists() and not os.environ.get("BOOK_RERUN"):
         return json.loads(cache.read_text(encoding="utf-8"))
@@ -320,7 +324,8 @@ def check(book: dict) -> int:
         for m in RUN_RE.finditer(md):
             try:
                 os.environ["BOOK_RERUN"] = "1"
-                run_sql(m.group("sql"), 6)
+                lim = re.search(r"rows=(\d+)", m.group("attrs"))
+                run_sql(m.group("sql"), int(lim.group(1)) if lim else 6)
             except Exception as e:  # noqa: BLE001
                 print(f"{f}: SQL خطا داد: {str(e).splitlines()[0]}\n    {m.group('sql')[:120]}")
                 errors += 1
@@ -336,6 +341,9 @@ def main() -> None:
         raise SystemExit(1 if check(book) else 0)
     doc, _ = build_html(book)
     (OUT / "book.html").write_text(doc, encoding="utf-8")
+    for f in RES.glob("*.json"):  # نتیجه‌ی کدهایی که دیگر در کتاب نیستند
+        if f.stem not in USED:
+            f.unlink()
     if "--html" in sys.argv:
         print(OUT / "book.html")
         return

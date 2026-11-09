@@ -1,0 +1,48 @@
+{
+"cols": [
+"layer",
+"column_name",
+"type",
+"srid"
+],
+"rows": [
+[
+"health_centers",
+"geom",
+"POINT",
+"4326"
+],
+[
+"metro_stations",
+"geom",
+"GEOMETRY",
+"4326"
+],
+[
+"neighborhoods",
+"geom",
+"POLYGON",
+"4326"
+],
+[
+"parcels",
+"geom",
+"POLYGON",
+"4326"
+],
+[
+"parks",
+"geom",
+"GEOMETRY",
+"4326"
+],
+[
+"schools",
+"geom",
+"GEOMETRY",
+"4326"
+]
+],
+"total": 6,
+"msg": ""
+}
