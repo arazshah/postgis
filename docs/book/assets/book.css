@@ -192,9 +192,9 @@ math[display="block"] { margin: 2mm auto 3mm; font-size: 11pt; direction: ltr; }
 .eq { direction: ltr; text-align: center; margin: 2mm 0 3mm; }
 
 /* پیوست و واژه‌نامه */
-dl.gloss { columns: 2; column-gap: 7mm; font-size: 8.8pt; line-height: 1.75; }
-dl.gloss dt { font-weight: 700; break-after: avoid; }
-dl.gloss dd { margin: 0 0 1.6mm; color: var(--ink-2); break-inside: avoid; }
+.gloss dl, dl.gloss { columns: 2; column-gap: 7mm; font-size: 8.8pt; line-height: 1.75; }
+.gloss dt, dl.gloss dt { font-weight: 700; break-after: avoid; }
+.gloss dd, dl.gloss dd { margin: 0 0 1.6mm; color: var(--ink-2); break-inside: avoid; }
 
 /* پیوست‌ها */
 .back-matter { break-before: right; }
