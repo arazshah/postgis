@@ -83,6 +83,47 @@ const SHOTS = [
   { name: "tools", url: `/dashboard/${DB}/tools/`, user: "main", full: true },
   { name: "maps", url: `/dashboard/${DB}/maps/`, user: "main" },
   { name: "satellite", url: `/dashboard/${DB}/satellite/`, user: "main", wait: 2500 },
+  { name: "sat-flow", url: `/dashboard/${DB}/satellite/`, user: "main", only: true,
+    act: async (p, snap) => {
+      const dlg = "[role=dialog]:visible, dialog[open]";
+      await p.click("[data-sat-open]"); await p.waitForTimeout(1200);
+      await p.waitForSelector('[data-layer] option:nth-child(2)', { state: "attached", timeout: 20000 });
+      await p.selectOption("[data-layer]", "parcels"); await p.waitForTimeout(2500);
+      await snap("sat-step1");
+      await p.click("[data-next]"); await p.waitForTimeout(900);
+      await p.click('label:has([name="period"][value="365"])'); await p.click('label:has([name="cloud"][value="20"])');
+      await snap("sat-step2");
+      await p.click("[data-next]"); await p.waitForTimeout(1200);
+      await p.click('label:has([name="mode"][value="composite"])'); await p.waitForTimeout(1500);
+      await snap("sat-step3");
+      await p.click("[data-next]"); await p.waitForTimeout(1200);
+      await p.click('.sat-prod[data-k="ndvi"]'); await p.waitForTimeout(1500);
+      await snap("sat-step4");
+      await p.click("[data-go]"); await p.waitForTimeout(1500);
+      await p.waitForSelector('.sat-card[data-st="ready"]', { timeout: 180000 }); await p.waitForTimeout(1500);
+      await snap("sat-ready", { clip: '.sat-card[data-st="ready"]' });
+      await p.click('.sat-card[data-st="ready"] [data-pop], .sat-card[data-st="ready"] .ib').catch(() => {});
+      await snap("sat-ready-menu");
+      await p.keyboard.press("Escape");
+      await p.click("#t-analysis"); await p.waitForTimeout(1000);
+      await p.click("[data-an-open]"); await p.waitForTimeout(1000);
+      await p.waitForSelector("#an-layer option", { state: "attached", timeout: 20000 });
+      await p.selectOption("#an-layer", "parcels"); await p.waitForTimeout(1500);
+      await snap("sat-an-modal");
+      await p.click("[data-an-go]"); await p.waitForTimeout(1500);
+      await p.waitForSelector('#an-cards .sat-an[data-st="ready"]', { timeout: 180000 }); await p.waitForTimeout(1500);
+      await snap("sat-an-ready", { clip: '#an-cards .sat-an[data-st="ready"]' });
+      await p.click("[data-an-chart]"); await p.waitForTimeout(2600);
+      await snap("sat-an-chart");
+      await p.selectOption("#an-feature", "P07").catch(() => {}); await p.waitForTimeout(2500);
+      await snap("sat-an-chart-p07");
+      await p.click("#an-chart [data-dialog-close]").catch(() => {});
+      await p.click("[data-mon-open]"); await p.waitForTimeout(1200);
+      await p.waitForSelector("#mon-layer option", { state: "attached", timeout: 20000 });
+      await p.selectOption("#mon-layer", "parcels"); await p.waitForTimeout(800);
+      await p.click('label:has([name="mon-drop"][value="20"])').catch(() => {});
+      await snap("sat-mon-modal");
+    } },
   { name: "publish", url: `/dashboard/${DB}/publish/`, user: "main", full: true },
   { name: "survey", url: `/dashboard/${DB}/survey/`, user: "main" },
   { name: "backups", url: `/dashboard/${DB}/backups/`, user: "main" },
@@ -107,7 +148,15 @@ const SHOTS = [
       const r = await page.goto(BASE + s.url, { waitUntil: "networkidle", timeout: 30000 });
       if (!r || r.status() >= 400) console.log(`WARN ${s.name}: HTTP ${r && r.status()}`);
       await page.addStyleTag({ content: "*{caret-color:transparent!important} .gpa-fab:not(.gpa-docked),.gpa-panel{display:none!important}" });
-      if (s.act) await s.act(page);
+      const snap = async (n, opts = {}) => {   // چند تصویر در یک صحنه
+        await page.waitForTimeout(opts.wait || 700);
+        const f = path.join(OUT, `${n}.jpg`);
+        if (opts.clip) await page.locator(opts.clip).first().screenshot({ path: f, type: "jpeg", quality: 84 });
+        else await page.screenshot({ path: f, type: "jpeg", quality: 84, fullPage: !!opts.full });
+        console.log("  +", n);
+      };
+      if (s.act) await s.act(page, snap);
+      if (s.only) { await ctx.close(); continue; }
       await page.waitForTimeout(s.wait || 600);
       const file = path.join(OUT, `${s.name}.jpg`);
       if (s.clip) await page.locator(s.clip).first().screenshot({ path: file, type: "jpeg", quality: 84 });

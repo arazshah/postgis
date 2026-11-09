@@ -1,0 +1,18 @@
+{
+"cols": [
+"red_reflectance",
+"nir_reflectance",
+"ndvi_reflectance",
+"ndvi_raw_dn"
+],
+"rows": [
+[
+"0.1040",
+"0.3490",
+"0.541",
+"0.375"
+]
+],
+"total": 1,
+"msg": ""
+}

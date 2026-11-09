@@ -178,6 +178,10 @@ def number_body(body: str, chno: int, marks: list) -> tuple[str, list]:
     return body, secs
 
 
+def chapter_no(path: str) -> int:
+    return int(re.match(r"(\d+)-", Path(path).name).group(1))
+
+
 def level_dots(n: int) -> str:
     return '<span class="lvl">' + "".join(f'<i class="{"on" if i < n else ""}"></i>' for i in range(3)) + "</span>"
 
@@ -250,15 +254,13 @@ def build_html(book: dict, pages: dict | None = None) -> tuple[str, list]:
         mk = f"@@P{pno}@@"
         toc.append(("part", f'بخش {fa(pno)}: {part["title"]}', mk, None))
         chlist = []
-        start = chno
-        for c in chs:
-            start += 1
-            chlist.append(f'<div><span>{fa(start)}</span>{html.escape(parse_md(HERE / c)[0]["title"])}</div>')
+        for c in chs:   # شماره‌ی فصل از نام فایل (جای برنامه‌ریزی‌شده)، تا ارجاع‌های متن با فصل‌های نانوشته به‌هم نریزد
+            chlist.append(f'<div><span>{fa(chapter_no(c))}</span>{html.escape(parse_md(HERE / c)[0]["title"])}</div>')
         parts_html.append(f'''<section class="part-page"><span class="mk">{mk}</span><div class="art">{art_svg(100 + pno, False)}</div>
 <div class="in"><div class="pno">بخش {fa(pno)}</div><h1>{html.escape(part["title"])}</h1>
 <div class="pin">{html.escape(part.get("intro", ""))}</div><div class="pch">{"".join(chlist)}</div></div></section>''')
         for c in chs:
-            chno += 1
+            chno = chapter_no(c)
             meta, md = parse_md(HERE / c)
             body, secs = number_body(pandoc(expand_runs(md)), chno, [])
             toc.append(("ch", meta["title"], f"@@C{chno}@@", (chno, secs)))

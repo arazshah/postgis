@@ -5,8 +5,11 @@
 "rows": [
 [
 "health_centers"
+],
+[
+"ndvi_parcels_latest"
 ]
 ],
-"total": 1,
+"total": 2,
 "msg": ""
 }

@@ -19,6 +19,12 @@
 "4326"
 ],
 [
+"ndvi_parcels_latest",
+"geom",
+"POLYGON",
+"4326"
+],
+[
 "neighborhoods",
 "geom",
 "POLYGON",
@@ -35,14 +41,8 @@
 "geom",
 "GEOMETRY",
 "4326"
-],
-[
-"schools",
-"geom",
-"GEOMETRY",
-"4326"
 ]
 ],
-"total": 6,
+"total": 7,
 "msg": ""
 }
