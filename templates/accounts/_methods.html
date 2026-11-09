@@ -1,0 +1,6 @@
+{% comment %}انتخاب روش ورود/ثبت‌نام؛ active: mobile | login | signup{% endcomment %}{% load ws %}
+<nav class="chips auth-methods" aria-label="روش ورود">
+  <a class="pick-chip" href="{% url 'accounts:login' %}{% if next %}?next={{ next|urlencode }}{% endif %}"{% if active == "mobile" %} aria-current="page"{% endif %}><span>{% icon "phone" 16 %}با موبایل (کد پیامکی)</span></a>
+  <a class="pick-chip" href="{% url 'accounts:login_password' %}{% if next %}?next={{ next|urlencode }}{% endif %}"{% if active == "login" %} aria-current="page"{% endif %}><span>{% icon "lock" 16 %}ورود با ایمیل و رمز</span></a>
+  <a class="pick-chip" href="{% url 'accounts:signup_email' %}{% if next %}?next={{ next|urlencode }}{% endif %}"{% if active == "signup" %} aria-current="page"{% endif %}><span>{% icon "user" 16 %}ثبت‌نام با ایمیل</span></a>
+</nav>

@@ -224,6 +224,8 @@ body.app .lead{font-size:13.5px}
 .pick-chip:hover>span{border-color:var(--teal)}
 .pick-chip input:checked+span{background:var(--teal);border-color:var(--teal);color:#fff}
 .pick-chip input:checked+span small{color:rgba(255,255,255,.8)}
+.pick-chip[aria-current=page]>span{background:var(--teal);border-color:var(--teal);color:#fff}
+.pick-chip{text-decoration:none;color:inherit}
 .pick-chip input:focus-visible+span{outline:3px solid var(--ochre);outline-offset:2px}
 body.app .empty{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--ink-2)}
 body.app .empty>.i{color:var(--teal)}
@@ -411,6 +413,7 @@ body.app .dash-card,body.app .db-card{background:var(--card);border:1px solid va
 body.app .dash-card:hover,body.app .db-card:hover{border-color:var(--teal);box-shadow:0 8px 22px -14px rgba(15,92,89,.45)}
 .auth{text-align:center}
 .auth .card{text-align:start;margin-top:var(--s4)}
+.auth .auth-methods{justify-content:center;margin-top:var(--s3)}
 .auth-ico{display:inline-grid;place-items:center;width:56px;height:56px;border-radius:16px;background:var(--teal-soft,rgba(15,92,89,.1));color:var(--teal);margin-bottom:var(--s3)}
 .card .u-h{font-size:1.05rem;margin:0 0 var(--s3);font-family:var(--f-display)}
 .card .table-wrap,.card .table-scroll{margin-top:var(--s3)}
