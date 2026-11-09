@@ -1,3 +1,4 @@
 out/*
 !out/book.pdf
 !out/cover-spread.pdf
+!out/book.docx
