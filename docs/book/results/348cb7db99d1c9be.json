@@ -1,0 +1,16 @@
+{
+"cols": [
+"triangles",
+"area_m2",
+"smallest_m2"
+],
+"rows": [
+[
+"98",
+"30625",
+"312.5"
+]
+],
+"total": 1,
+"msg": ""
+}
