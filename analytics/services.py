@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 COOKIE = "gp_vid"
 COOKIE_MAX_AGE = 365 * 24 * 3600
 SESSION_GAP = timedelta(minutes=30)
-SKIP_PREFIXES = ("/manage/", "/static/", "/media/", "/healthz", "/robots.txt", "/sitemap.xml", "/favicon",
+SKIP_PREFIXES = ("/manage/", "/static/", "/media/", "/healthz", "/robots.txt", "/verify-platform.txt", "/sitemap.xml", "/favicon",
                  "/api/", "/tiles/", "/ows/", "/go/")
 
 

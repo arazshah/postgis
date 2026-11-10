@@ -199,6 +199,11 @@ def csp_report(request):
     return HttpResponse(status=204)
 
 
+def verify_platform_txt(request):
+    # کد تأیید مالکیت سامندهی (روش دوم: فایل در ریشه‌ی سایت)
+    return HttpResponse("drtrpvvoql", content_type="text/plain")
+
+
 def robots_txt(request):
     lines = [
         "User-agent: *",
