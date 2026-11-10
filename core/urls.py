@@ -19,6 +19,7 @@ urlpatterns = [
     path("team/<int:pk>/photo/", views.team_photo, name="team_photo"),
     path("healthz", views.healthz, name="healthz"),
     path("csp-report/", views.csp_report, name="csp_report"),
+    path("verify-platform.txt", views.verify_platform_txt, name="verify_platform"),
     path("robots.txt", views.robots_txt, name="robots"),
     path("sitemap.xml", views.sitemap_xml, name="sitemap"),
 ]
