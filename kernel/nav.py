@@ -30,6 +30,7 @@ class WsSection:
     need: str  # viewer | editor | owner
     plugin: str
     visible: str = ""  # مسیر تابع () -> bool؛ خالی = همیشه
+    extra: tuple = ()  # آرگومان‌های بعد از شناسه‌ی پایگاه در آدرس (صفحه‌های کیت صفحه: پلاگین و کلید صفحه)
 
 
 @dataclass(frozen=True)
@@ -64,9 +65,10 @@ def ws_group(key: str, title: str, *, order: int, plugin: str = KERNEL) -> None:
 
 
 def ws_section(group: str, label: str, url: str, icon: str, need: str, *, plugin: str, order: int,
-               views: tuple[str, ...] = (), visible: str = "") -> None:
-    registry.add(WS_SECTION, url, WsSection(group, label, url, tuple(views) or (url,), icon, need, plugin, visible),
-                 plugin=plugin, order=order)
+               views: tuple[str, ...] = (), visible: str = "", extra: tuple = ()) -> None:
+    key = "|".join([url, *map(str, extra)])
+    registry.add(WS_SECTION, key, WsSection(group, label, url, tuple(views) or (url,), icon, need, plugin, visible, tuple(extra)),
+                 plugin=plugin, order=order, replace=bool(extra))
 
 
 def home_group(key: str, title: str, *, order: int, plugin: str = KERNEL) -> None:

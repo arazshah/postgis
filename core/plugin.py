@@ -51,3 +51,10 @@ def new_contacts() -> int:
     from .models import ContactRequest
 
     return ContactRequest.objects.filter(status=ContactRequest.Status.NEW).count()
+
+# کیت صفحه آیکون‌ها را نمی‌شناسد؛ هسته‌ی سایت مجموعه‌ی سیستم طراحی را برای اعتبارسنجی مشخصات صفحه می‌دهد
+from kernel import pagekit  # noqa: E402
+
+from .icons import ICONS  # noqa: E402
+
+pagekit.set_icon_checker(lambda name: name in ICONS)

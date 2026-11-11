@@ -62,7 +62,7 @@ def __getattr__(name):  # سازگاری: ws.GROUPS و ws.DASH_GROUPS همان �
     raise AttributeError(name)
 
 
-def build(db, view_name: str) -> dict:
+def build(db, view_name: str, kwargs: dict | None = None) -> dict:
     mine = bool(getattr(db, "is_mine", False))
     level = 2 if mine else (1 if getattr(db, "can_edit", False) else 0)
     out, current = [], None
@@ -71,8 +71,9 @@ def build(db, view_name: str) -> dict:
         for s in items:
             if LEVEL[s.need] > level or not _visible(s, db):
                 continue
-            on = view_name in s.views
-            row = {"label": s.label, "url": s.url, "on": on, "icon": s.icon}
+            on = view_name in s.views and (not s.extra or tuple(str((kwargs or {}).get(k)) for k in ("plugin", "page")) == tuple(map(str, s.extra)))
+            row = {"label": s.label, "url": s.url, "extra": s.extra, "on": on, "icon": s.icon,
+                   "href": reverse(s.url, args=[db.pk, *s.extra])}
             rows.append(row)
             if on:
                 current, has_current = row, True
@@ -104,9 +105,10 @@ def _other_databases(user, db) -> list:
 def switch_targets(user, db, current) -> list:
     """هر پایگاه را به همان بخشی که کاربر الان در آن است می‌برد؛ اگر پایگاه فعال نیست، به نمای کلی‌اش."""
     section = current["url"] if current else "databases:detail"
+    extra = current.get("extra", ()) if current else ()
     rows = []
     for o in _other_databases(user, db):
-        url = reverse(section if o["live"] else "databases:detail", args=[o["pk"]])
+        url = reverse(section if o["live"] else "databases:detail", args=[o["pk"], *(extra if o["live"] else ())])
         rows.append({"name": o["name"], "url": url, "mine": o["mine"], "live": o["live"]})
     return rows
 
@@ -116,7 +118,7 @@ def jump_entries(db, groups, switch) -> list:
     out = []
     for g in groups:
         for it in g["items"]:
-            out.append({"t": it["label"], "u": reverse(it["url"], args=[db.pk]), "g": g["title"] or "پایگاه داده", "k": "s"})
+            out.append({"t": it["label"], "u": it["href"], "g": g["title"] or "پایگاه داده", "k": "s"})
     for o in switch:
         out.append({"t": o["name"], "u": o["url"], "g": "رفتن به پایگاه داده", "k": "d"})
     return out
@@ -126,7 +128,7 @@ def jump_entries(db, groups, switch) -> list:
 def ws_nav(context, db):
     request = context.get("request")
     name = request.resolver_match.view_name if request and request.resolver_match else ""
-    data = build(db, name)
+    data = build(db, name, request.resolver_match.kwargs if request and request.resolver_match else None)
     switch = switch_targets(request.user, db, data["current"]) if request else []
     return {"db": db, "groups": data["groups"], "current": data["current"], "switch": switch,
             "jump": jump_entries(db, data["groups"], switch)}
@@ -136,7 +138,7 @@ def ws_nav(context, db):
 def ws_title(context, db):
     request = context.get("request")
     name = request.resolver_match.view_name if request and request.resolver_match else ""
-    cur = build(db, name)["current"]
+    cur = build(db, name, request.resolver_match.kwargs if request and request.resolver_match else None)["current"]
     return cur["label"] if cur else ""
 
 
@@ -188,7 +190,7 @@ TAB_LABELS = {"databases:detail": "نمای کلی", "databases:explore": "جد�
 def ws_tabs(context, db):
     request = context.get("request")
     name = request.resolver_match.view_name if request and request.resolver_match else ""
-    data = build(db, name)
+    data = build(db, name, request.resolver_match.kwargs if request and request.resolver_match else None)
     rows = {it["url"]: it for g in data["groups"] for it in g["items"]}
     tabs = [{"label": TAB_LABELS[u], "url": reverse(u, args=[db.pk]), "icon": rows[u]["icon"], "on": rows[u]["on"]}
             for u in TAB_VIEWS if u in rows]

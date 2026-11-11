@@ -89,6 +89,14 @@ class Registry:
     def points(self) -> list[str]:
         return sorted(self._points)
 
+    def remove_plugin(self, plugin_id: str) -> None:
+        """پلاگین و همه‌ی سهم‌هایش را برمی‌دارد (بارگذاری‌شده‌ی پویا؛ پلاگین داخلی هرگز)."""
+        self.plugins.pop(plugin_id, None)
+        self.errors.pop(plugin_id, None)
+        for bucket in self._points.values():
+            for key in [k for k, c in bucket.items() if c.plugin == plugin_id]:
+                del bucket[key]
+
     # ------------------------------------------------------------------ کشف
     def discover(self, force: bool = False) -> None:
         if self._discovered and not force:

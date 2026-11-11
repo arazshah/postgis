@@ -1,0 +1,32 @@
+{% load fa pk ws %}
+{% for e in param_errors %}<div class="msg warning">{{ e }}</div>{% endfor %}
+<div class="pk-grid">
+  {% for b in blocks %}
+  {% if b.kind == 'kpi' %}
+  <div class="stat pk-w-{{ b.width }}">
+    {% if b.error %}<span class="stat-l">{{ b.title }}</span><span class="small muted">{{ b.error }}</span>
+    {% else %}<span class="stat-n">{{ b.value }}{% if b.unit %} <small>{{ b.unit }}</small>{% endif %}</span><span class="stat-l">{{ b.title }}</span>{% if b.hint %}<span class="small muted">{{ b.hint }}</span>{% endif %}{% endif %}
+  </div>
+  {% else %}
+  <section class="card pk-w-{{ b.width }}">
+    {% if b.title %}<div class="ch"><h2>{{ b.title }}</h2></div>{% endif %}
+    {% if b.error %}<div class="msg warning">{{ b.error }}</div>{% if b.detail %}<details class="small muted"><summary>جزئیات فنی</summary><code class="ltr" dir="ltr">{{ b.detail }}</code></details>{% endif %}
+    {% elif b.kind == 'text' %}{% for p in b.paras %}<p>{{ p }}</p>{% endfor %}
+    {% elif b.kind == 'table' %}
+      {% if b.rows %}<div class="table-scroll"><table class="data-table"><thead><tr>{% for h in b.headers %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for r in b.rows %}<tr>{% for c in r %}<td>{{ c }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+        {% if b.truncated %}<p class="small muted">فقط ۲۰۰ ردیف اول نمایش داده می‌شود.</p>{% endif %}
+      {% else %}<div class="empty">{% icon "table" 28 %}<p>داده‌ای برای نمایش نیست.</p></div>{% endif %}
+    {% elif b.kind == 'bars' %}
+      {% if b.bars %}<ul class="pk-bars">{% for x in b.bars %}<li><span class="pk-bl">{{ x.label }}</span><span class="pk-bt"><i style="width:{{ x.pct }}%"></i></span><b class="pk-bv">{{ x.value }}</b></li>{% endfor %}</ul>
+      {% else %}<div class="empty">{% icon "chart" 28 %}<p>داده‌ای برای نمایش نیست.</p></div>{% endif %}
+    {% elif b.kind == 'map' %}
+      <div class="pk-map" data-pk-map data-tiles="{{ SITE.map_tile_url }}" data-attr="{{ SITE.map_tile_attribution }}"></div>
+      {{ b.geojson|json_script }}
+      {% if not b.count %}<p class="small muted">هیچ عارضه‌ای با هندسه‌ی معتبر پیدا نشد.</p>{% endif %}
+    {% endif %}
+    {% if b.hint and b.kind != 'kpi' and not b.error %}<p class="small muted">{{ b.hint }}</p>{% endif %}
+  </section>
+  {% endif %}
+  {% endfor %}
+</div>

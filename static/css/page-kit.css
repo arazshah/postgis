@@ -1,0 +1,25 @@
+/* کیت صفحه (kernel/pagekit.py): فقط توکن‌های سیستم طراحی */
+.pk-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--s4);align-items:start}
+.pk-grid>.pk-w-full{grid-column:span 12}
+.pk-grid>.pk-w-half{grid-column:span 6}
+.pk-grid>.pk-w-third{grid-column:span 4}
+.pk-filters{display:flex;flex-wrap:wrap;gap:var(--s4);align-items:flex-end;margin-bottom:var(--s4)}
+.pk-filters{padding:var(--s3) var(--s4)}
+.pk-filters.card{display:flex;flex-direction:row;flex-wrap:wrap}
+.pk-filters .field{flex:0 1 auto;width:auto;min-width:160px;margin:0}
+.pk-filters .chips{margin:0}
+.pk-filters .lbl{display:block;margin-bottom:var(--s2)}
+.pk-live{display:inline-flex;align-items:center;gap:6px}
+.pk-bars{list-style:none;margin:0;padding:0;display:grid;gap:var(--s3)}
+.pk-bars li{display:grid;grid-template-columns:minmax(80px,30%) 1fr auto;gap:var(--s3);align-items:center}
+.pk-bt{display:block;height:10px;border-radius:var(--r-ctl);background:var(--line-2);overflow:hidden}
+.pk-bt i{display:block;height:100%;background:var(--teal);border-radius:var(--r-ctl)}
+.pk-bv{font-variant-numeric:tabular-nums}
+.pk-map{height:360px;border-radius:var(--r-card);border:1px solid var(--line);overflow:hidden}
+.pk-grid .stat{min-width:0}
+@media (max-width:720px){
+  .pk-grid>.pk-w-half,.pk-grid>.pk-w-third{grid-column:span 12}
+  .pk-bars li{grid-template-columns:1fr auto}
+  .pk-bars .pk-bt{grid-column:1/-1;order:3}
+  .pk-map{height:300px}
+}

@@ -42,5 +42,6 @@ urlpatterns = [
     path("", include("restapi.urls")),
     path("", include("enterprise.urls")),
     path("", include("satellite.urls")),
+    path("", include("kernel.urls")),
     path("", include("core.urls")),
 ]

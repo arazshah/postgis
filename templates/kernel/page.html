@@ -1,0 +1,32 @@
+{% extends "databases/_ws.html" %}{% load fa pk static ws %}
+{% block title %}{{ page.title }} — {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/page-kit.css' %}">{% if has_map %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endif %}{% endblock %}
+{% block ws %}
+<div class="wrap page">
+  <div class="page-head"><div><h1>{{ page.title }}</h1>{% if page.subtitle %}<p class="muted page-sub">{{ page.subtitle }}</p>{% endif %}</div>
+    {% if page.refresh %}<div class="page-acts"><span class="small muted pk-live" data-pk-live>{% icon "clock" 16 %}به‌روزرسانی خودکار هر {{ page.refresh|fanum }} ثانیه</span></div>{% endif %}</div>
+
+  {% if page.params %}
+  <form method="get" class="card pk-filters" data-pk-filters>
+    {% for p in page.params %}
+    <div class="field">
+      {% if p.kind == 'choice' %}
+      <span class="lbl" id="pk-{{ p.name }}-l">{{ p.label }}</span>
+      <div class="chips" role="radiogroup" aria-labelledby="pk-{{ p.name }}-l">{% for val, text in p.choices %}<label class="pick-chip"><input type="radio" name="{{ p.name }}" value="{{ val }}" {% if values|get:p.name == val %}checked{% endif %} data-pk-auto><span>{{ text }}</span></label>{% endfor %}</div>
+      {% elif p.kind == 'layer' %}
+      <label for="pk-{{ p.name }}">{{ p.label }}</label>
+      <select id="pk-{{ p.name }}" name="{{ p.name }}" data-pk-auto>{% for key, name in layers.items %}<option value="{{ key }}" {% if values|get:p.name == key %}selected{% endif %}>{{ name }}</option>{% empty %}<option value="">لایه‌ای نیست</option>{% endfor %}</select>
+      {% else %}
+      <label for="pk-{{ p.name }}">{{ p.label }}</label>
+      <input id="pk-{{ p.name }}" name="{{ p.name }}" value="{{ values|get:p.name|default_if_none:'' }}" {% if p.kind != 'text' %}inputmode="decimal" dir="ltr"{% endif %} autocomplete="off">
+      {% endif %}
+    </div>
+    {% endfor %}
+    <button class="btn ghost sm" type="submit">{% icon "refresh" 16 %}اعمال</button>
+  </form>
+  {% endif %}
+
+  <div id="pk-body" data-pk-refresh="{{ page.refresh }}">{% include "kernel/_page_body.html" %}</div>
+</div>
+{% endblock %}
+{% block ws_scripts %}{% if has_map or page.refresh %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>{% endif %}<script src="{% static 'js/page-kit.js' %}" defer></script>{% endblock %}
