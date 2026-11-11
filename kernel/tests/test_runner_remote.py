@@ -66,6 +66,35 @@ class RunnerServerTests(SimpleTestCase):
         self.assertFalse(out["ok"])
         self.assertIn("ZeroDivisionError", out["error"])
 
+    def test_one_plugin_cannot_take_all_slots(self):
+        import threading as th
+        import time
+
+        slow = "import time\ndef handle(c, p):\n    time.sleep(1.5)\n    return 1"
+        results = {}
+
+        def call(key, plugin, code):
+            results[key] = self.post(self.body(files={"code/h.py": code}, plugin=plugin, timeout=10))
+
+        with mock.patch.object(server, "PER_PLUGIN", 1), mock.patch.object(server, "WAIT_S", 0.3), \
+                mock.patch.dict(server._plugin_slots, {}, clear=True), \
+                mock.patch("kernel.runner.server.make_sql", return_value=lambda q, p: {}):
+            first = th.Thread(target=call, args=("a", "greedy", slow))
+            first.start()
+            time.sleep(0.5)  # اولی اسلات پلاگین را گرفته
+            call("b", "greedy", slow)  # هم‌پلاگین: رد می‌شود
+            call("c", "other", "def handle(c, p):\n    return 7")  # پلاگین دیگر: بی‌مشکل
+            first.join()
+        self.assertEqual(results["b"][0], 429)
+        self.assertIn("این پلاگین", results["b"][1]["error"])
+        self.assertEqual(results["c"], (200, {"ok": True, "value": 7}))
+        self.assertEqual(results["a"], (200, {"ok": True, "value": 1}))
+
+    def test_bad_plugin_ids_share_the_unknown_bucket(self):
+        with mock.patch.dict(server._plugin_slots, {}, clear=True):
+            self.assertIs(server.plugin_slot("Bad Id!"), server.plugin_slot(""))
+            self.assertIsNot(server.plugin_slot("good_id"), server.plugin_slot("other"))
+
     def test_health(self):
         with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/healthz", timeout=5) as r:
             self.assertEqual(json.loads(r.read()), {"ok": True})
@@ -90,6 +119,43 @@ class RemoteClientTests(TestCase):
                 self.assertRaises(client.RunnerError) as cm:
             client.execute("compute", "h", {}, None, 5)
         self.assertNotIn("secret-host", str(cm.exception))
+
+    @override_settings(PLUGIN_RUNNER_MODE="remote", PLUGIN_RUNNER_URL="http://x", PLUGIN_RUNNER_TOKEN="t", PLUGIN_RUNNER_CALLBACK="http://w")
+    def test_capacity_full_is_not_a_plugin_fault_and_not_counted(self):
+        from kernel import health, pkg
+        from kernel.models import PluginHealthBucket
+
+        pkg._loaded["compute"] = "x"
+        self.addCleanup(pkg._loaded.pop, "compute", None)
+        err = urllib.error.HTTPError("http://x/run", 429, "busy", {}, None)
+        with mock.patch("urllib.request.urlopen", side_effect=err), self.assertRaises(client.RunnerError) as cm:
+            client.execute("compute", "h", {}, None, 5)
+        self.assertNotIsInstance(cm.exception, client.HandlerFailed)
+        self.assertIn("ظرفیت", str(cm.exception))
+        self.assertEqual(health.stats("compute"), (0, 0))
+        self.assertFalse(PluginHealthBucket.objects.exists())
+
+    @override_settings(PLUGIN_RUNNER_MODE="remote", PLUGIN_RUNNER_URL="http://x", PLUGIN_RUNNER_TOKEN="t", PLUGIN_RUNNER_CALLBACK="http://w")
+    def test_plugin_id_is_sent_to_the_runner(self):
+        sent = {}
+
+        class Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self, n=-1):
+                return b'{"ok": true, "value": 1}'
+
+        def fake(req, timeout=None):
+            sent.update(json.loads(req.data))
+            return Resp()
+
+        with mock.patch("urllib.request.urlopen", fake):
+            client.execute("compute", "h", {}, None, 5)
+        self.assertEqual(sent["plugin"], "compute")
 
     def test_job_token_is_short_lived_and_bound_to_one_workspace(self):
         tok = remote.job_token(7)

@@ -27,7 +27,7 @@ def read_job_token(token: str) -> int:
     return int(signing.loads(token, salt=SALT, max_age=TOKEN_TTL)["ws"])
 
 
-def call(files: dict, handler: str, params: dict, ws_pk: int, *, file: bytes | None = None, io: bool = False, mock_sql: list | None = None):
+def call(files: dict, handler: str, params: dict, ws_pk: int, *, file: bytes | None = None, io: bool = False, mock_sql: list | None = None, plugin: str = ""):
     from .client import HandlerFailed, RunnerError
 
     base = getattr(settings, "PLUGIN_RUNNER_URL", "").rstrip("/")
@@ -35,7 +35,7 @@ def call(files: dict, handler: str, params: dict, ws_pk: int, *, file: bytes | N
     if not base or not callback or not getattr(settings, "PLUGIN_RUNNER_TOKEN", ""):
         raise RunnerError("سرویس اجرای کد پلاگین تنظیم نشده است.")
     timeout = float(getattr(settings, "PLUGIN_RUNNER_TIMEOUT", 10)) * (3 if io else 1)
-    payload = {"files": files, "handler": handler, "params": params, "timeout": timeout, "io": bool(io),
+    payload = {"files": files, "handler": handler, "params": params, "timeout": timeout, "io": bool(io), "plugin": plugin,
                "callback": {"url": f"{callback}/internal/runner/sql/", "token": job_token(ws_pk)}}
     if file is not None:
         payload["file_b64"] = base64.b64encode(file).decode()
@@ -47,6 +47,10 @@ def call(files: dict, handler: str, params: dict, ws_pk: int, *, file: bytes | N
     try:
         with urllib.request.urlopen(req, timeout=timeout + 5) as resp:  # noqa: S310 - آدرس از تنظیمات مدیر استقرار است
             out = json.loads(resp.read(sandbox.MAX_LINE))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 429:  # ظرفیت پر است؛ تقصیر کد نیست و در قطع‌کن شمرده نمی‌شود
+            raise RunnerError("ظرفیت اجرای کد پلاگین پر است؛ کمی بعد دوباره تلاش کنید.") from exc
+        raise RunnerError("سرویس اجرای کد پلاگین در دسترس نیست.") from exc
     except (urllib.error.URLError, OSError, ValueError) as exc:
         raise RunnerError("سرویس اجرای کد پلاگین در دسترس نیست.") from exc
     if not out.get("ok"):

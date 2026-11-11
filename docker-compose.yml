@@ -128,6 +128,7 @@ services:
     environment:
       - RUNNER_TOKEN=${PLUGIN_RUNNER_TOKEN:-}
       - RUNNER_PARALLEL=${RUNNER_PARALLEL:-4}
+      - RUNNER_PER_PLUGIN=${RUNNER_PER_PLUGIN:-2}
     networks:
       - runner
     mem_limit: ${RUNNER_MEM_LIMIT:-768m}

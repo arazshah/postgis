@@ -93,7 +93,7 @@ def run_case(handler: str, source: str, role: str, spec, case: Case) -> str:
 
     try:
         out = client.run_files({f"code/{handler}.py": source}, handler, case.params, None, 0, file=case.file,
-                               io=role in ("import", "export"), allow_no_ws=True, mock_sql=list(case.sql))
+                               io=role in ("import", "export"), allow_no_ws=True, mock_sql=list(case.sql), plugin="pkgtest")
     except client.HandlerFailed as exc:
         want = case.expect.get("error_contains")
         return "" if want and str(want) in str(exc) else f"اجرا شکست خورد: {exc}"

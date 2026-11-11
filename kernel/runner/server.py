@@ -9,6 +9,7 @@ import base64
 import hmac
 import json
 import os
+import re
 import threading
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,7 +18,20 @@ from . import sandbox
 
 MAX_BODY = 8 * 1024 * 1024
 MAX_PARALLEL = int(os.environ.get("RUNNER_PARALLEL", "4"))
+PER_PLUGIN = int(os.environ.get("RUNNER_PER_PLUGIN", "2"))  # سقف هم‌زمانی هر پلاگین؛ پلاگین پرمصرف بقیه را گرسنه نکند
+WAIT_S = 2.0
 _slots = threading.BoundedSemaphore(MAX_PARALLEL)
+_plugin_slots: dict[str, threading.BoundedSemaphore] = {}
+_plugin_lock = threading.Lock()
+PLUGIN_RE = re.compile(r"[a-z][a-z0-9_]{0,40}")
+
+
+def plugin_slot(plugin: str) -> threading.BoundedSemaphore:
+    key = plugin if PLUGIN_RE.fullmatch(plugin or "") else "unknown"
+    with _plugin_lock:
+        if key not in _plugin_slots:
+            _plugin_slots[key] = threading.BoundedSemaphore(PER_PLUGIN)
+        return _plugin_slots[key]
 
 
 def make_sql(callback: dict, timeout: float):
@@ -69,7 +83,11 @@ class Handler(BaseHTTPRequestHandler):
             sql = make_sql(req["callback"], timeout)
         except (ValueError, KeyError, TypeError):
             return self._json(400, {"ok": False, "error": "درخواست نامعتبر است."})
-        if not _slots.acquire(timeout=2):
+        mine = plugin_slot(str(req.get("plugin", "")))
+        if not mine.acquire(timeout=WAIT_S):
+            return self._json(429, {"ok": False, "error": "ظرفیت اجرای این پلاگین پر است؛ کمی بعد دوباره تلاش کنید."})
+        if not _slots.acquire(timeout=WAIT_S):
+            mine.release()
             return self._json(429, {"ok": False, "error": "ظرفیت اجرا پر است؛ کمی بعد دوباره تلاش کنید."})
         try:
             b64 = req.get("file_b64")
@@ -83,6 +101,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"ok": False, "error": str(exc)})
         finally:
             _slots.release()
+            mine.release()
 
 
 def serve(host: str = "0.0.0.0", port: int = 8090) -> ThreadingHTTPServer:  # noqa: S104 - داخل شبکه‌ی internal کانتینر

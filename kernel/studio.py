@@ -310,7 +310,7 @@ def trial(d, handler: str, params: dict, file: bytes | None = None, ws=None) -> 
     sql_fn = (lambda q, a: pagekit.read_select(ws, q, a)) if ws is not None else None
     try:
         out = client.run_files({f"code/{handler}.py": src}, handler, params, sql_fn, getattr(ws, "pk", 0) or 0, file=file,
-                               io=role in ("import", "export"), on_log=res["logs"].append, allow_no_ws=True)
+                               io=role in ("import", "export"), on_log=res["logs"].append, allow_no_ws=True, plugin="studio")
     except client.RunnerError as exc:
         res["error"] = str(exc)
         return res
