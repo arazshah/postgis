@@ -550,13 +550,29 @@ def pagekit_key(k: str) -> bool:
     return bool(pagekit.KEY_RE.fullmatch(k))
 
 
+class SeenFilter(admin.SimpleListFilter):
+    title = "وضعیت بررسی"
+    parameter_name = "seen"
+
+    def lookups(self, request, model_admin):
+        return [("no", "دیده‌نشده"), ("yes", "دیده‌شده")]
+
+    def queryset(self, request, queryset):
+        if self.value() == "no":
+            return queryset.filter(seen_at__isnull=True)
+        if self.value() == "yes":
+            return queryset.filter(seen_at__isnull=False)
+        return queryset
+
+
 @admin.register(PluginTrip)
 class PluginTripAdmin(admin.ModelAdmin):
-    """ردپای قطع‌کن خودکار: فقط‌خواندنی."""
+    """ردپای قطع‌کن خودکار؛ فقط‌خواندنی به‌جز علامت «دیده‌شده» (کارت داشبورد تا آن موقع می‌ماند)."""
 
-    list_display = ("plugin_id", "version", "action", "restored_version", "errors", "runs", "tripped_at")
-    list_filter = ("action", "plugin_id")
+    list_display = ("plugin_id", "version", "action", "restored_version", "errors", "runs", "tripped_at", "seen_at")
+    list_filter = (SeenFilter, "action", "plugin_id")
     date_hierarchy = "tripped_at"
+    actions = ["mark_seen"]
 
     def has_add_permission(self, request):
         return False
@@ -566,3 +582,10 @@ class PluginTripAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    @admin.action(description="علامت‌گذاری به‌عنوان دیده‌شده")
+    def mark_seen(self, request, queryset):
+        from django.utils import timezone
+
+        n = queryset.filter(seen_at__isnull=True).update(seen_at=timezone.now())
+        self.message_user(request, f"{n} مورد دیده‌شده شد.", messages.SUCCESS)

@@ -184,6 +184,7 @@ class PluginTrip(models.Model):
     runs = models.PositiveIntegerField("اجرا در پنجره")
     errors = models.PositiveIntegerField("خطا در پنجره")
     tripped_at = models.DateTimeField("زمان", auto_now_add=True)
+    seen_at = models.DateTimeField("دیده‌شده توسط مدیر", null=True, blank=True)
 
     class Meta:
         verbose_name = "قطع خودکار پلاگین"
