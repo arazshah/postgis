@@ -59,3 +59,39 @@ class WorkspaceDeletedTests(BaseCase):
             services.delete_database(db, actor=self.user)
         db.refresh_from_db()
         self.assertEqual(db.status, db.Status.DELETED)
+
+
+class ReportSheetsTests(SimpleTestCase):
+    def test_a_failing_sheet_does_not_stop_the_others(self):
+        from kernel import admin as dash
+
+        wrote = []
+        registry.add(dash.SHEET, "kernel.tests.test_events.sheet_bad", "kernel.tests.test_events.sheet_bad", plugin="kernel", order=-2)
+        registry.add(dash.SHEET, "kernel.tests.test_events.sheet_ok", "kernel.tests.test_events.sheet_ok", plugin="kernel", order=-1)
+        SHEETS.append(wrote)
+        try:
+            with self.assertLogs("kernel.admin", "ERROR"):
+                dash.run_sheets("book", None)
+        finally:
+            registry._points[dash.SHEET].pop("kernel.tests.test_events.sheet_bad")
+            registry._points[dash.SHEET].pop("kernel.tests.test_events.sheet_ok")
+            SHEETS.clear()
+        self.assertEqual(wrote, ["book"])
+
+    def test_installed_sheet_order_matches_the_old_workbook(self):
+        from kernel import admin as dash
+
+        order = [c.plugin for c in registry.contributions(dash.SHEET)]
+        self.assertEqual(order, ["analysis", "maps", "publish", "billing", "support", "classroom", "survey"])
+        self.assertEqual(dash.broken_paths(), [])
+
+
+SHEETS: list = []
+
+
+def sheet_bad(book, since):
+    raise RuntimeError("x")
+
+
+def sheet_ok(book, since):
+    SHEETS[0].append(book)

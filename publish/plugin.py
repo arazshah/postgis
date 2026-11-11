@@ -1,4 +1,5 @@
 """مانیفست پلاگین «انتشار نقشه و API» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
+from kernel import admin as admin_dash
 from kernel import events, nav, plugins
 
 plugin = plugins.register("publish", "انتشار نقشه و API", kind="feature", requires=("databases",))
@@ -17,4 +18,5 @@ events.listen(events.TABLE_DROPPED, "publish.events.table_dropped", plugin=plugi
 events.listen(events.TABLE_RENAMED, "publish.events.table_renamed", plugin=plugin.id, order=20)
 events.listen(events.TABLE_USAGE, "publish.events.table_usage", plugin=plugin.id, order=20)
 events.listen(events.USAGE_CARDS, "publish.events.usage_cards", plugin=plugin.id, order=20)
+admin_dash.report_sheet("publish.reports.sheets", plugin=plugin.id, order=21)
 

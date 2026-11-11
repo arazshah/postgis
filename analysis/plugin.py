@@ -1,5 +1,6 @@
 """مانیفست پلاگین «تحلیل و پرسش فارسی» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
-from kernel import home, jobs, nav, plugins
+from kernel import admin as admin_dash
+from kernel import home, jobs, llm, nav, plugins
 from kernel import profile as profile_sections
 from kernel import settings as site_settings
 
@@ -21,3 +22,9 @@ profile_sections.section("ai", "مدل زبانی", "analysis/_profile_ai.html",
 
 home.feed("analysis.home.feed", plugin=plugin.id, order=10)
 home.step("analysis.home.step_llm", plugin=plugin.id, order=50)
+
+from .llm_config import AnalysisLlm  # noqa: E402
+
+llm.set_provider(AnalysisLlm())
+admin_dash.report_sheet("analysis.reports.sheets", plugin=plugin.id, order=10)
+

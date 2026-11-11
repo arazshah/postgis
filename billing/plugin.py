@@ -25,6 +25,7 @@ admin_dash.activity("billing.admin_cards.activity", plugin=plugin.id, order=20)
 admin_dash.search("billing.admin_cards.search", plugin=plugin.id, order=30)
 
 home.context("billing.home.context", plugin=plugin.id, order=20)
+admin_dash.report_sheet("billing.reports.sheets", plugin=plugin.id, order=30)
 
 
 def pending_invoices() -> int:

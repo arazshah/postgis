@@ -10,7 +10,7 @@
 - `core` (سایت و قاب پنل) فقط `accounts`، `databases` و `kb` را می‌شناسد؛ رمزنگاری مقدارهای حساس در `kernel.crypto` است.
 - اتصال به پایگاه داده‌ی مشتری فقط از `kernel.tenantdb` (`tenantdb.catalog(db)` یا `tenantdb.connect(db, write=..., as_owner=...)`)؛ نوشتن با `as_owner=True`، بدون `SET ROLE` دستی. `databases.explorer` فقط برای خود بخش داده است.
 - دسترسی به فضای کار (سطح کاربر، میزبان PostGIS، ساخت پایگاه، اعلان)، ورود/خروج GDAL و رمزنگاری از قراردادهای هسته می‌آید: `kernel.workspace`، `kernel.dataio`، `kernel.crypto`. از `databases` فقط `databases.models` (هدف کلید خارجی) برای بخش‌های دیگر مجاز است (`databases.nl2sql` فقط برای تحلیل)؛ `lint-imports` بقیه را رد می‌کند.
-- زبانه‌ی تازه‌ی پروفایل کاربر با `kernel.profile` ثبت می‌شود (نمونه: `analysis/profile.py`).
+- زبانه‌ی تازه‌ی پروفایل کاربر با `kernel.profile` ثبت می‌شود (نمونه: `analysis/profile.py`). قابلیت‌ها به خانه، مصرف، پنل مدیریت، رویدادهای فضای کار و جدول با `kernel.home`، `kernel.events` و `kernel.admin` سهم می‌دهند؛ پلاگین سیستمی (حساب، پایگاه داده، کارها، صورتحساب، پشتیبانی، اعلان، راهنما، آمار) هرگز پلاگین قابلیت را import نمی‌کند (قرارداد سخت در `lint-imports`).
 - ابزار تحلیل تازه = یک ماژول در `tools/plugins/` طبق `docs/plugins/tool-guide.md` (موتور: `tools/engine.py`، قرارداد: `tools/sdk.py`)؛ SQL هر ابزار با آزمون طلایی (`tools/tests/golden.py`) قفل است.
 - `lint-imports` قاعده‌های وابستگی را اجبار می‌کند؛ قرارداد تازه اضافه کنید، قرارداد موجود را شل نکنید.
 - پلاگین معیوب نباید سایت را بخواباند: خطای بارگذاری در `manage.py check` (شناسه‌های `kernel.E*`) دیده می‌شود.

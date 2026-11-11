@@ -3,6 +3,8 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
 
+from kernel import llm
+
 from .models import LlmConfig
 
 URL = "accounts:profile"
@@ -21,14 +23,12 @@ def has_key(request) -> bool:
 
 
 def handle(request, action: str, next_url: str):
-    from databases import nl2sql
-
     tab = f"{reverse(URL)}#ai"
     if action == "llm_save":
         try:
-            nl2sql.save_config(request.user, request.POST.get("base_url", ""), request.POST.get("model", ""),
+            llm.save(request.user, request.POST.get("base_url", ""), request.POST.get("model", ""),
                                request.POST.get("api_key", ""))
-        except nl2sql.NLError as exc:
+        except llm.LlmConfigError as exc:
             messages.error(request, str(exc))
             return redirect(tab)
         messages.success(request, "تنظیم مدل زبانی ذخیره شد.")

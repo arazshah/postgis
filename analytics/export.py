@@ -16,6 +16,8 @@ from django.db.models import Count, Max, Min, Q, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
+from kernel import admin as dash
+
 from . import quality, reports
 from .models import Event, TrackedLink, Visit, Visitor
 
@@ -133,7 +135,7 @@ def _since(days: int):
     return timezone.now() - timedelta(days=days) if days else None
 
 
-def _within(qs, field: str, since):
+def within(qs, field: str, since):
     return qs.filter(**{f"{field}__gte": since}) if since else qs
 
 
@@ -174,15 +176,15 @@ def _summary(book: Book, days: int, since) -> None:
     from databases.models import UserDatabase
     from jobs.models import Job
 
-    vis = _within(Visitor.objects.filter(flag=""), "first_seen", since)
-    ev = _within(Event.objects.filter(visitor__flag=""), "created_at", since)
-    paid = _within(Invoice.objects.filter(status=Invoice.Status.PAID, user__analytics_exclude=False), "paid_at", since)
+    vis = within(Visitor.objects.filter(flag=""), "first_seen", since)
+    ev = within(Event.objects.filter(visitor__flag=""), "created_at", since)
+    paid = within(Invoice.objects.filter(status=Invoice.Status.PAID, user__analytics_exclude=False), "paid_at", since)
     excl = quality.excluded_counts(days)
     book.key_value("خلاصه", [
         ("تاریخ تهیه‌ی گزارش", jalali(timezone.now())),
         ("بازه", f"{days} روز اخیر" if days else "همه‌ی زمان‌ها"),
         ("بازدیدکننده‌ی جدید", vis.count()),
-        ("نشست (Visit)", _within(Visit.objects.filter(visitor__flag=""), "started_at", since).count()),
+        ("نشست (Visit)", within(Visit.objects.filter(visitor__flag=""), "started_at", since).count()),
         ("بازدیدکننده‌ی مشکوک به ربات (کنار گذاشته شد)", excl["bot"]),
         ("بازدیدکننده‌ی داخلی (کنار گذاشته شد)", excl["internal"]),
         ("کلیک «شروع رایگان» (صفحه‌های دانش، راهنما و آموزش)", ev.filter(name=Event.CTA_CLICK).count()),
@@ -196,7 +198,7 @@ def _summary(book: Book, days: int, since) -> None:
         ("عملیات و ارسال فرم", ev.filter(name__startswith=Event.DO).count()),
         ("فاکتور پرداخت‌شده", paid.count()),
         ("درآمد (تومان)", paid.aggregate(s=Sum("amount_toman"))["s"] or 0),
-        ("کارهای ناموفق", _within(Job.objects.filter(status=Job.Status.FAILED), "created_at", since).count()),
+        ("کارهای ناموفق", within(Job.objects.filter(status=Job.Status.FAILED), "created_at", since).count()),
         ("— وضعیت امروز —", ""),
         ("کاربران سایت", User.objects.filter(is_staff=False).count()),
         ("پایگاه فعال", UserDatabase.objects.filter(status=UserDatabase.Status.ACTIVE).count()),
@@ -235,18 +237,18 @@ def _daily(book: Book, since) -> None:
         for r in q.annotate(n=Count("id") if not agg else Sum(agg["sum"])):
             table.setdefault(r["d"], {}).update({key: r["n"] or 0})
 
-    add(_within(Visitor.objects.filter(flag=""), "first_seen", since), "first_seen", "visitors")
-    add(_within(Visit.objects.filter(visitor__flag=""), "started_at", since), "started_at", "visits")
-    ev = _within(Event.objects.filter(visitor__flag=""), "created_at", since)
+    add(within(Visitor.objects.filter(flag=""), "first_seen", since), "first_seen", "visitors")
+    add(within(Visit.objects.filter(visitor__flag=""), "started_at", since), "started_at", "visits")
+    ev = within(Event.objects.filter(visitor__flag=""), "created_at", since)
     for name, key in [(Event.OTP_REQUESTED, "otp"), (Event.SIGNUP, "signup"), (Event.LOGIN, "login"),
                       (Event.DB_CREATED, "db"), (Event.IMPORT_QUEUED, "imp"), (Event.MAP_VIEWED, "map")]:
         add(ev.filter(name=name), "created_at", key)
     add(ev.filter(name__startswith=Event.VIEW), "created_at", "views")
     add(ev.filter(name__startswith=Event.DO), "created_at", "dos")
-    paid = _within(Invoice.objects.filter(status=Invoice.Status.PAID, user__analytics_exclude=False), "paid_at", since)
+    paid = within(Invoice.objects.filter(status=Invoice.Status.PAID, user__analytics_exclude=False), "paid_at", since)
     add(paid, "paid_at", "paid")
     add(paid, "paid_at", "revenue", sum="amount_toman")
-    add(_within(Ticket.objects.all(), "created_at", since), "created_at", "tickets")
+    add(within(Ticket.objects.all(), "created_at", since), "created_at", "tickets")
     keys = ["visitors", "visits", "otp", "signup", "login", "db", "imp", "map", "views", "dos", "paid", "revenue", "tickets"]
     rows = [[d, jalali(d), *[table[d].get(k, 0) for k in keys]] for d in sorted(x for x in table if x)]
     book.sheet("روزانه", ["تاریخ", "تاریخ شمسی", "بازدیدکننده‌ی جدید", "نشست", "درخواست کد", "ثبت‌نام", "ورود",
@@ -255,7 +257,7 @@ def _daily(book: Book, since) -> None:
 
 
 def _visits(book: Book, since) -> None:
-    qs = _within(Visit.objects.select_related("visitor"), "started_at", since).order_by("-started_at")
+    qs = within(Visit.objects.select_related("visitor"), "started_at", since).order_by("-started_at")
     rows = ([local(v.started_at), jalali(v.started_at), _vid(v.visitor.vid), v.visitor.user_id, v.source, v.medium,
              v.campaign, v.content, v.referrer_host, v.landing_path, v.last_path, v.pages, v.device, v.browser,
              v.in_app, v.visitor.get_flag_display()] for v in qs.iterator(chunk_size=2000))
@@ -266,7 +268,7 @@ def _visits(book: Book, since) -> None:
 
 
 def _events(book: Book, since) -> None:
-    qs = (_within(Event.objects.select_related("visitor"), "created_at", since)
+    qs = (within(Event.objects.select_related("visitor"), "created_at", since)
           .exclude(Q(name__startswith=Event.VIEW) | Q(name__startswith=Event.DO)).order_by("-created_at"))
     rows = ([local(e.created_at), jalali(e.created_at), event_label(e.name), e.name, _vid(e.visitor.vid),
              e.visitor.user_id, e.visitor.first_source, e.visitor.first_campaign, e.path,
@@ -278,7 +280,7 @@ def _events(book: Book, since) -> None:
 
 
 def _actions(book: Book, since) -> None:
-    qs = (_within(Event.objects.select_related("visitor"), "created_at", since)
+    qs = (within(Event.objects.select_related("visitor"), "created_at", since)
           .filter(Q(name__startswith=Event.VIEW) | Q(name__startswith=Event.DO)).order_by("-created_at"))
 
     def row(e):
@@ -296,7 +298,7 @@ def _actions(book: Book, since) -> None:
 def _activity(book: Book, since) -> None:
     from databases.models import ActivityLog
 
-    qs = _within(ActivityLog.objects.all(), "created_at", since).order_by("-created_at")
+    qs = within(ActivityLog.objects.all(), "created_at", since).order_by("-created_at")
     rows = ([local(a.created_at), jalali(a.created_at), a.action, a.user_id, a.database_id, a.success,
              mask_phone(a.message)] for a in qs.iterator(chunk_size=2000))
     book.sheet("ثبت عملیات", ["زمان", "تاریخ شمسی", "عملیات", "شناسه‌ی کاربر", "شناسه‌ی پایگاه", "موفق", "شرح"],
@@ -368,7 +370,7 @@ def _databases(book: Book) -> None:
 def _jobs(book: Book, since) -> None:
     from jobs.models import Job
 
-    qs = _within(Job.objects.all(), "created_at", since).order_by("-created_at")
+    qs = within(Job.objects.all(), "created_at", since).order_by("-created_at")
 
     def row(j):
         secs = (j.finished_at - j.started_at).total_seconds() if j.started_at and j.finished_at else None
@@ -381,75 +383,11 @@ def _jobs(book: Book, since) -> None:
                [17, 12, 22, 16, 10, 10, 10, 10, 10, 60])
 
 
-def _analysis(book: Book, since) -> None:
-    from analysis.models import Question, ToolRun
-
-    def rows():
-        for t in _within(ToolRun.objects.all(), "created_at", since).order_by("-created_at").iterator(chunk_size=2000):
-            yield [local(t.created_at), jalali(t.created_at), "ابزار تحلیل", t.tool, t.user_id, t.database_id,
-                   t.rows, (t.summary or "")[:160]]
-        for q in _within(Question.objects.all(), "created_at", since).order_by("-created_at").iterator(chunk_size=2000):
-            yield [local(q.created_at), jalali(q.created_at), "پرسش فارسی", q.result_kind or q.goal or "", q.user_id,
-                   q.database_id, q.rows, f"تلاش={q.attempts}"]
-
-    book.sheet("تحلیل‌ها", ["زمان", "تاریخ شمسی", "نوع", "ابزار / نتیجه", "شناسه‌ی کاربر", "شناسه‌ی پایگاه", "سطر",
-                            "خلاصه"], rows(), [17, 12, 14, 24, 10, 10, 10, 60])
-
-
-def _maps(book: Book, since) -> None:
-    from maps.models import WebMap
-    from publish.models import ApiKey, Layer
-
-    qs = _within(WebMap.objects.annotate(nl=Count("layers")), "created_at", since).order_by("-created_at")
-    book.sheet("نقشه‌ها", ["زمان", "تاریخ شمسی", "شناسه", "شناسه‌ی پایگاه", "عمومی", "لایه‌ها", "نقشه‌ی پایه"],
-               ([local(m.created_at), jalali(m.created_at), m.pk, m.database_id, m.is_public, m.nl, m.basemap]
-                for m in qs.iterator(chunk_size=1000)), [17, 12, 8, 10, 8, 8, 14])
-    ql = _within(Layer.objects.select_related("service"), "created_at", since).order_by("-created_at")
-    book.sheet("لایه‌های منتشرشده", ["زمان", "تاریخ شمسی", "شناسه‌ی پایگاه", "جدول", "نوع هندسه", "SRID", "عمومی"],
-               ([local(x.created_at), jalali(x.created_at), x.service.database_id, f"{x.schema}.{x.table}", x.geom_type,
-                 x.srid, x.is_public] for x in ql.iterator(chunk_size=1000)), [17, 12, 10, 30, 14, 8, 8])
-    qk = _within(ApiKey.objects.all(), "created_at", since).order_by("-created_at")
-    book.sheet("کلیدهای API", ["زمان", "تاریخ شمسی", "شناسه‌ی پایگاه", "نام", "قابلیت نوشتن", "آخرین استفاده", "باطل‌شده"],
-               ([local(k.created_at), jalali(k.created_at), k.database_id, k.name, k.can_write, local(k.last_used_at),
-                 local(k.revoked_at)] for k in qk.iterator(chunk_size=1000)), [17, 12, 10, 22, 10, 17, 17])
-
-
-def _money(book: Book, since) -> None:
-    from billing.models import Invoice
-    from support.models import Ticket
-
-    qs = _within(Invoice.objects.select_related("plan"), "created_at", since).order_by("-created_at")
-    book.sheet("فاکتورها", ["زمان", "تاریخ شمسی", "شماره", "شناسه‌ی کاربر", "نوع", "پلن", "مبلغ (تومان)", "روش",
-                            "درگاه", "وضعیت", "زمان پرداخت"],
-               ([local(i.created_at), jalali(i.created_at), i.number, i.user_id, i.get_kind_display(), i.plan.slug,
-                 i.amount_toman, i.get_method_display() if i.method else "", i.gateway, i.get_status_display(),
-                 local(i.paid_at)] for i in qs.iterator(chunk_size=1000)), [17, 12, 14, 10, 16, 14, 12, 18, 12, 16, 17])
-    qt = _within(Ticket.objects.all(), "created_at", since).order_by("-created_at")
-    book.sheet("پشتیبانی", ["زمان", "تاریخ شمسی", "شماره", "شناسه‌ی کاربر", "دسته", "وضعیت", "بسته‌شده"],
-               ([local(t.created_at), jalali(t.created_at), t.number, t.user_id, t.get_category_display(),
-                 t.get_status_display(), local(t.closed_at)] for t in qt.iterator(chunk_size=1000)),
-               [17, 12, 12, 10, 12, 16, 17])
-
-
-def _education(book: Book, since) -> None:
-    from classroom.models import Classroom
-    from survey.models import SurveyProject
-
-    qs = _within(Classroom.objects.annotate(n=Count("enrollments")), "created_at", since).order_by("-created_at")
-    book.sheet("کلاس‌ها", ["زمان", "تاریخ شمسی", "شناسه", "شناسه‌ی استاد", "ظرفیت", "ثبت‌نام‌شده", "وضعیت", "باز"],
-               ([local(c.created_at), jalali(c.created_at), c.pk, c.teacher_id, c.capacity, c.n, c.get_status_display(),
-                 c.is_open] for c in qs.iterator(chunk_size=500)), [17, 12, 8, 10, 8, 10, 14, 8])
-    qp = _within(SurveyProject.objects.all(), "created_at", since).order_by("-created_at")
-    book.sheet("برداشت", ["زمان", "تاریخ شمسی", "شناسه", "شناسه‌ی پایگاه", "SRID", "قالب", "بایگانی"],
-               ([local(p.created_at), jalali(p.created_at), p.pk, p.database_id, p.srid, p.template,
-                 local(p.archived_at)] for p in qp.iterator(chunk_size=500)), [17, 12, 8, 10, 8, 14, 17])
-
-
 def _assistant_kb(book: Book, since) -> None:
     from assistant.models import Usage
     from kb.models import Feedback, MissedQuery
 
-    qs = _within(Usage.objects.all(), "created_at", since).order_by("-created_at")
+    qs = within(Usage.objects.all(), "created_at", since).order_by("-created_at")
     book.sheet("دستیار", ["زمان", "تاریخ شمسی", "شناسه‌ی کاربر", "بازیگر", "وضعیت", "حالت", "صفحه", "طول پاسخ",
                           "تأخیر (ms)", "مفید"],
                ([local(u.created_at), jalali(u.created_at), u.user_id, u.actor, u.status, u.mode, u.path, u.answer_chars,
@@ -458,7 +396,7 @@ def _assistant_kb(book: Book, since) -> None:
     book.sheet("جست‌وجوی بی‌نتیجه", ["عبارت", "تعداد", "آخرین بار", "حل‌شده"],
                ([m.sample[:120], m.count, local(m.last_seen), m.resolved]
                 for m in MissedQuery.objects.order_by("-count")[:2000]), [50, 8, 17, 8])
-    qf = _within(Feedback.objects.select_related("article"), "created_at", since).order_by("-created_at")
+    qf = within(Feedback.objects.select_related("article"), "created_at", since).order_by("-created_at")
     book.sheet("بازخورد مقاله", ["زمان", "تاریخ شمسی", "مقاله", "مفید", "نظر"],
                ([local(f.created_at), jalali(f.created_at), f.article.slug, f.helpful, (f.comment or "")[:300]]
                 for f in qf.iterator(chunk_size=1000)), [17, 12, 30, 8, 60])
@@ -489,10 +427,7 @@ def build(days: int = 90) -> bytes:
     _activity(book, since)
     _databases(book)
     _jobs(book, since)
-    _analysis(book, since)
-    _maps(book, since)
-    _money(book, since)
-    _education(book, since)
+    dash.run_sheets(book, since)  # شیت‌های بخش‌های دیگر را خودشان می‌آورند (تحلیل، نقشه، انتشار، صورتحساب، پشتیبانی، کلاس، برداشت)
     _assistant_kb(book, since)
     _links(book)
     book.close()

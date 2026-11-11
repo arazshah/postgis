@@ -1,4 +1,5 @@
 """مانیفست پلاگین «نقشه‌های چندلایه» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
+from kernel import admin as admin_dash
 from kernel import events, home, nav, plugins
 
 plugin = plugins.register("maps", "نقشه‌های چندلایه", kind="feature", requires=("databases", "publish"))
@@ -14,4 +15,5 @@ events.listen(events.TABLE_DROPPED, "maps.events.table_dropped", plugin=plugin.i
 events.listen(events.TABLE_RENAMED, "maps.events.table_renamed", plugin=plugin.id, order=10)
 events.listen(events.TABLE_USAGE, "maps.events.table_usage", plugin=plugin.id, order=10)
 events.listen(events.TABLE_MAP_TARGETS, "maps.events.table_map_targets", plugin=plugin.id, order=10)
+admin_dash.report_sheet("maps.reports.sheets", plugin=plugin.id, order=20)
 

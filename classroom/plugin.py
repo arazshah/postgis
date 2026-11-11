@@ -1,4 +1,5 @@
 """مانیفست پلاگین «کلاس درس» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
+from kernel import admin as admin_dash
 from kernel import home, jobs, nav, plugins
 from kernel import settings as site_settings
 
@@ -13,3 +14,5 @@ site_settings.section("class_plan", "users", "پلن کلاس و دانشگاه"
                       fields=("class_price_per_student",))
 
 home.context("classroom.home.context", plugin=plugin.id, order=10)
+admin_dash.report_sheet("classroom.reports.sheets", plugin=plugin.id, order=40)
+

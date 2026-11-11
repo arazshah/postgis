@@ -114,3 +114,19 @@ ignore_imports = [
 ]
 unmatched_ignore_imports_alerting = "none"
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "پلاگین‌های سیستمی پلاگین‌های قابلیت را نمی‌شناسند (فقط برعکس)"
+type = "forbidden"
+source_modules = [
+    "accounts", "core", "databases", "jobs", "billing", "support", "notifications", "kb", "assistant", "analytics",
+]
+forbidden_modules = [
+    "analysis", "tools", "maps", "publish", "restapi", "survey", "iranmap", "classroom", "enterprise", "satellite",
+]
+ignore_imports = [
+    "accounts.tests.** -> **", "core.tests.** -> **", "databases.tests.** -> **", "jobs.tests.** -> **",
+    "billing.tests.** -> **", "support.tests.** -> **", "notifications.tests.** -> **", "kb.tests.** -> **",
+    "assistant.tests.** -> **", "analytics.tests.** -> **",
+]
+unmatched_ignore_imports_alerting = "none"

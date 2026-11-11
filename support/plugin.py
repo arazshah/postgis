@@ -11,6 +11,7 @@ admin_dash.attention("support.admin_cards.attention", plugin=plugin.id, order=20
 admin_dash.kpi("support.admin_cards.kpis", plugin=plugin.id, order=60)
 admin_dash.activity("support.admin_cards.activity", plugin=plugin.id, order=30)
 admin_dash.search("support.admin_cards.search", plugin=plugin.id, order=40)
+admin_dash.report_sheet("support.reports.sheets", plugin=plugin.id, order=31)
 
 
 def open_tickets() -> int:

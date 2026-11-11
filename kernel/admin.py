@@ -19,6 +19,7 @@ from .plugins import registry
 
 log = logging.getLogger(__name__)
 ATTENTION, HEALTH, KPI, ACTIVITY, SEARCH = "admin.attention", "admin.health", "admin.kpi", "admin.activity", "admin.search"
+SHEET = "admin.report_sheet"
 DAYS, SEARCH_LIMIT = 30, 5
 
 
@@ -33,6 +34,7 @@ health = _reg(HEALTH)  # تابع () -> [health_item(...)]
 kpi = _reg(KPI)  # تابع () -> [dict(label, value, sub, url, spark?, bad?)]
 activity = _reg(ACTIVITY)  # تابع () -> [dict(at, icon, kind, text, url)]
 search = _reg(SEARCH)  # تابع (request, q) -> [ردیف‌های rows()]
+report_sheet = _reg(SHEET)  # تابع (book, since) -> None؛ شیت‌های گزارش اکسل آمار (analytics.export.Book)
 
 
 def collect(point: str, *args) -> list:
@@ -45,9 +47,18 @@ def collect(point: str, *args) -> list:
     return out
 
 
+def run_sheets(book, since) -> None:
+    """شیت‌های بخش‌های دیگر را به ترتیب می‌نویسد؛ خطای یک بخش جلوی بقیه را نمی‌گیرد."""
+    for c in registry.contributions(SHEET):
+        try:
+            load(c.value)(book, since)
+        except Exception:  # noqa: BLE001
+            log.exception("report sheet %s (%s) failed", c.value, c.plugin)
+
+
 def broken_paths() -> list[tuple[str, str, str]]:
     out = []
-    for point in (ATTENTION, HEALTH, KPI, ACTIVITY, SEARCH):
+    for point in (ATTENTION, HEALTH, KPI, ACTIVITY, SEARCH, SHEET):
         for c in registry.contributions(point):
             try:
                 load(c.value)
