@@ -9,8 +9,8 @@ def _drop(**_):
 
 
 def connect():
-    from .models import Entitlement, OrgMember, PluginState
+    from .models import Entitlement, OrgMember, PluginRelease, PluginState
 
-    for model in (PluginState, Entitlement, OrgMember):
+    for model in (PluginState, Entitlement, OrgMember, PluginRelease):
         post_save.connect(_drop, sender=model, dispatch_uid=f"kernel.inv.save.{model.__name__}")
         post_delete.connect(_drop, sender=model, dispatch_uid=f"kernel.inv.del.{model.__name__}")

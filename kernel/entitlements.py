@@ -65,7 +65,23 @@ def _load() -> dict:
         for uid, oid in OrgMember.objects.values_list("user_id", "org_id"):
             orgs.setdefault(uid, set()).add(str(oid))
         _cache.update(at=time.monotonic(), states=states, orgs=orgs)
+        _sync_packages()
     return _cache
+
+
+def _sync_packages() -> None:
+    """نسخه‌های فعال بسته‌ی پلاگین را در رجیستری همین پردازه به‌روز می‌کند (هم‌زمان با تازه‌سازی مجوزها)."""
+    from . import pkg
+
+    try:
+        pkg.sync()
+    except Exception:  # noqa: BLE001  خطای پایگاه داده (مثلاً هنگام مهاجرت) نباید درخواست را بشکند
+        log.exception("plugin package sync failed")
+
+
+def refresh() -> None:
+    """اول هر درخواست: مجوزها و بسته‌های فعال تازه باشند (ارزان: فقط وقتی TTL گذشته)."""
+    _load()
 
 
 def state(plugin_id: str) -> State | None:

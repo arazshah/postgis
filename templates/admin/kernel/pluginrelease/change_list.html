@@ -1,0 +1,4 @@
+{% extends "admin/change_list.html" %}
+{% block object-tools-items %}
+{% if can_upload %}<li><a class="addlink" href="{% url 'admin:kernel_pluginrelease_upload' %}">بارگذاری بسته‌ی پلاگین</a></li>{% endif %}
+{% endblock %}

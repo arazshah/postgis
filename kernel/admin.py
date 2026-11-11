@@ -5,10 +5,11 @@
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
-from django.utils.html import format_html
+from django.core.exceptions import PermissionDenied
+from django.utils.html import format_html, format_html_join
 
-from . import workspace
-from .models import Entitlement, Organization, OrgMember, PluginState
+from . import entitlements, pkg, workspace
+from .models import Entitlement, Organization, OrgMember, PluginRelease, PluginState
 from .plugins import registry
 
 
@@ -118,19 +119,27 @@ class PluginStateAdmin(admin.ModelAdmin):
 
     @admin.action(description="محدود به دارندگان مجوز")
     def make_restricted(self, request, qs):
-        self.message_user(request, f"{qs.update(access=PluginState.Access.RESTRICTED)} پلاگین محدود شد.", messages.SUCCESS)
+        n = qs.update(access=PluginState.Access.RESTRICTED)
+        entitlements.invalidate()  # update سیگنال نمی‌فرستد
+        self.message_user(request, f"{n} پلاگین محدود شد.", messages.SUCCESS)
 
     @admin.action(description="باز برای همه")
     def make_open(self, request, qs):
-        self.message_user(request, f"{qs.update(access=PluginState.Access.OPEN)} پلاگین باز شد.", messages.SUCCESS)
+        n = qs.update(access=PluginState.Access.OPEN)
+        entitlements.invalidate()
+        self.message_user(request, f"{n} پلاگین باز شد.", messages.SUCCESS)
 
     @admin.action(description="روشن کردن")
     def turn_on(self, request, qs):
-        self.message_user(request, f"{qs.update(enabled=True)} پلاگین روشن شد.", messages.SUCCESS)
+        n = qs.update(enabled=True)
+        entitlements.invalidate()
+        self.message_user(request, f"{n} پلاگین روشن شد.", messages.SUCCESS)
 
     @admin.action(description="خاموش کردن (ناپدید برای همه)")
     def turn_off(self, request, qs):
-        self.message_user(request, f"{qs.update(enabled=False)} پلاگین خاموش شد.", messages.WARNING)
+        n = qs.update(enabled=False)
+        entitlements.invalidate()
+        self.message_user(request, f"{n} پلاگین خاموش شد.", messages.WARNING)
 
 
 class OrgMemberInline(admin.TabularInline):
@@ -149,3 +158,104 @@ class OrganizationAdmin(admin.ModelAdmin):
     @admin.display(description="اعضا")
     def member_count(self, obj):
         return obj.members.count()
+
+
+# ---------------------------------------------------------------------- نسخه‌ها و بارگذاری بسته‌ی پلاگین
+class UploadForm(forms.Form):
+    package = forms.FileField(label="بسته‌ی پلاگین (.gpkgx)", help_text="بسته باید با کلید یکی از ناشران مجاز امضا شده باشد (حداکثر ۲ مگابایت).")
+
+
+@admin.register(PluginRelease)
+class PluginReleaseAdmin(admin.ModelAdmin):
+    list_display = ("plugin_id", "version", "name", "publisher", "status", "uploaded_by", "uploaded_at", "activated_at")
+    list_filter = ("status", "publisher")
+    search_fields = ("plugin_id", "name", "sha256")
+    actions = ["activate_selected", "deactivate_selected"]
+    change_list_template = "admin/kernel/pluginrelease/change_list.html"
+    readonly_fields = ("plugin_id", "version", "name", "kind", "publisher", "sha256", "size", "status", "report_table",
+                       "manifest_view", "uploaded_by", "approved_by", "uploaded_at", "activated_at")
+    fields = readonly_fields
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False  # فقط مشاهده؛ تغییر وضعیت با کنش‌های مجاز
+
+    def has_delete_permission(self, request, obj=None):
+        return False  # ردپای بسته‌ها ماندگار است
+
+    def get_urls(self):
+        from django.urls import path
+
+        return [path("upload/", self.admin_site.admin_view(self.upload_view), name="kernel_pluginrelease_upload"),
+                *super().get_urls()]
+
+    def changelist_view(self, request, extra_context=None):
+        extra = {"can_upload": request.user.has_perm("kernel.upload_pluginrelease"), **(extra_context or {})}
+        return super().changelist_view(request, extra)
+
+    def upload_view(self, request):
+        from django.shortcuts import redirect
+        from django.template.response import TemplateResponse
+        from django.urls import reverse
+
+        if not request.user.has_perm("kernel.upload_pluginrelease"):
+            raise PermissionDenied
+        form = UploadForm(request.POST or None, request.FILES or None)
+        if request.method == "POST" and form.is_valid():
+            try:
+                rel = pkg.submit(form.cleaned_data["package"].read(), request.user)
+            except pkg.PackageError as exc:
+                messages.error(request, str(exc))
+            else:
+                (messages.success if rel.status == PluginRelease.Status.CHECKED else messages.error)(
+                    request, "بسته بررسی شد و منتظر تأیید است." if rel.status == PluginRelease.Status.CHECKED
+                    else "بسته در بررسی رد شد؛ گزارش را ببینید.")
+                return redirect(reverse("admin:kernel_pluginrelease_change", args=[rel.pk]))
+        return TemplateResponse(request, "admin/kernel/pluginrelease/upload.html", {
+            **self.admin_site.each_context(request), "form": form, "title": "بارگذاری بسته‌ی پلاگین", "opts": self.model._meta,
+            "keys": sorted(pkg.publisher_keys()) if _keys_ok() else []})
+
+    @admin.display(description="گزارش بررسی")
+    def report_table(self, obj):
+        rows = format_html_join("", "<tr><td>{}</td><td>{}</td></tr>", (
+            ("✓ " + s["stage"] if s["ok"] else "✗ " + s["stage"], s.get("detail", "")) for s in obj.report))
+        return format_html("<table>{}</table>", rows)
+
+    @admin.display(description="مانیفست")
+    def manifest_view(self, obj):
+        import json
+
+        return format_html('<pre dir="ltr" style="white-space:pre-wrap">{}</pre>', json.dumps(obj.manifest, ensure_ascii=False, indent=2))
+
+    @admin.action(description="تأیید و فعال‌سازی (یا بازگشت به این نسخه)")
+    def activate_selected(self, request, qs):
+        if not request.user.has_perm("kernel.activate_pluginrelease"):
+            raise PermissionDenied
+        for rel in qs:
+            try:
+                pkg.activate(rel, request.user)
+            except pkg.PackageError as exc:
+                self.message_user(request, f"{rel}: {exc}", messages.ERROR)
+            else:
+                self.message_user(request, f"{rel} فعال شد. تا مجوز ندهید هیچ مشتری آن را نمی‌بیند (از «پلاگین‌ها و مجوزها»).",
+                                  messages.SUCCESS)
+        entitlements.invalidate()
+
+    @admin.action(description="غیرفعال‌سازی (برداشتن از سامانه)")
+    def deactivate_selected(self, request, qs):
+        if not request.user.has_perm("kernel.activate_pluginrelease"):
+            raise PermissionDenied
+        for rel in qs:
+            pkg.deactivate(rel)
+            self.message_user(request, f"{rel} غیرفعال شد.", messages.WARNING)
+        entitlements.invalidate()
+
+
+def _keys_ok() -> bool:
+    try:
+        pkg.publisher_keys()
+        return True
+    except pkg.PackageError:
+        return False

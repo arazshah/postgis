@@ -103,3 +103,44 @@ class Entitlement(models.Model):
 
     def __str__(self):
         return f"{self.state_id}: {self.get_kind_display()} {self.subject}".strip()
+
+
+class PluginRelease(models.Model):
+    """یک نسخه‌ی بسته‌ی پلاگین بارگذاری‌شده از پنل. بسته‌ی بررسی‌شده تغییرناپذیر است و درون پایگاه داده می‌ماند
+    (بین وب و worker مشترک؛ بدون مدیریت فایل). فقط نسخه‌ی «فعال» در رجیستری بار می‌شود."""
+
+    class Status(models.TextChoices):
+        REJECTED = "rejected", "ردشده"
+        CHECKED = "checked", "بررسی‌شده؛ منتظر تأیید"
+        ACTIVE = "active", "فعال"
+        RETIRED = "retired", "جایگزین‌شده"
+
+    plugin_id = models.CharField("شناسه‌ی پلاگین", max_length=41, db_index=True)
+    version = models.CharField("نسخه", max_length=20)
+    name = models.CharField("نام", max_length=120, blank=True)
+    kind = models.CharField("نوع", max_length=10, blank=True)
+    publisher = models.CharField("ناشر", max_length=60, blank=True)
+    sha256 = models.CharField("چکیده‌ی بسته", max_length=64, unique=True)
+    blob = models.BinaryField("بسته", editable=False)
+    size = models.PositiveIntegerField("حجم (بایت)", default=0)
+    manifest = models.JSONField("مانیفست", default=dict, blank=True)
+    status = models.CharField("وضعیت", max_length=10, choices=Status.choices, default=Status.CHECKED, db_index=True)
+    report = models.JSONField("گزارش بررسی", default=list, blank=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+", verbose_name="بارگذارنده")
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+", verbose_name="تأییدکننده")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    activated_at = models.DateTimeField("زمان فعال‌سازی", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "نسخه‌ی پلاگین"
+        verbose_name_plural = "نسخه‌ها و بارگذاری پلاگین"
+        ordering = ["-uploaded_at"]
+        permissions = [("upload_pluginrelease", "بارگذاری بسته‌ی پلاگین"),
+                       ("activate_pluginrelease", "تأیید و فعال‌سازی نسخه‌ی پلاگین")]
+        constraints = [models.UniqueConstraint(fields=["plugin_id"], condition=models.Q(status="active"),
+                                               name="one_active_release_per_plugin")]
+
+    def __str__(self):
+        return f"{self.plugin_id} {self.version}"

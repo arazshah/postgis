@@ -55,7 +55,7 @@ class Registry:
     # ------------------------------------------------------------------ پلاگین
     def register(self, id: str, name: str, **kw) -> Plugin:
         p = Plugin(id=id, name=name, **{**kw, "requires": tuple(kw.get("requires", ()))})
-        if not ID_RE.match(p.id):
+        if not ID_RE.fullmatch(p.id):
             raise PluginError(f"شناسه‌ی پلاگین نامعتبر است: {p.id!r}")
         if p.kind not in KINDS:
             raise PluginError(f"نوع پلاگین {p.id} نامعتبر است: {p.kind!r}")

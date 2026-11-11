@@ -139,6 +139,7 @@ admin_group("marketing", "بازاریابی", "chart", order=60)
 admin_group("platform", "پلاگین‌ها و مشتریان سازمانی", "cube", order=65)
 admin_group("settings", "تنظیمات و امنیت", "settings", order=70)
 admin_item("platform", "kernel.pluginstate", "پلاگین‌ها و مجوزها", plugin=KERNEL, order=10)
+admin_item("platform", "kernel.pluginrelease", "بارگذاری و نسخه‌ها", plugin=KERNEL, order=15)
 admin_item("platform", "kernel.organization", None, plugin=KERNEL, order=20)
 
 

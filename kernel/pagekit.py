@@ -113,7 +113,7 @@ def _sql_values(text: str) -> set[str]:
 
 def parse_param(d: dict) -> Param:
     name = _str(d, "name", required=True, limit=31)
-    if not PARAM_RE.match(name):
+    if not PARAM_RE.fullmatch(name):
         raise SpecError(f"نام پارامتر «{name}» نامعتبر است.")
     kind = _str(d, "kind", required=True)
     if kind not in PARAM_KINDS:
@@ -166,7 +166,7 @@ def parse_page(plugin: str, d: dict) -> Page:
     if not isinstance(d, dict):
         raise SpecError("مشخصات صفحه باید یک شیء باشد.")
     key = _str(d, "key", required=True, limit=31)
-    if not KEY_RE.match(key):
+    if not KEY_RE.fullmatch(key):
         raise SpecError(f"کلید صفحه «{key}» نامعتبر است (حروف کوچک لاتین، رقم و _).")
     icon = _str(d, "icon", default="chart", limit=40)
     if not _icon_known(icon):
