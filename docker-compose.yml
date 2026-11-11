@@ -115,7 +115,7 @@ services:
     restart: unless-stopped
     # entrypoint عمداً خالی: ورودی ایمیج pip و migrate اجرا می‌کند و به شبکه/پایگاه داده نیاز دارد؛ runner هیچ‌کدام را ندارد.
     entrypoint: []
-    command: ["python", "-I", "-m", "kernel.runner.server"]
+    command: ["python", "-m", "kernel.runner.server"]
     working_dir: /app
     user: "10001:10001"
     read_only: true

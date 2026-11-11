@@ -92,6 +92,7 @@ jobs:
           DJANGO_SECRET_KEY: ci-secret
           CREDENTIALS_ENCRYPTION_KEY: ci-enc
           DJANGO_SUPERUSER_PASSWORD: Ci-Admin-Pass-123
+          PLUGIN_RUNNER_TOKEN: ci-runner-token
         run: |
           docker network create coolify || true
           docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
@@ -113,6 +114,28 @@ jobs:
             sleep 3
           done
           docker compose -f docker-compose.yml -f docker-compose.build.yml logs; exit 1
+      - name: plugin-runner (سلامت، ایزوله‌بودن و یک اجرای واقعی)
+        env:
+          SERVICE_PASSWORD_POSTGRES: ci-panel-pass
+          DJANGO_SECRET_KEY: ci-secret
+          CREDENTIALS_ENCRYPTION_KEY: ci-enc
+          DJANGO_SUPERUSER_PASSWORD: Ci-Admin-Pass-123
+          PLUGIN_RUNNER_TOKEN: ci-runner-token
+        run: |
+          C="docker compose -f docker-compose.yml -f docker-compose.build.yml"
+          ok=""
+          for i in $(seq 1 30); do
+            if $C exec -T plugin-runner python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:8090/healthz', timeout=3)"; then ok=1; break; fi
+            sleep 2
+          done
+          [ -n "$ok" ] || { $C logs plugin-runner; echo "runner سالم نشد"; exit 1; }
+          [ "$($C exec -T plugin-runner id -u)" = "10001" ] || { echo "runner نباید root باشد"; exit 1; }
+          if $C exec -T plugin-runner sh -c 'touch /app/should_fail 2>/dev/null'; then echo "فایل‌سیستم runner باید فقط‌خواندنی باشد"; exit 1; fi
+          if $C exec -T plugin-runner python -c "import urllib.request as u; u.urlopen('https://pypi.org', timeout=6)" 2>/dev/null; then
+            echo "runner نباید به اینترنت برسد"; exit 1
+          fi
+          $C exec -T -u app web python docker/ci_runner_check.py || { $C logs plugin-runner; exit 1; }
+          $C down -v || true
 
   # دروازه‌ی ماهواره (روی سرور خارجی) مستقل از ایمیج برنامه ساخته و منتشر می‌شود؛
   # به pmtiles، GDAL پنل یا job docker وابسته نیست، پس خرابی آن‌ها جلوی انتشار دروازه را نمی‌گیرد.
