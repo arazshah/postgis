@@ -8,6 +8,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
+from kernel import events
 from kernel.workspace import WorkspaceError
 
 from .models import ActivityLog, DatabaseServer, Extension, Plan, SizeSample, UserDatabase
@@ -156,23 +157,8 @@ def delete_database(db: UserDatabase, actor=None, reason="درخواست کار�
     db.role_name = db.role_name[: 63 - len(suffix)] + suffix
     db.browser_password_encrypted = ""
     db.save()
-    _remove_published_files(db)
+    events.emit(events.WORKSPACE_DELETED, ws=db, actor=actor)
     logevent("delete", reason, user=actor, database=db)
-
-
-def _remove_published_files(db: UserDatabase):
-    """فایل‌های پروژه QGIS Server این پایگاه داده (شامل رمز نقش فقط‌خواندنی) پاک شوند."""
-    from publish.models import Service
-    from publish.ows import remove_service_files
-
-    service = Service.objects.filter(database=db).first()
-    if service:
-        try:
-            remove_service_files(service)
-        except OSError:
-            log.exception("remove ows files for %s", db.pk)
-        service.ows_password_encrypted = ""
-        service.save(update_fields=["ows_password_encrypted"])
 
 
 def renew(db: UserDatabase, actor=None):

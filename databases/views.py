@@ -14,6 +14,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
+from kernel import home
 from kernel.workspace import SESSION_PW_KEY
 
 from . import csvgeo, editor, importinto, services, tablealter, tablebuilder
@@ -56,17 +57,10 @@ def dashboard(request):
              "quota": sum(d.plan.quota_bytes for d in dbs if getattr(d.plan, "quota_bytes", None)),
              "running": Job.objects.filter(database__in=dbs, status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).count(),
              "backups": sum(1 for d in dbs if d.last_backup)}
-    from classroom.services import teacher_contracts
-
-    is_teacher = teacher_contracts(request.user).exists() or request.user.taught_classes.exists()
     can_create, reason = services.user_can_create(request.user)
-    from billing.services import unused_vouchers
-
-    return render(request, "databases/dashboard.html", {"dbs": dbs, "shared": shared, "can_create": can_create, "stats": stats,
-                                                        "is_teacher": is_teacher,
-                                                        "reason": reason,
-                                                        "vouchers": unused_vouchers(request.user),
-                                                        **_home(request.user, dbs, stats)})
+    return render(request, "databases/dashboard.html", {
+        "dbs": dbs, "shared": shared, "can_create": can_create, "stats": stats, "reason": reason,
+        **home.collect_context(request, dbs), **_home(request.user, dbs, stats)})
 
 
 def _greeting(now=None) -> str:
@@ -75,55 +69,15 @@ def _greeting(now=None) -> str:
 
 
 def _home(user, dbs, stats) -> dict:
-    """داده‌ی «خانه»: خوشامد، شمار پایگاه‌های نیازمند توجه، ادامه‌ی کار و چک‌لیست شروع. چند پرس‌وجوی تجمیعی، نه یکی برای هر پایگاه."""
-    from analysis.models import LlmConfig, Question, ToolRun
-    from jobs.models import Job
-    from maps.models import WebMap
-    from tools.catalog import info
-
-    tool_info = info()
-
+    """داده‌ی «خانه»: خوشامد، شمار پایگاه‌های نیازمند توجه، ادامه‌ی کار و چک‌لیست شروع.
+    ردیف‌های ادامه‌ی کار و گام‌ها را پلاگین‌ها می‌آورند (kernel.home)؛ چند پرس‌وجوی تجمیعی، نه یکی برای هر پایگاه."""
     live = [d for d in dbs if d.is_live]
     attn_count = sum(1 for d in dbs if d.attn)
-
-    feed = []
-    if dbs:
-        for q in Question.objects.filter(database__in=dbs).select_related("database").order_by("-created_at")[:4]:
-            feed.append({"icon": "spark", "kind": "پرسش فارسی", "text": q.text, "db": q.database.db_name, "when": q.created_at,
-                         "url": reverse("analysis:page", args=[q.database_id]) + "#history"})
-        for t in ToolRun.objects.filter(database__in=dbs).select_related("database").order_by("-created_at")[:4]:
-            info = tool_info.get(t.tool)
-            feed.append({"icon": "toolbox", "kind": "ابزار تحلیل", "text": getattr(info, "title", t.tool) + (f" — {t.summary}" if t.summary else ""),
-                         "db": t.database.db_name, "when": t.created_at, "url": reverse("tools:page", args=[t.database_id])})
-        for m in WebMap.objects.filter(database__in=dbs).select_related("database").order_by("-updated_at")[:4]:
-            feed.append({"icon": "globe", "kind": "نقشه", "text": m.title, "db": m.database.db_name, "when": m.updated_at,
-                         "url": reverse("maps:composer", args=[m.database_id, m.pk])})
-        for j in Job.objects.filter(database__in=dbs, status=Job.Status.DONE,
-                                    kind__in=[Job.Kind.IMPORT, Job.Kind.BACKUP]).select_related("database").order_by("-created_at")[:4]:
-            feed.append({"icon": "upload" if j.kind == Job.Kind.IMPORT else "save", "kind": j.get_kind_display(),
-                         "text": j.get_kind_display() + " انجام شد", "db": j.database.db_name, "when": j.created_at,
-                         "url": reverse("databases:explore" if j.kind == Job.Kind.IMPORT else "databases:backups", args=[j.database_id])})
-    feed.sort(key=lambda f: f["when"], reverse=True)
-
-    target = live[0] if live else None
-    has_llm = LlmConfig.objects.filter(user=user).exists()
-    has_data = bool(dbs) and Job.objects.filter(database__in=dbs, kind=Job.Kind.IMPORT, status=Job.Status.DONE).exists()
-    has_map = bool(dbs) and WebMap.objects.filter(database__in=dbs).exists()
-    steps = [
-        {"label": "پروفایل را کامل کنید", "hint": "نام و دانشگاه / شرکت", "done": bool(user.full_name and user.organization),
-         "url": reverse("accounts:profile"), "icon": "user"},
-        {"label": "پایگاه داده بسازید", "hint": "کمتر از یک دقیقه", "done": bool(dbs), "url": reverse("databases:create"), "icon": "db"},
-        {"label": "اولین داده را وارد کنید", "hint": "فایل مکانی آپلود کنید",
-         "done": has_data, "url": reverse("databases:import", args=[target.pk]) if target else "", "icon": "upload"},
-        {"label": "اولین نقشه را بسازید", "hint": "لایه‌ها را روی نقشه ببینید",
-         "done": has_map, "url": reverse("maps:index", args=[target.pk]) if target else "", "icon": "globe"},
-        {"label": "مدل زبانی را وصل کنید", "hint": "برای پرسش فارسی", "done": has_llm,
-         "url": reverse("accounts:profile") + "#ai", "icon": "spark"},
-    ]
+    steps = home.collect_steps(user, dbs, live[0] if live else None)
     done = sum(1 for s in steps if s["done"])
     quota = stats["quota"]
-    return {"hello": _greeting(), "attn_count": attn_count, "feed": feed[:5], "steps": steps,
-            "steps_done": done, "steps_pct": round(done * 100 / len(steps)),
+    return {"hello": _greeting(), "attn_count": attn_count, "feed": home.collect_feed(user, dbs), "steps": steps,
+            "steps_done": done, "steps_pct": round(done * 100 / len(steps)) if steps else 100,
             "onboarding": done < len(steps), "total_pct": min(100, round(stats["size"] * 100 / quota)) if quota else 0}
 
 

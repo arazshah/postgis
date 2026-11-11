@@ -1,6 +1,6 @@
 """مانیفست پلاگین «پایگاه داده و داده» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
 from kernel import admin as admin_dash
-from kernel import dataio, jobs, nav, plugins, tenantdb, workspace
+from kernel import dataio, home, jobs, nav, plugins, tenantdb, workspace
 
 plugin = plugins.register("databases", "پایگاه داده و داده", kind="system", requires=("accounts", "jobs"))
 
@@ -51,3 +51,8 @@ admin_dash.attention("databases.admin_cards.attention", plugin=plugin.id, order=
 admin_dash.health("databases.admin_cards.health", plugin=plugin.id, order=10)
 admin_dash.kpi("databases.admin_cards.kpis", plugin=plugin.id, order=20)
 admin_dash.search("databases.admin_cards.search", plugin=plugin.id, order=20)
+
+home.feed("databases.home.feed", plugin=plugin.id, order=40)
+home.step("databases.home.step_profile", plugin=plugin.id, order=10)
+home.step("databases.home.step_create", plugin=plugin.id, order=20)
+home.step("databases.home.step_import", plugin=plugin.id, order=30)

@@ -1,5 +1,5 @@
 """مانیفست پلاگین «کلاس درس» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
-from kernel import jobs, nav, plugins
+from kernel import home, jobs, nav, plugins
 from kernel import settings as site_settings
 
 plugin = plugins.register("classroom", "کلاس درس", kind="feature", requires=("databases", "maps"))
@@ -11,3 +11,5 @@ jobs.register_tick("classes", "classroom.services.tick", plugin=plugin.id, order
 
 site_settings.section("class_plan", "users", "پلن کلاس و دانشگاه", plugin=plugin.id, order=170,
                       fields=("class_price_per_student",))
+
+home.context("classroom.home.context", plugin=plugin.id, order=10)

@@ -1,5 +1,5 @@
 """مانیفست پلاگین «انتشار نقشه و API» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
-from kernel import nav, plugins
+from kernel import events, nav, plugins
 
 plugin = plugins.register("publish", "انتشار نقشه و API", kind="feature", requires=("databases",))
 
@@ -11,3 +11,5 @@ nav.admin_item("publish", "publish.service", None, plugin=plugin.id, order=10)
 nav.admin_item("publish", "publish.apikey", None, plugin=plugin.id, order=20)
 nav.admin_item("publish", "publish.dailyusage", None, plugin=plugin.id, order=30)
 nav.admin_item("publish", "publish.owsproject", None, plugin=plugin.id, order=40)
+
+events.listen(events.WORKSPACE_DELETED, "publish.events.workspace_deleted", plugin=plugin.id)

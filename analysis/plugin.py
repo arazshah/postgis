@@ -1,5 +1,5 @@
 """مانیفست پلاگین «تحلیل و پرسش فارسی» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
-from kernel import jobs, nav, plugins
+from kernel import home, jobs, nav, plugins
 from kernel import profile as profile_sections
 from kernel import settings as site_settings
 
@@ -18,3 +18,6 @@ site_settings.section("llm_partner", "assistant", "راهنمای ساخت حس�
 profile_sections.section("ai", "مدل زبانی", "analysis/_profile_ai.html", plugin=plugin.id, order=10,
                          context="analysis.profile.context", badge="analysis.profile.has_key",
                          actions=("llm_save", "llm_delete"), handle="analysis.profile.handle", badge_title="کلید ثبت شده")
+
+home.feed("analysis.home.feed", plugin=plugin.id, order=10)
+home.step("analysis.home.step_llm", plugin=plugin.id, order=50)

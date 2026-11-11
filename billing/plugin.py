@@ -1,6 +1,6 @@
 """مانیفست پلاگین «پلن و صورتحساب» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
 from kernel import admin as admin_dash
-from kernel import nav, plugins
+from kernel import home, nav, plugins
 from kernel import settings as site_settings
 
 plugin = plugins.register("billing", "پلن و صورتحساب", kind="system", requires=("accounts", "databases"))
@@ -23,6 +23,8 @@ admin_dash.kpi("billing.admin_cards.kpis", plugin=plugin.id, order=40)
 admin_dash.kpi("billing.admin_cards.kpi_review", plugin=plugin.id, order=50)
 admin_dash.activity("billing.admin_cards.activity", plugin=plugin.id, order=20)
 admin_dash.search("billing.admin_cards.search", plugin=plugin.id, order=30)
+
+home.context("billing.home.context", plugin=plugin.id, order=20)
 
 
 def pending_invoices() -> int:
