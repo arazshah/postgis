@@ -22,8 +22,7 @@ from django.views.decorators.http import require_http_methods
 from psycopg import sql
 
 from core.templatetags.fa import fanum
-from databases.provisioner import Provisioner, ProvisionError
-from kernel import crypto, tenantdb
+from kernel import crypto, tenantdb, workspace
 from kernel.tenantdb import TenantError
 
 from . import access, qgis
@@ -52,10 +51,10 @@ def ows_password(service: Service, force: bool = False) -> str:
     db = service.database
     password = crypto.generate_password(28)
     try:
-        prov = Provisioner.for_server(db.server)
+        prov = workspace.host(db)
         prov.harden()  # پیش از ساخت نقش عضو pg_read_all_data: هیچ دیتابیسی برای PUBLIC باز نماند
         prov.ensure_ows_role(db.db_name, db.role_name, password)
-    except ProvisionError as exc:
+    except workspace.HostingError as exc:
         raise OwsError(f"آماده‌سازی دسترسی فقط‌خواندنی ممکن نشد: {exc}") from exc
     service.ows_password_encrypted = crypto.encrypt(password)
     service.save(update_fields=["ows_password_encrypted"])
@@ -65,7 +64,7 @@ def ows_password(service: Service, force: bool = False) -> str:
 def connection(service: Service, force: bool = False) -> str:
     db = service.database
     server = db.server
-    return qgis.connection_string(server.host, server.port, db.db_name, Provisioner.ows_role_name(db.role_name),
+    return qgis.connection_string(server.host, server.port, db.db_name, workspace.role_name(db, "ows"),
                                   ows_password(service, force), server.sslmode)
 
 

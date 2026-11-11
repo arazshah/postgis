@@ -11,8 +11,6 @@ jobs.register_kind("restore", "بازگردانی", "jobs.services._do_restore",
                    destination="databases:backups")
 jobs.register_kind("restore_test", "آزمون بازگردانی", "jobs.services._do_restore_test", plugin=plugin.id,
                    destination="databases:backups", quiet_when_auto=True)
-jobs.register_kind("import", "ورود فایل", "jobs.services._do_import", plugin=plugin.id,
-                   destination="databases:explore", done_title="دریافت و ورود فایل تمام شد")
 
 nav.admin_item("infra", "jobs.job", None, plugin=plugin.id, order=30)
 jobs.register_tick("nightly", "jobs.services.schedule_nightly", plugin=plugin.id, order=20)

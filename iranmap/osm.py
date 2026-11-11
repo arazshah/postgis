@@ -25,7 +25,7 @@ from django.conf import settings
 from django.utils import timezone
 from psycopg import sql
 
-from databases import gdal
+from kernel import dataio
 
 log = logging.getLogger(__name__)
 
@@ -149,9 +149,9 @@ def refresh_areas() -> int:
         _run([_bin("osmium"), "tags-filter", "--overwrite", "-o", str(bnd), str(src),
               "r/boundary=administrative"])
         out = Path(d) / "areas.geojsonl"
-        gdal._run([gdal._bin("ogr2ogr"), "-f", "GeoJSONSeq", str(out), str(bnd), "multipolygons",
-                   "-where", "admin_level IN ('4','5','6','8')", "-simplify", "0.002",
-                   "-oo", f"CONFIG_FILE={OSMCONF}", "-lco", "RS=NO"], env=gdal._env())
+        dataio.run_gdal("ogr2ogr", ["-f", "GeoJSONSeq", str(out), str(bnd), "multipolygons",
+                                    "-where", "admin_level IN ('4','5','6','8')", "-simplify", "0.002",
+                                    "-oo", f"CONFIG_FILE={OSMCONF}", "-lco", "RS=NO"])
         rows = []
         for line in out.read_text(encoding="utf-8").splitlines():
             if not line.strip():
@@ -299,14 +299,15 @@ def extract(area, dest: Path) -> Path:
 
 def import_dataset(db, pbf: Path, ds: Dataset, table_prefix: str = "osm_") -> int:
     table = f"{table_prefix}{ds.key}"
-    tgt = gdal.target(db)
+    tgt = dataio.pg_target(db)
     cols = ", ".join(ds.columns + ("osm_id", "geometry"))  # در گویش SQLite هندسه باید صریح انتخاب شود
     query = f"SELECT {cols} FROM {ds.layer} WHERE {ds.where}"
-    gdal._run([gdal._bin("ogr2ogr"), "-f", "PostgreSQL", tgt.conn, str(pbf), "-sql", query, "-dialect", "SQLite",
-               "-oo", f"CONFIG_FILE={OSMCONF}", "-nln", f"public.{table}", "-overwrite",
-               "-lco", "GEOMETRY_NAME=geom", "-lco", "FID=gid", "-lco", "SPATIAL_INDEX=GIST",
-               "-lco", "LAUNDER=YES", "-lco", "PRECISION=NO", "-nlt",
-               "PROMOTE_TO_MULTI", "-gt", "50000", "--config", "OSM_USE_CUSTOM_INDEXING", "NO"], env=tgt.env)
+    dataio.run_gdal("ogr2ogr", ["-f", "PostgreSQL", tgt.conn, str(pbf), "-sql", query, "-dialect", "SQLite",
+                                "-oo", f"CONFIG_FILE={OSMCONF}", "-nln", f"public.{table}", "-overwrite",
+                                "-lco", "GEOMETRY_NAME=geom", "-lco", "FID=gid", "-lco", "SPATIAL_INDEX=GIST",
+                                "-lco", "LAUNDER=YES", "-lco", "PRECISION=NO", "-nlt",
+                                "PROMOTE_TO_MULTI", "-gt", "50000", "--config", "OSM_USE_CUSTOM_INDEXING", "NO"],
+                    env=tgt.env)
     from kernel import tenantdb
 
     with tenantdb.catalog(db).connect(read_only=False, as_owner=True) as conn:
@@ -319,14 +320,13 @@ def import_dataset(db, pbf: Path, ds: Dataset, table_prefix: str = "osm_") -> in
 
 def import_routing(db, pbf: Path) -> int:
     """شبکه مسیریابی با osm2pgrouting در schema routing (جدول ways با cost و reverse_cost)."""
-    from databases.provisioner import Provisioner
-    from kernel import tenantdb
+    from kernel import tenantdb, workspace
 
-    Provisioner.for_server(db.server).install_extension(db.db_name, "pgrouting")
+    workspace.host(db).install_extension(db.db_name, "pgrouting")
     with tenantdb.catalog(db).connect(read_only=False, as_owner=True) as conn:
         conn.execute("CREATE SCHEMA IF NOT EXISTS routing")
         conn.commit()
-    tgt = gdal.target(db)
+    tgt = dataio.pg_target(db)
     with tempfile.TemporaryDirectory() as d:
         # فقط راه‌ها (و گره‌هایشان): ساختمان و کاربری و … برای گراف لازم نیست و حجم را چندین برابر می‌کند
         roads = Path(d) / "roads.osm.pbf"
@@ -338,7 +338,7 @@ def import_routing(db, pbf: Path) -> int:
         _run([_bin("osmium"), "cat", "--overwrite", "-o", str(osm), str(roads)])
         conf = _mapconfig()
         server = db.server
-        user = Provisioner.browser_role_name(db.role_name)
+        user = workspace.role_name(db, "browser")
         # osm2pgrouting رمز خالی می‌فرستد و PGPASSWORD را نادیده می‌گیرد؛ libpq در آن حالت فایل رمز را می‌خواند.
         # رمز در فایل موقت با دسترسی ۶۰۰ است، نه در خط فرمان (که در فهرست پروسه‌ها دیده می‌شود).
         pgpass = Path(d) / "pgpass"

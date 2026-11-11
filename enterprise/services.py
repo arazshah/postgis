@@ -48,18 +48,17 @@ def request_geoserver(db: UserDatabase, user) -> GeoServerInstance:
 
 def _geoserver_role(db: UserDatabase) -> tuple[str, str]:
     """کاربر فقط‌خواندنی جداگانه برای GeoServer (رمز اصلی مشتری در GeoServer نمی‌نشیند)."""
-    from databases.services import limits_for, provisioner_for
     from kernel import workspace
     from kernel.crypto import generate_password
 
     name = workspace.extra_role_name(db, geoserver.ROLE_SUFFIX)
     password = generate_password()
     if DbRole.objects.filter(name=name).exists():
-        provisioner_for(db.server).set_password(name, password)
+        workspace.host(db).set_password(name, password)
     else:
         DbRole.objects.create(database=db, name=name, access=DbRole.Access.READ, note="GeoServer اختصاصی (خودکار)")
-        provisioner_for(db.server).create_extra_role(db.db_name, db.role_name, name, password, write=False,
-                                                     limits=limits_for(db.plan))
+        workspace.host(db).create_extra_role(db.db_name, db.role_name, name, password, write=False,
+                                         limits=workspace.limits(db.plan))
     return name, password
 
 
@@ -199,7 +198,7 @@ def delete_raster(r: Raster) -> None:
 # ---------------------------------------------------------------------- کپی پایگاه داده
 def request_clone(db: UserDatabase, user, backup: Job | None, label: str) -> tuple[UserDatabase, str]:
     """پایگاه داده آزمایشی از آخرین بکاپ (یا بکاپ انتخابی): پایگاه داده جدید ساخته و داده در worker ریخته می‌شود."""
-    from databases import services as db_services
+    from kernel import workspace
     from kernel.crypto import generate_password
 
     if not db.plan.clone_enabled:
@@ -215,8 +214,8 @@ def request_clone(db: UserDatabase, user, backup: Job | None, label: str) -> tup
     password = generate_password()
     try:
         # کپی جزو سقف تعداد پایگاه داده کاربر نیست، ولی هم‌زمان با اصلی منقضی می‌شود
-        clone = db_services.create_database(user, label, password, [], plan=db.plan, ignore_limit=True)
-    except db_services.ServiceError as exc:
+        clone = workspace.create_database(user, label, password, [], plan=db.plan, ignore_limit=True)
+    except workspace.WorkspaceError as exc:
         raise EnterpriseError(str(exc)) from exc
     clone.expires_at = db.expires_at
     clone.save(update_fields=["expires_at"])
@@ -226,14 +225,14 @@ def request_clone(db: UserDatabase, user, backup: Job | None, label: str) -> tup
 
 
 def do_clone(job: Job) -> str:
-    from databases.provisioner import Provisioner
     from jobs.services import restore_into
+    from kernel import workspace
 
     clone, src = job.database, job.source
     if src is None or not src.path or not src.path.exists():
         raise EnterpriseError("فایل بکاپ پیدا نشد.")
     restore_into(clone.server, clone.db_name, src.path)
-    info = Provisioner.for_server(clone.server).finish_restore(clone.db_name, clone.role_name)
+    info = workspace.host(clone).finish_restore(clone.db_name, clone.role_name)
     when = timezone.localtime(src.created_at).strftime("%Y-%m-%d %H:%M")
     return f"کپی از بکاپ {when} ساخته شد ({info['tables']} جدول)."
 

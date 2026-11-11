@@ -8,6 +8,8 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
+from kernel.workspace import WorkspaceError
+
 from .models import ActivityLog, DatabaseServer, Extension, Plan, SizeSample, UserDatabase
 from .provisioner import Provisioner, ProvisionError, TenantLimits
 
@@ -21,7 +23,7 @@ def conf():
     return SiteSettings.get()
 
 
-class ServiceError(Exception):
+class ServiceError(WorkspaceError):
     pass
 
 

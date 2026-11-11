@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 import psycopg
 from psycopg import sql
 
+from kernel.workspace import HostingError
+
 from .crypto import scram_sha256_verifier
 
 log = logging.getLogger(__name__)
@@ -24,7 +26,7 @@ _IDENT = re.compile(r"^[a-z][a-z0-9_]{2,62}$")
 _EXT = re.compile(r"^[a-z0-9_\-]{2,63}$")
 
 
-class ProvisionError(Exception):
+class ProvisionError(HostingError):
     """خطای قابل نمایش به ادمین/کاربر."""
 
 

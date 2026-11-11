@@ -22,7 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from databases.models import UserDatabase
-from databases.provisioner import Provisioner
+from kernel import workspace
 
 from .models import Job
 
@@ -195,7 +195,7 @@ def _do_restore(job: Job) -> None:
     if safety.status != Job.Status.DONE:
         raise JobError(f"بکاپ ایمنی قبل از بازگردانی ناموفق بود؛ چیزی تغییر نکرد. {safety.message}")
     # ۲. بازگردانی در دیتابیس موقت و بررسی سلامت
-    prov = Provisioner.for_server(db.server)
+    prov = workspace.host(db)
     scratch = _scratch_name(db.db_name, "rst")
     prov.create_scratch_database(scratch, db.role_name)
     try:
@@ -222,7 +222,7 @@ def _do_restore_test(job: Job) -> None:
         return
     src = random.choice(candidates)
     db = src.database
-    prov = Provisioner.for_server(db.server)
+    prov = workspace.host(db)
     scratch = _scratch_name(db.db_name, "rtest")
     prov.create_scratch_database(scratch, db.role_name)
     try:
@@ -233,78 +233,6 @@ def _do_restore_test(job: Job) -> None:
     job.database = db
     job.source = src
     job.message = f"بکاپ {db.db_name} با موفقیت بازگردانی آزمایشی شد ({info['tables']} جدول)."
-
-
-# ---------------------------------------------------------------------- ورود فایل
-def import_dir(job: Job) -> Path:
-    return Path(settings.IMPORT_ROOT) / str(job.pk)
-
-
-def _do_import(job: Job) -> None:
-    from databases import gdal
-
-    db = job.database
-    if db.status != UserDatabase.Status.ACTIVE:
-        raise JobError("پایگاه داده فعال نیست یا حجمش پر است؛ ورود فایل ممکن نیست.")
-    if job.params.get("into"):
-        return _do_import_into(job, db)
-    path = import_dir(job) / job.params["file"]
-    done, errors = [], []
-    try:
-        for layer in job.params["layers"]:
-            if not layer.get("selected"):
-                continue
-            try:
-                gdal.import_layer(db, path, layer, job.params.get("encoding"))
-                done.append(layer["table"])
-                if layer.get("csv_bad") and layer.get("csv_mode") != "none":
-                    bad = str(layer["csv_bad"]).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
-                    errors.append(f"{layer['table']}: {bad} سطر مختصات معتبر نداشت و بدون هندسه وارد شد")
-            except gdal.GdalError as exc:
-                errors.append(f"{layer['name']}: {exc}")
-    finally:
-        shutil.rmtree(import_dir(job), ignore_errors=True)
-    job.params = {**job.params, "imported": done, "errors": errors}
-    if not done:
-        raise JobError("هیچ لایه‌ای وارد نشد. " + " | ".join(errors))
-    count = str(len(done)).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
-    job.message = f"{count} لایه وارد شد: {'، '.join(done)}" + (f". خطا: {' | '.join(errors)}" if errors else "")
-
-
-def _do_import_into(job: Job, db) -> None:
-    """ورود فایل به جدول موجود: خواندن در جدول موقت، بعد درج (یا جایگزینی) در یک تراکنش همه‌یاهیچ."""
-    from databases import gdal, importinto
-    from kernel import tenantdb
-    from kernel.tenantdb import TenantError
-
-    into = job.params["into"]
-    layer = next((x for x in job.params["layers"] if x.get("selected")), None)
-    if layer is None:
-        raise JobError("لایه‌ای برای ورود انتخاب نشده است.")
-    path = import_dir(job) / job.params["file"]
-    ex = tenantdb.catalog(db)
-    staging = importinto.staging_name(job.pk)
-    try:
-        try:
-            table = ex.find(into["schema"], into["table"])
-        except TenantError as exc:
-            raise JobError(f"جدول مقصد پیدا نشد: {exc}") from exc
-        stage = {"name": layer["name"], "table": staging, "srid": layer.get("srid"),
-                 "assign_srid": layer.get("assign_srid"), "to4326": False, "mode": "overwrite", "geom_type": "",
-                 "fid": importinto.STAGING_FID, "geom_name": importinto.STAGING_GEOM}
-        try:
-            gdal.import_layer(db, path, stage, job.params.get("encoding"))
-            mapping = {k: int(v) for k, v in (job.params.get("into_map") or {}).items()}
-            count = importinto.run_merge(ex, table, mapping, staging, replace=job.params.get("into_mode") == "replace")
-        except (gdal.GdalError, TenantError) as exc:
-            raise JobError(str(exc)) from exc
-    finally:
-        importinto.drop_staging(ex, staging)
-        shutil.rmtree(import_dir(job), ignore_errors=True)
-    fa = str(count).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
-    verb = "جایگزین شد" if job.params.get("into_mode") == "replace" else "اضافه شد"
-    job.params = {**job.params, "imported": [f"{into['schema']}.{into['table']}"], "errors": [], "inserted": count}
-    job.message = f"{fa} سطر به «{into['table']}» {verb}."
 
 
 def run_inline(job: Job) -> Job:
@@ -356,10 +284,6 @@ def cleanup(now: datetime | None = None) -> int:
         job.status = Job.Status.EXPIRED
         job.save(update_fields=["status"])
         removed += 1
-    for job in Job.objects.filter(kind=Job.Kind.IMPORT, status=Job.Status.DRAFT, created_at__lt=now - timedelta(days=1)):
-        shutil.rmtree(import_dir(job), ignore_errors=True)
-        job.status = Job.Status.EXPIRED
-        job.save(update_fields=["status"])
     from . import offsite
 
     offsite.purge_expired()

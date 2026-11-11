@@ -5,7 +5,7 @@
 برای هر پایگاه داده یک نقش محدود ساخته می‌شود که عضو نقش همان کاربر است، superuser نیست و فقط به دیتابیس خودش
 دسترسی دارد؛ رمز آن رمزنگاری‌شده در پنل می‌ماند. هرگز با کاربر ادمین سرور به داده‌ی مشتری وصل نمی‌شویم.
 """
-from kernel import tenantdb, workspace
+from kernel import dataio, tenantdb, workspace
 
 from . import crypto
 from .provisioner import Provisioner, ProvisionError
@@ -60,3 +60,61 @@ class TeamProvider(workspace.Provider):
         from . import team
 
         return team.role_name_for(ws, suffix)
+
+    # ---- میزبانی و چرخه‌ی عمر
+    def host(self, ws):
+        from . import services
+
+        return services.provisioner_for(ws.server)
+
+    def role_name(self, ws, kind):
+        if kind == "browser":
+            return Provisioner.browser_role_name(ws.role_name)
+        if kind == "ows":
+            return Provisioner.ows_role_name(ws.role_name)
+        raise ValueError(kind)
+
+    def limits(self, plan):
+        from . import services
+
+        return services.limits_for(plan)
+
+    def create_database(self, user, label, password, extensions, **kw):
+        from . import services
+
+        return services.create_database(user, label, password, extensions, **kw)
+
+    def log_event(self, action, message="", *, user=None, database=None, success=True):
+        from . import services
+
+        services.logevent(action, message, user=user, database=database, success=success)
+
+    def notify_user(self, user, subject, body):
+        from . import services
+
+        services._notify(user, subject, body)
+
+    def plan_default(self, name, default=None):
+        from .defaults import FREE_PLAN
+
+        return FREE_PLAN.get(name, default)
+
+
+class GdalProvider(dataio.Provider):
+    """ورود و خروج داده با GDAL (databases/gdal.py)."""
+
+    def import_layer(self, ws, path, layer, encoding):
+        from . import gdal
+
+        gdal.import_layer(ws, path, layer, encoding)
+
+    def run_gdal(self, tool, args, *, env=None, timeout=None):
+        from . import gdal
+
+        kw = {"timeout": timeout} if timeout else {}
+        return gdal._run([gdal._bin(tool), *args], env=env or gdal._env(), **kw)
+
+    def pg_target(self, ws):
+        from . import gdal
+
+        return gdal.target(ws)

@@ -55,9 +55,9 @@ def staff_reply(ticket: Ticket, staff, body: str, attachment=None, close: bool =
     ticket.updated_at = now
     ticket.closed_at = now if close else None
     ticket.save(update_fields=["status", "updated_at", "closed_at"])
-    from databases.services import _notify
+    from kernel import workspace
 
-    _notify(ticket.user, f"پاسخ تیکت {ticket.number}",
+    workspace.notify_user(ticket.user, f"پاسخ تیکت {ticket.number}",
             f"به تیکت {ticket.number} («{ticket.subject[:40]}») پاسخ داده شد. برای دیدن پاسخ وارد حساب خود شوید.")
     return m
 

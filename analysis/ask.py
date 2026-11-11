@@ -18,9 +18,9 @@ from pathlib import Path
 from django.utils import timezone
 from psycopg import sql
 
-from databases.gdal import TABLE_RE
 from jobs.models import Job
 from kernel import tenantdb
+from kernel.tenantdb import TABLE_RE
 
 from .models import LlmConfig, Question
 
@@ -1079,7 +1079,7 @@ def preview_svg(feats: list, width: int = 320, height: int = 200) -> str:
 
 
 def run(job: Job, client=None) -> str:
-    from databases import gdal
+    from kernel import dataio
 
     q = job.question
     db = job.database
@@ -1187,9 +1187,9 @@ def run(job: Job, client=None) -> str:
         path.write_text(json.dumps({"type": "FeatureCollection", "features": feats}, ensure_ascii=False),
                         encoding="utf-8")
         exists = f"public.{q.output_table}" in tables
-        gdal.import_layer(db, path, {"name": "result", "table": q.output_table, "srid": srid, "assign_srid": True,
-                                     "to4326": srid != 4326, "mode": "overwrite" if exists else "create",
-                                     "geom_type": ""}, "UTF-8")
+        dataio.import_layer(db, path, {"name": "result", "table": q.output_table, "srid": srid, "assign_srid": True,
+                                       "to4326": srid != 4326, "mode": "overwrite" if exists else "create",
+                                       "geom_type": ""}, "UTF-8")
     q.rows = len(feats)
     q.save(update_fields=fields + ["rows"])
     return f"{spec.goal} — {len(feats):,} عارضه در جدول {q.output_table}"

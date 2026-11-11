@@ -8,8 +8,8 @@ from django.views.decorators.http import require_http_methods
 from accounts.decorators import site_user_required
 from analysis import history
 from analysis.models import ToolRun
-from databases.views import _explorer_db
 from jobs.models import Job
+from kernel import workspace
 from kernel.tenantdb import TenantError
 
 from . import engine, sdk
@@ -52,7 +52,7 @@ def _busy(db) -> bool:
 
 
 def _context(request, pk):
-    db, ex = _explorer_db(request, pk, "editor")
+    db, ex = workspace.open_catalog(request, pk, "editor")
     if ex is None:
         return db, None, [], []
     try:

@@ -9,9 +9,9 @@ from pathlib import Path
 from django.db import transaction
 from django.utils import timezone
 
-from databases import services as db_services
 from databases.models import Member, Plan, UserDatabase
 from jobs.models import Job
+from kernel import workspace
 from kernel.crypto import generate_password
 
 from .models import Assignment, ClassMap, Classroom, Contract, Enrollment, Submission
@@ -92,9 +92,9 @@ def join(classroom: Classroom, user, full_name: str, student_no: str = "") -> tu
     password = generate_password()
     label = f"c{classroom.pk}_s{user.pk}"
     try:
-        db = db_services.create_database(user, label, password, ["postgis"], plan=class_plan(contract.quota_mb),
+        db = workspace.create_database(user, label, password, ["postgis"], plan=class_plan(contract.quota_mb),
                                          ignore_limit=True)
-    except db_services.ServiceError as exc:
+    except workspace.WorkspaceError as exc:
         enrollment.delete()
         raise ClassError(str(exc)) from exc
     db.expires_at = term_end(contract)
@@ -109,14 +109,14 @@ def join(classroom: Classroom, user, full_name: str, student_no: str = "") -> tu
 
 
 def seed(classroom: Classroom, db: UserDatabase, user) -> None:
-    from databases import gdal
+    from kernel import dataio
 
     if classroom.template == Classroom.Template.SAMPLE:
         for name in SAMPLE_LAYERS:
             try:
-                gdal.import_layer(db, SAMPLE_DIR / f"{name}.geojson",
-                                  {"name": name, "table": name, "mode": "create", "geom_type": ""}, None)
-            except gdal.GdalError:
+                dataio.import_layer(db, SAMPLE_DIR / f"{name}.geojson",
+                                    {"name": name, "table": name, "mode": "create", "geom_type": ""}, None)
+            except dataio.DataIOError:
                 log.exception("class seed %s", name)
     elif classroom.template == Classroom.Template.OSM and classroom.osm_area:
         from iranmap import ready

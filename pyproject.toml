@@ -81,7 +81,12 @@ source_modules = [
     "analysis", "tools", "maps", "publish", "restapi", "survey", "satellite", "iranmap", "enterprise", "classroom", "jobs",
     "billing", "core", "kb", "support", "accounts", "analytics",
 ]
-forbidden_modules = ["databases.explorer", "databases.team", "databases.crypto"]
+forbidden_modules = [
+    "databases.explorer", "databases.team", "databases.crypto", "databases.gdal", "databases.importinto",
+    "databases.provisioner", "databases.services", "databases.views", "databases.defaults", "databases.editor",
+    "databases.find", "databases.find_save", "databases.tablealter", "databases.tablebuilder", "databases.csvgeo",
+    "databases.usage", "databases.gateway", "databases.jobs", "databases.forms", "databases.urls",
+]
 ignore_imports = [
     "analysis.tests.** -> **", "tools.tests.** -> **", "maps.tests.** -> **", "publish.tests.** -> **",
     "restapi.tests.** -> **", "survey.tests.** -> **", "satellite.tests.** -> **", "iranmap.tests.** -> **",

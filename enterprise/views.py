@@ -10,7 +10,6 @@ from django.views.decorators.http import require_http_methods
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
 from databases.models import UserDatabase
-from databases.views import SESSION_PW_KEY
 from iranmap import basemap
 from jobs.models import Job
 from kernel import workspace
@@ -52,7 +51,7 @@ def page(request, pk):
             elif action == "clone":
                 backup = db.jobs.filter(pk=request.POST.get("backup") or 0, kind=Job.Kind.BACKUP).first()
                 clone, pw = services.request_clone(db, request.user, backup, request.POST.get("label", ""))
-                request.session[SESSION_PW_KEY.format(clone.pk)] = pw
+                request.session[workspace.SESSION_PW_KEY.format(clone.pk)] = pw
                 messages.success(request, "پایگاه داده آزمایشی ساخته شد و داده در حال کپی است.")
                 return redirect("databases:detail", pk=clone.pk)
         except services.EnterpriseError as exc:

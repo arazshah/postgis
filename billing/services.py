@@ -10,9 +10,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import SiteSettings
-from databases import services as db_services
 from databases.models import Plan, UserDatabase
-from databases.provisioner import ProvisionError
+from kernel import workspace
 
 from .gateways import GatewayError, get_gateway
 from .models import Invoice, PlanVoucher
@@ -64,7 +63,7 @@ def create_invoice(user, kind: str, plan: Plan, database: UserDatabase | None = 
     inv = Invoice.objects.create(
         user=user, kind=kind, plan=plan, database=database, amount_toman=plan.price_toman,
         expires_at=timezone.now() + timedelta(minutes=conf.invoice_ttl_minutes))
-    db_services.logevent("invoice", f"فاکتور {inv.number}: {inv.title} – {inv.amount_toman} تومان",
+    workspace.log_event("invoice", f"فاکتور {inv.number}: {inv.title} – {inv.amount_toman} تومان",
                          user=user, database=database)
     return inv
 
@@ -86,7 +85,7 @@ def start_gateway(inv: Invoice, request) -> str:
                             order_id=inv.number, mobile=inv.user.phone or "", email=inv.user.email or "")
     except GatewayError as exc:
         log.warning("gateway request failed for %s: %s", inv.number, exc)
-        db_services.logevent("payment", f"{inv.number}: {exc}"[:500], user=inv.user, database=inv.database,
+        workspace.log_event("payment", f"{inv.number}: {exc}"[:500], user=inv.user, database=inv.database,
                              success=False)
         msg = "اتصال به درگاه پرداخت ممکن نشد. چند دقیقه دیگر تلاش کنید"
         msg += " یا از روش کارت به کارت استفاده کنید." if conf.manual_ready else "."
@@ -149,7 +148,7 @@ def submit_receipt(inv: Invoice, *, receipt, last4: str, tracking: str, paid_tim
     inv.paid_at_claimed = paid_time
     inv.status = Invoice.Status.REVIEW
     inv.save()
-    db_services.logevent("payment", f"رسید فاکتور {inv.number} ثبت شد و منتظر تأیید است",
+    workspace.log_event("payment", f"رسید فاکتور {inv.number} ثبت شد و منتظر تأیید است",
                          user=inv.user, database=inv.database)
     return inv
 
@@ -162,7 +161,7 @@ def reject(inv: Invoice, actor, reason: str = ""):
     if reason:
         inv.note = (inv.note + "\n" + reason).strip()
     inv.save(update_fields=["status", "reviewed_by", "note"])
-    db_services._notify(inv.user, "رسید پرداخت تأیید نشد",
+    workspace.notify_user(inv.user, "رسید پرداخت تأیید نشد",
                         f"رسید فاکتور {inv.number} تأیید نشد. {reason} برای پیگیری با پشتیبانی تماس بگیرید.")
 
 
@@ -178,11 +177,11 @@ def mark_paid(inv: Invoice, actor=None) -> Invoice:
         if actor is not None:
             locked.reviewed_by = actor
         locked.save(update_fields=["status", "paid_at", "reviewed_by"])
-    db_services.logevent("payment", f"فاکتور {locked.number} پرداخت شد ({locked.amount_toman} تومان)",
+    workspace.log_event("payment", f"فاکتور {locked.number} پرداخت شد ({locked.amount_toman} تومان)",
                          user=locked.user, database=locked.database)
     try:
         apply_invoice(locked)
-    except (BillingError, ProvisionError, db_services.ServiceError) as exc:
+    except (BillingError, workspace.WorkspaceError) as exc:
         locked.note = (locked.note + f"\nاعمال خودکار ناموفق: {exc}").strip()
         locked.save(update_fields=["note"])
         log.exception("apply invoice %s failed", locked.number)
@@ -202,24 +201,24 @@ def apply_invoice(inv: Invoice):
         db = inv.database
         if db is None or db.status == UserDatabase.Status.DELETED:
             raise BillingError("پایگاه داده این فاکتور دیگر وجود ندارد.")
-        p = db_services.provisioner_for(db.server)
+        p = workspace.host(db)
         db.plan = plan
         db.extend(plan.duration_days)
         if db.status == UserDatabase.Status.EXPIRED:
             p.set_login(db.role_name, True)
             db.status = UserDatabase.Status.ACTIVE
-        p.apply_limits(db.role_name, db_services.limits_for(plan))
+        p.apply_limits(db.role_name, workspace.limits(plan))
         if db.status == UserDatabase.Status.READONLY and db.size_bytes <= plan.quota_bytes * 0.95:
             p.set_readonly(db.db_name, False)
             db.status = UserDatabase.Status.ACTIVE
         db.quota_warned_at = None
         db.save()
-        db_services.logevent("plan", f"{inv.get_kind_display()} به پلن {plan.name} تا {db.expires_at:%Y-%m-%d}",
+        workspace.log_event("plan", f"{inv.get_kind_display()} به پلن {plan.name} تا {db.expires_at:%Y-%m-%d}",
                              database=db)
         body = f"پرداخت فاکتور {inv.number} تأیید شد و پلن {plan.name} برای {db.label} فعال شد."
     inv.applied_at = timezone.now()
     inv.save(update_fields=["applied_at"])
-    db_services._notify(inv.user, "پرداخت تأیید شد", body)
+    workspace.notify_user(inv.user, "پرداخت تأیید شد", body)
 
 
 # ---------------------------------------------------------------------- نگهداری

@@ -19,10 +19,10 @@ def _toman(n: int) -> str:
 
 
 def _plan_values(plan) -> dict[str, str]:
-    from databases.defaults import FREE_PLAN
+    from kernel import workspace
 
     def g(name, default):
-        return getattr(plan, name, None) if plan is not None else FREE_PLAN.get(name, default)
+        return getattr(plan, name, None) if plan is not None else workspace.plan_default(name, default)
 
     quota_mb = g("quota_mb", 1024)
     quota = f"{quota_mb // 1024} گیگابایت" if quota_mb >= 1024 and quota_mb % 1024 == 0 else f"{quota_mb} مگابایت"
@@ -89,13 +89,18 @@ def values() -> dict[str, str]:
     return out
 
 
-KNOWN = {"plans_table", *(_plan_values(None).keys()),
-         "site_name", "site_url", "support_phone", "support_telegram", "support_email",
-         "expiry_warning_days", "grace_days", "renew_window_days", "invoice_ttl_minutes", "max_databases"}
+_STATIC = {"plans_table", "site_name", "site_url", "support_phone", "support_telegram", "support_email",
+           "expiry_warning_days", "grace_days", "renew_window_days", "invoice_ttl_minutes", "max_databases"}
+
+
+def known() -> set[str]:
+    """نشانه‌های مجاز؛ دیر محاسبه می‌شود چون مقدارهای پیش‌فرض پلن از ارائه‌دهنده‌ی فضای کار می‌آید (هنگام import هنوز ثبت نشده)."""
+    return _STATIC | set(_plan_values(None))
 
 
 def unknown_tokens(text: str) -> set[str]:
-    return {m for m in TOKEN_RE.findall(text or "") if m not in KNOWN}
+    found = set(TOKEN_RE.findall(text or ""))
+    return found - known() if found else set()
 
 
 def resolve(text: str, vals: dict[str, str] | None = None) -> str:

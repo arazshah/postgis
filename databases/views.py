@@ -14,6 +14,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
+from kernel.workspace import SESSION_PW_KEY
 
 from . import csvgeo, editor, importinto, services, tablealter, tablebuilder
 from .crypto import generate_password
@@ -22,8 +23,6 @@ from .explorer import EXPORT_LIMIT, MAP_LIMIT, SQL_MAX_ROWS, Explorer, ExplorerE
 from .forms import AddExtensionForm, CreateDatabaseForm, DeleteConfirmForm, PasswordResetForm
 from .models import EditBatch, UserDatabase
 from .provisioner import ProvisionError
-
-SESSION_PW_KEY = "gp_once_password_{}"
 
 
 def _user_db(request, pk, need: str = "owner") -> UserDatabase:
@@ -806,9 +805,9 @@ def import_start(request, pk):
     from django.conf import settings
 
     from jobs.models import Job
-    from jobs.services import import_dir
 
     from . import gdal
+    from .jobs import import_dir
 
     db, ex = _explorer_db(request, pk, "editor")
     if ex is None:
@@ -882,9 +881,9 @@ def import_start(request, pk):
 @require_http_methods(["GET", "POST"])
 def import_review(request, pk, job_id):
     from jobs.models import Job
-    from jobs.services import import_dir
 
     from . import gdal
+    from .jobs import import_dir
 
     db, ex = _explorer_db(request, pk, "editor")
     if ex is None:
@@ -1185,7 +1184,7 @@ def _csv_refresh(job, folder, existing: set, prev: dict | None) -> dict:
 
 def _csv_update(job, post, enc: str | None, existing: set) -> list[str]:
     """تغییر انکودینگ یا ستون‌های مکانی از فرم بررسی؛ فقط در صورت تغییر، فایل دوباره ساخته می‌شود."""
-    from jobs.services import import_dir
+    from .jobs import import_dir
 
     folder = import_dir(job)
     info = job.params["csv"]

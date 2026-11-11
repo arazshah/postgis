@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import re
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from importlib import import_module
@@ -20,6 +21,7 @@ HIDDEN_SCHEMAS = {"pg_catalog", "information_schema", "pg_toast", "topology", "t
 HIDDEN_TABLES = {("public", t) for t in ("spatial_ref_sys", "geometry_columns", "geography_columns",
                                         "raster_columns", "raster_overviews")}
 MAP_LIMIT = 2000
+TABLE_RE = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")  # قاعده‌ی نام جدول در پایگاه مشتری
 
 
 class TenantError(Exception):

@@ -19,6 +19,9 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from kernel.dataio import DataIOError
+from kernel.tenantdb import TABLE_RE
+
 from .provisioner import Provisioner
 
 ALLOWED_EXT = {".zip", ".gpkg", ".geojson", ".json", ".kml", ".kmz", ".csv", ".dxf", ".gml"}
@@ -30,7 +33,6 @@ EXPORT_FORMATS = {
     "dxf": ("DXF", "dxf", "DXF (اتوکد)"),
     "xlsx": ("XLSX", "xlsx", "اکسل"),
 }
-TABLE_RE = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
 SRID_CHOICES = [
     (4326, "WGS 84 جغرافیایی (طول و عرض)"),
     (32638, "UTM زون 38 شمالی"), (32639, "UTM زون 39 شمالی"), (32640, "UTM زون 40 شمالی"),
@@ -43,7 +45,7 @@ CSV_GEOM = "wkt,geom,geometry,the_geom"
 TIMEOUT = 3600
 
 
-class GdalError(Exception):
+class GdalError(DataIOError):
     pass
 
 

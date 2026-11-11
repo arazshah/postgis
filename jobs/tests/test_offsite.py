@@ -251,7 +251,7 @@ class UploadTests(OffsiteBase):
 
         prov = mock.MagicMock()
         with mock.patch.object(services, "restore_into", fake_restore_into), \
-                mock.patch.object(services.Provisioner, "for_server", return_value=prov), \
+                mock.patch("databases.provisioner.Provisioner.for_server", return_value=prov), \
                 mock.patch.object(services, "run_inline", side_effect=lambda j: setattr(j, "status", Job.Status.DONE)):
             with self.assertRaises(services.JobError):
                 services._do_restore(job)

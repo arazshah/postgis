@@ -1,16 +1,20 @@
 """مانیفست پلاگین «پایگاه داده و داده» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
 from kernel import admin as admin_dash
-from kernel import jobs, nav, plugins, tenantdb, workspace
+from kernel import dataio, jobs, nav, plugins, tenantdb, workspace
 
 plugin = plugins.register("databases", "پایگاه داده و داده", kind="system", requires=("accounts", "jobs"))
 
 # دروازه‌ی داده‌ی مشتری: هسته از این پلاگین می‌پرسد چگونه وصل شود و کاتالوگ کامل کدام کلاس است
-from .gateway import PostgisConnector, TeamProvider  # noqa: E402
+from .gateway import GdalProvider, PostgisConnector, TeamProvider  # noqa: E402
 
 tenantdb.set_connector(PostgisConnector())
 tenantdb.set_catalog("databases.explorer.Explorer")
 workspace.set_provider(TeamProvider())
+dataio.set_provider(GdalProvider())
 
+jobs.register_kind("import", "ورود فایل", "databases.jobs.do_import", plugin=plugin.id,
+                   destination="databases:explore", done_title="دریافت و ورود فایل تمام شد")
+jobs.register_tick("import_drafts", "databases.jobs.expire_import_drafts", plugin=plugin.id, order=45)
 jobs.register_kind("find", "ذخیره‌ی نتیجه‌ی یافتن عارضه", "databases.jobs.do_find", plugin=plugin.id,
                    destination="databases:explore")
 

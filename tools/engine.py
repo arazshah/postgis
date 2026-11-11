@@ -6,9 +6,8 @@ from __future__ import annotations
 
 from psycopg import sql
 
-from databases.gdal import TABLE_RE
 from kernel import tenantdb
-from kernel.tenantdb import TenantError
+from kernel.tenantdb import TABLE_RE, TenantError
 
 from . import sdk
 from .sdk import ToolError
@@ -99,7 +98,7 @@ def run(db, key: str, params: dict, job=None, run_row=None) -> dict:
     ex, out, target, body, guards = _prepare(db, key, params)
     tool = sdk.get(key)
     step(12, "ساخت جدول نتیجه (سنگین‌ترین مرحله)")
-    from databases.provisioner import Provisioner
+    from kernel import workspace
 
     try:
         with ex.connect(read_only=False, as_owner=True) as conn:
@@ -127,7 +126,7 @@ def run(db, key: str, params: dict, job=None, run_row=None) -> dict:
         if "statement timeout" in msg:
             msg = "تحلیل بیش از ۳ دقیقه طول کشید؛ داده را کوچک‌تر کنید یا پارامتر را تغییر دهید."
         raise ToolError(f"تحلیل انجام نشد: {msg}") from exc
-    Provisioner.for_server(db.server).reassign_browser_objects(db.db_name, db.role_name)
+    workspace.host(db).reassign_browser_objects(db.db_name, db.role_name)
     if run_row is not None:
         run_row.rows = n
         run_row.save(update_fields=["rows"])

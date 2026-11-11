@@ -14,10 +14,9 @@ from django.utils import timezone
 from psycopg import sql
 
 from databases.models import UserDatabase
-from databases.provisioner import Provisioner
 from enterprise.models import Raster
 from jobs.models import Job
-from kernel import tenantdb
+from kernel import tenantdb, workspace
 from kernel.tenantdb import TenantError
 from satgate import spec
 from satgate import zonal as zl
@@ -326,7 +325,7 @@ def write_table(an: SatAnalysis, rows: list[dict]) -> None:
             conn.commit()
     except psycopg.Error as exc:
         raise SatError("نوشتن جدول نتیجه در پایگاه داده ممکن نشد؛ فضا یا دسترسی را بررسی کنید.", "write") from exc
-    Provisioner.for_server(db.server).reassign_browser_objects(db.db_name, db.role_name)
+    workspace.host(db).reassign_browser_objects(db.db_name, db.role_name)
 
 
 def _finish(an: SatAnalysis, rows: list[dict], scenes: list[dict], skipped=()) -> str:

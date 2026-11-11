@@ -47,7 +47,7 @@ class ToolsPagesTests(BaseCase):
         self.db = services.create_database(self.user, "toolsdb", "Abcdefgh123", ["postgis"])
         self.client.force_login(self.user)
         self.tables = list(self.TABLES)
-        patcher = mock.patch("databases.views.Explorer")
+        patcher = mock.patch("kernel.tenantdb.catalog")
         self.explorer = patcher.start().return_value
         self.explorer.tables.side_effect = lambda: self.tables
         self.addCleanup(patcher.stop)
@@ -142,7 +142,7 @@ class HistoryCardsTests(BaseCase):
         super().setUp()
         self.db = services.create_database(self.user, "histdb", "Abcdefgh123", ["postgis"])
         self.client.force_login(self.user)
-        patcher = mock.patch("databases.views.Explorer")
+        patcher = mock.patch("kernel.tenantdb.catalog")
         self.explorer = patcher.start().return_value
         self.explorer.tables.return_value = [_t("parks", "POLYGON")]
         self.addCleanup(patcher.stop)
