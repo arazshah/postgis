@@ -5,6 +5,7 @@ GET /healthz. پرس‌وجوی SQL کد پلاگین به callback میزبان
 """
 from __future__ import annotations
 
+import base64
 import hmac
 import json
 import os
@@ -14,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import sandbox
 
-MAX_BODY = 3 * 1024 * 1024
+MAX_BODY = 8 * 1024 * 1024
 MAX_PARALLEL = int(os.environ.get("RUNNER_PARALLEL", "4"))
 _slots = threading.BoundedSemaphore(MAX_PARALLEL)
 
@@ -71,7 +72,11 @@ class Handler(BaseHTTPRequestHandler):
         if not _slots.acquire(timeout=2):
             return self._json(429, {"ok": False, "error": "ظرفیت اجرا پر است؛ کمی بعد دوباره تلاش کنید."})
         try:
-            value = sandbox.run({k: str(v) for k, v in files.items()}, handler, req.get("params") or {}, sql, timeout=timeout)
+            b64 = req.get("file_b64")
+            io = bool(req.get("io"))
+            value = sandbox.run({k: str(v) for k, v in files.items()}, handler, req.get("params") or {}, sql, timeout=timeout,
+                                file=base64.b64decode(b64) if isinstance(b64, str) else None,
+                                max_result=sandbox.MAX_RESULT_IO if io else sandbox.MAX_RESULT)
             self._json(200, {"ok": True, "value": value})
         except sandbox.SandboxError as exc:
             self._json(200, {"ok": False, "error": str(exc)})

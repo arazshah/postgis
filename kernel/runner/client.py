@@ -25,7 +25,7 @@ def mode() -> str:
     return getattr(settings, "PLUGIN_RUNNER_MODE", "off")
 
 
-def execute(plugin: str, handler: str, params: dict, sql_fn, ws_pk: int = 0):
+def execute(plugin: str, handler: str, params: dict, sql_fn, ws_pk: int = 0, *, file: bytes | None = None, io: bool = False):
     files = handlers.files_for(plugin, handler)
     if not files:
         raise RunnerError("کد این بخش در دسترس نیست.")
@@ -33,7 +33,8 @@ def execute(plugin: str, handler: str, params: dict, sql_fn, ws_pk: int = 0):
     metering.record(plugin, "handler_runs")
     if m == "local":
         try:
-            out = sandbox.run(files, handler, params, sql_fn, timeout=float(getattr(settings, "PLUGIN_RUNNER_TIMEOUT", 10)))
+            out = sandbox.run(files, handler, params, sql_fn, timeout=float(getattr(settings, "PLUGIN_RUNNER_TIMEOUT", 10)) * (3 if io else 1),
+                              file=file, max_result=sandbox.MAX_RESULT_IO if io else sandbox.MAX_RESULT)
         except sandbox.SandboxError as exc:
             health.record(plugin, False)
             raise HandlerFailed(f"اجرای کد پلاگین ناموفق بود: {exc}") from exc
@@ -45,7 +46,7 @@ def execute(plugin: str, handler: str, params: dict, sql_fn, ws_pk: int = 0):
         if not ws_pk:
             raise RunnerError("اجرای راه‌دور به پایگاه داده‌ی مشخص نیاز دارد.")
         try:
-            out = remote.call(files, handler, params, ws_pk)
+            out = remote.call(files, handler, params, ws_pk, file=file, io=io)
         except HandlerFailed:
             health.record(plugin, False)
             raise

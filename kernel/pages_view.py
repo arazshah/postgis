@@ -1,12 +1,12 @@
 """نمای عمومی صفحه‌های کیت صفحه: `dashboard/<pk>/p/<plugin>/<page>/` (و `?fragment=1` برای تازه‌سازی بدنه)."""
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from . import entitlements, gate, metering, pagekit, tenantdb, workspace
+from . import entitlements, gate, metering, pagekit, pluginio, tenantdb, workspace
 
 
 @login_required
@@ -105,3 +105,95 @@ def runner_sql(request):
         return JsonResponse({"error": "forbidden"}, status=403)
     except Exception as exc:  # noqa: BLE001 - پیام کوتاه به کد پلاگین
         return JsonResponse({"error": str(exc).splitlines()[0][:300] if str(exc) else "خطا"}, status=200)
+
+
+def _io_context(request, pk, plugin, page, kind, key):
+    """مشترک ورود/خروج: صفحه و مورد را می‌یابد، دسترسی و مجوز و سقف ماهانه را می‌سنجد. (spec، item، ws) یا پاسخ برای بازگشت."""
+    spec = pagekit.get(plugin, page)
+    item = (pagekit.get_import if kind == "import" else pagekit.get_export)(spec, key) if spec else None
+    if item is None:
+        raise Http404
+    ws = workspace.get(request, pk, spec.need)
+    if not entitlements.allowed(plugin, user=request.user, ws=ws):
+        raise Http404
+    back = redirect("kernel:page", pk=ws.pk, plugin=plugin, page=page)
+    if not ws.is_live:
+        messages.error(request, "این صفحه فقط برای پایگاه داده‌ی فعال در دسترس است.")
+        return None, None, None, redirect("databases:detail", pk=ws.pk)
+    within, _now, cap = metering.check(plugin, "io_runs", user=request.user, ws=ws)
+    if not within:
+        messages.error(request, f"سقف ماهانه‌ی ورود و خروج ({cap}) پر شده است؛ برای افزایش با پشتیبانی تماس بگیرید.")
+        return None, None, None, back
+    return spec, item, ws, None
+
+
+@login_required
+@require_POST
+def import_file(request, pk, plugin, page, key):
+    """ورود فایل با handler سطح ۲: handler تبدیل می‌کند؛ هسته جدول **تازه** می‌سازد (docs/adr/0005)."""
+    from .runner import client
+
+    spec, item, ws, early = _io_context(request, pk, plugin, page, "import", key)
+    if early is not None:
+        return early
+    back = redirect("kernel:page", pk=ws.pk, plugin=plugin, page=page)
+    up = request.FILES.get("file")
+    if up is None or not up.size:
+        messages.error(request, "فایلی انتخاب نشده یا خالی است.")
+        return back
+    if up.size > client.sandbox.MAX_FILE:
+        messages.error(request, "حجم فایل بیش از ۳ مگابایت است.")
+        return back
+    name = (up.name or "").lower()
+    if item.extensions and not name.endswith(tuple(item.extensions)):
+        messages.error(request, "پسوند فایل مجاز نیست (مجاز: " + "، ".join(item.extensions) + ").")
+        return back
+    try:
+        table = pluginio.table_name(request.POST.get("table", ""))
+    except pluginio.PluginIOError as exc:
+        messages.error(request, str(exc))
+        return back
+    data = up.read(client.sandbox.MAX_FILE + 1)
+    try:
+        out = client.execute(plugin, item.handler, {"filename": pluginio.safe_filename(up.name, "txt"), "size": len(data)},
+                             lambda q, a: pagekit.read_select(ws, q, a), ws.pk, file=data, io=True)
+        created = pluginio.create_table(ws, pluginio.normalize_import(table, out))
+    except (client.RunnerError, pluginio.PluginIOError) as exc:
+        messages.error(request, str(exc))
+        workspace.log_event("plugin_import", f"{plugin}/{page}/{key}: {str(exc)[:200]}", user=request.user, database=ws, success=False)
+        return back
+    except Exception as exc:  # noqa: BLE001 - خطای پایگاه داده (سهمیه، نوع، دسترسی)
+        msg = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__
+        messages.error(request, "ساخت جدول انجام نشد: " + ("زمان اجرا تمام شد." if "statement timeout" in msg else "پایگاه داده نپذیرفت (سهمیه یا ساختار)."))
+        workspace.log_event("plugin_import", f"{plugin}/{page}/{key}: {msg}", user=request.user, database=ws, success=False)
+        return back
+    metering.record(plugin, "io_runs", user=request.user, ws=ws)
+    workspace.log_event("plugin_import", f"{plugin}/{page}/{key}: جدول «{table}» با {created:,} ردیف ساخته شد", user=request.user, database=ws)
+    messages.success(request, f"{item.success} ({created:,} ردیف در «{table}»)")
+    return back
+
+
+@login_required
+@require_POST
+def export_file(request, pk, plugin, page, key):
+    """خروجی اختصاصی با handler سطح ۲: فقط attachment با Content-Type فهرست سفید و nosniff."""
+    from .runner import client
+
+    spec, item, ws, early = _io_context(request, pk, plugin, page, "export", key)
+    if early is not None:
+        return early
+    back = redirect("kernel:page", pk=ws.pk, plugin=plugin, page=page)
+    try:
+        out = client.execute(plugin, item.handler, {}, lambda q, a: pagekit.read_select(ws, q, a), ws.pk, io=True)
+        filename, body, ctype = pluginio.normalize_export(out, item.format)
+    except (client.RunnerError, pluginio.PluginIOError) as exc:
+        messages.error(request, str(exc))
+        workspace.log_event("plugin_export", f"{plugin}/{page}/{key}: {str(exc)[:200]}", user=request.user, database=ws, success=False)
+        return back
+    metering.record(plugin, "io_runs", user=request.user, ws=ws)
+    workspace.log_event("plugin_export", f"{plugin}/{page}/{key}: {filename} ({len(body):,} بایت)", user=request.user, database=ws)
+    resp = HttpResponse(body, content_type=f"{ctype}; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    resp["X-Content-Type-Options"] = "nosniff"
+    resp["Cache-Control"] = "no-store"
+    return resp

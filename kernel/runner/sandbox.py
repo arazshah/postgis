@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -15,7 +16,9 @@ from pathlib import Path
 
 CHILD = Path(__file__).with_name("child.py")
 MAX_RESULT = 1024 * 1024
-MAX_LINE = 4 * 1024 * 1024
+MAX_RESULT_IO = 4 * 1024 * 1024  # handler ورود/خروج
+MAX_FILE = 3 * 1024 * 1024
+MAX_LINE = 7 * 1024 * 1024
 
 
 class SandboxError(Exception):
@@ -23,7 +26,8 @@ class SandboxError(Exception):
 
 
 def run(files: dict[str, str], handler: str, params: dict, sql: Callable[[str, object], dict] | None = None, *,
-        timeout: float = 10.0, memory_mb: int = 256, cpu_s: int = 10, on_log: Callable[[str], None] | None = None):
+        timeout: float = 10.0, memory_mb: int = 256, cpu_s: int = 10, on_log: Callable[[str], None] | None = None,
+        file: bytes | None = None, max_result: int = MAX_RESULT):
     """handler را اجرا و مقدار برگشتی (JSON) را برمی‌گرداند. sql(query, params) -> {"columns","rows"} (بیرون از جعبه اجرا می‌شود)."""
     proc = subprocess.Popen(
         [sys.executable, "-I", "-S", str(CHILD)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -45,7 +49,12 @@ def run(files: dict[str, str], handler: str, params: dict, sql: Callable[[str, o
             proc.stdin.flush()
 
         try:
-            send({"files": files, "handler": handler, "params": params, "limits": {"memory_mb": memory_mb, "cpu_s": cpu_s}})
+            if file is not None and len(file) > MAX_FILE:
+                raise SandboxError("حجم فایل بیش از ۳ مگابایت است.")
+            req = {"files": files, "handler": handler, "params": params, "limits": {"memory_mb": memory_mb, "cpu_s": cpu_s}}
+            if file is not None:
+                req["file_b64"] = base64.b64encode(file).decode()
+            send(req)
             while True:
                 line = proc.stdout.readline(MAX_LINE + 1)
                 if timed_out.is_set():
@@ -73,7 +82,7 @@ def run(files: dict[str, str], handler: str, params: dict, sql: Callable[[str, o
                         send({"ok": False, "error": str(exc)[:300]})
                 elif op == "result":
                     value = msg.get("value")
-                    if len(json.dumps(value, default=str)) > MAX_RESULT:
+                    if len(json.dumps(value, default=str)) > max_result:
                         raise SandboxError("نتیجه بیش از حد بزرگ است.")
                     return value
                 elif op == "error":

@@ -40,6 +40,35 @@ def handle(ctx, params):
 - سرویس `plugin-runner` در `docker-compose.yml` است (entrypoint ایمیج عمداً خالی تا pip/migrate اجرا نشود).
 - هر اجرا معیار `handler_runs` را می‌شمارد (سقف مجوز: `handler_runs_per_month` را پلاگین می‌تواند بسنجد).
 
+## ورود و خروج داده (docs/adr/0005)
+صفحه‌ی کیت می‌تواند فایل بگیرد و جدول بسازد یا خروجی اختصاصی بدهد. **کد فقط تبدیل می‌کند؛ هسته می‌نویسد.**
+```toml
+need = "editor"                  # ورود = نوشتن
+[[imports]]
+key = "gps"
+title = "ورود فایل دستگاه GPS"
+handler = "parse_gps"            # در handlers بسته
+extensions = [".trk"]
+[[exports]]
+key = "rep"
+title = "گزارش اختصاصی"
+handler = "to_report"
+format = "csv"                   # csv | json | txt | geojson
+```
+```python
+def parse_gps(ctx, params):                  # params: {filename, size}
+    rows = [...]                             # از ctx.file() (bytes، حداکثر ۳ مگابایت)
+    return {"columns": [{"name": "at", "type": "timestamptz"}, {"name": "lat", "type": "double"}, {"name": "lon", "type": "double"}],
+            "rows": rows, "geometry": {"lat": "lat", "lon": "lon"}}   # geometry اختیاری: نقطه‌ی WGS84
+
+def to_report(ctx, params):
+    r = ctx.sql("select ...")
+    return {"filename": "report", "text": "a,b\n1,2\n"}
+```
+- **ورود:** هسته جدول **تازه** `public.<نام>` می‌سازد (نام را کاربر می‌دهد؛ جدول موجود = خطا؛ بدون append/overwrite). نوع ستون: `text`، `integer`، `bigint`، `double`، `boolean`، `date`، `timestamptz`، `jsonb`. سقف: ۳ مگابایت فایل، ۲۰٬۰۰۰ ردیف، ۵۰ ستون، ۱۰٬۰۰۰ نویسه در هر سلول، نتیجه ۴ مگابایت. نام ستون `geom` رزرو است. مختصات باید در WGS84 باشد.
+- **خروجی:** فقط `attachment` با Content-Type قالب (هرگز HTML)، `nosniff`، `no-store`؛ نام فایل پاک‌سازی و پسوند قالب همیشه آخر نام است؛ سقف ۴ مگابایت؛ JSON/GeoJSON باید معتبر باشد.
+- هر اجرا: سطح دسترسی صفحه، مجوز پلاگین، CSRF، معیار `io_runs` (سقف `io_runs_per_month`)، ثبت در گزارش فعالیت پایگاه، و قطع‌کن خودکار. گزارش بررسی بسته «جدول تازه (handler)» را در مرحله‌ی «دسترسی نوشتن» نشان می‌دهد.
+
 ## قطع‌کن خودکار
 اگر کد یک پلاگین بسته پشت‌سرهم خطا بدهد، همان نسخه خودکار کنار گذاشته می‌شود (`kernel.health`):
 - هر اجرای handler و هشدار نتیجه‌اش را ثبت می‌کند. **فقط خطای خود کد** (استثنا، مهلت، سقف منابع، خروجی نامعتبر) شمرده می‌شود؛ خاموش بودن یا در دسترس نبودن runner تقصیر پلاگین نیست و شمرده نمی‌شود.
@@ -49,4 +78,4 @@ def handle(ctx, params):
 - پوشش: فقط کد سطح ۲. خطای صفحه‌ی اعلانی (SQL) معمولاً مربوط به داده‌ی یک مشتری است و عمداً شمرده نمی‌شود تا مشکل یک پایگاه کل پلاگین را خاموش نکند.
 
 ## هنوز نیست
-اجرای پس‌زمینه (نوع کار)، ورود/خروج داده با handler، آزمون خودکار بسته در runner، سقف هم‌زمانی هر پلاگین، استودیو برای سطح ۲، و قطع‌کن خودکار.
+اجرای پس‌زمینه (نوع کار)، آزمون خودکار بسته در runner، ورود/خروج فایل بزرگ‌تر از ۳ مگابایت، append/overwrite، ورود در مودال اصلی، سقف هم‌زمانی هر پلاگین، استودیو برای سطح ۲، و قطع‌کن خودکار.

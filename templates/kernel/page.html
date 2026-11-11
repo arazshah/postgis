@@ -28,6 +28,28 @@
 
   <div id="pk-body" data-pk-refresh="{{ page.refresh }}">{% include "kernel/_page_body.html" %}</div>
 
+  {% for im in page.imports %}
+  <form method="post" action="{% url 'kernel:import' db.pk page.plugin page.key im.key %}" enctype="multipart/form-data" class="card pk-form" id="import-{{ im.key }}">
+    {% csrf_token %}
+    <div class="ch"><h2>{{ im.title }}</h2></div>
+    {% if im.hint %}<p class="small muted">{{ im.hint }}</p>{% endif %}
+    <div class="pk-form-fields">
+      <div class="field"><label for="im-{{ im.key }}-file">فایل (حداکثر ۳ مگابایت)</label>
+        <input id="im-{{ im.key }}-file" type="file" name="file" required{% if im.extensions %} accept="{{ im.extensions|join:',' }}"{% endif %}></div>
+      <div class="field"><label for="im-{{ im.key }}-table">نام جدول تازه</label>
+        <input id="im-{{ im.key }}-table" name="table" dir="ltr" maxlength="63" pattern="[a-z_][a-z0-9_]*" required autocomplete="off"></div>
+    </div>
+    <button class="btn" type="submit">{% icon "upload" 18 %}{{ im.submit }}</button>
+  </form>
+  {% endfor %}
+  {% for ex in page.exports %}
+  <form method="post" action="{% url 'kernel:export' db.pk page.plugin page.key ex.key %}" class="card pk-form" id="export-{{ ex.key }}">
+    {% csrf_token %}
+    <div class="ch"><h2>{{ ex.title }}</h2></div>
+    {% if ex.hint %}<p class="small muted">{{ ex.hint }}</p>{% endif %}
+    <button class="btn ghost" type="submit">{% icon "download" 18 %}{{ ex.submit }}</button>
+  </form>
+  {% endfor %}
   {% for f in page.forms %}
   <form method="post" action="{% url 'kernel:form' db.pk page.plugin page.key f.key %}" class="card pk-form" id="form-{{ f.key }}" novalidate>
     {% csrf_token %}

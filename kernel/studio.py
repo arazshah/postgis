@@ -107,7 +107,8 @@ def check(d) -> list[dict]:
         return steps
     pages = stage("مشخصات صفحه‌ها", lambda: pkg._pages(manifest, files))
     if pages:
-        writes = sorted({f"{pg.key}→{fm.table}" for pg in pages for fm in pg.forms})
+        writes = sorted({f"{pg.key}→{fm.table}" for pg in pages for fm in pg.forms} |
+                        {f"{pg.key}→جدول تازه ({im.handler})" for pg in pages for im in pg.imports})
         steps.append({"stage": "دسترسی نوشتن", "ok": True,
                       "detail": ("فقط INSERT در: " + "، ".join(writes)) if writes else "بدون نوشتن (فقط خواندنی)"})
     return steps
