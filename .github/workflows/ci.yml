@@ -7,6 +7,7 @@ on:
 
 jobs:
   test:
+    timeout-minutes: 45
     # ubuntu-latest صرف‌نظر از نسخه‌ی ۲۴.۰۴ به ۲۶.۰۴ رسیده و pg_dump/pg_restore آن جدیدتر از سرور آزمون (PostgreSQL 16) است؛
     # آرشیوش «SET transaction_timeout» دارد و روی ۱۶ بازگردانی نمی‌شود. ۲۴.۰۴ همان کلاینت ۱۶ را دارد.
     runs-on: ubuntu-24.04
@@ -40,7 +41,21 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: sudo apt-get update -q && sudo apt-get install -y -q gdal-bin osmium-tool osm2pgrouting pgbouncer gettext-base
+      - name: System packages (with retries)
+        timeout-minutes: 15
+        run: |
+          # آینه‌ی azure رانر گاهی DNS ندارد و apt نیم‌ساعت روی آن می‌ماند؛ مخزن اصلی را اولویت می‌دهیم،
+          # مهلت‌ها کوتاه است و چند بار از نو تلاش می‌کنیم تا خطای گذرای شبکه کل اجرا را نخواباند.
+          echo "http://archive.ubuntu.com/ubuntu/ priority:1" | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+          for i in 1 2 3; do
+            if sudo apt-get update -q $APT \
+               && timeout 300 sudo apt-get install -y -q --fix-missing $APT gdal-bin osmium-tool osm2pgrouting pgbouncer gettext-base; then
+              exit 0
+            fi
+            echo "تلاش $i برای نصب بسته‌ها ناموفق بود؛ ۳۰ ثانیه بعد دوباره"; sleep 30
+          done
+          exit 1
       - run: pip install -r requirements-dev.txt
       - name: Lint
         run: ruff check .
