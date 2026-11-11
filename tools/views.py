@@ -7,13 +7,13 @@ from django.views.decorators.http import require_http_methods
 
 from accounts.decorators import site_user_required
 from analysis import history
-from analysis import tools as engine
 from analysis.models import ToolRun
 from databases.explorer import ExplorerError
 from databases.views import _explorer_db
 from jobs.models import Job
 
-from .catalog import CATALOG, INFO, category_groups
+from . import engine, sdk
+from .catalog import category_groups
 
 
 def _geom_ok(t, want: str) -> bool:
@@ -75,14 +75,14 @@ def index(request, pk):
                        "url": reverse("tools:detail", args=[db.pk, i.key])} for i in g["tools"]]
     hist = history.entries(db, ("tool",), 8)
     return render(request, "tools/index.html", {
-        "db": db, "section": "tools", "groups": groups, "total": len(CATALOG), "history": hist,
+        "db": db, "section": "tools", "groups": groups, "total": len(sdk.all_tools()), "history": hist,
         "active": any(e["job"] and e["job"].active for e in hist), "hist_kinds": "tool"})
 
 
 @site_user_required
 @require_http_methods(["GET", "POST"])
 def detail(request, pk, key):
-    info = INFO.get(key)
+    info = sdk.get(key)
     if info is None:
         raise Http404
     db, ex, tables, spatial = _context(request, pk)
@@ -92,7 +92,7 @@ def detail(request, pk, key):
     blocked = _blocked(info, spatial, routing)
     vals = {}
     if request.method == "POST":
-        vals = {k: request.POST.get(k, "").strip() for k in engine.PUBLIC_PARAMS if request.POST.get(k)}
+        vals = {k: request.POST.get(k, "").strip() for k in engine.public_params(key) if request.POST.get(k)}
         if db.status != db.Status.ACTIVE:
             messages.error(request, "پایگاه داده فقط‌خواندنی یا غیرفعال است.")
         elif blocked:

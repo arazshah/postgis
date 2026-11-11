@@ -310,12 +310,12 @@ class SiteSettings(models.Model):
 
     # کلید API رمزنگاری‌شده نگه داشته می‌شود
     def set_smsir_api_key(self, raw: str):
-        from databases.crypto import encrypt
+        from kernel.crypto import encrypt
 
         self.smsir_api_key_encrypted = encrypt(raw)
 
     def get_smsir_api_key(self) -> str:
-        from databases.crypto import decrypt
+        from kernel.crypto import decrypt
 
         try:
             return decrypt(self.smsir_api_key_encrypted)
@@ -323,12 +323,12 @@ class SiteSettings(models.Model):
             return ""
 
     def set_assistant_api_key(self, raw: str):
-        from databases.crypto import encrypt
+        from kernel.crypto import encrypt
 
         self.assistant_api_key_encrypted = encrypt(raw.strip()) if raw else ""
 
     def get_assistant_api_key(self) -> str:
-        from databases.crypto import decrypt
+        from kernel.crypto import decrypt
 
         if not self.assistant_api_key_encrypted:
             return ""
@@ -350,12 +350,12 @@ class SiteSettings(models.Model):
         return bool(self.smsir_api_key_encrypted)
 
     def set_gateway_merchant(self, raw: str):
-        from databases.crypto import encrypt
+        from kernel.crypto import encrypt
 
         self.gateway_merchant_encrypted = encrypt(raw) if raw else ""
 
     def get_gateway_merchant(self) -> str:
-        from databases.crypto import decrypt
+        from kernel.crypto import decrypt
 
         if not self.gateway_merchant_encrypted:
             return ""
@@ -375,7 +375,7 @@ class SiteSettings(models.Model):
 
     # --- کلیدهای فضای ابری: رمزنگاری‌شده و بدون نمایش ---
     def set_offsite_keys(self, access: str = "", secret: str = ""):
-        from databases.crypto import encrypt
+        from kernel.crypto import encrypt
 
         if access:
             self.offsite_access_key_encrypted = encrypt(access.strip())
@@ -383,7 +383,7 @@ class SiteSettings(models.Model):
             self.offsite_secret_key_encrypted = encrypt(secret.strip())
 
     def get_offsite_keys(self) -> tuple[str, str]:
-        from databases.crypto import decrypt
+        from kernel.crypto import decrypt
 
         try:
             return decrypt(self.offsite_access_key_encrypted), decrypt(self.offsite_secret_key_encrypted)
@@ -396,12 +396,12 @@ class SiteSettings(models.Model):
 
     # --- کلید مشترک دروازه‌ی ماهواره: رمزنگاری‌شده و بدون نمایش ---
     def set_satgate_secret(self, raw: str):
-        from databases.crypto import encrypt
+        from kernel.crypto import encrypt
 
         self.satgate_secret_encrypted = encrypt(raw.strip()) if raw else ""
 
     def get_satgate_secret(self) -> str:
-        from databases.crypto import decrypt
+        from kernel.crypto import decrypt
 
         if not self.satgate_secret_encrypted:
             return ""

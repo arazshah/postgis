@@ -3,20 +3,11 @@ from urllib.parse import urlencode
 
 from django.urls import reverse
 
-from . import tools
+from kernel.plugins import registry
+
 from .models import Question, ToolRun
 
 HISTORY_LIMIT = 24
-# پیشنهاد نمودار برای نتیجه هر ابزار: «ساخت نقشه و نمودار» جدول نتیجه را به نقشه می‌برد و فرم نمودار را پر می‌کند
-CHART_HINTS = {
-    "nearest": {"kind": "hist", "field": "distance_m", "cumulative": "1"},
-    "count": {"kind": "hist", "field": "point_count"},
-    "overlap": {"kind": "stacked", "field": "zone", "series": "category", "value": "area_m2", "agg": "sum", "percent": "1"},
-    "hexbin": {"kind": "hist", "field": "count"},
-    "cluster": {"kind": "hist", "field": "point_count"},
-    "netnearest": {"kind": "hist", "field": "network_m", "cumulative": "1"},
-    "change": {"kind": "sankey", "field": "from_category", "target": "to_category", "value": "area_m2", "agg": "sum"},
-}
 # نام فارسی مرحله‌های رایج برنامهٔ s3geo در گزارش مرحله‌به‌مرحلهٔ پرسش
 OP_LABELS = {
     "input": "ورودی", "crs_transform": "تبدیل مختصات", "filter_attribute": "فیلتر ستونی", "sort_limit": "مرتب‌سازی",
@@ -25,12 +16,6 @@ OP_LABELS = {
     "summarize_vector": "خلاصه", "attribute_statistics": "آمار ستونی", "top_n": "برترین‌ها", "dissolve": "ادغام",
     "area_perimeter": "طول و مساحت", "calculate_field": "محاسبه ستون", "distance_to": "فاصله",
 }
-# آیکون هر ردیف (نام از core/icons.py)
-ICONS = {"buffer": "t-buffer", "nearest": "t-nearest", "count": "t-count", "overlap": "t-overlap",
-         "change": "t-change", "hexbin": "t-hexbin", "isochrone": "t-isochrone",
-         **{k: f"t-{k}" for k in ("within", "voronoi", "cluster", "measure", "clip", "erase", "route", "netnearest", "coverage")}}
-
-
 def together(db, output: str, inputs) -> str:
     """«نمایش با هم»: نتیجه بالای لایه‌های ورودی (بدون ذخیره نقشه)."""
     keys = [f"public.{output}"] + [k for k in (inputs or []) if isinstance(k, str) and k]
@@ -45,10 +30,10 @@ def entries(db, kinds=("tool", "ask"), limit=HISTORY_LIMIT):
     out = []
     if "tool" in kinds:
         for r in ToolRun.objects.filter(database=db).select_related("job")[:limit]:
-            t = tools.TOOL_MAP.get(r.tool)
+            t = registry.get("tool", r.tool)  # ابزار پلاگین است؛ تحلیل آن را فقط از رجیستری هسته می‌شناسد
             out.append({"kind": "tool", "id": f"t{r.pk}", "tool": r.tool, "title": t.title if t else r.tool,
-                        "icon": ICONS.get(r.tool, "toolbox"), "detail": r.summary, "table": r.output_table, "rows": r.rows,
-                        "job": r.job, "created": r.created_at, "chart": CHART_HINTS.get(r.tool),
+                        "icon": t.icon if t else "toolbox", "detail": r.summary, "table": r.output_table, "rows": r.rows,
+                        "job": r.job, "created": r.created_at, "chart": t.chart_hint if t else None,
                         "together": together(db, r.output_table, [r.params.get("layer"), r.params.get("other")])})
     if "ask" in kinds:
         for q in Question.objects.filter(database=db).select_related("job")[:limit]:

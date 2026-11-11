@@ -1,0 +1,27 @@
+"""handler کارهای پس‌زمینه‌ی تحلیل (پرسش فارسی) و متن اعلان آن‌ها؛ در plugin.py ثبت می‌شوند."""
+
+
+def do_ask(job) -> None:
+    from . import ask
+
+    job.message = ask.run(job)
+
+
+def ask_subject(job):
+    q = getattr(job, "question", None)
+    return f"«{q.text[:60]}»" if q else "پرسش فارسی"
+
+
+def ask_notice(job, subject):
+    """اعلان پایان پرسش فارسی بسته به نوع نتیجه (برنامه‌ی منتظر تأیید، بدون عارضه، پاسخ متنی)."""
+    q = getattr(job, "question", None)
+    if q is None:
+        return None
+    if q.result_kind == "plan":
+        return {"level": "info", "title": "برنامهٔ تحلیل آمادهٔ تأیید است", "body": "برنامه را بررسی و تأیید کنید.",
+                "action": "بررسی برنامه"}
+    if q.result_kind == "empty":
+        return {"level": "warning", "title": f"{subject}: هیچ عارضه‌ای پیدا نشد"}
+    if q.result_kind == "answer":
+        return {"title": f"{subject}: پاسخ آماده است"}
+    return None

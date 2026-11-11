@@ -5,3 +5,5 @@ openpyxl>=3.1
 # ساخت glyph نقشه و داده OSM ساختگی آزمون‌ها
 numpy>=1.26
 scipy>=1.11
+# قاعده‌ی وابستگی معماری (docs/adr/0004): lint-imports
+import-linter>=2.1

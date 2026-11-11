@@ -2,6 +2,9 @@
 from django import template
 from django.urls import reverse
 
+from kernel import jobs as kernel_jobs
+from kernel import nav
+
 register = template.Library()
 
 # مسیرهای قدیمی (برای آیکون‌های قدیمی داشبورد)؛ آیکون‌های تازه از core/icons.py می‌آیند
@@ -31,62 +34,48 @@ ICONS = {
     "arrow": "M19 12H5M11 6l-6 6 6 6",
 }
 
-# (کلید گروه، عنوان، [(عنوان، url name، نام view‌ها برای تشخیص بخش فعال، آیکون، حداقل دسترسی)])
-GROUPS = [
-    ("", [("نمای کلی و اتصال", "databases:detail", ("databases:detail",), "home", "viewer")]),
-    ("داده", [
-        ("جدول‌ها", "databases:explore", ("databases:explore", "databases:explore_table"), "table", "viewer"),
-        ("یافتن عارضه", "databases:find", ("databases:find",), "search", "viewer"),
-        ("اجرای SQL", "databases:explore_sql", ("databases:explore_sql",), "code", "viewer"),
-        ("ورود فایل", "databases:import", ("databases:import", "databases:import_review"), "upload", "editor"),
-        ("داده آماده ایران", "iranmap:ready", ("iranmap:ready",), "pin", "editor"),
-        ("تصویر ماهواره‌ای", "satellite:index", ("satellite:index",), "satellite", "viewer"),
-        ("سلامت داده", "databases:explore_health", ("databases:explore_health",), "pulse", "viewer"),
-    ]),
-    ("تحلیل و انتشار", [
-        ("تحلیل", "analysis:page", ("analysis:page",), "chart", "editor"),
-        ("ابزارها", "tools:page", ("tools:page", "tools:detail"), "toolbox", "editor"),
-        ("برداشت میدانی", "survey:index", ("survey:index", "survey:studio"), "target", "viewer"),
-        ("نقشه‌های چندلایه", "maps:index", ("maps:index", "maps:composer", "maps:quick"), "layers", "viewer"),
-        ("نقشه و API", "publish:manage", ("publish:manage", "publish:map_builder"), "globe", "editor"),
-        ("WMS و WFS", "publish:ows", ("publish:ows", "publish:ows_detail"), "cube", "editor"),
-        ("REST API و فرم میدانی", "restapi:manage", ("restapi:manage",), "braces", "editor"),
-    ]),
-    ("مدیریت", [
-        ("تیم و کاربران", "databases:team", ("databases:team",), "users", "owner"),
-        ("بکاپ و بازگردانی", "databases:backups", ("databases:backups",), "clock", "owner"),
-        ("مصرف و کارایی", "databases:usage", ("databases:usage",), "gauge", "owner"),
-        ("امکانات سازمانی", "enterprise:page", ("enterprise:page",), "server", "owner"),
-    ]),
-]
 LEVEL = {"viewer": 0, "editor": 1, "owner": 2}
-GROUP_KEYS = {"": "top", "داده": "data", "تحلیل و انتشار": "share", "مدیریت": "manage"}
 
 
-def _survey_on() -> bool:
-    from core.models import SiteSettings
+def _visible(item) -> bool:
+    return not item.visible or bool(kernel_jobs.call(item.visible))
 
-    return bool(SiteSettings.get().survey_enabled)
+
+def groups():
+    """(عنوان گروه، [(عنوان، url name، نام viewها، آیکون، حداقل دسترسی)]) از بخش‌هایی که پلاگین‌ها ثبت کرده‌اند."""
+    return [(g.title, [(s.label, s.url, s.views, s.icon, s.need) for s in items]) for g, items in nav.ws_groups()]
+
+
+def dash_groups():
+    """(کلید گروه، عنوان، [(عنوان، توضیح، url name، آیکون)]) برای کارت‌های میانبر خانه."""
+    return [(g.key, g.title, [(a.label, a.hint, a.url, a.icon) for a in items]) for g, items in nav.home_groups()]
+
+
+def __getattr__(name):  # سازگاری: ws.GROUPS و ws.DASH_GROUPS همان شکل قبلی را دارند
+    if name == "GROUPS":
+        return groups()
+    if name == "DASH_GROUPS":
+        return dash_groups()
+    raise AttributeError(name)
 
 
 def build(db, view_name: str) -> dict:
-    survey_on = _survey_on()
     mine = bool(getattr(db, "is_mine", False))
     level = 2 if mine else (1 if getattr(db, "can_edit", False) else 0)
-    groups, current = [], None
-    for title, items in GROUPS:
+    out, current = [], None
+    for g, items in nav.ws_groups():
         rows, has_current = [], False
-        for label, url, views, icon, need in items:
-            if LEVEL[need] > level or (url == "survey:index" and not survey_on):
+        for s in items:
+            if LEVEL[s.need] > level or not _visible(s):
                 continue
-            on = view_name in views
-            row = {"label": label, "url": url, "on": on, "icon": icon}
+            on = view_name in s.views
+            row = {"label": s.label, "url": s.url, "on": on, "icon": s.icon}
             rows.append(row)
             if on:
                 current, has_current = row, True
         if rows:
-            groups.append({"title": title, "key": GROUP_KEYS.get(title, "g"), "items": rows, "has_current": has_current})
-    return {"groups": groups, "current": current}
+            out.append({"title": g.title, "key": g.key, "items": rows, "has_current": has_current})
+    return {"groups": out, "current": current}
 
 
 MAX_SWITCH = 60
@@ -165,50 +154,26 @@ def icon(name, size=20, cls=""):
         size, mark_safe(inner), cls)  # noqa: S308 (مجموعه‌ی ثابت داخل مخزن)
 
 
-# کارت‌های میانبر داشبورد: هر دکمه یک عنوان کوتاه + یک جمله که دقیقاً می‌گوید چه می‌کند.
-# (کلید گروه، عنوان، [(عنوان، توضیح، url name، آیکون)])
-DASH_GROUPS = [
-    ("data", "داده", [
-        ("جدول‌ها و داده‌ها", "جدول‌ها، ستون‌ها و روی نقشه را ببین؛ خروجی CSV و GeoJSON بگیر", "databases:explore", "table"),
-        ("اجرای SQL", "کوئری بنویس و نتیجه را همان‌جا ببین (به‌طور پیش‌فرض فقط‌خواندنی)", "databases:explore_sql", "code"),
-        ("ورود فایل", "Shapefile، GeoPackage، GeoJSON، KML یا CSV را آپلود کن", "databases:import", "upload"),
-        ("برداشت میدانی", "با GPS یا گیرنده RTK در میدان نقطه برداشت کن؛ آفلاین هم کار می‌کند", "survey:index", "target"),
-    ]),
-    ("share", "تحلیل و انتشار", [
-        ("ابزارهای تحلیل مکانی", "بافر، نزدیک‌ترین، حوزه دسترسی و ... بدون کدنویسی", "tools:page", "toolbox"),
-        ("انتشار نقشه و API", "لایه را با لینک عمومی، کاشی برداری یا API در وب بگذار", "publish:manage", "globe"),
-        ("نقشه‌های چندلایه", "چند لایه را با سبک دلخواه یک‌جا بچین و ارائه بده", "maps:index", "layers"),
-    ]),
-    ("manage", "نگهداری", [
-        ("بکاپ‌ها", "نسخه پشتیبان بگیر، دانلود کن یا بازگردانی کن", "databases:backups", "clock"),
-        ("مصرف و کارایی", "نمودار حجم و درخواست‌ها و پیشنهاد نمایه", "databases:usage", "gauge"),
-        ("تیم و دسترسی", "همکارانت را با نقش مشاهده‌گر یا ویرایشگر دعوت کن", "databases:team", "users"),
-    ]),
-]
-
-
 @register.inclusion_tag("databases/_dash_actions.html")
 def dash_actions(db):
-    groups = []
-    survey_on = _survey_on()
-    for key, title, items in DASH_GROUPS:
-        groups.append({"key": key, "title": title, "items": [
-            {"label": a, "hint": b, "url": reverse(u, args=[db.pk]), "icon": i} for a, b, u, i in items
-            if survey_on or u != "survey:index"]})
-    return {"groups": groups}
+    """کارت‌های میانبر خانه: هر دکمه یک عنوان کوتاه + یک جمله که دقیقاً می‌گوید چه می‌کند."""
+    out = []
+    for g, items in nav.home_groups():
+        out.append({"key": g.key, "title": g.title, "items": [
+            {"label": a.label, "hint": a.hint, "url": reverse(a.url, args=[db.pk]), "icon": a.icon}
+            for a in items if _visible(a)]})
+    return {"groups": out}
 
 
 @register.inclusion_tag("databases/_dash_menu.html")
 def dash_menu(db):
     """منوی «⋯» ردیف فشرده‌ی داشبورد: همه‌ی بخش‌ها با همان دسته‌بندی منوی کنار صفحه (فقط پایگاه‌های خود کاربر)."""
-    survey_on = _survey_on()
-    groups = []
-    for title, items in GROUPS:
-        rows = [{"label": label, "url": reverse(url, args=[db.pk])} for label, url, _views, _icon, _need in items
-                if survey_on or url != "survey:index"]
+    out = []
+    for g, items in nav.ws_groups():
+        rows = [{"label": s.label, "url": reverse(s.url, args=[db.pk])} for s in items if _visible(s)]
         if rows:
-            groups.append({"title": title, "items": rows})
-    return {"groups": groups}
+            out.append({"title": g.title, "items": rows})
+    return {"groups": out}
 
 
 # نوار تب پایین گوشی: چهار بخش پرکاربرد (فقط آن‌هایی که کاربر به آن‌ها دسترسی دارد) + «بیشتر»

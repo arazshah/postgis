@@ -2,28 +2,11 @@
 from django.urls import NoReverseMatch, reverse
 
 from jobs.models import Job
+from kernel import jobs as kinds
 
 from .models import Notification
 
 L = Notification.Level
-# نوع کار ← (نام url، نام نمایشی کوتاه برای «مشاهده …»)
-DESTINATIONS = {
-    Job.Kind.ASK: ("analysis:page", "analysis_history"),
-    Job.Kind.TOOL: ("tools:page", "tools_history"),
-    Job.Kind.FIND: ("databases:explore", ""),
-    Job.Kind.BACKUP: ("databases:backups", ""),
-    Job.Kind.RESTORE: ("databases:backups", ""),
-    Job.Kind.RESTORE_TEST: ("databases:backups", ""),
-    Job.Kind.IMPORT: ("databases:explore", ""),
-    Job.Kind.OSM_IMPORT: ("iranmap:ready", ""),
-    Job.Kind.OSM_REFRESH: ("iranmap:ready", ""),
-    Job.Kind.BASEMAP: ("iranmap:ready", ""),
-    Job.Kind.GEOSERVER: ("enterprise:page", ""),
-    Job.Kind.RASTER: ("enterprise:page", ""),
-    Job.Kind.CLONE: ("enterprise:page", ""),
-    Job.Kind.SATELLITE: ("satellite:index", ""),
-    Job.Kind.SAT_ANALYSIS: ("satellite:index", ""),
-}
 FRIENDLY_FAIL = {
     "statement timeout": "عملیات بیش از حد مجاز طول کشید؛ داده را کوچک‌تر کنید یا دوباره تلاش کنید.",
     "connection": "اتصال به پایگاه داده برقرار نشد؛ کمی بعد دوباره تلاش کنید.",
@@ -31,29 +14,21 @@ FRIENDLY_FAIL = {
 
 
 def _url(job: Job) -> str:
+    """مقصد «مشاهده»: از نوع کار ثبت‌شده در kernel.jobs؛ نوع ناشناخته به نمای کلی پایگاه می‌رود."""
     if job.database_id is None:
         return ""
-    name, _ = DESTINATIONS.get(job.kind, ("databases:detail", ""))
+    k = kinds.get(job.kind)
     try:
-        url = reverse(name, args=[job.database_id])
+        url = reverse((k.destination if k else "") or "databases:detail", args=[job.database_id])
     except NoReverseMatch:
         return ""
-    return url + "#history" if job.kind in (Job.Kind.ASK, Job.Kind.TOOL) else url
+    return url + (k.fragment if k else "")
 
 
 def _subject(job: Job) -> str:
     """نام کوتاه موضوع: متن پرسش، نام ابزار یا نوع کار."""
-    if job.kind == Job.Kind.ASK:
-        q = getattr(job, "question", None)
-        return f"«{q.text[:60]}»" if q else "پرسش فارسی"
-    if job.kind == Job.Kind.TOOL:
-        run = getattr(job, "tool_run", None)
-        if run:
-            from analysis import tools
-
-            t = tools.TOOL_MAP.get(run.tool)
-            return f"«{t.title if t else run.tool}»"
-    return job.get_kind_display()
+    k = kinds.get(job.kind)
+    return (kinds.call(k.subject, job) if k else None) or job.get_kind_display()
 
 
 def _short_reason(message: str) -> str:
@@ -72,8 +47,8 @@ def for_job(job: Job) -> Notification | None:
     owner = job.user_id or (job.database.owner_id if job.database_id else None)
     if owner is None:
         return None
-    if job.status == Job.Status.DONE and job.trigger != Job.Trigger.MANUAL and job.kind in (
-            Job.Kind.BACKUP, Job.Kind.RESTORE_TEST, Job.Kind.OSM_REFRESH, Job.Kind.BASEMAP):
+    k = kinds.get(job.kind)
+    if job.status == Job.Status.DONE and job.trigger != Job.Trigger.MANUAL and k is not None and k.quiet_when_auto:
         return None  # کارهای خودکار موفق، اعلان بی‌فایده می‌سازند
     subject = _subject(job)
     level, title, body, detail, action = L.SUCCESS, "", "", "", "مشاهده"
@@ -86,19 +61,11 @@ def for_job(job: Job) -> Notification | None:
     else:
         title = f"{subject} تمام شد"
         body = job.message[:300]
-        q = getattr(job, "question", None) if job.kind == Job.Kind.ASK else None
-        if q is not None:
-            kind = q.result_kind
-            if kind == "plan":
-                level, title, body, action = L.INFO, "برنامهٔ تحلیل آمادهٔ تأیید است", "برنامه را بررسی و تأیید کنید.", "بررسی برنامه"
-            elif kind == "empty":
-                level, title = L.WARNING, f"{subject}: هیچ عارضه‌ای پیدا نشد"
-            elif kind == "answer":
-                title = f"{subject}: پاسخ آماده است"
-        if job.kind == Job.Kind.IMPORT:
-            title = "دریافت و ورود فایل تمام شد"
-        elif job.kind in (Job.Kind.OSM_IMPORT, Job.Kind.OSM_REFRESH):
-            title = "دریافت داده آماده ایران تمام شد"
+        if k is not None and k.done_title:
+            title = k.done_title
+        over = (kinds.call(k.notice, job, subject) if k else None) or {}
+        level, title = over.get("level", level), over.get("title", title)
+        body, action = over.get("body", body), over.get("action", action)
     note, _ = Notification.objects.get_or_create(job=job, defaults=dict(
         user_id=owner, level=level, title=title[:160], body=body, detail=detail, url=_url(job),
         action=action, database_id=job.database_id))

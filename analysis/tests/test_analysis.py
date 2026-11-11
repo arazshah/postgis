@@ -11,13 +11,14 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import User
-from analysis import ask, tools
+from analysis import ask
 from analysis.models import LlmConfig, Question, ToolRun
 from databases import gdal
 from databases import services as db_services
 from databases.models import DatabaseServer
 from databases.provisioner import Provisioner
 from jobs.models import Job
+from tools import engine as tools
 
 PG_HOST = os.environ.get("TEST_PG_HOST", "")
 HAS_GDAL = bool(shutil.which("ogr2ogr"))

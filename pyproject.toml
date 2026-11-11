@@ -6,3 +6,70 @@ extend-exclude = ["*/migrations/*"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
 ignore = ["E501", "B904"]
+
+# قاعده‌ی وابستگی معماری (docs/adr/0004). اجرا: lint-imports
+# قرارداد «هسته» قطعی است؛ بقیه چرخ‌دنده‌اند: فهرست ignore فقط باید کوتاه شود.
+[tool.importlinter]
+root_packages = [
+    "kernel", "accounts", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases",
+    "enterprise", "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate",
+    "support", "survey", "tools",
+]
+include_external_packages = false
+
+[[tool.importlinter.contracts]]
+name = "هسته به هیچ پلاگینی وابسته نیست"
+type = "forbidden"
+source_modules = ["kernel"]
+forbidden_modules = [
+    "accounts", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases", "enterprise",
+    "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate", "support",
+    "survey", "tools",
+]
+ignore_imports = ["kernel.tests.** -> **"]
+unmatched_ignore_imports_alerting = "none"
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "صف کارها پلاگین‌های قابلیت را نمی‌شناسد"
+type = "forbidden"
+source_modules = ["jobs"]
+forbidden_modules = [
+    "analysis", "classroom", "enterprise", "iranmap", "satellite", "tools", "maps", "publish", "survey", "restapi",
+]
+ignore_imports = ["jobs.tests.** -> **"]
+unmatched_ignore_imports_alerting = "none"
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "اعلان‌ها پلاگین‌های قابلیت را نمی‌شناسد"
+type = "forbidden"
+source_modules = ["notifications"]
+forbidden_modules = [
+    "analysis", "classroom", "enterprise", "iranmap", "satellite", "tools", "maps", "publish", "survey", "restapi",
+]
+ignore_imports = ["notifications.tests.** -> **"]
+unmatched_ignore_imports_alerting = "none"
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "ابزارها فقط SDK را می‌شناسند (نه موتور، نما یا اپ‌های دیگر)"
+type = "forbidden"
+source_modules = ["tools.plugins"]
+forbidden_modules = [
+    "tools.engine", "tools.views", "tools.catalog", "databases", "analysis", "jobs", "core", "accounts", "maps",
+    "publish", "notifications",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "سایت و قاب پنل (core) پلاگین‌های دیگر را نمی‌شناسد، جز حساب، پایگاه و پایگاه دانش"
+type = "forbidden"
+source_modules = ["core"]
+forbidden_modules = [
+    "analysis", "analytics", "assistant", "billing", "classroom", "enterprise", "iranmap", "jobs", "maps",
+    "notifications", "publish", "restapi", "satellite", "satgate", "support", "survey", "tools",
+]
+ignore_imports = ["core.tests.** -> **"]
+unmatched_ignore_imports_alerting = "none"
+allow_indirect_imports = true

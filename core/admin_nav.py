@@ -5,45 +5,8 @@
 from django.contrib import admin
 from django.urls import NoReverseMatch, reverse
 
-# (کلید، عنوان، آیکون، [(برچسب مدل، عنوان نمایشی یا None)])
-GROUPS = [
-    ("customers", "مشتریان", "users", [
-        ("accounts.siteuser", None), ("databases.userdatabase", None), ("databases.activitylog", "رویدادهای پایگاه"),
-        ("classroom.classroom", None), ("classroom.contract", None), ("classroom.contractrequest", None),
-        ("core.contactrequest", None),
-    ]),
-    ("finance", "مالی", "card", [
-        ("billing.invoice", None), ("billing.planvoucher", None), ("databases.plan", "پلن‌ها و قیمت‌ها"),
-    ]),
-    ("support", "پشتیبانی و محتوا", "life", [
-        ("support.ticket", None), ("kb.article", None), ("kb.category", None), ("kb.missedquery", None),
-        ("kb.feedback", None), ("assistant.usage", None),
-    ]),
-    ("infra", "زیرساخت", "server", [
-        ("databases.databaseserver", None), ("databases.extension", None), ("jobs.job", None),
-        ("enterprise.geoserverinstance", None), ("enterprise.raster", None), ("iranmap.area", None),
-    ]),
-    ("publish", "انتشار و داده", "globe", [
-        ("publish.service", None), ("publish.apikey", None), ("publish.dailyusage", None),
-        ("publish.owsproject", None), ("maps.webmap", None), ("survey.surveyproject", None),
-        ("survey.gnssdriver", None), ("survey.ntripprofile", None),
-    ]),
-    ("marketing", "بازاریابی", "chart", [
-        ("analytics.sourcereport", None), ("analytics.trackedlink", None), ("analytics.visitor", None),
-        ("analytics.visit", None), ("analytics.event", "رویدادهای بازدید"),
-    ]),
-    ("settings", "تنظیمات و امنیت", "settings", [
-        ("core.sitesettings", None), ("core.teammember", None), ("core.trustitem", None), ("accounts.adminuser", None), ("auth.group", None), ("accounts.otpcode", None),
-    ]),
-]
-
-# کارهای سریع: (برچسب، آیکون، نام مسیر یا (نام مسیر، query))
-QUICK = [
-    ("افزودن سرور", "server", "admin:databases_databaseserver_add"),
-    ("افزودن پلن", "layers", "admin:databases_plan_add"),
-    ("مقاله‌ی تازه", "book", "admin:kb_article_add"),
-    ("لینک ردیابی", "link", "admin:analytics_trackedlink_add"),
-]
+from kernel import nav
+from kernel.jobs import load
 
 
 def _find(label):
@@ -61,20 +24,22 @@ def _url(model, view="changelist"):
 
 
 def badges():
-    """شمارنده‌ی کارهای منتظر مدیر: label مدل ← عدد."""
+    """شمارنده‌ی کارهای منتظر مدیر: label مدل ← عدد (هر پلاگین شمارنده‌ی خودش را ثبت می‌کند)."""
     out = {}
-    try:
-        from billing.models import Invoice
-        from support.models import Ticket
-
-        out["billing.invoice"] = Invoice.objects.filter(status=Invoice.Status.REVIEW).count()
-        out["support.ticket"] = Ticket.objects.filter(status=Ticket.Status.OPEN).count()
-        from .models import ContactRequest
-
-        out["core.contactrequest"] = ContactRequest.objects.filter(status=ContactRequest.Status.NEW).count()
-    except Exception:  # شمارنده نباید صفحه را بشکند
-        pass
+    for label, counter in nav.admin_badges().items():
+        try:
+            out[label] = int(load(counter)())
+        except Exception:  # noqa: BLE001  شمارنده نباید صفحه را بشکند
+            continue
     return out
+
+
+def __getattr__(name):  # سازگاری با مصرف‌کننده‌های قدیمی
+    if name == "QUICK":
+        return [(q.label, q.icon, q.url) for q in nav.admin_quicks()]
+    if name == "GROUPS":
+        return [(g.key, g.title, g.icon, [(i.model, i.title) for i in items]) for g, items in nav.admin_groups()]
+    raise AttributeError(name)
 
 
 def build(request):
@@ -90,7 +55,7 @@ def build(request):
         return {"label": label, "title": title or str(model._meta.verbose_name_plural), "url": url,
                 "on": bool(base) and path.startswith(base), "count": counts.get(label, 0)}
 
-    for key, title, icon, rows in GROUPS:
+    for key, title, icon, rows in __getattr__("GROUPS"):
         items = []
         for label, name in rows:
             model, ma = _find(label)
