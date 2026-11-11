@@ -7,6 +7,7 @@ plugin = plugins.register("billing", "پلن و صورتحساب", kind="system"
 
 nav.admin_item("finance", "billing.invoice", None, plugin=plugin.id, order=10)
 nav.admin_item("finance", "billing.planvoucher", None, plugin=plugin.id, order=20)
+nav.admin_item("finance", "billing.pluginaddon", None, plugin=plugin.id, order=30)
 nav.admin_badge("billing.invoice", "billing.plugin.pending_invoices", plugin=plugin.id)
 
 site_settings.tab("pay", "پرداخت", "card", plugin=plugin.id, order=40, status="billing.settings_admin.tab_status")

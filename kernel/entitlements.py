@@ -12,11 +12,15 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from django.utils import timezone
 
 from . import events
 from .plugins import registry
+
+if TYPE_CHECKING:
+    from .models import Entitlement
 
 log = logging.getLogger(__name__)
 TTL = 20.0
@@ -156,6 +160,45 @@ def limits(plugin_id: str, *, user=None, ws=None) -> dict:
             else:
                 out.setdefault(k, v)
     return out
+
+
+def grant(plugin_id: str, kind: str, subject: str = "", *, source: str = "purchase", days: int | None = None,
+          limits: dict | None = None, note: str = "") -> Entitlement:
+    """مجوز را می‌دهد یا تمدید می‌کند (قرارداد هسته برای صورتحساب و هر منبع دیگر).
+
+    - پلاگین باید نصب و غیرسیستمی باشد (سیستمی مجوز نمی‌خواهد).
+    - مجوز موجود با همان (دارنده، موضوع) تمدید می‌شود: انقضا از «بعد از انقضای فعلی» یا «اکنون» (هرکدام دیرتر) + days.
+    - `days=None` یعنی بدون انقضا. سقف‌ها روی سقف‌های قبلی ادغام می‌شود.
+    """
+    import datetime
+
+    from django.utils import timezone
+
+    from .models import Entitlement, PluginState
+
+    p = registry.plugins.get(plugin_id)
+    if p is None or p.kind == "system":
+        raise ValueError(f"پلاگین «{plugin_id}» نصب نیست یا مجوزپذیر نیست.")
+    if kind not in Entitlement.Kind.values:
+        raise ValueError("نوع دارنده نامعتبر است.")
+    subject = "" if kind == Entitlement.Kind.ALL else str(subject)
+    if kind != Entitlement.Kind.ALL and not subject:
+        raise ValueError("شناسه‌ی دارنده لازم است.")
+    st, _ = PluginState.objects.get_or_create(plugin_id=plugin_id)
+    ent, created = Entitlement.objects.get_or_create(state=st, kind=kind, subject=subject, defaults={"source": source})
+    now = timezone.now()
+    if days is None:
+        ent.expires_at = None
+    elif created or ent.expires_at is not None:
+        base = max(now, ent.expires_at) if ent.expires_at else now
+        ent.expires_at = base + datetime.timedelta(days=days)
+    ent.limits = {**(ent.limits or {}), **(limits or {})}
+    ent.source = source
+    if note:
+        ent.note = note[:200]
+    ent.save()
+    invalidate()
+    return ent
 
 
 def workspace_deleted(*, ws, **_) -> None:

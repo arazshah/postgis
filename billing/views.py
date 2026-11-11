@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 
 def _user_invoice(request, number) -> Invoice:
-    return get_object_or_404(Invoice.objects.select_related("plan", "database"), number=number, user=request.user)
+    return get_object_or_404(Invoice.objects.select_related("plan", "addon", "database"), number=number, user=request.user)
 
 
 @site_user_required
@@ -30,7 +30,7 @@ def plans(request):
     dbs = request.user.databases.exclude(status__in=[UserDatabase.Status.DELETED, UserDatabase.Status.ERROR,
                                                      UserDatabase.Status.PENDING]).select_related("plan")
     return render(request, "billing/plans.html", {
-        "plans": services.paid_plans(), "dbs": dbs, "enabled": conf.pay_enabled and services.methods_available(conf),
+        "plans": services.paid_plans(), "addons": services.public_addons(), "dbs": dbs, "enabled": conf.pay_enabled and services.methods_available(conf),
         "selected_plan": request.GET.get("plan", ""), "selected_db": request.GET.get("db", ""),
     })
 
@@ -47,6 +47,22 @@ def start(request):
         kind = Invoice.Kind.UPGRADE
     try:
         inv = services.create_invoice(request.user, kind, plan, db)
+    except services.BillingError as exc:
+        messages.error(request, str(exc))
+        return redirect("billing:plans")
+    return redirect("billing:invoice", number=inv.number)
+
+
+@site_user_required
+@require_POST
+def start_addon(request):
+    from .models import PluginAddon
+
+    addon = get_object_or_404(PluginAddon, pk=request.POST.get("addon", "") if request.POST.get("addon", "").isdigit() else 0)
+    target = request.POST.get("target", "")
+    db = UserDatabase.objects.filter(pk=target, owner=request.user).first() if target.isdigit() else None
+    try:
+        inv = services.create_addon_invoice(request.user, addon, db)
     except services.BillingError as exc:
         messages.error(request, str(exc))
         return redirect("billing:plans")
@@ -140,7 +156,7 @@ def cancel(request, number):
 @site_user_required
 def invoices(request):
     return render(request, "billing/invoices.html", {
-        "invoices": request.user.invoices.select_related("plan", "database")[:100]})
+        "invoices": request.user.invoices.select_related("plan", "addon", "database")[:100]})
 
 
 @login_required
