@@ -13,6 +13,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 from analytics import services as analytics
 from analytics.models import Event
 from core.models import SiteSettings
+from kernel.jobs import load
 
 from . import otp
 from .decorators import site_user_required
@@ -210,11 +211,9 @@ def resend(request):
 @site_user_required
 @require_http_methods(["GET", "POST"])
 def profile(request):
-    """پروفایل: مشخصات، تنظیم مدل زبانی (برای پرسش فارسی در همه‌ی پایگاه‌ها) و اطلاعات حساب."""
-    from analysis.models import LlmConfig
-    from databases import nl2sql
+    """پروفایل: مشخصات، حساب و امنیت؛ زبانه‌های دیگر (مثلاً مدل زبانی) را پلاگین‌ها می‌آورند (kernel.profile)."""
+    from kernel import profile as profile_sections
 
-    cfg = LlmConfig.objects.filter(user=request.user).first()
     nxt = _safe_next(request, request.POST.get("next") or request.GET.get("next"))
     action = request.POST.get("action", "profile") if request.method == "POST" else ""
     form = ProfileForm(request.POST if action == "profile" else None, instance=request.user)
@@ -232,19 +231,11 @@ def profile(request):
                 messages.success(request, "رمز عبور ذخیره شد.")
                 return redirect(f"{reverse('accounts:profile')}#account")
             messages.error(request, "رمز عبور ذخیره نشد؛ خطاها را در بخش «حساب و امنیت» ببینید.")
-        if action == "llm_save":
-            try:
-                nl2sql.save_config(request.user, request.POST.get("base_url", ""), request.POST.get("model", ""),
-                                   request.POST.get("api_key", ""))
-            except nl2sql.NLError as exc:
-                messages.error(request, str(exc))
-                return redirect(f"{reverse('accounts:profile')}#ai")
-            messages.success(request, "تنظیم مدل زبانی ذخیره شد.")
-            return redirect(nxt or f"{reverse('accounts:profile')}#ai")
-        if action == "llm_delete":
-            if cfg:
-                cfg.delete()
-                messages.success(request, "کلید مدل زبانی حذف شد.")
-            return redirect(f"{reverse('accounts:profile')}#ai")
-    return render(request, "accounts/profile.html", {"form": form, "pw_form": pw_form, "cfg": cfg,
-                                                    "next": nxt or "", "open_tab": "account" if action == "password" else ""})
+        owner = profile_sections.owner_of(action)
+        if owner is not None and owner.handle:
+            response = load(owner.handle)(request, action, nxt)
+            if response is not None:
+                return response
+    return render(request, "accounts/profile.html", {
+        "form": form, "pw_form": pw_form, "profile_sections": profile_sections.build(request),
+        "next": nxt or "", "open_tab": "account" if action == "password" else ""})

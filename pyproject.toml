@@ -96,3 +96,21 @@ ignore_imports = [
 ]
 unmatched_ignore_imports_alerting = "none"
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "تنظیم و اجرای پرسش فارسی (nl2sql) فقط برای تحلیل است؛ پروفایل زبانه‌اش را از رجیستری می‌گیرد"
+type = "forbidden"
+source_modules = [
+    "accounts", "billing", "classroom", "core", "enterprise", "iranmap", "jobs", "kb", "maps", "notifications",
+    "publish", "restapi", "satellite", "support", "survey", "tools", "analytics", "assistant",
+]
+forbidden_modules = ["databases.nl2sql"]
+ignore_imports = [
+    "accounts.tests.** -> **", "billing.tests.** -> **", "classroom.tests.** -> **", "core.tests.** -> **",
+    "enterprise.tests.** -> **", "iranmap.tests.** -> **", "jobs.tests.** -> **", "kb.tests.** -> **",
+    "maps.tests.** -> **", "notifications.tests.** -> **", "publish.tests.** -> **", "restapi.tests.** -> **",
+    "satellite.tests.** -> **", "support.tests.** -> **", "survey.tests.** -> **", "tools.tests.** -> **",
+    "analytics.tests.** -> **", "assistant.tests.** -> **",
+]
+unmatched_ignore_imports_alerting = "none"
+allow_indirect_imports = true
