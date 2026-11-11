@@ -134,7 +134,10 @@ admin_group("support", "پشتیبانی و محتوا", "life", order=30)
 admin_group("infra", "زیرساخت", "server", order=40)
 admin_group("publish", "انتشار و داده", "globe", order=50)
 admin_group("marketing", "بازاریابی", "chart", order=60)
+admin_group("platform", "پلاگین‌ها و مشتریان سازمانی", "cube", order=65)
 admin_group("settings", "تنظیمات و امنیت", "settings", order=70)
+admin_item("platform", "kernel.pluginstate", "پلاگین‌ها و مجوزها", plugin=KERNEL, order=10)
+admin_item("platform", "kernel.organization", None, plugin=KERNEL, order=20)
 
 
 def broken_paths() -> list[tuple[str, str, str]]:

@@ -1,7 +1,7 @@
-"""جست‌وجوی سراسری رکوردها در پنل مدیریت (Ctrl+K): هر پلاگین جست‌وجوی مدل‌های خودش را ثبت می‌کند (kernel.admin)."""
+"""جست‌وجوی سراسری رکوردها در پنل مدیریت (Ctrl+K): هر پلاگین جست‌وجوی مدل‌های خودش را ثبت می‌کند (kernel.dash)."""
 from django.http import JsonResponse
 
-from kernel import admin as dash
+from kernel import dash as dash
 
 
 def search(request):

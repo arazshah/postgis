@@ -56,6 +56,11 @@ class TeamProvider(workspace.Provider):
 
         return team.shared_with(user)
 
+    def peek(self, pk):
+        from .models import UserDatabase
+
+        return UserDatabase.objects.select_related("plan").exclude(status=UserDatabase.Status.DELETED).filter(pk=pk).first()
+
     def extra_role_name(self, ws, suffix):
         from . import team
 

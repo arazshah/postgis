@@ -1,5 +1,5 @@
 """مانیفست پلاگین «تحلیل و پرسش فارسی» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
-from kernel import admin as admin_dash
+from kernel import dash as admin_dash
 from kernel import home, jobs, llm, nav, plugins
 from kernel import profile as profile_sections
 from kernel import settings as site_settings

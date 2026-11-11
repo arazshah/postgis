@@ -44,8 +44,12 @@ def build(request) -> list[dict]:
     """زبانه‌های افزوده برای قالب: [{key, title, template, ctx, badge}]؛ خطای یک بخش فقط همان زبانه را حذف می‌کند."""
     import logging
 
+    from . import entitlements
+
     out = []
     for s in sections():
+        if not entitlements.allowed(s.plugin, user=getattr(request, "user", None)):
+            continue
         try:
             ctx = load(s.context)(request) if s.context else {}
             badge = bool(load(s.badge)(request)) if s.badge else False

@@ -7,7 +7,10 @@ class KernelConfig(AppConfig):
     verbose_name = "هسته"
 
     def ready(self):
-        from . import checks  # noqa: F401  ثبت بررسی‌های سیستم
+        from . import checks, entitlements  # noqa: F401  ثبت بررسی‌های سیستم و شنونده‌ی پاک‌سازی مجوز
+        from .signals import connect
+
+        connect()
         from .plugins import registry
 
         registry.discover()

@@ -16,7 +16,7 @@ from django.db.models import Count, Max, Min, Q, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
-from kernel import admin as dash
+from kernel import dash as dash
 
 from . import quality, reports
 from .models import Event, TrackedLink, Visit, Visitor

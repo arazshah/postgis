@@ -1,10 +1,10 @@
 """داده‌ی داشبورد پنل مدیریت: نیاز به توجه، سلامت سیستم، آمار کلیدی با روند و فعالیت اخیر.
 
-هر ردیف را پلاگین صاحبش ثبت می‌کند (kernel.admin)؛ اینجا فقط کنار هم گذاشته می‌شوند.
+هر ردیف را پلاگین صاحبش ثبت می‌کند (kernel.dash)؛ اینجا فقط کنار هم گذاشته می‌شوند.
 """
 from django.urls import reverse
 
-from kernel import admin as dash
+from kernel import dash as dash
 
 from . import admin_nav
 

@@ -116,6 +116,7 @@ MIDDLEWARE = [
     "analytics.middleware.AnalyticsMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "kernel.gate.PluginGateMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

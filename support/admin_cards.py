@@ -2,7 +2,7 @@
 from django.db.models import Q
 from django.urls import reverse
 
-from kernel import admin as dash
+from kernel import dash as dash
 
 from .models import Ticket
 

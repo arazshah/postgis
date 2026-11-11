@@ -1,5 +1,5 @@
 """مانیفست پلاگین «انتشار نقشه و API» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
-from kernel import admin as admin_dash
+from kernel import dash as admin_dash
 from kernel import events, nav, plugins
 
 plugin = plugins.register("publish", "انتشار نقشه و API", kind="feature", requires=("databases",))

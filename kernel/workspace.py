@@ -37,6 +37,10 @@ class Provider:
         """فضای کارهایی که با کاربر به اشتراک گذاشته شده‌اند (QuerySet)."""
         raise NotImplementedError
 
+    def peek(self, pk):
+        """فضای کار بدون بررسی دسترسی (فقط برای دروازه‌ی مجوز پلاگین‌ها)؛ نبودن = None."""
+        raise NotImplementedError
+
     def extra_role_name(self, ws, suffix: str) -> str:
         """نام نقش اضافه‌ی پایگاه (مثلاً برای GeoServer) برای این فضای کار."""
         raise NotImplementedError
@@ -94,6 +98,10 @@ def level(user, ws) -> int:
 
 def shared_with(user):
     return provider().shared_with(user)
+
+
+def peek(pk):
+    return provider().peek(pk)
 
 
 def extra_role_name(ws, suffix: str) -> str:

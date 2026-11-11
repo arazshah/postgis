@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from kernel import admin as dash
+from kernel import dash as dash
 
 from .models import Job
 

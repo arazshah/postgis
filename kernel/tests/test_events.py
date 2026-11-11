@@ -63,14 +63,14 @@ class WorkspaceDeletedTests(BaseCase):
 
 class ReportSheetsTests(SimpleTestCase):
     def test_a_failing_sheet_does_not_stop_the_others(self):
-        from kernel import admin as dash
+        from kernel import dash as dash
 
         wrote = []
         registry.add(dash.SHEET, "kernel.tests.test_events.sheet_bad", "kernel.tests.test_events.sheet_bad", plugin="kernel", order=-2)
         registry.add(dash.SHEET, "kernel.tests.test_events.sheet_ok", "kernel.tests.test_events.sheet_ok", plugin="kernel", order=-1)
         SHEETS.append(wrote)
         try:
-            with self.assertLogs("kernel.admin", "ERROR"):
+            with self.assertLogs("kernel.dash", "ERROR"):
                 dash.run_sheets("book", None)
         finally:
             registry._points[dash.SHEET].pop("kernel.tests.test_events.sheet_bad")
@@ -79,7 +79,7 @@ class ReportSheetsTests(SimpleTestCase):
         self.assertEqual(wrote, ["book"])
 
     def test_installed_sheet_order_matches_the_old_workbook(self):
-        from kernel import admin as dash
+        from kernel import dash as dash
 
         order = [c.plugin for c in registry.contributions(dash.SHEET)]
         self.assertEqual(order, ["analysis", "maps", "publish", "billing", "support", "classroom", "survey"])

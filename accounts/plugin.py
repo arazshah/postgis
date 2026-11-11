@@ -1,5 +1,5 @@
 """مانیفست پلاگین «حساب و ورود» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
-from kernel import admin as admin_dash
+from kernel import dash as admin_dash
 from kernel import nav, plugins
 from kernel import settings as site_settings
 

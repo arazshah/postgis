@@ -2,8 +2,8 @@
 from django import template
 from django.urls import reverse
 
+from kernel import entitlements, nav
 from kernel import jobs as kernel_jobs
-from kernel import nav
 
 register = template.Library()
 
@@ -37,8 +37,11 @@ ICONS = {
 LEVEL = {"viewer": 0, "editor": 1, "owner": 2}
 
 
-def _visible(item) -> bool:
-    return not item.visible or bool(kernel_jobs.call(item.visible))
+def _visible(item, ws=None) -> bool:
+    """بخش دیده شود؟ شرط ثبت‌شده‌ی خودش + روشن بودن پلاگین و مجوز آن برای این فضای کار (kernel.entitlements)."""
+    if item.visible and not kernel_jobs.call(item.visible):
+        return False
+    return entitlements.allowed(item.plugin, ws=ws)
 
 
 def groups():
@@ -66,7 +69,7 @@ def build(db, view_name: str) -> dict:
     for g, items in nav.ws_groups():
         rows, has_current = [], False
         for s in items:
-            if LEVEL[s.need] > level or not _visible(s):
+            if LEVEL[s.need] > level or not _visible(s, db):
                 continue
             on = view_name in s.views
             row = {"label": s.label, "url": s.url, "on": on, "icon": s.icon}
@@ -161,7 +164,7 @@ def dash_actions(db):
     for g, items in nav.home_groups():
         out.append({"key": g.key, "title": g.title, "items": [
             {"label": a.label, "hint": a.hint, "url": reverse(a.url, args=[db.pk]), "icon": a.icon}
-            for a in items if _visible(a)]})
+            for a in items if _visible(a, db)]})
     return {"groups": out}
 
 
@@ -170,7 +173,7 @@ def dash_menu(db):
     """منوی «⋯» ردیف فشرده‌ی داشبورد: همه‌ی بخش‌ها با همان دسته‌بندی منوی کنار صفحه (فقط پایگاه‌های خود کاربر)."""
     out = []
     for g, items in nav.ws_groups():
-        rows = [{"label": s.label, "url": reverse(s.url, args=[db.pk])} for s in items if _visible(s)]
+        rows = [{"label": s.label, "url": reverse(s.url, args=[db.pk])} for s in items if _visible(s, db)]
         if rows:
             out.append({"title": g.title, "items": rows})
     return {"groups": out}

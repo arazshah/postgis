@@ -126,19 +126,19 @@ class SettingsAndAdminContributionTests(SimpleTestCase):
             ma.no_such_display  # noqa: B018
 
     def test_admin_dashboard_and_search_contributions_load(self):
-        from kernel import admin as dash
+        from kernel import dash as dash
 
         self.assertEqual(dash.broken_paths(), [])
         for point in (dash.ATTENTION, dash.HEALTH, dash.KPI, dash.ACTIVITY, dash.SEARCH):
             self.assertTrue(registry.contributions(point), point)
 
     def test_a_failing_dashboard_contribution_is_dropped_not_fatal(self):
-        from kernel import admin as dash
+        from kernel import dash as dash
 
         registry.add("admin.zz", "kernel.tests.test_kernel.boom", "kernel.tests.test_kernel.boom", plugin="kernel", order=1)
         registry.add("admin.zz", "kernel.tests.test_kernel.two", "kernel.tests.test_kernel.two", plugin="kernel", order=2)
         try:
-            with self.assertLogs("kernel.admin", "ERROR"):
+            with self.assertLogs("kernel.dash", "ERROR"):
                 self.assertEqual(dash.collect("admin.zz"), [1, 2])
         finally:
             registry._points.pop("admin.zz")
