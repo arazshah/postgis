@@ -129,11 +129,8 @@ def normalize_import(name: str, out) -> Table:
     return Table(name, tuple(cols), tuple(rows), pair)
 
 
-def create_table(ws, t: Table) -> int:
-    """جدول تازه‌ی public.<name> را با نقش مالک می‌سازد و ردیف‌ها را با INSERT پارامتری می‌ریزد؛ تعداد ردیف."""
-    cat = tenantdb.catalog(ws)
-    if any(x.schema == "public" and x.name == t.name for x in cat.tables()):
-        raise PluginIOError(f"جدولی به نام «{t.name}» از قبل هست؛ نام دیگری بدهید.")
+def statements(t: Table):
+    """(CREATE TABLE، INSERT) برای جدول تازه؛ مقدارها فقط جای‌نگهدار هستند."""
     rel = sql.Identifier("public", t.name)
     defs = [sql.SQL("{} {}").format(sql.Identifier(n), sql.SQL(TYPES[ty])) for n, ty in t.columns]
     names = [n for n, _ in t.columns]
@@ -142,11 +139,22 @@ def create_table(ws, t: Table) -> int:
     if t.geometry:
         defs.append(sql.SQL("geom geometry(Point, 4326)"))
         cols_sql = sql.SQL("{}, geom").format(cols_sql)
-        la, lo = (names.index(t.geometry[0]), names.index(t.geometry[1]))
+        num = sql.SQL("CAST(%s AS double precision)")  # بدون cast نوع پارامترِ «IS NULL» مشخص نیست (IndeterminateDatatype)
         vals.append(sql.SQL("CASE WHEN {} IS NULL OR {} IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint({}, {}), 4326) END").format(
-            sql.Placeholder(), sql.Placeholder(), sql.Placeholder(), sql.Placeholder()))
+            num, num, num, num))
     create = sql.SQL("CREATE TABLE {} ({})").format(rel, sql.SQL(", ").join(defs))
     insert = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(rel, cols_sql, sql.SQL(", ").join(vals))
+    return create, insert
+
+
+def create_table(ws, t: Table) -> int:
+    """جدول تازه‌ی public.<name> را با نقش مالک می‌سازد و ردیف‌ها را با INSERT پارامتری می‌ریزد؛ تعداد ردیف."""
+    cat = tenantdb.catalog(ws)
+    if any(x.schema == "public" and x.name == t.name for x in cat.tables()):
+        raise PluginIOError(f"جدولی به نام «{t.name}» از قبل هست؛ نام دیگری بدهید.")
+    create, insert = statements(t)
+    names = [n for n, _ in t.columns]
+    la, lo = (names.index(t.geometry[0]), names.index(t.geometry[1])) if t.geometry else (None, None)
     with tenantdb.connect(ws, write=True, as_owner=True) as conn:
         conn.execute(sql.SQL("SET LOCAL statement_timeout = '30s'"))
         conn.execute(create)

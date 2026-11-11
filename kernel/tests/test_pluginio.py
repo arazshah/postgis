@@ -118,6 +118,12 @@ class CreateTableTests(SimpleTestCase):
         self.assertEqual(many[2][0][-4:], (35.7, 51.4, 51.4, 35.7))  # lat, lon, lon, lat برای MakePoint(lon, lat)
         self.assertEqual(self.conn.calls[-1], ("commit",))
 
+    def test_geometry_placeholders_are_explicitly_typed(self):
+        """بدون CAST، PostgreSQL نوع پارامتر «IS NULL» را نمی‌فهمد (IndeterminateDatatype؛ در CI دیده شد)."""
+        _create, insert = pluginio.statements(pluginio.normalize_import("trk", GOOD))
+        text = insert.as_string(None) if hasattr(insert, "as_string") else str(insert)
+        self.assertEqual(text.count("CAST(%s AS double precision)"), 4)
+
     def test_existing_table_is_refused_before_any_write(self):
         self.cat.tables.return_value = [SimpleNamespace(schema="public", name="trk")]
         with self.assertRaisesRegex(pluginio.PluginIOError, "از قبل هست"):
@@ -284,6 +290,27 @@ class ViewTests(BaseCase):
 
 @unittest.skipUnless(PG_HOST, "به TEST_PG_HOST نیاز دارد")
 class RealPostgresTests(SimpleTestCase):
+    def test_geometry_insert_typing_without_postgis(self):
+        """همان INSERT با توابع جایگزین PostGIS: نوع پارامترها باید روی PostgreSQL ساده هم مشخص باشد و مختصات ناقص NULL شود."""
+        kw = dict(host=PG_HOST, port=int(os.environ.get("TEST_PG_PORT", "5432")), user=os.environ.get("TEST_PG_USER", "postgres"),
+                  password=os.environ.get("TEST_PG_PASSWORD", "postgres"), autocommit=True)
+        with psycopg.connect(dbname="postgres", **kw) as c:
+            c.execute("DROP DATABASE IF EXISTS pluginio_stub")
+            c.execute("CREATE DATABASE pluginio_stub")
+        with psycopg.connect(dbname="pluginio_stub", **kw) as c:
+            c.execute("CREATE FUNCTION st_makepoint(double precision, double precision) RETURNS text LANGUAGE sql AS $$ select 'P('||$1||' '||$2||')' $$")
+            c.execute("CREATE FUNCTION st_setsrid(text, int) RETURNS text LANGUAGE sql AS $$ select $1||'@'||$2 $$")
+            c.execute("CREATE TABLE trk(at timestamptz, lat double precision, lon double precision, geom text)")
+            t = pluginio.normalize_import("trk", {"columns": [{"name": "at", "type": "timestamptz"}, {"name": "lat", "type": "double"},
+                                                              {"name": "lon", "type": "double"}],
+                                                  "rows": [["2026-01-01T10:00:00Z", 35.7, 51.4], [None, None, None], ["2026-01-02T10:00:00Z", 35.8, None]],
+                                                  "geometry": {"lat": "lat", "lon": "lon"}})
+            _create, insert = pluginio.statements(t)
+            c.cursor().executemany(insert, [r + (r[1], r[2], r[2], r[1]) for r in t.rows])
+            self.assertEqual(c.execute("select lat, lon, geom from trk order by at nulls last").fetchall(),
+                             [(35.7, 51.4, "P(51.4 35.7)@4326"), (35.8, None, None), (None, None, None)])
+
+
     def test_real_create_and_hostile_values(self):
         kw = dict(host=PG_HOST, port=int(os.environ.get("TEST_PG_PORT", "5432")), user=os.environ.get("TEST_PG_USER", "postgres"),
                   password=os.environ.get("TEST_PG_PASSWORD", "postgres"), autocommit=True)
