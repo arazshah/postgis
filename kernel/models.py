@@ -148,6 +148,49 @@ class PluginAlertState(models.Model):
         return f"{self.plugin_id}.{self.handler} @ {self.workspace_id}"
 
 
+class PluginHealthBucket(models.Model):
+    """شمارنده‌ی ۵ دقیقه‌ای اجرای کد پلاگین (موفق/ناموفق) برای قطع‌کن خودکار (kernel.health)."""
+
+    plugin_id = models.CharField("پلاگین", max_length=41)
+    bucket = models.DateTimeField("بازه")
+    runs = models.PositiveIntegerField("اجرا", default=0)
+    errors = models.PositiveIntegerField("خطا", default=0)
+
+    class Meta:
+        verbose_name = "سلامت پلاگین"
+        verbose_name_plural = "سلامت پلاگین‌ها"
+        constraints = [models.UniqueConstraint(fields=["plugin_id", "bucket"], name="uniq_plugin_health_bucket")]
+        indexes = [models.Index(fields=["plugin_id", "bucket"], name="plugin_health_lookup")]
+
+    def __str__(self):
+        return f"{self.plugin_id} {self.bucket:%H:%M}: {self.errors}/{self.runs}"
+
+
+class PluginTrip(models.Model):
+    """ردپای قطع‌کن: چرا و با چه اقدامی (بازگشت به نسخه‌ی قبل یا خاموشی) یک نسخه‌ی پلاگین خودکار کنار گذاشته شد."""
+
+    class Action(models.TextChoices):
+        ROLLBACK = "rollback", "بازگشت به نسخه‌ی قبلی"
+        DISABLE = "disable", "خاموش شد (نسخه‌ی قبلی نبود)"
+
+    plugin_id = models.CharField("پلاگین", max_length=41, db_index=True)
+    release = models.ForeignKey("PluginRelease", null=True, blank=True, on_delete=models.SET_NULL, related_name="trips", verbose_name="نسخه‌ی قطع‌شده")
+    version = models.CharField("نسخه‌ی قطع‌شده", max_length=20)
+    action = models.CharField("اقدام", max_length=10, choices=Action.choices)
+    restored_version = models.CharField("نسخه‌ی بازگردانده‌شده", max_length=20, blank=True)
+    runs = models.PositiveIntegerField("اجرا در پنجره")
+    errors = models.PositiveIntegerField("خطا در پنجره")
+    tripped_at = models.DateTimeField("زمان", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "قطع خودکار پلاگین"
+        verbose_name_plural = "قطع‌های خودکار پلاگین"
+        ordering = ["-tripped_at"]
+
+    def __str__(self):
+        return f"{self.plugin_id} {self.version}: {self.get_action_display()}"
+
+
 class Entitlement(models.Model):
     """مجوز: چه کسی (همه، پلن، سازمان، کاربر یا یک فضای کار) به یک پلاگین محدود دسترسی دارد."""
 

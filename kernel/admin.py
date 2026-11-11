@@ -10,7 +10,16 @@ from django.shortcuts import redirect
 from django.utils.html import format_html, format_html_join
 
 from . import conf, entitlements, pagekit, pkg, stepup, studio, workspace
-from .models import Entitlement, Organization, OrgMember, PluginDraft, PluginRelease, PluginState, PluginUsage
+from .models import (
+    Entitlement,
+    Organization,
+    OrgMember,
+    PluginDraft,
+    PluginRelease,
+    PluginState,
+    PluginTrip,
+    PluginUsage,
+)
 from .plugins import registry
 
 
@@ -479,3 +488,21 @@ class PluginDraftAdmin(admin.ModelAdmin):
 
 def pagekit_key(k: str) -> bool:
     return bool(pagekit.KEY_RE.fullmatch(k))
+
+
+@admin.register(PluginTrip)
+class PluginTripAdmin(admin.ModelAdmin):
+    """ردپای قطع‌کن خودکار: فقط‌خواندنی."""
+
+    list_display = ("plugin_id", "version", "action", "restored_version", "errors", "runs", "tripped_at")
+    list_filter = ("action", "plugin_id")
+    date_hierarchy = "tripped_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

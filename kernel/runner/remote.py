@@ -27,7 +27,7 @@ def read_job_token(token: str) -> int:
 
 
 def call(files: dict, handler: str, params: dict, ws_pk: int):
-    from .client import RunnerError
+    from .client import HandlerFailed, RunnerError
 
     base = getattr(settings, "PLUGIN_RUNNER_URL", "").rstrip("/")
     callback = getattr(settings, "PLUGIN_RUNNER_CALLBACK", "").rstrip("/")
@@ -44,5 +44,5 @@ def call(files: dict, handler: str, params: dict, ws_pk: int):
     except (urllib.error.URLError, OSError, ValueError) as exc:
         raise RunnerError("سرویس اجرای کد پلاگین در دسترس نیست.") from exc
     if not out.get("ok"):
-        raise RunnerError(f"اجرای کد پلاگین ناموفق بود: {str(out.get('error', ''))[:300]}")
+        raise HandlerFailed(f"اجرای کد پلاگین ناموفق بود: {str(out.get('error', ''))[:300]}")
     return out.get("value")
