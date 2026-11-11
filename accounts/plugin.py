@@ -1,6 +1,6 @@
 """مانیفست پلاگین «حساب و ورود» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
 from kernel import dash as admin_dash
-from kernel import nav, plugins
+from kernel import nav, plugins, stepup
 from kernel import settings as site_settings
 
 plugin = plugins.register("accounts", "حساب و ورود", kind="system")
@@ -26,3 +26,7 @@ admin_dash.health("accounts.admin_cards.health", plugin=plugin.id, order=40)
 admin_dash.kpi("accounts.admin_cards.kpis", plugin=plugin.id, order=10)
 admin_dash.activity("accounts.admin_cards.activity", plugin=plugin.id, order=10)
 admin_dash.search("accounts.admin_cards.search", plugin=plugin.id, order=10)
+
+from .admin_2fa import Provider as _TwoFactor  # noqa: E402
+
+stepup.set_provider(_TwoFactor())

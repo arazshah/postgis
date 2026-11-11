@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import include, path
 
+from accounts.admin_2fa import twofa as admin_2fa
 from accounts.admin_auth import LockoutAdminAuthenticationForm
 from core.admin_search import search as admin_search
 
@@ -22,6 +23,7 @@ def _index_with_stats(request, extra_context=None):
 admin.site.index = _index_with_stats
 
 urlpatterns = [
+    path("manage/2fa/", admin_2fa, name="admin_2fa"),
     path("manage/_search/", admin.site.admin_view(admin_search), name="admin_search"),
     path("manage/", admin.site.urls),
     path("accounts/", include("accounts.urls")),

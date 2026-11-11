@@ -30,3 +30,5 @@
 - تغییر رابط را با Playwright روی دسکتاپ و ۴۰۰ پیکسل ببینید (Chromium نصب است).
 - راهنما و پایگاه دانش (`kb/content`) را با رابط هماهنگ نگه دارید؛ `python manage.py kb_check`.
 - بدون درخواست صریح، PR نسازید؛ روی شاخه‌ی تعیین‌شده کار و push کنید.
+
+- ورود دومرحله‌ای پنل مدیریت (TOTP) در `accounts/admin_2fa.py`؛ کار حساس تازه در پنل را با `kernel.stepup.ok(request)` / `stepup.url(request)` محافظت کنید (تأیید تازه). در آزمون `override_settings(ADMIN_2FA_REQUIRED=True)`؛ بازنشانی: `manage.py admin_2fa_reset`.

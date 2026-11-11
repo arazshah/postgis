@@ -206,3 +206,40 @@ class AdminUser(User):
         proxy = True
         verbose_name = "مدیر"
         verbose_name_plural = "مدیران"
+
+
+class AdminTOTP(models.Model):
+    """عامل دوم ورود پنل مدیریت (برنامه‌ی تأییدکننده). راز رمزنگاری‌شده و فقط یک‌بار تأییدشده است؛
+    تا `confirmed_at` پر نشده ورود دومرحله‌ای فعال نیست و کاربر در مرحله‌ی ثبت‌نام می‌ماند."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="totp")
+    secret_encrypted = models.TextField(editable=False)
+    confirmed_at = models.DateTimeField("تأیید ثبت", null=True, blank=True)
+    last_step = models.BigIntegerField("آخرین گام پذیرفته‌شده", default=0)
+    recovery_hashes = models.JSONField("چکیده‌ی کدهای بازیابی", default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "ورود دومرحله‌ای مدیر"
+        verbose_name_plural = "ورود دومرحله‌ای مدیران"
+
+    def __str__(self):
+        return f"{self.user} ({'فعال' if self.confirmed_at else 'ناتمام'})"
+
+    @property
+    def secret(self) -> str:
+        from kernel.crypto import decrypt
+
+        return decrypt(self.secret_encrypted)
+
+    @classmethod
+    def start(cls, user) -> "AdminTOTP":
+        """ثبت‌نام تازه (یا ادامه‌ی ثبت‌نام ناتمام)؛ برای کاربر ثبت‌شده راز تازه نمی‌سازد."""
+        from kernel.crypto import encrypt
+
+        from . import totp
+
+        obj = cls.objects.filter(user=user).first()
+        if obj is None:
+            obj = cls.objects.create(user=user, secret_encrypted=encrypt(totp.new_secret()))
+        return obj

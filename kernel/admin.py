@@ -6,9 +6,10 @@ from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
+from django.shortcuts import redirect
 from django.utils.html import format_html, format_html_join
 
-from . import entitlements, pkg, workspace
+from . import entitlements, pkg, stepup, workspace
 from .models import Entitlement, Organization, OrgMember, PluginRelease, PluginState
 from .plugins import registry
 
@@ -196,12 +197,13 @@ class PluginReleaseAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra)
 
     def upload_view(self, request):
-        from django.shortcuts import redirect
         from django.template.response import TemplateResponse
         from django.urls import reverse
 
         if not request.user.has_perm("kernel.upload_pluginrelease"):
             raise PermissionDenied
+        if not stepup.ok(request):
+            return redirect(stepup.url(request))
         form = UploadForm(request.POST or None, request.FILES or None)
         if request.method == "POST" and form.is_valid():
             try:
@@ -233,6 +235,8 @@ class PluginReleaseAdmin(admin.ModelAdmin):
     def activate_selected(self, request, qs):
         if not request.user.has_perm("kernel.activate_pluginrelease"):
             raise PermissionDenied
+        if not stepup.ok(request):
+            return redirect(stepup.url(request))
         for rel in qs:
             try:
                 pkg.activate(rel, request.user)
@@ -247,6 +251,8 @@ class PluginReleaseAdmin(admin.ModelAdmin):
     def deactivate_selected(self, request, qs):
         if not request.user.has_perm("kernel.activate_pluginrelease"):
             raise PermissionDenied
+        if not stepup.ok(request):
+            return redirect(stepup.url(request))
         for rel in qs:
             pkg.deactivate(rel)
             self.message_user(request, f"{rel} غیرفعال شد.", messages.WARNING)
