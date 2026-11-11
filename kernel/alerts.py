@@ -75,7 +75,7 @@ def run_one(alert: Alert, ws, state, now) -> bool:
     except Exception as exc:  # noqa: BLE001 - runner خاموش، کد معیوب، پایگاه ناپیدا…
         state.last_error = str(exc).splitlines()[0][:300] if str(exc) else type(exc).__name__
         state.save()
-        return False
+        return False  # سلامت را client.execute (فقط برای خطای خود کد) ثبت کرده
     metering.record(alert.plugin, "alert_runs", ws=ws)
     sent = False
     if found:

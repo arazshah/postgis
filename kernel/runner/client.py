@@ -9,12 +9,16 @@ from __future__ import annotations
 
 from django.conf import settings
 
-from .. import handlers, metering
+from .. import handlers, health, metering
 from . import sandbox
 
 
 class RunnerError(Exception):
     """پیام فارسی امن برای کاربر."""
+
+
+class HandlerFailed(RunnerError):
+    """خطای خود کد پلاگین (خطا، مهلت، سقف منابع، خروجی نامعتبر)؛ فقط همین‌ها در قطع‌کن شمرده می‌شوند، نه خرابی زیرساخت."""
 
 
 def mode() -> str:
@@ -29,13 +33,22 @@ def execute(plugin: str, handler: str, params: dict, sql_fn, ws_pk: int = 0):
     metering.record(plugin, "handler_runs")
     if m == "local":
         try:
-            return sandbox.run(files, handler, params, sql_fn, timeout=float(getattr(settings, "PLUGIN_RUNNER_TIMEOUT", 10)))
+            out = sandbox.run(files, handler, params, sql_fn, timeout=float(getattr(settings, "PLUGIN_RUNNER_TIMEOUT", 10)))
         except sandbox.SandboxError as exc:
-            raise RunnerError(f"اجرای کد پلاگین ناموفق بود: {exc}") from exc
+            health.record(plugin, False)
+            raise HandlerFailed(f"اجرای کد پلاگین ناموفق بود: {exc}") from exc
+        health.record(plugin, True)
+        return out
     if m == "remote":
         from . import remote
 
         if not ws_pk:
             raise RunnerError("اجرای راه‌دور به پایگاه داده‌ی مشخص نیاز دارد.")
-        return remote.call(files, handler, params, ws_pk)
+        try:
+            out = remote.call(files, handler, params, ws_pk)
+        except HandlerFailed:
+            health.record(plugin, False)
+            raise
+        health.record(plugin, True)
+        return out
     raise RunnerError("اجرای کد پلاگین روی این استقرار فعال نیست.")
