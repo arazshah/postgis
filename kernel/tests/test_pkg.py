@@ -143,7 +143,7 @@ class InspectTests(TestCase):
         ins = self.inspect(build())
         self.assertTrue(ins.ok, ins.report())
         self.assertEqual((ins.publisher, ins.manifest["id"], len(ins.pages)), ("acme", "fleet", 1))
-        self.assertEqual(len(ins.steps), 6)  # آخری «دسترسی نوشتن» است
+        self.assertEqual(len(ins.steps), 7)  # پیش‌ازآخر «کد سطح ۲»، آخر «دسترسی نوشتن»
 
     def test_unsigned_untrusted_or_modified_never_reach_later_stages(self):
         self.assertEqual(self.failed(build(signed=False)).stage, "امضا و ناشر")
@@ -160,7 +160,7 @@ class InspectTests(TestCase):
 
         cases = [
             ({"id": '"Bad-ID"'}, "شناسه"), ({"version": '"1.0"'}, "نسخه"), ({"name": '""'}, "نام"),
-            ({"kind": '"system"'}, "سیستمی"), ({"api": "9"}, "قرارداد"), ({"tier": "2"}, "tier = 1"),
+            ({"kind": '"system"'}, "سیستمی"), ({"api": "9"}, "قرارداد"), ({"tier": "3"}, "سطح ۳"),
             ({"id": '"databases"'}, "برخورد"),
         ]
         for patch, needle in cases:

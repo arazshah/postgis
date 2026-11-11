@@ -22,13 +22,13 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from . import pagekit
+from . import handlers, pagekit
 from .plugins import API_VERSION, ID_RE, registry
 
 log = logging.getLogger(__name__)
 
 MAX_TOTAL, MAX_FILE, MAX_FILES = 2 * 1024 * 1024, 200 * 1024, 60
-NAME_RE = re.compile(r"^(plugin\.toml|SIGNATURE|README\.md|pages/[a-z][a-z0-9_]{1,30}\.toml)$")
+NAME_RE = re.compile(r"^(plugin\.toml|SIGNATURE|README\.md|pages/[a-z][a-z0-9_]{1,30}\.toml|code/[a-z][a-z0-9_]{1,30}\.py)$")
 VERSION_RE = re.compile(r"^(\d{1,4})\.(\d{1,4})\.(\d{1,4})$")
 SIG_NAME, MANIFEST_NAME = "SIGNATURE", "plugin.toml"
 KINDS = ("custom", "feature")
@@ -149,6 +149,7 @@ class Inspection:
     files: dict[str, bytes] = field(default_factory=dict)
     manifest: dict = field(default_factory=dict)
     pages: list[pagekit.Page] = field(default_factory=list)
+    code: dict[str, str] = field(default_factory=dict)  # سطح ۲: نام handler ← منبع پایتون
     publisher: str = ""
     sha256: str = ""
 
@@ -184,8 +185,8 @@ def _manifest(files: dict[str, bytes]) -> dict:
         raise PackageError(f"نوع پلاگین باید یکی از {'، '.join(KINDS)} باشد (پلاگین سیستمی از راه بسته نمی‌آید).")
     if int(m.get("api", 1)) > API_VERSION:
         raise PackageError(f"بسته قرارداد نسخه‌ی {m.get('api')} می‌خواهد؛ هسته {API_VERSION} است.")
-    if int(m.get("tier", 1)) != 1:
-        raise PackageError("فقط پلاگین اعلانی (tier = 1) از راه بسته پشتیبانی می‌شود؛ سطح ۲ و ۳ هنوز نیست.")
+    if int(m.get("tier", 1)) not in (1, 2):
+        raise PackageError("فقط سطح ۱ (اعلانی) و ۲ (کد ایزوله) از راه بسته پشتیبانی می‌شود؛ سطح ۳ هنوز نیست.")
     return m
 
 
@@ -224,7 +225,11 @@ def inspect(data: bytes, *, keys: dict | None = None, new_release: bool = True) 
     ins.manifest = manifest
     if stage("هویت و نسخه", lambda: _identity(manifest, check_version=new_release)) is None:
         return ins
-    pages = stage("مشخصات صفحه‌ها", lambda: _pages(manifest, files))
+    code = stage("کد سطح ۲", lambda: _code(manifest, files))
+    if code is None:
+        return ins
+    ins.code = code
+    pages = stage("مشخصات صفحه‌ها", lambda: _pages(manifest, files, set(code)))
     if pages is not None:
         ins.pages = pages
         writes = sorted({f"{pg.key}→{fm.table}" for pg in pages for fm in pg.forms})
@@ -248,7 +253,36 @@ def _identity(manifest: dict, *, check_version: bool = True) -> bool:
     return True
 
 
-def _pages(manifest: dict, files: dict[str, bytes]) -> list[pagekit.Page]:
+def _code(manifest: dict, files: dict[str, bytes]) -> dict[str, str]:
+    """کد سطح ۲: فقط با tier = 2، با فهرست handlers هم‌خوان، و بررسی ایستای AST."""
+    from .runner import scan
+
+    present = {n[5:-3]: n for n in files if n.startswith("code/")}
+    declared = list((manifest.get("contributes") or {}).get("handlers", []))
+    if int(manifest.get("tier", 1)) != 2:
+        if present or declared:
+            raise PackageError("کد پایتون و handlers فقط در بسته‌ی سطح ۲ (tier = 2) مجاز است.")
+        return {}
+    if sorted(declared) != sorted(present):
+        raise PackageError("فهرست handlers مانیفست با فایل‌های code/ یکی نیست.")
+    if not present:
+        raise PackageError("بسته‌ی سطح ۲ دست‌کم یک handler لازم دارد.")
+    out, problems = {}, []
+    for name, path in sorted(present.items()):
+        try:
+            src = files[path].decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise PackageError(f"{path}: کد باید UTF-8 باشد.") from exc
+        problems += scan.scan(src, path)
+        if "def handle(" not in src:
+            problems.append(f"{path}: تابع handle(ctx, params) تعریف نشده است.")
+        out[name] = src
+    if problems:
+        raise PackageError("؛ ".join(problems[:8]) + (f" (و {len(problems) - 8} مورد دیگر)" if len(problems) > 8 else ""))
+    return out
+
+
+def _pages(manifest: dict, files: dict[str, bytes], known: set[str] | None = None) -> list[pagekit.Page]:
     declared = list((manifest.get("contributes") or {}).get("pages", []))
     present = sorted(n for n in files if n.startswith("pages/"))
     if sorted(declared) != present:
@@ -260,6 +294,9 @@ def _pages(manifest: dict, files: dict[str, bytes]) -> list[pagekit.Page]:
             page = pagekit.parse_page(manifest["id"], spec)
         except (UnicodeDecodeError, tomllib.TOMLDecodeError, pagekit.SpecError) as exc:
             raise PackageError(f"{name}: {exc}") from exc
+        for b in page.blocks:
+            if b.handler and b.handler not in (known or set()):
+                raise PackageError(f"{name}: handler «{b.handler}» در بسته نیست.")
         if page.key in keys:
             raise PackageError(f"{name}: کلید صفحه‌ی «{page.key}» تکراری است.")
         keys.add(page.key)
@@ -359,6 +396,8 @@ def sync() -> int:
                               requires=tuple(m.get("requires", ())), description=str(m.get("description", "")))
             for page in ins.pages:
                 pagekit.register(pid, page)
+            for hname, src in ins.code.items():
+                handlers.register(pid, hname, src)
             _loaded[pid] = rel.sha256
             changed += 1
         except Exception as exc:  # noqa: BLE001  بسته‌ی معیوب سایت را نمی‌خواباند

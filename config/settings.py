@@ -191,6 +191,12 @@ ADMIN_2FA_FRESH_MINUTES = int(os.environ.get("ADMIN_2FA_FRESH_MINUTES", "30"))  
 PLUGIN_PUBLISHER_KEYS = os.environ.get("PLUGIN_PUBLISHER_KEYS", "")
 # تأیید و فعال‌سازی توسط همان کسی که بسته را بارگذاری کرده؛ پیش‌فرض ممنوع (اصل دونفره). تیم یک‌نفره می‌تواند روشن کند.
 PLUGIN_SELF_APPROVAL = os.environ.get("PLUGIN_SELF_APPROVAL", "") == "1"
+# اجرای کد سطح ۲ پلاگین: off (پیش‌فرض تولید) | local (فقط توسعه/آزمون؛ بدون جداسازی کانتینری) | remote (سرویس plugin-runner)
+PLUGIN_RUNNER_MODE = os.environ.get("PLUGIN_RUNNER_MODE", "local" if (DEBUG or os.environ.get("DJANGO_TESTING")) else "off")
+PLUGIN_RUNNER_URL = os.environ.get("PLUGIN_RUNNER_URL", "")
+PLUGIN_RUNNER_TOKEN = os.environ.get("PLUGIN_RUNNER_TOKEN", "")
+PLUGIN_RUNNER_CALLBACK = os.environ.get("PLUGIN_RUNNER_CALLBACK", "")  # آدرس داخلی web برای پرس‌وجوی کد پلاگین، مثل http://web:8000
+PLUGIN_RUNNER_TIMEOUT = int(os.environ.get("PLUGIN_RUNNER_TIMEOUT", "10"))
 OSM_ROOT = Path(os.environ.get("OSM_ROOT", MEDIA_ROOT / "osm"))
 OSM_SOURCE_URL = os.environ.get("OSM_SOURCE_URL", "https://download.geofabrik.de/asia/iran-latest.osm.pbf")
 OSM_REFRESH_DAYS = int(os.environ.get("OSM_REFRESH_DAYS", "7"))  # 0 = فقط دستی

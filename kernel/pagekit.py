@@ -60,6 +60,7 @@ class Block:
     unit: str = ""
     hint: str = ""
     columns: tuple[tuple[str, str], ...] = ()  # (نام ستون، برچسب)
+    handler: str = ""  # سطح ۲: نام handler کد ایزوله به‌جای sql (پاسخ: {"columns": [...], "rows": [[...]]})
 
 
 FIELD_KINDS = ("text", "int", "number", "bool", "date", "choice")
@@ -169,9 +170,17 @@ def parse_block(d: dict, params: dict[str, Param]) -> Block:
     if width not in WIDTHS:
         raise SpecError(f"عرض بلوک «{width}» نامعتبر است.")
     text, query = _str(d, "text", limit=4000), _str(d, "sql", limit=MAX_SQL)
+    handler = _str(d, "handler", limit=31)
+    if handler:
+        if not KEY_RE.fullmatch(handler):
+            raise SpecError(f"نام handler «{handler}» نامعتبر است.")
+        if kind not in ("kpi", "table", "bars"):
+            raise SpecError("handler فقط برای بلوک‌های kpi، table و bars است.")
+        if query:
+            raise SpecError("بلوک هم‌زمان «sql» و «handler» نمی‌تواند داشته باشد.")
     if kind == "text" and not text:
         raise SpecError("بلوک متنی باید «text» داشته باشد.")
-    if kind != "text":
+    if kind != "text" and not handler:
         if not query:
             raise SpecError(f"بلوک «{kind}» باید «sql» داشته باشد.")
         if not re.match(r"^\s*(select|with)\b", query, re.I):
@@ -188,7 +197,7 @@ def parse_block(d: dict, params: dict[str, Param]) -> Block:
     if cols and not all(isinstance(c, (list, tuple)) and len(c) == 2 for c in cols):
         raise SpecError("«columns» فهرست [نام ستون، برچسب] است.")
     return Block(kind, _str(d, "title", limit=100), width, query, text, _str(d, "unit", limit=20),
-                 _str(d, "hint", limit=200), tuple((str(a), str(b)) for a, b in cols))
+                 _str(d, "hint", limit=200), tuple((str(a), str(b)) for a, b in cols), handler)
 
 
 def parse_field(d: dict) -> Field:
@@ -362,6 +371,45 @@ def run_sql(ws, block: Block, page: Page, values: dict, *, kind: str | None = No
         return cols, cur.fetchall()
 
 
+def read_select(ws, query: str, params=None, *, limit: int = 2000) -> dict:
+    """پل SQL برای کد سطح ۲: فقط SELECT/WITH، یک دستور، تراکنش فقط‌خواندنی با نقش محدود مشتری، سقف ردیف و زمان."""
+    if not re.match(r"^\s*(select|with)\b", query or "", re.I) or len(query) > MAX_SQL:
+        raise SpecError("فقط SELECT یا WITH (حداکثر ۴۰۰۰ نویسه) مجاز است.")
+    with tenantdb.connect(ws) as conn:
+        conn.execute(sql.SQL("SET LOCAL statement_timeout = {}").format(sql.Literal(f"{TIMEOUT_S}s")))
+        cur = conn.execute(sql.SQL("SELECT * FROM ({}) AS q LIMIT {}").format(sql.SQL(query.rstrip().rstrip(";")), sql.Literal(limit)),
+                           params if isinstance(params, (list, tuple, dict)) else None, prepare=True)
+        cols = [d.name for d in cur.description]
+        return {"columns": cols, "rows": [[_json_safe(v) for v in r] for r in cur.fetchall()]}
+
+
+def _json_safe(v):
+    if isinstance(v, (Decimal,)):
+        return float(v)
+    if isinstance(v, (datetime, date)):
+        return v.isoformat()
+    if isinstance(v, (bytes, memoryview)):
+        return None
+    return v
+
+
+def run_handler(ws, page: Page, block: Block, values: dict) -> tuple[list[str], list[tuple]]:
+    """بلوک مبتنی بر کد ایزوله: handler را اجرا و (ستون‌ها، ردیف‌ها) را برمی‌گرداند. خطا = SpecError با پیام کوتاه."""
+    from .runner import client
+
+    params = {p.name: values.get(p.name) for p in page.params if p.kind != "layer"}
+    params.update({p.name: values.get(p.name) for p in page.params if p.kind == "layer"})
+    try:
+        out = client.execute(page.plugin, block.handler, params, lambda q, a: read_select(ws, q, a), getattr(ws, "pk", 0))
+    except client.RunnerError as exc:
+        raise SpecError(str(exc)) from exc
+    if not isinstance(out, dict) or not isinstance(out.get("columns"), list) or not isinstance(out.get("rows"), list):
+        raise SpecError("handler باید {columns: [...], rows: [[...]]} برگرداند.")
+    cols = [str(c) for c in out["columns"]][:50]
+    rows = [tuple(r) for r in out["rows"][:LIMITS.get(block.kind, 200)] if isinstance(r, (list, tuple))]
+    return cols, rows
+
+
 def _fmt(v) -> str:
     if v is None:
         return ""
@@ -384,7 +432,7 @@ def render_block(ws, page: Page, block: Block, values: dict) -> dict:
         out["paras"] = [p.strip() for p in block.text.split("\n\n") if p.strip()]
         return out
     try:
-        cols, rows = run_sql(ws, block, page, values)
+        cols, rows = run_handler(ws, page, block, values) if block.handler else run_sql(ws, block, page, values)
     except SpecError as exc:
         out["error"] = str(exc)
         return out

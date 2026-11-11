@@ -1,11 +1,12 @@
 """نمای عمومی صفحه‌های کیت صفحه: `dashboard/<pk>/p/<plugin>/<page>/` (و `?fragment=1` برای تازه‌سازی بدنه)."""
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from . import entitlements, metering, pagekit, tenantdb, workspace
+from . import entitlements, gate, metering, pagekit, tenantdb, workspace
 
 
 @login_required
@@ -79,3 +80,28 @@ def submit(request, pk, plugin, page, form):
     workspace.log_event("plugin_form", f"{plugin}/{page}/{form}: یک ردیف در {fm.table} ثبت شد", user=request.user, database=ws)
     messages.success(request, fm.success)
     return back
+
+
+@csrf_exempt
+@gate.public
+@require_POST
+def runner_sql(request):
+    """پل SQL برای سرویس plugin-runner: فقط با توکن کار امضاشده (۶۰ ثانیه، فقط یک پایگاه داده) و فقط SELECT فقط‌خواندنی."""
+    import json
+
+    from django.core import signing
+
+    from .runner import remote
+
+    auth = request.headers.get("Authorization", "")
+    try:
+        ws_pk = remote.read_job_token(auth.removeprefix("Bearer "))
+        body = json.loads(request.body[:remote.sandbox.MAX_LINE])
+        ws = workspace.peek(ws_pk)
+        if ws is None or not getattr(ws, "is_live", False):
+            raise ValueError("پایگاه داده در دسترس نیست.")
+        return JsonResponse(pagekit.read_select(ws, str(body.get("query", "")), body.get("params")))
+    except (signing.BadSignature, KeyError, TypeError):
+        return JsonResponse({"error": "forbidden"}, status=403)
+    except Exception as exc:  # noqa: BLE001 - پیام کوتاه به کد پلاگین
+        return JsonResponse({"error": str(exc).splitlines()[0][:300] if str(exc) else "خطا"}, status=200)
