@@ -66,18 +66,56 @@ max = 80
 }
 
 
+HANDLER_TEMPLATES = {
+    "block": ('''def handle(ctx, params):
+    # فقط SELECT/WITH؛ نتیجه {columns, rows}
+    r = ctx.sql("select 1 as n")
+    return {"columns": ["شاخص", "مقدار"], "rows": [["نمونه", r["rows"][0][0]]]}
+''', "بلوک صفحه (kpi/table/bars)"),
+    "importer": ('''def handle(ctx, params):
+    # ctx.file() بایت فایل؛ هسته جدول تازه می‌سازد
+    lines = ctx.file().decode("utf-8").splitlines()
+    rows = []
+    for line in lines:
+        a, b = line.split(",")
+        rows.append([a, float(b)])
+    return {"columns": [{"name": "name", "type": "text"}, {"name": "value", "type": "double"}], "rows": rows}
+''', "ورود فایل ← جدول تازه"),
+    "exporter": ('''def handle(ctx, params):
+    r = ctx.sql("select 1 as n")
+    return {"filename": "report", "text": "n\\n" + str(r["rows"][0][0]) + "\\n"}
+''', "خروجی اختصاصی (متن)"),
+    "alert": ('''def handle(ctx, params):
+    n = ctx.sql("select count(*) from information_schema.tables")["rows"][0][0]
+    if n > 1000:
+        return {"alerts": [{"title": "تعداد زیاد", "body": f"{n} مورد"}]}
+    return {"alerts": []}
+''', "هشدار دوره‌ای"),
+}
+
+
 def manifest_text(d) -> str:
     q = json.dumps  # رشته‌ی JSON معتبر TOML هم هست
     req = [r.strip() for r in (d.requires or "").split(",") if r.strip()]
     pages = ", ".join(q(f"pages/{k}.toml") for k in sorted(d.pages))
-    return (f"id = {q(d.plugin_id)}\nname = {q(d.name, ensure_ascii=False)}\nversion = {q(d.version)}\napi = 1\n"
-            f"kind = {q(d.kind)}\ntier = 1\nrequires = [{', '.join(q(r) for r in req)}]\n\n[contributes]\npages = [{pages}]\n")
+    code = sorted(getattr(d, "code", None) or {})
+    out = (f"id = {q(d.plugin_id)}\nname = {q(d.name, ensure_ascii=False)}\nversion = {q(d.version)}\napi = 1\n"
+           f"kind = {q(d.kind)}\ntier = {2 if code else 1}\nrequires = [{', '.join(q(r) for r in req)}]\n\n[contributes]\npages = [{pages}]\n")
+    if code:
+        out += f"handlers = [{', '.join(q(c) for c in code)}]\n"
+        for h in code:
+            mins = (getattr(d, "alerts", None) or {}).get(h)
+            if isinstance(mins, int) and not isinstance(mins, bool):
+                out += f"\n[[contributes.alerts]]\nhandler = {q(h)}\nevery_minutes = {mins}\n"
+    return out
 
 
 def files_of(d) -> dict[str, bytes]:
     files = {pkg.MANIFEST_NAME: manifest_text(d).encode()}
     for key, text in sorted(d.pages.items()):
         files[f"pages/{key}.toml"] = str(text).encode()
+    for name, src in sorted((getattr(d, "code", None) or {}).items()):
+        files[f"code/{name}.py"] = str(src).encode()
     if (d.readme or "").strip():
         files["README.md"] = d.readme.encode()
     return files
@@ -105,7 +143,12 @@ def check(d) -> list[dict]:
         return steps
     if stage("هویت", lambda: pkg._identity(manifest, check_version=False)) is None:
         return steps
-    pages = stage("مشخصات صفحه‌ها", lambda: pkg._pages(manifest, files))
+    code = stage("کد سطح ۲ (بررسی ایستا)", lambda: pkg._code(manifest, files))
+    if code is None:
+        return steps
+    if stage("هشدارهای دوره‌ای", lambda: pkg._alerts(manifest, code)) is None:
+        return steps
+    pages = stage("مشخصات صفحه‌ها", lambda: pkg._pages(manifest, files, set(code)))
     if pages:
         writes = sorted({f"{pg.key}→{fm.table}" for pg in pages for fm in pg.forms} |
                         {f"{pg.key}→جدول تازه ({im.handler})" for pg in pages for im in pg.imports})
@@ -168,3 +211,72 @@ def preview_page(d, key: str, ws, query) -> dict:
 
 def installed(plugin_id: str) -> bool:
     return plugin_id in registry.plugins
+
+
+# ---------------------------------------------------------------------- اجرای آزمایشی handler
+MAX_SHOWN = 20_000
+
+
+def roles(d) -> dict[str, tuple[str, object]]:
+    """نقش هر handler در صفحه‌های پیش‌نویس: ("import"، spec) | ("export"، spec) | ("block"، None)."""
+    out: dict[str, tuple[str, object]] = {}
+    try:
+        pages = parse_pages(d)
+    except Exception:  # noqa: BLE001 - صفحه‌ی خراب: نقش نامشخص
+        return out
+    for pg in pages:
+        for b in pg.blocks:
+            if b.handler:
+                out.setdefault(b.handler, ("block", None))
+        for im in pg.imports:
+            out[im.handler] = ("import", im)
+        for ex in pg.exports:
+            out[ex.handler] = ("export", ex)
+    return out
+
+
+def trial(d, handler: str, params: dict, file: bytes | None = None, ws=None) -> dict:
+    """handler پیش‌نویس را با ورودی نمونه اجرا می‌کند (از همان مسیر مدل‌آگاه runner؛ در حالت off اجرا نمی‌شود).
+
+    بدون پایگاه داده‌ی انتخابی، `ctx.sql` خطای «دسترسی ندارد» می‌دهد. خروجی همان‌طور که هسته در کاربرد واقعی اعتبارسنجی می‌کند
+    (ورود: ستون و نوع و ردیف؛ خروج: قالب و حجم) بررسی می‌شود تا نویسنده پیش از بارگذاری ایرادش را ببیند؛ **چیزی نوشته نمی‌شود**.
+    dict: {ok, error, result (JSON خوانا، کوتاه‌شده)، verdict (فهرست پیام)، logs}.
+    """
+    from . import pagekit, pluginio
+    from .runner import client
+
+    res = {"ok": False, "error": "", "result": "", "verdict": [], "logs": []}
+    src = (getattr(d, "code", None) or {}).get(handler)
+    if src is None:
+        res["error"] = "handler در پیش‌نویس نیست."
+        return res
+    from .runner import scan
+
+    found = scan.scan(src, f"code/{handler}.py")
+    if found:
+        res["error"] = "کد از بررسی ایستا نمی‌گذرد: " + "؛ ".join(found[:3])
+        return res
+    role, spec = roles(d).get(handler, ("block", None))
+    sql_fn = (lambda q, a: pagekit.read_select(ws, q, a)) if ws is not None else None
+    try:
+        out = client.run_files({f"code/{handler}.py": src}, handler, params, sql_fn, getattr(ws, "pk", 0) or 0, file=file,
+                               io=role in ("import", "export"), on_log=res["logs"].append, allow_no_ws=True)
+    except client.RunnerError as exc:
+        res["error"] = str(exc)
+        return res
+    shown = json.dumps(out, ensure_ascii=False, indent=2, default=str)
+    res["result"] = shown if len(shown) <= MAX_SHOWN else shown[:MAX_SHOWN] + "\n… (کوتاه‌شده)"
+    try:
+        if role == "import":
+            t = pluginio.normalize_import("trial_table", out)
+            res["verdict"].append(f"ورود معتبر است: {len(t.rows):,} ردیف، {len(t.columns)} ستون" + ("، با ستون نقطه‌ی geom" if t.geometry else ""))
+        elif role == "export":
+            name, body, ctype = pluginio.normalize_export(out, spec.format)
+            res["verdict"].append(f"خروجی معتبر است: {name} ({len(body):,} بایت، {ctype})")
+        else:
+            res["verdict"].append("اجرا موفق بود (قالب خروجی را بلوک صفحه‌ی مصرف‌کننده‌اش می‌سنجد: {columns, rows}).")
+    except pluginio.PluginIOError as exc:
+        res["error"] = f"خروجی handler معتبر نیست: {exc}"
+        return res
+    res["ok"] = True
+    return res

@@ -116,6 +116,8 @@ class PluginDraft(models.Model):
     requires = models.CharField("نیازمندی‌ها (با ویرگول)", max_length=200, blank=True)
     readme = models.TextField("شرح", blank=True)
     pages = models.JSONField("صفحه‌ها", default=dict, blank=True, help_text="کلید صفحه ← متن TOML")
+    code = models.JSONField("کد سطح ۲", default=dict, blank=True, help_text="نام handler ← منبع پایتون؛ خالی = پلاگین سطح ۱")
+    alerts = models.JSONField("هشدارها", default=dict, blank=True, help_text="نام handler ← هر چند دقیقه")
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     updated_at = models.DateTimeField(auto_now=True)
 

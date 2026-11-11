@@ -25,31 +25,34 @@ def mode() -> str:
     return getattr(settings, "PLUGIN_RUNNER_MODE", "off")
 
 
+def run_files(files: dict, handler: str, params: dict, sql_fn, ws_pk: int = 0, *, file: bytes | None = None, io: bool = False,
+              on_log=None, allow_no_ws: bool = False):
+    """اجرای مدل‌آگاه: off ← خطا، local ← جعبه‌ی همین سرور (فقط توسعه)، remote ← کانتینر runner. برای پلاگین نصب‌شده و استودیو مشترک است."""
+    m = mode()
+    if m == "local":
+        try:
+            return sandbox.run(files, handler, params, sql_fn, timeout=float(getattr(settings, "PLUGIN_RUNNER_TIMEOUT", 10)) * (3 if io else 1),
+                               file=file, max_result=sandbox.MAX_RESULT_IO if io else sandbox.MAX_RESULT, on_log=on_log)
+        except sandbox.SandboxError as exc:
+            raise HandlerFailed(f"اجرای کد پلاگین ناموفق بود: {exc}") from exc
+    if m == "remote":
+        from . import remote
+
+        if not ws_pk and not allow_no_ws:
+            raise RunnerError("اجرای راه‌دور به پایگاه داده‌ی مشخص نیاز دارد.")
+        return remote.call(files, handler, params, ws_pk, file=file, io=io)
+    raise RunnerError("اجرای کد پلاگین روی این استقرار فعال نیست.")
+
+
 def execute(plugin: str, handler: str, params: dict, sql_fn, ws_pk: int = 0, *, file: bytes | None = None, io: bool = False):
     files = handlers.files_for(plugin, handler)
     if not files:
         raise RunnerError("کد این بخش در دسترس نیست.")
-    m = mode()
     metering.record(plugin, "handler_runs")
-    if m == "local":
-        try:
-            out = sandbox.run(files, handler, params, sql_fn, timeout=float(getattr(settings, "PLUGIN_RUNNER_TIMEOUT", 10)) * (3 if io else 1),
-                              file=file, max_result=sandbox.MAX_RESULT_IO if io else sandbox.MAX_RESULT)
-        except sandbox.SandboxError as exc:
-            health.record(plugin, False)
-            raise HandlerFailed(f"اجرای کد پلاگین ناموفق بود: {exc}") from exc
-        health.record(plugin, True)
-        return out
-    if m == "remote":
-        from . import remote
-
-        if not ws_pk:
-            raise RunnerError("اجرای راه‌دور به پایگاه داده‌ی مشخص نیاز دارد.")
-        try:
-            out = remote.call(files, handler, params, ws_pk, file=file, io=io)
-        except HandlerFailed:
-            health.record(plugin, False)
-            raise
-        health.record(plugin, True)
-        return out
-    raise RunnerError("اجرای کد پلاگین روی این استقرار فعال نیست.")
+    try:
+        out = run_files(files, handler, params, sql_fn, ws_pk, file=file, io=io)
+    except HandlerFailed:
+        health.record(plugin, False)
+        raise
+    health.record(plugin, True)
+    return out

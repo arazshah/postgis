@@ -430,9 +430,15 @@ class PluginDraftAdmin(admin.ModelAdmin):
         draft = get_object_or_404(PluginDraft, pk=pk) if pk else None
         meta = DraftMetaForm(request.POST if request.method == "POST" else None, instance=draft)
         steps, preview_html, texts = [], "", dict(draft.pages) if draft else {}
+        codes, alert_mins, trial_out, trial_name = (dict(draft.code) if draft else {}), (dict(draft.alerts) if draft else {}), None, ""
         if request.method == "POST":
             op = request.POST.get("op", "save")
             texts = {k[5:]: v for k, v in request.POST.items() if k.startswith("page_") and pagekit_key(k[5:])}
+            codes = {k[5:]: v for k, v in request.POST.items() if k.startswith("code_") and pagekit_key(k[5:])}
+            alert_mins = {}
+            for k, v in request.POST.items():
+                if k.startswith("alert_") and pagekit_key(k[6:]) and v.strip().isdigit():
+                    alert_mins[k[6:]] = int(v.strip())
             if op == "addpage":
                 key = request.POST.get("newkey", "").strip()
                 tpl = studio.TEMPLATES.get(request.POST.get("template", "monitor"), studio.TEMPLATES["monitor"])[0]
@@ -440,17 +446,28 @@ class PluginDraftAdmin(admin.ModelAdmin):
                     messages.error(request, "کلید صفحه نامعتبر یا تکراری است (حروف کوچک لاتین، رقم و _).")
                 else:
                     texts[key] = tpl.format(key=key)
+            if op == "addhandler":
+                name = request.POST.get("newhandler", "").strip()
+                tpl = studio.HANDLER_TEMPLATES.get(request.POST.get("htemplate", "block"), studio.HANDLER_TEMPLATES["block"])[0]
+                if not pagekit_key(name) or name in codes:
+                    messages.error(request, "نام handler نامعتبر یا تکراری است (حروف کوچک لاتین، رقم و _؛ دست‌کم ۲ نویسه).")
+                else:
+                    codes[name] = tpl
             if op.startswith("delpage:"):
                 texts.pop(op.split(":", 1)[1], None)
+            if op.startswith("delhandler:"):
+                gone = op.split(":", 1)[1]
+                codes.pop(gone, None)
+                alert_mins.pop(gone, None)
             if meta.is_valid():
                 d = meta.save(commit=False)
-                d.pages, d.updated_by = texts, request.user
+                d.pages, d.code, d.alerts, d.updated_by = texts, codes, {k: v for k, v in alert_mins.items() if k in codes}, request.user
                 if draft is None and PluginDraft.objects.filter(plugin_id=d.plugin_id).exists():
                     messages.error(request, "پیش‌نویسی با این شناسه هست.")
                 else:
                     d.save()
                     draft = d
-                    if op in ("save", "addpage") or op.startswith("delpage:"):
+                    if op in ("save", "addpage", "addhandler") or op.startswith(("delpage:", "delhandler:")):
                         messages.success(request, "پیش‌نویس ذخیره شد.")
                         return redirect(reverse("admin:kernel_plugindraft_studio", args=[d.pk]))
                     steps = studio.check(d)
@@ -458,13 +475,47 @@ class PluginDraftAdmin(admin.ModelAdmin):
                         if not stepup.ok(request):
                             return redirect(stepup.url(request))
                         preview_html = self._preview(request, d)
+                    if op.startswith("trial:"):
+                        if not stepup.ok(request):
+                            return redirect(stepup.url(request))
+                        trial_name = op.split(":", 1)[1]
+                        trial_out = self._trial(request, d, trial_name)
         if draft and not steps and request.method == "GET":
             steps = studio.check(draft)
         return TemplateResponse(request, "admin/kernel/plugindraft/studio.html", {
             **self.admin_site.each_context(request), "title": "استودیوی پلاگین", "draft": draft, "meta": meta,
             "texts": sorted(texts.items()), "steps": steps, "valid": studio.ok(steps), "preview_html": preview_html,
             "templates": [(k, v[1]) for k, v in studio.TEMPLATES.items()], "opts": self.model._meta,
+            "codes": sorted(codes.items()), "alert_mins": alert_mins, "handler_templates": [(k, v[1]) for k, v in studio.HANDLER_TEMPLATES.items()],
+            "roles": {k: v[0] for k, v in (studio.roles(draft).items() if draft else [])}, "trial": trial_out, "trial_name": trial_name,
             "installed": bool(draft and studio.installed(draft.plugin_id))})
+
+    def _trial(self, request, d, name):
+        """اجرای آزمایشی یک handler با ورودی نمونه؛ پایگاه داده‌ی اختیاری فقط‌خواندنی و با ثبت فعالیت."""
+        import json as _json
+
+        from . import workspace as ws_mod
+        from .runner import sandbox
+
+        try:
+            params = _json.loads(request.POST.get("trial_params", "").strip() or "{}")
+            if not isinstance(params, dict):
+                raise ValueError
+        except ValueError:
+            return {"ok": False, "error": "ورودی نمونه باید یک شیء JSON باشد.", "result": "", "verdict": [], "logs": []}
+        up = request.FILES.get("trial_file")
+        if up is not None and up.size > sandbox.MAX_FILE:
+            return {"ok": False, "error": "فایل نمونه بیش از ۳ مگابایت است.", "result": "", "verdict": [], "logs": []}
+        ws = None
+        db = request.POST.get("trial_db", "").strip()
+        if db:
+            ws = ws_mod.peek(int(db)) if db.isdigit() else None
+            if ws is None or not getattr(ws, "is_live", False):
+                return {"ok": False, "error": "پایگاه داده‌ی فعال با این شناسه نیست.", "result": "", "verdict": [], "logs": []}
+        out = studio.trial(d, name, params, up.read(sandbox.MAX_FILE + 1) if up is not None else None, ws)
+        if ws is not None:
+            ws_mod.log_event("plugin_studio", f"اجرای آزمایشی {d.plugin_id}/{name} روی پایگاه داده {ws.pk}", user=request.user, database=ws)
+        return out
 
     def _preview(self, request, d):
         from django.template.loader import render_to_string
