@@ -143,7 +143,10 @@ class InspectTests(TestCase):
         ins = self.inspect(build())
         self.assertTrue(ins.ok, ins.report())
         self.assertEqual((ins.publisher, ins.manifest["id"], len(ins.pages)), ("acme", "fleet", 1))
-        self.assertEqual(len(ins.steps), 7)  # پیش‌ازآخر «کد سطح ۲»، آخر «دسترسی نوشتن»
+        stages = [st.stage for st in ins.steps]
+        for needed in ("امضا و ناشر", "مانیفست", "هویت و نسخه", "کد سطح ۲", "هشدارهای دوره‌ای", "مشخصات صفحه‌ها"):
+            self.assertIn(needed, stages)
+        self.assertEqual(stages[-1], "دسترسی نوشتن")
 
     def test_unsigned_untrusted_or_modified_never_reach_later_stages(self):
         self.assertEqual(self.failed(build(signed=False)).stage, "امضا و ناشر")

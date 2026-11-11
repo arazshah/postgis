@@ -22,7 +22,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from . import handlers, pagekit
+from . import alerts, handlers, pagekit
 from .plugins import API_VERSION, ID_RE, registry
 
 log = logging.getLogger(__name__)
@@ -150,6 +150,7 @@ class Inspection:
     manifest: dict = field(default_factory=dict)
     pages: list[pagekit.Page] = field(default_factory=list)
     code: dict[str, str] = field(default_factory=dict)  # سطح ۲: نام handler ← منبع پایتون
+    alerts: list[tuple[str, int]] = field(default_factory=list)  # سطح ۲: (handler، هر چند دقیقه)
     publisher: str = ""
     sha256: str = ""
 
@@ -229,6 +230,9 @@ def inspect(data: bytes, *, keys: dict | None = None, new_release: bool = True) 
     if code is None:
         return ins
     ins.code = code
+    if stage("هشدارهای دوره‌ای", lambda: _alerts(manifest, code)) is None:
+        return ins
+    ins.alerts = _alerts(manifest, code)
     pages = stage("مشخصات صفحه‌ها", lambda: _pages(manifest, files, set(code)))
     if pages is not None:
         ins.pages = pages
@@ -279,6 +283,31 @@ def _code(manifest: dict, files: dict[str, bytes]) -> dict[str, str]:
         out[name] = src
     if problems:
         raise PackageError("؛ ".join(problems[:8]) + (f" (و {len(problems) - 8} مورد دیگر)" if len(problems) > 8 else ""))
+    return out
+
+
+def _alerts(manifest: dict, code: dict[str, str]) -> list[tuple[str, int]]:
+    """`[[contributes.alerts]]` handler + every_minutes (۵ تا ۱۴۴۰)؛ فقط سطح ۲ و فقط handlerهای بسته."""
+    from . import alerts as alerts_mod
+
+    raw = (manifest.get("contributes") or {}).get("alerts", [])
+    if not raw:
+        return []
+    if not code:
+        raise PackageError("هشدار دوره‌ای فقط در بسته‌ی سطح ۲ مجاز است.")
+    if not isinstance(raw, list) or len(raw) > 5:
+        raise PackageError("حداکثر ۵ هشدار دوره‌ای.")
+    out, seen = [], set()
+    for a in raw:
+        h, every = (a.get("handler") if isinstance(a, dict) else None), (a.get("every_minutes") if isinstance(a, dict) else None)
+        if h not in code:
+            raise PackageError(f"هشدار: handler «{h}» در بسته نیست.")
+        if not isinstance(every, int) or isinstance(every, bool) or not alerts_mod.MIN_EVERY <= every <= alerts_mod.MAX_EVERY:
+            raise PackageError(f"هشدار «{h}»: every_minutes باید عدد صحیح بین {alerts_mod.MIN_EVERY} و {alerts_mod.MAX_EVERY} باشد.")
+        if h in seen:
+            raise PackageError(f"هشدار «{h}» تکراری است.")
+        seen.add(h)
+        out.append((h, every))
     return out
 
 
@@ -398,6 +427,8 @@ def sync() -> int:
                 pagekit.register(pid, page)
             for hname, src in ins.code.items():
                 handlers.register(pid, hname, src)
+            for hname, every in ins.alerts:
+                alerts.register(pid, hname, every)
             _loaded[pid] = rel.sha256
             changed += 1
         except Exception as exc:  # noqa: BLE001  بسته‌ی معیوب سایت را نمی‌خواباند

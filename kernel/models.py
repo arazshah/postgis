@@ -128,6 +128,26 @@ class PluginDraft(models.Model):
         return f"{self.name} ({self.plugin_id})"
 
 
+class PluginAlertState(models.Model):
+    """وضعیت اجرای هشدار دوره‌ای handler سطح ۲ برای یک پایگاه داده (kernel.alerts): زمان آخرین اجرا و جلوگیری از تکرار پیام."""
+
+    plugin_id = models.CharField("پلاگین", max_length=41)
+    handler = models.CharField("handler", max_length=31)
+    workspace_id = models.PositiveIntegerField("پایگاه داده")
+    last_run = models.DateTimeField("آخرین اجرا", null=True, blank=True)
+    last_hash = models.CharField(max_length=40, blank=True)
+    last_sent = models.DateTimeField("آخرین ارسال", null=True, blank=True)
+    last_error = models.CharField("آخرین خطا", max_length=300, blank=True)
+
+    class Meta:
+        verbose_name = "وضعیت هشدار پلاگین"
+        verbose_name_plural = "وضعیت هشدارهای پلاگین"
+        constraints = [models.UniqueConstraint(fields=["plugin_id", "handler", "workspace_id"], name="uniq_plugin_alert_state")]
+
+    def __str__(self):
+        return f"{self.plugin_id}.{self.handler} @ {self.workspace_id}"
+
+
 class Entitlement(models.Model):
     """مجوز: چه کسی (همه، پلن، سازمان، کاربر یا یک فضای کار) به یک پلاگین محدود دسترسی دارد."""
 
