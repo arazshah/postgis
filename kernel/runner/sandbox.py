@@ -27,7 +27,7 @@ class SandboxError(Exception):
 
 def run(files: dict[str, str], handler: str, params: dict, sql: Callable[[str, object], dict] | None = None, *,
         timeout: float = 10.0, memory_mb: int = 256, cpu_s: int = 10, on_log: Callable[[str], None] | None = None,
-        file: bytes | None = None, max_result: int = MAX_RESULT):
+        file: bytes | None = None, max_result: int = MAX_RESULT, mock_sql: list | None = None):
     """handler را اجرا و مقدار برگشتی (JSON) را برمی‌گرداند. sql(query, params) -> {"columns","rows"} (بیرون از جعبه اجرا می‌شود)."""
     proc = subprocess.Popen(
         [sys.executable, "-I", "-S", str(CHILD)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -54,6 +54,8 @@ def run(files: dict[str, str], handler: str, params: dict, sql: Callable[[str, o
             req = {"files": files, "handler": handler, "params": params, "limits": {"memory_mb": memory_mb, "cpu_s": cpu_s}}
             if file is not None:
                 req["file_b64"] = base64.b64encode(file).decode()
+            if mock_sql is not None:
+                req["mock_sql"] = mock_sql
             send(req)
             while True:
                 line = proc.stdout.readline(MAX_LINE + 1)

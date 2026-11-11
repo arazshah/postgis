@@ -41,10 +41,11 @@ def limit(kind, soft):
 
 
 class Ctx:
-    def __init__(self, file_bytes=None):
+    def __init__(self, file_bytes=None, mock_sql=None):
         self.sql_calls = 0
         self.logs = 0
         self._file = file_bytes
+        self._mock = mock_sql if isinstance(mock_sql, list) else None  # آزمون بسته: پاسخ ساختگی بدون هیچ اتصال
 
     def file(self):
         """بایت فایل بارگذاری‌شده (فقط در handler ورود)؛ بدون فایل خطا می‌دهد."""
@@ -57,6 +58,12 @@ class Ctx:
         self.sql_calls += 1
         if self.sql_calls > MAX_SQL_CALLS:
             raise RuntimeError(f"حداکثر {MAX_SQL_CALLS} پرس‌وجو در هر اجرا.")
+        if self._mock is not None:
+            q = str(query).lower()
+            for m in self._mock:
+                if isinstance(m, dict) and str(m.get("match", "")).lower() in q:
+                    return {"columns": list(m.get("columns", [])), "rows": [list(r) for r in m.get("rows", [])]}
+            raise RuntimeError("برای این پرس‌وجو پاسخ ساختگی (sql) در آزمون تعریف نشده است.")
         send({"op": "sql", "query": str(query), "params": params if isinstance(params, (dict, list, tuple)) else None})
         reply = recv()
         if not reply.get("ok"):
@@ -91,7 +98,7 @@ def main():
     safe = {k: v for k, v in vars(builtins).items() if k not in BANNED_NAMES}
     safe["__import__"] = guarded_import
     b64 = req.get("file_b64")
-    ctx = Ctx(base64.b64decode(b64) if isinstance(b64, str) else None)
+    ctx = Ctx(base64.b64decode(b64) if isinstance(b64, str) else None, req.get("mock_sql"))
     safe["print"] = ctx.log
     handler = req["handler"]
     source = req["files"].get(f"code/{handler}.py")

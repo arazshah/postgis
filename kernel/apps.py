@@ -18,3 +18,6 @@ class KernelConfig(AppConfig):
 
         jobs.register_tick("plugin_alerts", "kernel.alerts.tick", plugin="kernel", order=90)
         jobs.register_tick("plugin_breaker", "kernel.health.tick", plugin="kernel", order=95)
+        from . import dash
+
+        dash.attention("kernel.admin_cards.attention", plugin="kernel", order=5)

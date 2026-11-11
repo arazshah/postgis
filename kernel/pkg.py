@@ -28,7 +28,7 @@ from .plugins import API_VERSION, ID_RE, registry
 log = logging.getLogger(__name__)
 
 MAX_TOTAL, MAX_FILE, MAX_FILES = 2 * 1024 * 1024, 200 * 1024, 60
-NAME_RE = re.compile(r"^(plugin\.toml|SIGNATURE|README\.md|pages/[a-z][a-z0-9_]{1,30}\.toml|code/[a-z][a-z0-9_]{1,30}\.py)$")
+NAME_RE = re.compile(r"^(plugin\.toml|SIGNATURE|README\.md|pages/[a-z][a-z0-9_]{1,30}\.toml|code/[a-z][a-z0-9_]{1,30}\.py|tests/[a-z][a-z0-9_]{1,30}\.toml)$")
 VERSION_RE = re.compile(r"^(\d{1,4})\.(\d{1,4})\.(\d{1,4})$")
 SIG_NAME, MANIFEST_NAME = "SIGNATURE", "plugin.toml"
 KINDS = ("custom", "feature")
@@ -151,6 +151,7 @@ class Inspection:
     pages: list[pagekit.Page] = field(default_factory=list)
     code: dict[str, str] = field(default_factory=dict)  # سطح ۲: نام handler ← منبع پایتون
     alerts: list[tuple[str, int]] = field(default_factory=list)  # سطح ۲: (handler، هر چند دقیقه)
+    tests: dict = field(default_factory=dict)  # سطح ۲: نام handler ← فهرست Case
     publisher: str = ""
     sha256: str = ""
 
@@ -197,7 +198,7 @@ def _check_collision(pid: str) -> None:
         raise PackageError(f"شناسه‌ی «{pid}» با پلاگین داخلی سامانه برخورد دارد.")
 
 
-def inspect(data: bytes, *, keys: dict | None = None, new_release: bool = True) -> Inspection:
+def inspect(data: bytes, *, keys: dict | None = None, new_release: bool = True, run_tests: bool = False) -> Inspection:
     """همه‌ی مرحله‌های خودکار (دریافت، امضا، مانیفست، هویت، صفحه‌ها) را اجرا می‌کند؛ اولین شکست بقیه را متوقف می‌کند.
     new_release=False (بررسی دوباره‌ی نسخه‌ی ذخیره‌شده): شرط «نسخه‌ی بالاتر از موجودها» برداشته می‌شود."""
     ins = Inspection()
@@ -233,12 +234,18 @@ def inspect(data: bytes, *, keys: dict | None = None, new_release: bool = True) 
     if stage("هشدارهای دوره‌ای", lambda: _alerts(manifest, code)) is None:
         return ins
     ins.alerts = _alerts(manifest, code)
+    tests = stage("آزمون‌های بسته (ساختار)", lambda: _tests(files, code))
+    if tests is None:
+        return ins
+    ins.tests = tests
     pages = stage("مشخصات صفحه‌ها", lambda: _pages(manifest, files, set(code)))
     if pages is not None:
         ins.pages = pages
         writes = sorted({f"{pg.key}→{fm.table}" for pg in pages for fm in pg.forms} |
                         {f"{pg.key}→جدول تازه ({im.handler})" for pg in pages for im in pg.imports})
         # خبر برای بازبین: این بسته می‌تواند ردیف بنویسد (فقط INSERT در جدول‌های نام‌برده)؛ مانع نیست
+        if run_tests and code:
+            stage("آزمون‌های بسته (اجرا)", lambda: _run_tests(code, tests, pages))
         ins.steps.append(Step("دسترسی نوشتن", True, ("فقط INSERT در: " + "، ".join(writes)) if writes else "بدون نوشتن (فقط خواندنی)"))
     return ins
 
@@ -285,6 +292,47 @@ def _code(manifest: dict, files: dict[str, bytes]) -> dict[str, str]:
     if problems:
         raise PackageError("؛ ".join(problems[:8]) + (f" (و {len(problems) - 8} مورد دیگر)" if len(problems) > 8 else ""))
     return out
+
+
+def _tests(files: dict[str, bytes], code: dict[str, str]) -> dict:
+    """هر handler فایل tests/<handler>.toml با دست‌کم یک مورد می‌خواهد؛ فایل آزمون برای handlerِ ناموجود یا در سطح ۱ رد می‌شود."""
+    from . import pkgtest
+
+    present = {n[6:-5]: n for n in files if n.startswith("tests/")}
+    if not code:
+        if present:
+            raise PackageError("فایل آزمون فقط در بسته‌ی سطح ۲ مجاز است.")
+        return {}
+    extra = sorted(set(present) - set(code))
+    if extra:
+        raise PackageError(f"آزمون برای handlerِ ناموجود: {'، '.join(extra)}")
+    missing = sorted(set(code) - set(present))
+    if missing:
+        raise PackageError(f"آزمون لازم است (tests/<نام>.toml با دست‌کم یک مورد) برای: {'، '.join(missing)}")
+    total, out = 0, {}
+    for name in sorted(present):
+        try:
+            out[name] = pkgtest.parse(files[present[name]].decode("utf-8"), name)
+        except (pkgtest.TestSpecError, UnicodeDecodeError) as exc:
+            raise PackageError(str(exc)) from exc
+        total += len(out[name])
+    if total > pkgtest.MAX_CASES:
+        raise PackageError(f"حداکثر {pkgtest.MAX_CASES} مورد آزمون در هر بسته.")
+    return out
+
+
+def _run_tests(code: dict[str, str], tests: dict, pages) -> bool:
+    """موردهای آزمون را در runner اجرا می‌کند؛ اولین ناکامی‌ها در پیام می‌آید. روی استقرار بدون runner قابل اجرا نیست."""
+    from . import pkgtest
+
+    try:
+        res = pkgtest.run_all(code, tests, pkgtest.roles_of(pages or []))
+    except pkgtest.TestSpecError as exc:
+        raise PackageError(f"آزمون‌ها اجرا نشد: {exc}") from exc
+    bad = [r for r in res if not r["ok"]]
+    if bad:
+        raise PackageError(f"{len(bad)} از {len(res)} مورد ناموفق: " + "؛ ".join(f"{r['handler']}/{r['case']}: {r['message']}" for r in bad[:5]))
+    return True
 
 
 def _alerts(manifest: dict, code: dict[str, str]) -> list[tuple[str, int]]:
@@ -346,7 +394,7 @@ def submit(data: bytes, user) -> PluginRelease:  # noqa: F821
 
     if len(data) > MAX_TOTAL:
         raise PackageError("حجم بسته بیش از ۲ مگابایت است.")
-    ins = inspect(data)
+    ins = inspect(data, run_tests=True)
     existing = PluginRelease.objects.filter(sha256=ins.sha256).first()
     if existing:
         raise PackageError(f"همین بسته پیش‌تر بارگذاری شده است ({existing}).")
@@ -379,7 +427,7 @@ def activate(release, user) -> None:
     why = can_approve(release, user)
     if why:
         raise PackageError(why)
-    ins = inspect(bytes(release.blob), new_release=False)  # دوباره: کلید ناشر ممکن است حذف شده باشد
+    ins = inspect(bytes(release.blob), new_release=False, run_tests=True)  # دوباره: کلید ناشر ممکن است حذف شده باشد
     if not ins.ok:
         raise PackageError("بررسی دوباره‌ی بسته موفق نبود: " + "؛ ".join(s.detail for s in ins.steps if not s.ok))
     PluginRelease.objects.filter(plugin_id=release.plugin_id, status=PluginRelease.Status.ACTIVE).update(

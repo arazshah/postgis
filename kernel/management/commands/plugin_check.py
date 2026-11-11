@@ -10,9 +10,11 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("package")
+        parser.add_argument("--tests", action="store_true",
+                            help="آزمون‌های بسته‌ی سطح ۲ را هم اجرا کن (نیازمند PLUGIN_RUNNER_MODE=local در توسعه/CI یا remote)")
 
     def handle(self, package, **options):
-        ins = pkg.inspect(Path(package).read_bytes())
+        ins = pkg.inspect(Path(package).read_bytes(), run_tests=options.get("tests", False))
         for s in ins.steps:
             self.stdout.write(f"{'✓' if s.ok else '✗'} {s.stage}{': ' + s.detail if s.detail else ''}")
         if not ins.ok:
