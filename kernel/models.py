@@ -84,6 +84,28 @@ class PluginSetting(models.Model):
         return f"{self.plugin_id}.{self.key}"
 
 
+class PluginUsage(models.Model):
+    """شمارنده‌ی روزانه‌ی مصرف پلاگین به‌ازای (معیار، فضای کار، کاربر)؛ ۰ یعنی «بدون فضای کار/کاربر». kernel.metering."""
+
+    plugin_id = models.CharField("پلاگین", max_length=41)
+    metric = models.CharField("معیار", max_length=40)
+    day = models.DateField("روز")
+    workspace_id = models.PositiveIntegerField("پایگاه داده", default=0)
+    user_id = models.PositiveIntegerField("کاربر", default=0)
+    count = models.BigIntegerField("تعداد", default=0)
+
+    class Meta:
+        verbose_name = "مصرف پلاگین"
+        verbose_name_plural = "مصرف پلاگین‌ها"
+        ordering = ["-day", "plugin_id", "metric"]
+        constraints = [models.UniqueConstraint(fields=["plugin_id", "metric", "day", "workspace_id", "user_id"],
+                                               name="uniq_plugin_usage")]
+        indexes = [models.Index(fields=["plugin_id", "metric", "day"], name="plugin_usage_lookup")]
+
+    def __str__(self):
+        return f"{self.plugin_id}.{self.metric} {self.day}: {self.count}"
+
+
 class Entitlement(models.Model):
     """مجوز: چه کسی (همه، پلن، سازمان، کاربر یا یک فضای کار) به یک پلاگین محدود دسترسی دارد."""
 

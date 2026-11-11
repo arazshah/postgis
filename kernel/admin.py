@@ -10,7 +10,7 @@ from django.shortcuts import redirect
 from django.utils.html import format_html, format_html_join
 
 from . import conf, entitlements, pkg, stepup, workspace
-from .models import Entitlement, Organization, OrgMember, PluginRelease, PluginState
+from .models import Entitlement, Organization, OrgMember, PluginRelease, PluginState, PluginUsage
 from .plugins import registry
 
 
@@ -322,4 +322,23 @@ def _keys_ok() -> bool:
         pkg.publisher_keys()
         return True
     except pkg.PackageError:
+        return False
+
+
+@admin.register(PluginUsage)
+class PluginUsageAdmin(admin.ModelAdmin):
+    """گزارش مصرف: فقط‌خواندنی (شمارنده‌ها را فقط هسته می‌نویسد)."""
+
+    list_display = ("plugin_id", "metric", "day", "workspace_id", "user_id", "count")
+    list_filter = ("plugin_id", "metric", "day")
+    search_fields = ("plugin_id", "metric")
+    date_hierarchy = "day"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False

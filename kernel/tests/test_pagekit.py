@@ -277,6 +277,27 @@ class PageViewTests(BaseCase):
         self.assertContains(r, 'class="ws-item on"', count=1)
 
     @override_settings(STORAGES=STORAGES)
+    def test_views_are_metered_but_refresh_is_not(self):
+        from kernel import metering
+
+        self.client.get(self.url)
+        self.client.get(self.url, {"fragment": "1"})
+        self.assertEqual(metering.used("demo", "page_views", ws=self.db), 1)
+
+    @override_settings(STORAGES=STORAGES)
+    def test_monthly_cap_blocks_the_page(self):
+        from kernel import metering
+        from kernel.models import Entitlement, PluginState
+
+        st = PluginState.objects.create(plugin_id="demo")
+        Entitlement.objects.create(state=st, kind=Entitlement.Kind.ALL, limits={"page_views_per_month": 1})
+        entitlements.invalidate()
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        r = self.client.get(self.url)
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(metering.used("demo", "page_views", ws=self.db), 1)
+
+    @override_settings(STORAGES=STORAGES)
     def test_fragment_returns_only_the_body(self):
         r = self.client.get(self.url, {"fragment": "1"})
         self.assertContains(r, "pk-grid")
