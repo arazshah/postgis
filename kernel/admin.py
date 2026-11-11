@@ -9,7 +9,7 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 from django.utils.html import format_html, format_html_join
 
-from . import entitlements, pkg, stepup, workspace
+from . import conf, entitlements, pkg, stepup, workspace
 from .models import Entitlement, Organization, OrgMember, PluginRelease, PluginState
 from .plugins import registry
 
@@ -22,6 +22,26 @@ def sync_states() -> int:
             _, new = PluginState.objects.get_or_create(plugin_id=p.id)
             made += new
     return made
+
+
+def options_form(opts, data=None) -> forms.Form:
+    """فرم پویا از گزینه‌های اعلام‌شده؛ مقدار secret هرگز پر نمی‌شود (فقط «تنظیم شده»)."""
+    fields = {}
+    for o in opts:
+        common = {"label": o.label, "required": False, "help_text": o.help}
+        if o.kind == "bool":
+            fields[o.key] = forms.BooleanField(initial=bool(conf.get(o.plugin, o.key)), **common)
+        elif o.kind == "int":
+            fields[o.key] = forms.IntegerField(initial=conf.get(o.plugin, o.key), min_value=o.min, max_value=o.max, **common)
+        elif o.kind == "choice":
+            fields[o.key] = forms.ChoiceField(choices=o.choices, initial=conf.get(o.plugin, o.key), **common)
+        elif o.kind == "secret":
+            hint = "تنظیم شده؛ برای تغییر مقدار تازه بنویسید" if conf.is_set(o.plugin, o.key) else "تنظیم نشده"
+            fields[o.key] = forms.CharField(widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password"}),
+                                            label=o.label, required=False, help_text=f"{hint}. {o.help}".strip())
+        else:
+            fields[o.key] = forms.CharField(initial=conf.get(o.plugin, o.key), max_length=2000, **common)
+    return type("OptionsForm", (forms.Form,), fields)(data)
 
 
 class EntitlementForm(forms.ModelForm):
@@ -68,8 +88,46 @@ class PluginStateAdmin(admin.ModelAdmin):
     search_fields = ("plugin_id", "note")
     inlines = [EntitlementInline]
     actions = ["make_restricted", "make_open", "turn_on", "turn_off"]
-    fields = ("plugin_id", "enabled", "access", "note")
-    readonly_fields = ("plugin_id",)
+    fields = ("plugin_id", "enabled", "access", "note", "options_link")
+    readonly_fields = ("plugin_id", "options_link")
+
+    @admin.display(description="تنظیمات پلاگین")
+    def options_link(self, obj):
+        from django.urls import reverse
+
+        n = len(conf.options(obj.plugin_id))
+        if not obj.pk or not n:
+            return "—"
+        return format_html('<a href="{}">{} گزینه؛ ویرایش</a>', reverse("admin:kernel_pluginstate_options", args=[obj.pk]), n)
+
+    def get_urls(self):
+        from django.urls import path
+
+        return [path("<int:pk>/options/", self.admin_site.admin_view(self.options_view),
+                     name="kernel_pluginstate_options")] + super().get_urls()
+
+    def options_view(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        from django.template.response import TemplateResponse
+        from django.urls import reverse
+
+        obj = get_object_or_404(PluginState, pk=pk)
+        if not self.has_change_permission(request, obj):
+            raise PermissionDenied
+        opts = conf.options(obj.plugin_id)
+        form = options_form(opts, request.POST if request.method == "POST" else None)
+        back = reverse("admin:kernel_pluginstate_change", args=[obj.pk])
+        if request.method == "POST" and form.is_valid():
+            changing_secret = any(o.kind == "secret" and form.cleaned_data.get(o.key) for o in opts)
+            if changing_secret and not stepup.ok(request):
+                return redirect(stepup.url(request))
+            for o in opts:
+                conf.set_value(obj.plugin_id, o.key, form.cleaned_data.get(o.key))
+            messages.success(request, "تنظیمات پلاگین ذخیره شد.")
+            return redirect(back)
+        return TemplateResponse(request, "admin/kernel/pluginstate/options.html", {
+            **self.admin_site.each_context(request), "title": f"تنظیمات {obj.plugin_id}", "form": form, "obj": obj,
+            "back": back, "opts": opts, "has_view_permission": True})
 
     def has_add_permission(self, request):
         return False

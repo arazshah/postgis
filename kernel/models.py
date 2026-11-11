@@ -67,6 +67,23 @@ class PluginState(models.Model):
         return self.plugin_id
 
 
+class PluginSetting(models.Model):
+    """مقدار یک گزینه‌ی اعلام‌شده‌ی پلاگین (kernel.conf). گزینه‌ی secret رمزنگاری‌شده است."""
+
+    plugin_id = models.CharField("پلاگین", max_length=41)
+    key = models.CharField("کلید", max_length=60)
+    value = models.TextField("مقدار", blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "تنظیم پلاگین"
+        verbose_name_plural = "تنظیمات پلاگین"
+        constraints = [models.UniqueConstraint(fields=["plugin_id", "key"], name="uniq_plugin_setting")]
+
+    def __str__(self):
+        return f"{self.plugin_id}.{self.key}"
+
+
 class Entitlement(models.Model):
     """مجوز: چه کسی (همه، پلن، سازمان، کاربر یا یک فضای کار) به یک پلاگین محدود دسترسی دارد."""
 
