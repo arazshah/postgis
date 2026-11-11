@@ -1,0 +1,14 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="content-main">
+  <p>بسته‌ی امضاشده را بارگذاری کنید. بررسی خودکار (بازکردن امن، امضا، مانیفست، صفحه‌ها) فوراً انجام می‌شود؛ بعد از آن فعال‌سازی نیازمند تأیید یک مدیر مجاز (ترجیحاً غیر از بارگذارنده) است و پلاگین تا اعطای مجوز برای هیچ مشتری دیده نمی‌شود.</p>
+  {% if keys %}<p class="help">ناشران مجاز این استقرار: <b dir="ltr">{{ keys|join:"، " }}</b></p>
+  {% else %}<p class="errornote">هیچ ناشر مجازی تنظیم نشده (PLUGIN_PUBLISHER_KEYS)؛ هر بسته‌ای رد می‌شود.</p>{% endif %}
+  <form method="post" enctype="multipart/form-data">{% csrf_token %}
+    <fieldset class="module aligned">
+      <div class="form-row">{{ form.package.errors }}{{ form.package.label_tag }} {{ form.package }}<div class="help">{{ form.package.help_text }}</div></div>
+    </fieldset>
+    <div class="submit-row"><input type="submit" class="default" value="بارگذاری و بررسی"></div>
+  </form>
+</div>
+{% endblock %}

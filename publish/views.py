@@ -11,8 +11,9 @@ from django.views.decorators.clickjacking import xframe_options_exempt
 from django.views.decorators.http import require_POST
 
 from accounts.decorators import site_user_required
-from databases.explorer import Explorer, ExplorerError
 from databases.models import UserDatabase
+from kernel import tenantdb
+from kernel.tenantdb import TenantError
 
 from . import access, engine, styles
 from .models import ApiKey, Layer, Service
@@ -23,9 +24,9 @@ SESSION_KEY = "publish_new_key_{}"
 
 def _db(request, pk, need: str = "editor") -> UserDatabase:
     """انتشار: مالک و ویرایشگرهای تیم؛ کلیدهای API فقط مالک."""
-    from databases import team
+    from kernel import workspace
 
-    return team.get_db(request, pk, need)
+    return workspace.get(request, pk, need)
 
 
 @site_user_required
@@ -37,8 +38,8 @@ def manage(request, pk):
     service = Service.objects.filter(database=db).first()
     layers = {(x.schema, x.table): x for x in (service.layers.all() if service else [])}
     try:
-        tables = Explorer(db).tables()
-    except ExplorerError as exc:
+        tables = tenantdb.catalog(db).tables()
+    except TenantError as exc:
         messages.error(request, str(exc))
         tables = []
     rows = []
@@ -109,8 +110,8 @@ def publish_table(request, pk):
     db = _db(request, pk)
     schema, table = request.POST.get("schema", ""), request.POST.get("table", "")
     try:
-        t = Explorer(db).find(schema, table)
-    except ExplorerError as exc:
+        t = tenantdb.catalog(db).find(schema, table)
+    except TenantError as exc:
         messages.error(request, str(exc))
         return redirect("publish:manage", pk=db.pk)
     service, _ = Service.objects.get_or_create(database=db)
@@ -129,8 +130,8 @@ def publish_bulk(request, pk):
         messages.error(request, "جدولی انتخاب نشده است.")
         return redirect("publish:manage", pk=db.pk)
     try:
-        by_name = {f"{t.schema}.{t.name}": t for t in Explorer(db).tables()}
-    except ExplorerError as exc:
+        by_name = {f"{t.schema}.{t.name}": t for t in tenantdb.catalog(db).tables()}
+    except TenantError as exc:
         messages.error(request, str(exc))
         return redirect("publish:manage", pk=db.pk)
     service, _ = Service.objects.get_or_create(database=db)

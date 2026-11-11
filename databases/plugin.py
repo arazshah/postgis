@@ -1,9 +1,20 @@
 """مانیفست پلاگین «پایگاه داده و داده» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
-from kernel import admin as admin_dash
-from kernel import jobs, nav, plugins
+from kernel import dash as admin_dash
+from kernel import dataio, home, jobs, nav, plugins, tenantdb, workspace
 
 plugin = plugins.register("databases", "پایگاه داده و داده", kind="system", requires=("accounts", "jobs"))
 
+# دروازه‌ی داده‌ی مشتری: هسته از این پلاگین می‌پرسد چگونه وصل شود و کاتالوگ کامل کدام کلاس است
+from .gateway import GdalProvider, PostgisConnector, TeamProvider  # noqa: E402
+
+tenantdb.set_connector(PostgisConnector())
+tenantdb.set_catalog("databases.explorer.Explorer")
+workspace.set_provider(TeamProvider())
+dataio.set_provider(GdalProvider())
+
+jobs.register_kind("import", "ورود فایل", "databases.jobs.do_import", plugin=plugin.id,
+                   destination="databases:explore", done_title="دریافت و ورود فایل تمام شد")
+jobs.register_tick("import_drafts", "databases.jobs.expire_import_drafts", plugin=plugin.id, order=45)
 jobs.register_kind("find", "ذخیره‌ی نتیجه‌ی یافتن عارضه", "databases.jobs.do_find", plugin=plugin.id,
                    destination="databases:explore")
 
@@ -40,3 +51,8 @@ admin_dash.attention("databases.admin_cards.attention", plugin=plugin.id, order=
 admin_dash.health("databases.admin_cards.health", plugin=plugin.id, order=10)
 admin_dash.kpi("databases.admin_cards.kpis", plugin=plugin.id, order=20)
 admin_dash.search("databases.admin_cards.search", plugin=plugin.id, order=20)
+
+home.feed("databases.home.feed", plugin=plugin.id, order=40)
+home.step("databases.home.step_profile", plugin=plugin.id, order=10)
+home.step("databases.home.step_create", plugin=plugin.id, order=20)
+home.step("databases.home.step_import", plugin=plugin.id, order=30)

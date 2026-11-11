@@ -5,7 +5,7 @@
   <div class="page-head"><div><h1>خرید یا ارتقای پلن</h1><p class="muted page-sub">پلن را انتخاب کنید و روی همان پایگاه داده ارتقا بدهید؛ داده‌ها دست نمی‌خورند.</p></div><div class="page-acts"><a class="btn ghost" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}صورتحساب‌های من</a></div></div>
   {% if not enabled %}
     <div class="empty">{% icon "card" 28 %}<h2>فروش پلن پولی فعلاً فعال نیست</h2><p class="muted">به‌زودی فعال می‌شود. برای سؤال با پشتیبانی تماس بگیرید.</p></div>
-  {% elif not plans %}
+  {% elif not plans and not addons %}
     <div class="empty"><h2>هنوز پلن پولی تعریف نشده است</h2></div>
   {% else %}
   <div class="plans">
@@ -33,6 +33,31 @@
     </form>
     {% endfor %}
   </div>
+  {% endif %}
+  {% if enabled and addons %}
+  <div class="page-head" style="margin-top:32px"><div><h2>افزونه‌ها</h2><p class="muted page-sub">قابلیت‌های اضافه برای پایگاه داده یا حساب شما؛ پس از تأیید پرداخت خودکار فعال می‌شوند.</p></div></div>
+  <div class="plans">
+    {% for a in addons %}
+    <form method="post" action="{% url 'billing:start_addon' %}" class="legend buy-card">
+      {% csrf_token %}
+      <input type="hidden" name="addon" value="{{ a.pk }}">
+      <div class="legend-title"><h3>{{ a.title }}</h3><span class="price">{{ a.price_toman|money }} <small>تومان</small></span></div>
+      {% if a.description %}<p class="small muted">{{ a.description }}</p>{% endif %}
+      <p class="small muted">مدت: {{ a.duration_days|fanum }} روز</p>
+      {% if a.scope == 'workspace' %}
+      <div class="field" style="margin:12px 0">
+        <label for="a-{{ a.pk }}" class="small">برای کدام پایگاه داده؟</label>
+        <select name="target" id="a-{{ a.pk }}" required>
+          {% for db in dbs %}<option value="{{ db.pk }}">{{ db.db_name }}</option>{% empty %}<option value="">پایگاه داده‌ای ندارید</option>{% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <button class="btn" type="submit" style="width:100%">{% icon "check" 18 %}ادامه و پرداخت</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if enabled and plans %}
   <p class="small muted" style="margin-top:16px">ارتقا روی همان پایگاه داده انجام می‌شود و داده‌ها دست نمی‌خورند. مدت پلن جدید به روزهای باقی‌مانده اضافه می‌شود.</p>
   {% endif %}
 </div>

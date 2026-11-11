@@ -10,12 +10,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import SiteSettings
-from databases import services as db_services
 from databases.models import Plan, UserDatabase
-from databases.provisioner import ProvisionError
+from kernel import entitlements, workspace
 
 from .gateways import GatewayError, get_gateway
-from .models import Invoice, PlanVoucher
+from .models import Invoice, PlanVoucher, PluginAddon
 
 log = logging.getLogger(__name__)
 
@@ -64,8 +63,38 @@ def create_invoice(user, kind: str, plan: Plan, database: UserDatabase | None = 
     inv = Invoice.objects.create(
         user=user, kind=kind, plan=plan, database=database, amount_toman=plan.price_toman,
         expires_at=timezone.now() + timedelta(minutes=conf.invoice_ttl_minutes))
-    db_services.logevent("invoice", f"فاکتور {inv.number}: {inv.title} – {inv.amount_toman} تومان",
+    workspace.log_event("invoice", f"فاکتور {inv.number}: {inv.title} – {inv.amount_toman} تومان",
                          user=user, database=database)
+    return inv
+
+
+def public_addons():
+    """افزونه‌های قابل فروش: فقط آن‌هایی که پلاگینشان نصب و غیرسیستمی است."""
+    from kernel.plugins import registry
+
+    return [a for a in PluginAddon.objects.filter(is_public=True, price_toman__gt=0)
+            if (p := registry.plugins.get(a.plugin_id)) and p.kind != "system"]
+
+
+def create_addon_invoice(user, addon: PluginAddon, database: UserDatabase | None = None) -> Invoice:
+    conf = SiteSettings.get()
+    if not conf.pay_enabled or not methods_available(conf):
+        raise BillingError("فروش فعلاً فعال نیست.")
+    if addon not in public_addons():
+        raise BillingError("این افزونه قابل خرید نیست.")
+    if addon.scope == PluginAddon.Scope.WORKSPACE:
+        if database is None or database.owner_id != user.pk or database.status == UserDatabase.Status.DELETED:
+            raise BillingError("برای این افزونه یک پایگاه داده‌ی خودتان را انتخاب کنید.")
+    else:
+        database = None
+    existing = Invoice.objects.filter(user=user, kind=Invoice.Kind.ADDON, addon=addon, database=database,
+                                      status=Invoice.Status.PENDING, expires_at__gt=timezone.now()).first()
+    if existing:
+        return existing
+    inv = Invoice.objects.create(
+        user=user, kind=Invoice.Kind.ADDON, plan=None, addon=addon, database=database, amount_toman=addon.price_toman,
+        expires_at=timezone.now() + timedelta(minutes=conf.invoice_ttl_minutes))
+    workspace.log_event("invoice", f"فاکتور {inv.number}: {inv.title} – {inv.amount_toman} تومان", user=user, database=database)
     return inv
 
 
@@ -86,7 +115,7 @@ def start_gateway(inv: Invoice, request) -> str:
                             order_id=inv.number, mobile=inv.user.phone or "", email=inv.user.email or "")
     except GatewayError as exc:
         log.warning("gateway request failed for %s: %s", inv.number, exc)
-        db_services.logevent("payment", f"{inv.number}: {exc}"[:500], user=inv.user, database=inv.database,
+        workspace.log_event("payment", f"{inv.number}: {exc}"[:500], user=inv.user, database=inv.database,
                              success=False)
         msg = "اتصال به درگاه پرداخت ممکن نشد. چند دقیقه دیگر تلاش کنید"
         msg += " یا از روش کارت به کارت استفاده کنید." if conf.manual_ready else "."
@@ -149,7 +178,7 @@ def submit_receipt(inv: Invoice, *, receipt, last4: str, tracking: str, paid_tim
     inv.paid_at_claimed = paid_time
     inv.status = Invoice.Status.REVIEW
     inv.save()
-    db_services.logevent("payment", f"رسید فاکتور {inv.number} ثبت شد و منتظر تأیید است",
+    workspace.log_event("payment", f"رسید فاکتور {inv.number} ثبت شد و منتظر تأیید است",
                          user=inv.user, database=inv.database)
     return inv
 
@@ -162,7 +191,7 @@ def reject(inv: Invoice, actor, reason: str = ""):
     if reason:
         inv.note = (inv.note + "\n" + reason).strip()
     inv.save(update_fields=["status", "reviewed_by", "note"])
-    db_services._notify(inv.user, "رسید پرداخت تأیید نشد",
+    workspace.notify_user(inv.user, "رسید پرداخت تأیید نشد",
                         f"رسید فاکتور {inv.number} تأیید نشد. {reason} برای پیگیری با پشتیبانی تماس بگیرید.")
 
 
@@ -178,11 +207,11 @@ def mark_paid(inv: Invoice, actor=None) -> Invoice:
         if actor is not None:
             locked.reviewed_by = actor
         locked.save(update_fields=["status", "paid_at", "reviewed_by"])
-    db_services.logevent("payment", f"فاکتور {locked.number} پرداخت شد ({locked.amount_toman} تومان)",
+    workspace.log_event("payment", f"فاکتور {locked.number} پرداخت شد ({locked.amount_toman} تومان)",
                          user=locked.user, database=locked.database)
     try:
         apply_invoice(locked)
-    except (BillingError, ProvisionError, db_services.ServiceError) as exc:
+    except (BillingError, workspace.WorkspaceError) as exc:
         locked.note = (locked.note + f"\nاعمال خودکار ناموفق: {exc}").strip()
         locked.save(update_fields=["note"])
         log.exception("apply invoice %s failed", locked.number)
@@ -195,31 +224,48 @@ def apply_invoice(inv: Invoice):
     if inv.applied_at:
         return
     plan = inv.plan
-    if inv.kind == Invoice.Kind.NEW:
+    if inv.kind == Invoice.Kind.ADDON:
+        addon = inv.addon
+        if addon is None:
+            raise BillingError("افزونه‌ی این فاکتور دیگر وجود ندارد.")
+        if addon.scope == PluginAddon.Scope.WORKSPACE:
+            if inv.database is None or inv.database.status == UserDatabase.Status.DELETED:
+                raise BillingError("پایگاه داده‌ی این فاکتور دیگر وجود ندارد.")
+            kind, subject = "workspace", str(inv.database.pk)
+        else:
+            kind, subject = "user", str(inv.user.pk)
+        try:
+            entitlements.grant(addon.plugin_id, kind, subject, source="purchase", days=addon.duration_days,
+                               limits=addon.limits, note=f"فاکتور {inv.number}")
+        except ValueError as exc:
+            raise BillingError(str(exc)) from exc
+        workspace.log_event("plan", f"افزونه‌ی {addon.title} تا {addon.duration_days} روز فعال شد", user=inv.user, database=inv.database)
+        body = f"پرداخت فاکتور {inv.number} تأیید شد و افزونه‌ی {addon.title} فعال شد."
+    elif inv.kind == Invoice.Kind.NEW:
         PlanVoucher.objects.get_or_create(invoice=inv, defaults={"user": inv.user, "plan": plan})
         body = f"پرداخت فاکتور {inv.number} تأیید شد. حالا می‌توانید پایگاه داده جدید با پلن {plan.name} بسازید."
     else:
         db = inv.database
         if db is None or db.status == UserDatabase.Status.DELETED:
             raise BillingError("پایگاه داده این فاکتور دیگر وجود ندارد.")
-        p = db_services.provisioner_for(db.server)
+        p = workspace.host(db)
         db.plan = plan
         db.extend(plan.duration_days)
         if db.status == UserDatabase.Status.EXPIRED:
             p.set_login(db.role_name, True)
             db.status = UserDatabase.Status.ACTIVE
-        p.apply_limits(db.role_name, db_services.limits_for(plan))
+        p.apply_limits(db.role_name, workspace.limits(plan))
         if db.status == UserDatabase.Status.READONLY and db.size_bytes <= plan.quota_bytes * 0.95:
             p.set_readonly(db.db_name, False)
             db.status = UserDatabase.Status.ACTIVE
         db.quota_warned_at = None
         db.save()
-        db_services.logevent("plan", f"{inv.get_kind_display()} به پلن {plan.name} تا {db.expires_at:%Y-%m-%d}",
+        workspace.log_event("plan", f"{inv.get_kind_display()} به پلن {plan.name} تا {db.expires_at:%Y-%m-%d}",
                              database=db)
         body = f"پرداخت فاکتور {inv.number} تأیید شد و پلن {plan.name} برای {db.label} فعال شد."
     inv.applied_at = timezone.now()
     inv.save(update_fields=["applied_at"])
-    db_services._notify(inv.user, "پرداخت تأیید شد", body)
+    workspace.notify_user(inv.user, "پرداخت تأیید شد", body)
 
 
 # ---------------------------------------------------------------------- نگهداری

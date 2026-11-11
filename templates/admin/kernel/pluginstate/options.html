@@ -1,0 +1,21 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="content-main" style="max-width:640px">
+  <form method="post">{% csrf_token %}
+    {{ form.non_field_errors }}
+    <fieldset class="module aligned">
+      {% for f in form %}
+      <div class="form-row{% if f.errors %} errors{% endif %}">
+        {{ f.errors }}
+        <label for="{{ f.id_for_label }}">{{ f.label }}</label>
+        {{ f }}
+        {% if f.help_text %}<div class="help">{{ f.help_text }}</div>{% endif %}
+      </div>
+      {% empty %}
+      <p>این پلاگین گزینه‌ای ندارد.</p>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row"><input type="submit" class="default" value="ذخیره"> <a class="closelink" href="{{ back }}">بازگشت</a></div>
+  </form>
+</div>
+{% endblock %}

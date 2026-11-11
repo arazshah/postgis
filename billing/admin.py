@@ -1,28 +1,29 @@
+from django import forms
 from django.contrib import admin, messages
 from django.urls import reverse
 from django.utils.html import format_html
 
 from . import services
-from .models import Invoice, PlanVoucher
+from .models import Invoice, PlanVoucher, PluginAddon
 
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
     list_display = ["number", "user", "title_col", "amount_col", "method", "status_col", "created_at", "paid_at"]
-    list_filter = ["status", "method", "kind", "plan"]
+    list_filter = ["status", "method", "kind", "plan", "addon"]
     search_fields = ["number", "user__phone", "user__full_name", "tracking_code", "payer_card_last4", "provider_id", "gateway_ref"]
     date_hierarchy = "created_at"
     actions = ["approve", "reject_selected", "check_gateway", "reapply"]
-    readonly_fields = ["number", "user", "kind", "plan", "database", "amount_toman", "method", "gateway", "provider_id",
+    readonly_fields = ["number", "user", "kind", "plan", "addon", "database", "amount_toman", "method", "gateway", "provider_id",
                        "gateway_ref", "pay_url", "provider_status", "receipt_preview", "payer_card_last4", "tracking_code",
                        "paid_at_claimed", "reviewed_by", "created_at", "expires_at", "paid_at", "applied_at"]
-    fields = ["number", "user", "kind", "plan", "database", "amount_toman", "status", "method",
+    fields = ["number", "user", "kind", "plan", "addon", "database", "amount_toman", "status", "method",
               "receipt_preview", "payer_card_last4", "tracking_code", "paid_at_claimed",
               "gateway", "provider_id", "gateway_ref", "pay_url", "provider_status", "note", "reviewed_by",
               "created_at", "expires_at", "paid_at", "applied_at"]
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("user", "plan", "database")
+        return super().get_queryset(request).select_related("user", "plan", "addon", "database")
 
     def has_add_permission(self, request):
         return False
@@ -99,3 +100,25 @@ class PlanVoucherAdmin(admin.ModelAdmin):
     list_filter = ["plan"]
     search_fields = ["user__phone"]
     raw_id_fields = ["user", "invoice", "used_by"]
+
+
+class AddonForm(forms.ModelForm):
+    plugin_id = forms.ChoiceField(label="پلاگین")
+
+    class Meta:
+        model = PluginAddon
+        fields = "__all__"
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        from kernel.plugins import registry
+
+        self.fields["plugin_id"].choices = [(p.id, f"{p.name} ({p.id})") for p in registry.plugins.values() if p.kind != "system"]
+
+
+@admin.register(PluginAddon)
+class PluginAddonAdmin(admin.ModelAdmin):
+    form = AddonForm
+    list_display = ["title", "plugin_id", "scope", "price_toman", "duration_days", "is_public", "order"]
+    list_filter = ["scope", "is_public"]
+    search_fields = ["title", "plugin_id"]

@@ -8,9 +8,9 @@ from django.views.decorators.http import require_http_methods
 from accounts.decorators import site_user_required
 from analysis import history
 from analysis.models import ToolRun
-from databases.explorer import ExplorerError
-from databases.views import _explorer_db
 from jobs.models import Job
+from kernel import workspace
+from kernel.tenantdb import TenantError
 
 from . import engine, sdk
 from .catalog import category_groups
@@ -52,12 +52,12 @@ def _busy(db) -> bool:
 
 
 def _context(request, pk):
-    db, ex = _explorer_db(request, pk, "editor")
+    db, ex = workspace.open_catalog(request, pk, "editor")
     if ex is None:
         return db, None, [], []
     try:
         tables = ex.tables()
-    except ExplorerError as exc:
+    except TenantError as exc:
         messages.error(request, str(exc))
         tables = []
     return db, ex, tables, [t for t in tables if t.geometry]
@@ -103,7 +103,7 @@ def detail(request, pk, key):
             try:
                 out = engine.validate(db, key, vals)
                 summary = engine.summarize(db, key, vals)
-            except (engine.ToolError, ExplorerError) as exc:
+            except (engine.ToolError, TenantError) as exc:
                 messages.error(request, str(exc))
             else:
                 job = Job.objects.create(kind=Job.Kind.TOOL, database=db, user=request.user, status=Job.Status.QUEUED)

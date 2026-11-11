@@ -10,8 +10,8 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 
-from databases import team
 from databases.models import UserDatabase
+from kernel import workspace
 from publish import access
 from publish.models import Service
 
@@ -51,7 +51,7 @@ def _resolve(slug, path):
 
 def _authorize(request, db, t: ApiTable, op: str):
     """op: read | insert | update | delete. نوشتن فقط با کلید دارای اجازه نوشتن (نه نشست مرورگر)."""
-    member = team.level(request.user, db) > 0
+    member = workspace.level(request.user, db) > 0
     key = access.key_for(request, db)
     if op == "read":
         if not (t.public_read or key or member):
@@ -159,7 +159,7 @@ def _form(request, slug) -> FieldForm:
 def _can_use(request, form) -> bool:
     if form.access == FieldForm.Access.PUBLIC:
         return True
-    return team.level(request.user, form.api_table.service.database) > 0
+    return workspace.level(request.user, form.api_table.service.database) > 0
 
 
 def form_fields(form: FieldForm, meta: dict) -> list[dict]:
@@ -264,7 +264,7 @@ def form_submit(request, slug):
             if not (-180 <= lon <= 180 and -90 <= lat <= 90):
                 return _err(400, "مختصات نامعتبر است.")
             values[meta["geom"]["name"]] = {"type": "Point", "coordinates": [lon, lat]}
-        if team.level(request.user, db) == 0:
+        if workspace.level(request.user, db) == 0:
             access.count(db)
         row = engine.insert(db, form.api_table.schema, form.api_table.table, values)
     except access.Denied as exc:

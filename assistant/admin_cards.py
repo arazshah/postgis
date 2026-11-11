@@ -1,5 +1,5 @@
 """سهم «دستیار هوشمند» در داشبورد پنل مدیریت؛ در plugin.py ثبت می‌شود."""
-from kernel import admin as dash
+from kernel import dash as dash
 
 
 def health():

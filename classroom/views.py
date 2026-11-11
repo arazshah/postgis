@@ -9,7 +9,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
-from databases.explorer import ExplorerError
+from kernel.tenantdb import TenantError
 
 from . import services
 from .models import ClassMap, Classroom, Contract, ContractRequest, Enrollment, Submission
@@ -375,7 +375,7 @@ def copy_map(request, code, share_id):
         raise Http404
     try:
         copy, skipped = map_services.copy_to(cm.webmap, mine.database, request.user)
-    except (map_services.MapError, ExplorerError) as exc:
+    except (map_services.MapError, TenantError) as exc:
         messages.error(request, str(exc))
         return redirect("classroom:join", code=c.code)
     msg = f"نقشه «{copy.title}» در پایگاه داده شما ساخته شد."

@@ -121,7 +121,7 @@ def wait_until_up(instance, timeout_s: int = 600, interval: int = 10) -> str:
 
 def bootstrap(instance, role_name: str, role_password: str) -> dict:
     """workspace + datastore + انتشار جدول‌های مکانی. چندباره اجراشدنی است."""
-    from databases.explorer import Explorer
+    from kernel import tenantdb
 
     db = instance.database
     server = db.server
@@ -145,7 +145,7 @@ def bootstrap(instance, role_name: str, role_password: str) -> dict:
     if status >= 300:
         raise GeoServerError(f"ساخت اتصال PostGIS در GeoServer ناموفق بود: {status} {raw[:200]!r}")
     published, failed = [], []
-    for t in Explorer(db).tables():
+    for t in tenantdb.catalog(db).tables():
         if t.schema != "public" or not t.geometry or t.kind not in ("r", "v", "m", "p"):
             continue
         status, _ = _gs(instance, "GET", f"/workspaces/{quote(ws)}/datastores/postgis/featuretypes/{quote(t.name)}.json")

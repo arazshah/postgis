@@ -1,7 +1,7 @@
 """
 پرسش فارسی در کنسول SQL: متن فارسی ← یک دستور SQL (PostgreSQL/PostGIS) که کاربر می‌بیند و اجرا می‌کند.
 
-مستقل از «تحلیل» (s3geo) است و فقط از کلید مدل زبانی خود کاربر (analysis.LlmConfig) استفاده می‌کند.
+مستقل از «تحلیل» (s3geo) است و فقط از کلید مدل زبانی خود کاربر (سرویس kernel.llm) استفاده می‌کند.
 اصول:
 - به مدل فقط «ساختار» می‌رود: نام جدول‌ها، ستون‌ها و نوعشان، نوع هندسه و SRID، تعداد تقریبی ردیف؛
   و اگر کاربر بخواهد، چند مقدار نمونه از ستون‌های متنی (و مقدارهایی که با واژه‌های پرسش جور درمی‌آیند)
@@ -20,6 +20,8 @@ import psycopg
 from django.core.cache import cache
 from django.utils import timezone
 from psycopg import sql
+
+from kernel import llm
 
 from .explorer import Explorer, ExplorerError
 
@@ -134,31 +136,8 @@ class _Conf:
 
 
 def user_config(user):
-    from analysis.models import LlmConfig
-
-    return LlmConfig.objects.filter(user=user).first()
-
-
-def save_config(user, base_url: str, model: str, key: str):
-    from urllib.parse import urlsplit
-
-    from analysis.models import LlmConfig
-
-    url = (base_url or "").strip().rstrip("/")
-    parts = urlsplit(url)
-    if parts.scheme != "https" or not parts.netloc:
-        raise NLError("آدرس سرویس باید با https شروع شود؛ مثلاً https://api.avalai.ir/v1")
-    cfg = user_config(user)
-    key = (key or "").strip()
-    if not key and cfg is None:
-        raise NLError("کلید API را وارد کنید.")
-    cfg = cfg or LlmConfig(user=user)
-    cfg.base_url = url
-    cfg.model = (model or "gpt-4o").strip()[:100]
-    if key:
-        cfg.set_key(key)
-    cfg.save()
-    return cfg
+    """تنظیم مدل زبانی شخصی کاربر (سرویس هسته؛ پلاگین تحلیل آن را می‌دهد)."""
+    return llm.config(user)
 
 
 def _quota_key(user) -> str:

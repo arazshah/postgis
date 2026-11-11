@@ -1,4 +1,5 @@
 """مانیفست پلاگین «برداشت میدانی» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
+from kernel import dash as admin_dash
 from kernel import nav, plugins
 from kernel import settings as site_settings
 
@@ -14,6 +15,7 @@ nav.admin_item("publish", "survey.ntripprofile", None, plugin=plugin.id, order=8
 site_settings.section("survey", "map", "برداشت میدانی", plugin=plugin.id, order=130,
                       fields=("survey_enabled",),
                       description="نقشه‌برداری و اتصال گیرنده GNSS. تا خاموش است هیچ‌چیز برای کاربران دیده نمی‌شود.")
+admin_dash.report_sheet("survey.reports.sheets", plugin=plugin.id, order=50)
 
 
 def enabled() -> bool:

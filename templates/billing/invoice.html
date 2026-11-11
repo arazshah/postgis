@@ -67,11 +67,12 @@
     <aside class="card">
       <h3>جزئیات</h3>
       <table class="kv small">
-        <tr><th>پلن</th><td class="rtl">{{ inv.plan.name }}</td></tr>
+        {% if inv.addon %}<tr><th>افزونه</th><td class="rtl">{{ inv.addon.title }}</td></tr>{% elif inv.plan %}<tr><th>پلن</th><td class="rtl">{{ inv.plan.name }}</td></tr>{% endif %}
         <tr><th>نوع</th><td class="rtl">{{ inv.get_kind_display }}</td></tr>
         {% if inv.database %}<tr><th>پایگاه داده</th><td>{{ inv.database.db_name }}</td></tr>{% endif %}
-        <tr><th>حجم</th><td class="rtl">{{ inv.plan.quota_display|fanum }}</td></tr>
-        <tr><th>مدت</th><td class="rtl">{{ inv.plan.duration_days|fanum }} روز</td></tr>
+        {% if inv.addon %}<tr><th>مدت</th><td class="rtl">{{ inv.addon.duration_days|fanum }} روز</td></tr>
+        {% elif inv.plan %}<tr><th>حجم</th><td class="rtl">{{ inv.plan.quota_display|fanum }}</td></tr>
+        <tr><th>مدت</th><td class="rtl">{{ inv.plan.duration_days|fanum }} روز</td></tr>{% endif %}
         <tr><th>تاریخ</th><td class="rtl">{{ inv.created_at|jdate }}</td></tr>
         {% if inv.method %}<tr><th>روش</th><td class="rtl">{{ inv.get_method_display }}</td></tr>{% endif %}
         {% if inv.gateway_ref %}<tr><th>کد رهگیری</th><td>{{ inv.gateway_ref }}</td></tr>{% endif %}

@@ -18,15 +18,7 @@
       <p class="small muted">حجم روزانه، ۳۰ روز اخیر{% if size_chart.cap_y is not None %}؛ خط‌چین: سقف پلن{% endif %}.</p>
       {% else %}<p class="small muted">نمودار بعد از اولین اندازه‌گیری روزانه نمایش داده می‌شود.</p>{% endif %}
     </section>
-    <section class="card">
-      <div class="ch"><h2>درخواست‌های نقشه و API</h2></div>
-      {% with today=requests|last %}<p class="u-big">{{ today.n|fanum }} <span class="muted small">امروز، از سقف {{ db.plan.publish_daily_requests|fanum }}</span></p>{% endwith %}
-      <svg class="u-chart" viewBox="0 0 {{ req_chart.w }} {{ req_chart.h }}" role="img" aria-label="درخواست‌های روزانه ۱۴ روز اخیر">
-        {% for b in req_chart.bars %}<rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" rx="2"><title>{{ b.day|jdate }}: {{ b.v|fanum }}</title></rect>{% endfor %}
-        {% if req_chart.cap_y is not None %}<line x1="0" x2="{{ req_chart.w }}" y1="{{ req_chart.cap_y }}" y2="{{ req_chart.cap_y }}" class="cap"/>{% endif %}
-      </svg>
-      <p class="small muted">کاشی‌ها، OGC API و WMS/WFS، ۱۴ روز اخیر. درخواست‌های خود شما و اعضای تیم شمرده نمی‌شوند.</p>
-    </section>
+    {% for c in usage_cards %}{% include c.template with u=c.ctx %}{% endfor %}
   </div>
 
   {% if stats %}

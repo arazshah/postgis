@@ -11,11 +11,38 @@ def receipt_path(instance, filename):
     return f"receipts/{timezone.now():%Y/%m}/{uuid.uuid4().hex}.{ext}"
 
 
+class PluginAddon(models.Model):
+    """افزونه‌ی قابل خرید: خرید موفق یک مجوز (kernel.entitlements.grant) برای پلاگین می‌دهد، نه تغییر پلن."""
+
+    class Scope(models.TextChoices):
+        WORKSPACE = "workspace", "یک پایگاه داده"
+        USER = "user", "حساب کاربر"
+
+    plugin_id = models.CharField("پلاگین", max_length=41)
+    title = models.CharField("عنوان", max_length=80)
+    description = models.CharField("توضیح", max_length=240, blank=True)
+    price_toman = models.PositiveIntegerField("قیمت (تومان)")
+    duration_days = models.PositiveIntegerField("مدت (روز)", default=30)
+    scope = models.CharField("دارنده", max_length=10, choices=Scope.choices, default=Scope.WORKSPACE)
+    limits = models.JSONField("سقف‌ها", default=dict, blank=True, help_text='مثلاً {"page_views_per_month": 5000}')
+    is_public = models.BooleanField("در فروشگاه نمایش داده شود", default=True)
+    order = models.PositiveIntegerField("ترتیب", default=100)
+
+    class Meta:
+        verbose_name = "افزونه‌ی قابل خرید"
+        verbose_name_plural = "افزونه‌های قابل خرید"
+        ordering = ["order", "price_toman"]
+
+    def __str__(self):
+        return self.title
+
+
 class Invoice(models.Model):
     class Kind(models.TextChoices):
         UPGRADE = "upgrade", "ارتقای پلن"
         RENEW = "renew", "تمدید"
         NEW = "new", "پایگاه داده جدید"
+        ADDON = "addon", "خرید افزونه"
 
     class Status(models.TextChoices):
         PENDING = "pending", "منتظر پرداخت"
@@ -36,7 +63,10 @@ class Invoice(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="invoices",
                              verbose_name="کاربر")
     kind = models.CharField("نوع", max_length=10, choices=Kind.choices)
-    plan = models.ForeignKey("databases.Plan", on_delete=models.PROTECT, related_name="invoices", verbose_name="پلن")
+    plan = models.ForeignKey("databases.Plan", on_delete=models.PROTECT, related_name="invoices", verbose_name="پلن",
+                             null=True, blank=True)
+    addon = models.ForeignKey(PluginAddon, on_delete=models.PROTECT, null=True, blank=True, related_name="invoices",
+                              verbose_name="افزونه")
     database = models.ForeignKey("databases.UserDatabase", on_delete=models.SET_NULL, null=True, blank=True,
                                  related_name="invoices", verbose_name="پایگاه داده")
     amount_toman = models.PositiveIntegerField("مبلغ (تومان)")
@@ -91,6 +121,9 @@ class Invoice(models.Model):
 
     @property
     def title(self) -> str:
+        if self.kind == self.Kind.ADDON:
+            target = f" برای {self.database.label}" if self.database else ""
+            return f"افزونه‌ی {self.addon.title}{target}" if self.addon else "افزونه"
         if self.kind == self.Kind.NEW:
             return f"پایگاه داده جدید با پلن {self.plan.name}"
         target = self.database.label if self.database else ""

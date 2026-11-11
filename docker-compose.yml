@@ -36,6 +36,10 @@ services:
       - SATGATE_SECRET=${SATGATE_SECRET:-}
       - QGIS_SERVER_URL=${QGIS_SERVER_URL:-http://qgis/ows/}
       - PGBOUNCER_AUTH_PASSWORD=${PGBOUNCER_AUTH_PASSWORD:-}
+      - PLUGIN_RUNNER_MODE=${PLUGIN_RUNNER_MODE:-off}
+      - PLUGIN_RUNNER_URL=${PLUGIN_RUNNER_URL:-}
+      - PLUGIN_RUNNER_CALLBACK=${PLUGIN_RUNNER_CALLBACK:-}
+      - PLUGIN_RUNNER_TOKEN=${PLUGIN_RUNNER_TOKEN:-}
     volumes:
       - panel-media:/app/media
       - db-backups:/app/backups
@@ -46,6 +50,7 @@ services:
     networks:
       - default
       - coolify
+      - runner
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
       interval: 30s
@@ -100,6 +105,39 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+
+  # اجرای کد سطح ۲ پلاگین‌ها (docs/plugins/tier2.md): بدون راز، بدون شبکه‌ی بیرون، غیر root، فایل‌سیستم فقط‌خواندنی.
+  # فقط روی شبکه‌ی internal «runner» است (بدون خروج به اینترنت)؛ web همان شبکه را دارد تا کد را بفرستد و پرس‌وجوهای SQL را برگیرد.
+  # برای فعال‌سازی: در web مقدارهای PLUGIN_RUNNER_MODE=remote، PLUGIN_RUNNER_URL=http://plugin-runner:8090،
+  # PLUGIN_RUNNER_CALLBACK=http://web:8000 و PLUGIN_RUNNER_TOKEN (همان RUNNER_TOKEN) را بگذارید و "web" را به DJANGO_ALLOWED_HOSTS بیفزایید.
+  plugin-runner:
+    image: ${APP_IMAGE:-ghcr.io/arazshah/postgis:latest}
+    restart: unless-stopped
+    # entrypoint عمداً خالی: ورودی ایمیج pip و migrate اجرا می‌کند و به شبکه/پایگاه داده نیاز دارد؛ runner هیچ‌کدام را ندارد.
+    entrypoint: []
+    command: ["python", "-I", "-m", "kernel.runner.server"]
+    working_dir: /app
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - RUNNER_TOKEN=${PLUGIN_RUNNER_TOKEN:-}
+      - RUNNER_PARALLEL=${RUNNER_PARALLEL:-4}
+    networks:
+      - runner
+    mem_limit: ${RUNNER_MEM_LIMIT:-768m}
+    cpus: ${RUNNER_CPUS:-1}
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8090/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # QGIS Server برای WMS/WFS پروژه‌های کاربران. پورتی بیرون نمی‌دهد؛ فقط web به آن درخواست می‌فرستد.
   # به شبکه coolify وصل است تا به سرور PostGIS مشتریان برسد (با نقش فقط‌خواندنی هر پایگاه داده).
@@ -169,3 +207,5 @@ volumes:
 networks:
   coolify:
     external: true
+  runner:
+    internal: true  # بدون مسیر به اینترنت

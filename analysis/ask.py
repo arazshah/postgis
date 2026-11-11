@@ -18,9 +18,9 @@ from pathlib import Path
 from django.utils import timezone
 from psycopg import sql
 
-from databases.explorer import Explorer
-from databases.gdal import TABLE_RE
 from jobs.models import Job
+from kernel import tenantdb
+from kernel.tenantdb import TABLE_RE
 
 from .models import LlmConfig, Question
 
@@ -65,7 +65,7 @@ def request(db, user, text: str, layer_keys: list[str], output: str, share_value
     output = (output or "").strip().lower() or _auto_output(text)
     if not TABLE_RE.match(output):
         raise AskError("نام جدول نتیجه: حروف کوچک لاتین، رقم و _ (مثلاً schools_far_from_metro).")
-    tables = {f"{t.schema}.{t.name}": t for t in Explorer(db).tables()}
+    tables = {f"{t.schema}.{t.name}": t for t in tenantdb.catalog(db).tables()}
     spatial = {k: t for k, t in tables.items() if t.geometry}
     notes = []
     given = [k for k in dict.fromkeys(layer_keys or []) if k]
@@ -1079,12 +1079,12 @@ def preview_svg(feats: list, width: int = 320, height: int = 200) -> str:
 
 
 def run(job: Job, client=None) -> str:
-    from databases import gdal
+    from kernel import dataio
 
     q = job.question
     db = job.database
     job.set_progress(8, "خواندن لایه‌ها")
-    ex = Explorer(db)
+    ex = tenantdb.catalog(db)
     tables = {f"{t.schema}.{t.name}": t for t in ex.tables()}
     layers, notes = {}, [n for n in (q.notes or []) if not n.startswith(("برش", "تلاش", "هشدار برنامه"))]
     for key in q.layers:
@@ -1165,8 +1165,7 @@ def run(job: Job, client=None) -> str:
         return f"{spec.goal} — پاسخ متنی (بدون لایه مکانی)"
     job.set_progress(82, "ذخیره نتیجه در جدول")
     if out.kind == "table":
-        with ex.connect(read_only=False) as conn:
-            conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
+        with ex.connect(read_only=False, as_owner=True) as conn:
             n = write_table(conn, q.output_table, out.rows)
         q.result_kind = Question.Result.TABLE
         q.rows, q.answer = n, ""
@@ -1188,9 +1187,9 @@ def run(job: Job, client=None) -> str:
         path.write_text(json.dumps({"type": "FeatureCollection", "features": feats}, ensure_ascii=False),
                         encoding="utf-8")
         exists = f"public.{q.output_table}" in tables
-        gdal.import_layer(db, path, {"name": "result", "table": q.output_table, "srid": srid, "assign_srid": True,
-                                     "to4326": srid != 4326, "mode": "overwrite" if exists else "create",
-                                     "geom_type": ""}, "UTF-8")
+        dataio.import_layer(db, path, {"name": "result", "table": q.output_table, "srid": srid, "assign_srid": True,
+                                       "to4326": srid != 4326, "mode": "overwrite" if exists else "create",
+                                       "geom_type": ""}, "UTF-8")
     q.rows = len(feats)
     q.save(update_fields=fields + ["rows"])
     return f"{spec.goal} — {len(feats):,} عارضه در جدول {q.output_table}"

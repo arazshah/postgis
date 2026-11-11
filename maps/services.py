@@ -4,7 +4,8 @@ from __future__ import annotations
 from django.db import transaction
 from django.db.models import F
 
-from databases.explorer import Explorer, ExplorerError
+from kernel import tenantdb
+from kernel.tenantdb import TenantError
 from publish import engine
 from publish.styles import CATEGORY_COLORS, STYLE_DEFAULT
 
@@ -21,7 +22,7 @@ class MapError(Exception):
 def spatial_tables(db) -> list[dict]:
     """جدول‌هایی که می‌شود روی نقشه آورد: ستون geometry با SRID معلوم."""
     out = []
-    for t in Explorer(db).tables():
+    for t in tenantdb.catalog(db).tables():
         geoms = [g for g in t.geometry if not g["geography"] and g["srid"]]
         if geoms:
             g = geoms[0]
@@ -82,7 +83,7 @@ def add_layer(webmap: WebMap, schema: str, table: str, info: dict | None = None)
                      srid=t["srid"], geom_type=t["geom_type"], position=0, style=default_style(count))
     try:
         layer.bbox = engine.extent(layer)
-    except (engine.EngineError, ExplorerError):
+    except (engine.EngineError, TenantError):
         layer.bbox = []
     layer.save()
     WebMap.objects.filter(pk=webmap.pk).update(updated_at=layer.updated_at)
@@ -152,7 +153,7 @@ def quick_layers(db, keys: list[str]) -> list[MapLayer]:
                          srid=t["srid"], geom_type=t["geom_type"], style=default_style(i))
         try:
             layer.bbox = engine.extent(layer)
-        except (engine.EngineError, ExplorerError):
+        except (engine.EngineError, TenantError):
             layer.bbox = []
         out.append(layer)
     return out
@@ -183,7 +184,7 @@ def copy_to(webmap: WebMap, target_db, user) -> tuple[WebMap, list[str]]:
             try:
                 names = {n for n, _ in all_fields(new)}
                 new.bbox = engine.extent(new)
-            except (engine.EngineError, ExplorerError):
+            except (engine.EngineError, TenantError):
                 names, new.bbox = set(), []
             style = styles.clean(layer.style, names)
             style.pop("basemap", None)
@@ -202,7 +203,7 @@ def copy_to(webmap: WebMap, target_db, user) -> tuple[WebMap, list[str]]:
             if chart.layer_id not in fields:
                 try:
                     fields[chart.layer_id] = dict(all_fields(MapLayer.objects.get(pk=ids[chart.layer_id])))
-                except (engine.EngineError, ExplorerError):
+                except (engine.EngineError, TenantError):
                     fields[chart.layer_id] = {}
             try:  # ستون‌ها یا نوعشان در جدول مقصد فرق کرده باشد، نمودار کنار گذاشته می‌شود
                 config = charts.clean(chart.kind, chart.config, fields[chart.layer_id])

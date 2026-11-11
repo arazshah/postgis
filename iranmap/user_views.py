@@ -7,9 +7,9 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from accounts.decorators import site_user_required
-from databases.explorer import ExplorerError
-from databases.views import _explorer_db
 from jobs.models import Job
+from kernel import workspace
+from kernel.tenantdb import TenantError
 
 from . import osm, ready
 from .models import Area
@@ -24,7 +24,7 @@ def _province_list() -> list[dict]:
 @site_user_required
 @require_http_methods(["GET", "POST"])
 def ready_data(request, pk):
-    db, ex = _explorer_db(request, pk, "editor")
+    db, ex = workspace.open_catalog(request, pk, "editor")
     if ex is None:
         return redirect("databases:detail", pk=db.pk)
     error = None
@@ -43,7 +43,7 @@ def ready_data(request, pk):
                 return redirect("iranmap:ready", pk=db.pk)
     try:
         tables = ex.tables()
-    except ExplorerError as exc:
+    except TenantError as exc:
         messages.error(request, str(exc))
         tables = []
     recent = Job.objects.filter(database=db, kind=Job.Kind.OSM_IMPORT)[:8]
@@ -60,7 +60,7 @@ def ready_data(request, pk):
 @require_GET
 def status(request, pk):
     """وضعیت درخواست‌های داده آماده برای نوار پیشرفت."""
-    db, ex = _explorer_db(request, pk, "editor")
+    db, ex = workspace.open_catalog(request, pk, "editor")
     if ex is None:
         return JsonResponse({"error": "unavailable"}, status=404)
     now = timezone.now()

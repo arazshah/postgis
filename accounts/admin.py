@@ -6,7 +6,7 @@ from django.db.models import Count, Q
 
 from databases.models import UserDatabase
 
-from .models import AdminUser, OTPCode, SiteUser, normalize_mobile
+from .models import AdminTOTP, AdminUser, OTPCode, SiteUser, normalize_mobile
 
 
 class UserDatabaseInline(admin.TabularInline):
@@ -103,10 +103,23 @@ class AdminCreateForm(forms.ModelForm):
 class AdminUserAdmin(BaseUserAdmin):
     add_form = AdminCreateForm
     change_password_form = AdminPasswordChangeForm
-    list_display = ["username", "full_name", "is_superuser", "is_active", "last_login"]
+    list_display = ["username", "full_name", "is_superuser", "is_active", "two_factor", "last_login"]
     list_filter = ["is_superuser", "is_active"]
     search_fields = ["username", "full_name"]
     ordering = ["username"]
+    actions = ["reset_two_factor"]
+
+    @admin.display(description="ورود دومرحله‌ای", boolean=True)
+    def two_factor(self, obj):
+        return AdminTOTP.objects.filter(user=obj, confirmed_at__isnull=False).exists()
+
+    @admin.action(description="بازنشانی ورود دومرحله‌ای (دستگاه گم‌شده)")
+    def reset_two_factor(self, request, queryset):
+        if not request.user.is_superuser:
+            self.message_user(request, "فقط مدیر کامل می‌تواند ورود دومرحله‌ای دیگران را بازنشانی کند.", messages.ERROR)
+            return
+        n, _ = AdminTOTP.objects.filter(user__in=queryset).delete()
+        self.message_user(request, f"ورود دومرحله‌ی {n} مدیر بازنشانی شد؛ ورود بعدی‌شان ثبت‌نام تازه می‌خواهد.", messages.WARNING)
     fieldsets = (
         (None, {"fields": ("username", "password")}),
         ("اطلاعات", {"fields": ("full_name", "email")}),

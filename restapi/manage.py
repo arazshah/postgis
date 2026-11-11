@@ -4,8 +4,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
 from accounts.decorators import site_user_required
-from databases import team
-from databases.explorer import Explorer, ExplorerError
+from kernel import tenantdb, workspace
+from kernel.tenantdb import TenantError
 from publish import access
 from publish.models import Service
 
@@ -16,7 +16,7 @@ from .models import ApiTable, FieldForm
 @site_user_required
 @require_http_methods(["GET", "POST"])
 def manage(request, pk):
-    db = team.get_db(request, pk, "editor")
+    db = workspace.get(request, pk, "editor")
     if not db.is_live:
         messages.error(request, "پایگاه داده فعال نیست.")
         return redirect("databases:detail", pk=db.pk)
@@ -67,10 +67,10 @@ def manage(request, pk):
         return here
     pks = set()
     try:
-        ex = Explorer(db)
+        ex = tenantdb.catalog(db)
         tables = [t for t in ex.tables() if t.kind in ("r", "p")]
         pks = ex.single_pk_tables()
-    except ExplorerError as exc:
+    except TenantError as exc:
         messages.error(request, str(exc))
         tables = []
     api = {(a.schema, a.table): a for a in service.api_tables.prefetch_related("forms")}

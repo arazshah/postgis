@@ -55,7 +55,7 @@ class Registry:
     # ------------------------------------------------------------------ پلاگین
     def register(self, id: str, name: str, **kw) -> Plugin:
         p = Plugin(id=id, name=name, **{**kw, "requires": tuple(kw.get("requires", ()))})
-        if not ID_RE.match(p.id):
+        if not ID_RE.fullmatch(p.id):
             raise PluginError(f"شناسه‌ی پلاگین نامعتبر است: {p.id!r}")
         if p.kind not in KINDS:
             raise PluginError(f"نوع پلاگین {p.id} نامعتبر است: {p.kind!r}")
@@ -88,6 +88,14 @@ class Registry:
 
     def points(self) -> list[str]:
         return sorted(self._points)
+
+    def remove_plugin(self, plugin_id: str) -> None:
+        """پلاگین و همه‌ی سهم‌هایش را برمی‌دارد (بارگذاری‌شده‌ی پویا؛ پلاگین داخلی هرگز)."""
+        self.plugins.pop(plugin_id, None)
+        self.errors.pop(plugin_id, None)
+        for bucket in self._points.values():
+            for key in [k for k, c in bucket.items() if c.plugin == plugin_id]:
+                del bucket[key]
 
     # ------------------------------------------------------------------ کشف
     def discover(self, force: bool = False) -> None:

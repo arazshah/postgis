@@ -7,6 +7,7 @@ app_name = "billing"
 urlpatterns = [
     path("plans/", views.plans, name="plans"),
     path("start/", views.start, name="start"),
+    path("start-addon/", views.start_addon, name="start_addon"),
     path("invoices/", views.invoices, name="invoices"),
     path("invoice/<str:number>/", views.invoice, name="invoice"),
     path("invoice/<str:number>/pay/", views.pay_gateway, name="pay_gateway"),

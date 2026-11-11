@@ -1,0 +1,10 @@
+{% load fa %}
+<section class="card">
+  <div class="ch"><h2>درخواست‌های نقشه و API</h2></div>
+  {% with today=u.requests|last %}<p class="u-big">{{ today.n|fanum }} <span class="muted small">امروز، از سقف {{ db.plan.publish_daily_requests|fanum }}</span></p>{% endwith %}
+  <svg class="u-chart" viewBox="0 0 {{ u.chart.w }} {{ u.chart.h }}" role="img" aria-label="درخواست‌های روزانه ۱۴ روز اخیر">
+    {% for b in u.chart.bars %}<rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" rx="2"><title>{{ b.day|jdate }}: {{ b.v|fanum }}</title></rect>{% endfor %}
+    {% if u.chart.cap_y is not None %}<line x1="0" x2="{{ u.chart.w }}" y1="{{ u.chart.cap_y }}" y2="{{ u.chart.cap_y }}" class="cap"/>{% endif %}
+  </svg>
+  <p class="small muted">کاشی‌ها، OGC API و WMS/WFS، ۱۴ روز اخیر. درخواست‌های خود شما و اعضای تیم شمرده نمی‌شوند.</p>
+</section>

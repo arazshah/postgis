@@ -13,11 +13,11 @@ from django.db import transaction
 from django.utils import timezone
 from psycopg import sql
 
-from databases.explorer import Explorer, ExplorerError
 from databases.models import UserDatabase
-from databases.provisioner import Provisioner
 from enterprise.models import Raster
 from jobs.models import Job
+from kernel import tenantdb, workspace
+from kernel.tenantdb import TenantError
 from satgate import spec
 from satgate import zonal as zl
 
@@ -47,7 +47,7 @@ def credits(db: UserDatabase) -> dict:
 # ---------------------------------------------------------------------- لایه‌ها و ستون‌ها
 def polygon_layers(db: UserDatabase) -> list[dict]:
     """جدول‌های چندضلعی با ستون‌هایشان برای انتخاب لایه و ستون شناسه."""
-    ex = Explorer(db)
+    ex = tenantdb.catalog(db)
     out = []
     for t in ex.tables():
         if t.geo_kind != "polygon" or t.kind not in ("r", "p", "v", "m"):
@@ -67,7 +67,7 @@ def _split(layer: str) -> tuple[str, str]:
 
 def read_features(db: UserDatabase, layer: str, id_col: str) -> tuple[list[dict], list[float], float]:
     """چندضلعی‌ها به GeoJSON (WGS84، ساده‌شده)؛ خروجی: (عارضه‌ها، محدوده، مساحت محدوده به کیلومتر مربع)."""
-    ex = Explorer(db)
+    ex = tenantdb.catalog(db)
     try:
         t = ex.find(*_split(layer))
         cols = {c["name"]: c for c in ex.columns(t)}
@@ -89,7 +89,7 @@ def read_features(db: UserDatabase, layer: str, id_col: str) -> tuple[list[dict]
                 "FROM {s}.{t} WHERE {raw} IS NOT NULL AND NOT ST_IsEmpty({raw}::geometry) LIMIT {n}").format(
                     i=sql.Identifier(id_col), g=geom, s=sql.Identifier(t.schema), t=sql.Identifier(t.name), raw=gcol,
                     n=sql.Literal(zl.MAX_FEATURES + 1))).fetchall()
-    except (ExplorerError, psycopg.Error) as exc:
+    except (TenantError, psycopg.Error) as exc:
         raise SatError("لایه خوانده نشد؛ نام لایه و ستون شناسه را بررسی کنید.", "layer") from exc
     feats = []
     for fid, gj in rows:
@@ -109,7 +109,7 @@ def read_features(db: UserDatabase, layer: str, id_col: str) -> tuple[list[dict]
 
 
 def _exists(db: UserDatabase, name: str) -> bool:
-    ex = Explorer(db)
+    ex = tenantdb.catalog(db)
     with ex.connect() as conn:
         return bool(conn.execute("SELECT to_regclass(%s)", (f"{SCHEMA}.{name}",)).fetchone()[0])
 
@@ -293,12 +293,11 @@ COLS = [("feature_id", "text NOT NULL"), ("scene_date", "date NOT NULL"), ("scen
 def write_table(an: SatAnalysis, rows: list[dict]) -> None:
     """جدول نتیجه (بلند: یک ردیف برای هر عارضه و تاریخ) و نمای «آخرین مقدار» با هندسه‌ی لایه در پایگاه داده‌ی کاربر."""
     db = an.database
-    ex = Explorer(db)
+    ex = tenantdb.catalog(db)
     tbl, view = sql.Identifier(SCHEMA, an.name), sql.Identifier(SCHEMA, an.name + "_latest")
     src_schema, src_name = _split(an.layer)
     try:
-        with ex.connect(read_only=False) as conn:
-            conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
+        with ex.connect(read_only=False, as_owner=True) as conn:
             conn.execute("SET statement_timeout = 120000")
             have = conn.execute("SELECT to_regclass(%s)", (f"{SCHEMA}.{an.name}",)).fetchone()[0]
             if have and not an.monitor_id:
@@ -326,7 +325,7 @@ def write_table(an: SatAnalysis, rows: list[dict]) -> None:
             conn.commit()
     except psycopg.Error as exc:
         raise SatError("نوشتن جدول نتیجه در پایگاه داده ممکن نشد؛ فضا یا دسترسی را بررسی کنید.", "write") from exc
-    Provisioner.for_server(db.server).reassign_browser_objects(db.db_name, db.role_name)
+    workspace.host(db).reassign_browser_objects(db.db_name, db.role_name)
 
 
 def _finish(an: SatAnalysis, rows: list[dict], scenes: list[dict], skipped=()) -> str:
@@ -412,7 +411,7 @@ def _local_rows(an: SatAnalysis, feats: list[dict], bbox: list[float]) -> tuple[
 # ---------------------------------------------------------------------- خواندن نتیجه برای نمودار
 def series(an: SatAnalysis, feature: str = "") -> dict:
     """سری زمانی از جدول نتیجه‌ی خود کاربر: میانگین همه‌ی عارضه‌ها (با کمینه و بیشینه) و در صورت انتخاب، یک عارضه."""
-    ex = Explorer(an.database)
+    ex = tenantdb.catalog(an.database)
     tbl = sql.Identifier(SCHEMA, an.name)
     with ex.connect() as conn:
         conn.execute("SET statement_timeout = 20000")

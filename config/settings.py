@@ -116,6 +116,8 @@ MIDDLEWARE = [
     "analytics.middleware.AnalyticsMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "accounts.admin_2fa.Admin2FAMiddleware",
+    "kernel.gate.PluginGateMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -180,6 +182,21 @@ QGIS_SERVER_TIMEOUT = int(os.environ.get("QGIS_SERVER_TIMEOUT", "60"))
 PGBOUNCER_AUTH_PASSWORD = os.environ.get("PGBOUNCER_AUTH_PASSWORD", "")
 
 # نقشه پایه ایران و داده آماده OSM (مجوز ODbL). فایل‌ها روی volume جدا (osm-data) می‌مانند.
+# بسته‌های پلاگین (docs/plugins/packages.md): فقط بسته‌ی امضاشده با کلید یکی از ناشران پذیرفته می‌شود.
+# قالب: «نام=کلید-عمومی-Ed25519-به-base64» با ویرگول؛ فقط در استقرار (نه در پایگاه داده) تا حساب مدیر لورفته ناشر تازه اضافه نکند.
+# ورود دومرحله‌ی پنل مدیریت (TOTP): در تولید پیش‌فرض الزامی است. ADMIN_2FA=off فقط برای توسعه یا اضطرار (و گزارش کنید).
+ADMIN_2FA_REQUIRED = {"on": True, "off": False}.get(os.environ.get("ADMIN_2FA", "").lower(), not (DEBUG or os.environ.get("DJANGO_TESTING")))
+ADMIN_2FA_MAX_AGE_HOURS = int(os.environ.get("ADMIN_2FA_MAX_AGE_HOURS", "12"))  # بعد از این مدت دوباره رمز دوم می‌خواهد
+ADMIN_2FA_FRESH_MINUTES = int(os.environ.get("ADMIN_2FA_FRESH_MINUTES", "30"))  # کارهای حساس (فعال‌سازی پلاگین) رمز تازه می‌خواهند
+PLUGIN_PUBLISHER_KEYS = os.environ.get("PLUGIN_PUBLISHER_KEYS", "")
+# تأیید و فعال‌سازی توسط همان کسی که بسته را بارگذاری کرده؛ پیش‌فرض ممنوع (اصل دونفره). تیم یک‌نفره می‌تواند روشن کند.
+PLUGIN_SELF_APPROVAL = os.environ.get("PLUGIN_SELF_APPROVAL", "") == "1"
+# اجرای کد سطح ۲ پلاگین: off (پیش‌فرض تولید) | local (فقط توسعه/آزمون؛ بدون جداسازی کانتینری) | remote (سرویس plugin-runner)
+PLUGIN_RUNNER_MODE = os.environ.get("PLUGIN_RUNNER_MODE", "local" if (DEBUG or os.environ.get("DJANGO_TESTING")) else "off")
+PLUGIN_RUNNER_URL = os.environ.get("PLUGIN_RUNNER_URL", "")
+PLUGIN_RUNNER_TOKEN = os.environ.get("PLUGIN_RUNNER_TOKEN", "")
+PLUGIN_RUNNER_CALLBACK = os.environ.get("PLUGIN_RUNNER_CALLBACK", "")  # آدرس داخلی web برای پرس‌وجوی کد پلاگین، مثل http://web:8000
+PLUGIN_RUNNER_TIMEOUT = int(os.environ.get("PLUGIN_RUNNER_TIMEOUT", "10"))
 OSM_ROOT = Path(os.environ.get("OSM_ROOT", MEDIA_ROOT / "osm"))
 OSM_SOURCE_URL = os.environ.get("OSM_SOURCE_URL", "https://download.geofabrik.de/asia/iran-latest.osm.pbf")
 OSM_REFRESH_DAYS = int(os.environ.get("OSM_REFRESH_DAYS", "7"))  # 0 = فقط دستی

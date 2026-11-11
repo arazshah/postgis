@@ -22,9 +22,8 @@ from django.views.decorators.http import require_http_methods
 from psycopg import sql
 
 from core.templatetags.fa import fanum
-from databases import crypto
-from databases.explorer import Explorer, ExplorerError
-from databases.provisioner import Provisioner, ProvisionError
+from kernel import crypto, tenantdb, workspace
+from kernel.tenantdb import TenantError
 
 from . import access, qgis
 from .models import OwsProject, Service
@@ -52,10 +51,10 @@ def ows_password(service: Service, force: bool = False) -> str:
     db = service.database
     password = crypto.generate_password(28)
     try:
-        prov = Provisioner.for_server(db.server)
+        prov = workspace.host(db)
         prov.harden()  # پیش از ساخت نقش عضو pg_read_all_data: هیچ دیتابیسی برای PUBLIC باز نماند
         prov.ensure_ows_role(db.db_name, db.role_name, password)
-    except ProvisionError as exc:
+    except workspace.HostingError as exc:
         raise OwsError(f"آماده‌سازی دسترسی فقط‌خواندنی ممکن نشد: {exc}") from exc
     service.ows_password_encrypted = crypto.encrypt(password)
     service.save(update_fields=["ows_password_encrypted"])
@@ -65,7 +64,7 @@ def ows_password(service: Service, force: bool = False) -> str:
 def connection(service: Service, force: bool = False) -> str:
     db = service.database
     server = db.server
-    return qgis.connection_string(server.host, server.port, db.db_name, Provisioner.ows_role_name(db.role_name),
+    return qgis.connection_string(server.host, server.port, db.db_name, workspace.role_name(db, "ows"),
                                   ows_password(service, force), server.sslmode)
 
 
@@ -125,8 +124,8 @@ def remove_service_files(service: Service):
 # ---------------------------------------------------------------------- ساخت پروژه
 def _missing_tables(db, layers: list[qgis.LayerInfo]) -> list[str]:
     try:
-        tables = {(t.schema, t.name) for t in Explorer(db).tables()}
-    except ExplorerError:
+        tables = {(t.schema, t.name) for t in tenantdb.catalog(db).tables()}
+    except TenantError:
         return []
     return [f"لایه «{x.name}» به جدول {x.schema}.{x.table} اشاره می‌کند که در این پایگاه داده نیست؛ "
             "روی نقشه خالی می‌ماند." for x in layers if (x.schema, x.table) not in tables]
@@ -136,7 +135,7 @@ def _bbox(db, layers: list[qgis.LayerInfo]) -> list[float]:
     """محدوده همه لایه‌های برداری به طول و عرض جغرافیایی (برای پیش‌نمایش)."""
     boxes = []
     try:
-        with Explorer(db).connect() as conn:
+        with tenantdb.catalog(db).connect() as conn:
             for x in layers:
                 if x.kind != "vector" or not x.geom_column:
                     continue
@@ -151,7 +150,7 @@ def _bbox(db, layers: list[qgis.LayerInfo]) -> list[float]:
                     continue
                 if row and row[0] is not None:
                     boxes.append(row)
-    except ExplorerError:
+    except TenantError:
         return []
     if not boxes:
         return []
@@ -206,7 +205,7 @@ def saved_projects(db) -> list[dict]:
     """پروژه‌هایی که با Project › Save To › PostgreSQL در QGIS ذخیره شده‌اند (جدول qgis_projects)."""
     out = []
     try:
-        with Explorer(db).connect() as conn:
+        with tenantdb.catalog(db).connect() as conn:
             schemas = [r[0] for r in conn.execute("""
                 SELECT n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE c.relname = 'qgis_projects' AND c.relkind = 'r' AND has_table_privilege(c.oid, 'SELECT')
@@ -222,7 +221,7 @@ def saved_projects(db) -> list[dict]:
 
 
 def read_saved(db, schema: str, name: str) -> bytes:
-    with Explorer(db).connect() as conn:
+    with tenantdb.catalog(db).connect() as conn:
         q = sql.SQL("SELECT content FROM {} WHERE name = %s").format(sql.Identifier(schema, "qgis_projects"))
         row = conn.execute(q, (name,)).fetchone()
     if not row:

@@ -9,7 +9,8 @@ from contextlib import ExitStack, contextmanager
 import psycopg
 from psycopg import sql
 
-from databases.explorer import Explorer, ExplorerError
+from kernel import tenantdb
+from kernel.tenantdb import TenantError
 
 MVT_TYPES = {"int2", "int4", "int8", "float4", "float8", "bool", "text", "varchar", "bpchar", "name"}
 NUMERIC_TYPES = {"int2", "int4", "int8", "float4", "float8", "numeric"}
@@ -42,14 +43,14 @@ def _connect(layer):
     db = layer.database
     slot = _slot(db.pk)
     if not slot.acquire(timeout=20):
-        raise ExplorerError("سرور مشغول است؛ چند لحظه بعد دوباره تلاش کنید.")
+        raise TenantError("سرور مشغول است؛ چند لحظه بعد دوباره تلاش کنید.")
     try:
         with ExitStack() as stack:
             for delay in (*_RETRY_DELAYS, None):
                 try:
-                    conn = stack.enter_context(Explorer(db).connect())
+                    conn = stack.enter_context(tenantdb.catalog(db).connect())
                     break
-                except ExplorerError as exc:
+                except TenantError as exc:
                     if delay is None or "too many connections" not in str(exc):
                         raise
                     time.sleep(delay)
@@ -219,7 +220,7 @@ def describe(layer) -> dict:
     try:
         with _connect(layer) as conn:
             return table_meta(conn, layer.schema, layer.table)
-    except ExplorerError as exc:
+    except TenantError as exc:
         raise EngineError(str(exc)) from exc
 
 

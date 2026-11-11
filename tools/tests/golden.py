@@ -102,7 +102,7 @@ def render(engine, key, routing, params):
     ex.connect.return_value.__enter__.return_value = conn
     p = {"output": "out_t", **params}
     try:
-        with mock.patch.object(engine, "Explorer", return_value=ex):
+        with mock.patch("kernel.tenantdb.catalog", return_value=ex):
             _ex, out, target, body, guards = engine._prepare(None, key, p)
             summary = engine.summarize(None, key, p)
     except engine.ToolError as exc:

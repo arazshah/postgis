@@ -29,12 +29,12 @@
     <details class="ws-group" data-key="{{ g.key }}" open>
       <summary class="ws-gt"><span>{{ g.title }}</span><i aria-hidden="true"></i></summary>
       <div class="ws-items">
-        {% for it in g.items %}<a href="{% url it.url db.pk %}" class="ws-item{% if it.on %} on{% endif %}" title="{{ it.label }}"{% if it.on %} aria-current="page"{% endif %}>{% icon it.icon 20 %}<span class="ws-lbl">{{ it.label }}</span></a>{% endfor %}
+        {% for it in g.items %}<a href="{{ it.href }}" class="ws-item{% if it.on %} on{% endif %}" title="{{ it.label }}"{% if it.on %} aria-current="page"{% endif %}>{% icon it.icon 20 %}<span class="ws-lbl">{{ it.label }}</span></a>{% endfor %}
       </div>
     </details>
     {% else %}
     <div class="ws-group ws-top">
-      {% for it in g.items %}<a href="{% url it.url db.pk %}" class="ws-item{% if it.on %} on{% endif %}" title="{{ it.label }}"{% if it.on %} aria-current="page"{% endif %}>{% icon it.icon 20 %}<span class="ws-lbl">{{ it.label }}</span></a>{% endfor %}
+      {% for it in g.items %}<a href="{{ it.href }}" class="ws-item{% if it.on %} on{% endif %}" title="{{ it.label }}"{% if it.on %} aria-current="page"{% endif %}>{% icon it.icon 20 %}<span class="ws-lbl">{{ it.label }}</span></a>{% endfor %}
     </div>
     {% endif %}
     {% endfor %}

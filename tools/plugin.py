@@ -2,7 +2,7 @@
 import pkgutil
 from importlib import import_module
 
-from kernel import jobs, nav, plugins
+from kernel import home, jobs, nav, plugins
 
 from . import plugins as builtin
 from . import sdk
@@ -30,3 +30,5 @@ for _m in pkgutil.iter_modules(builtin.__path__):
 from django.utils.module_loading import autodiscover_modules  # noqa: E402
 
 autodiscover_modules("geotools")
+
+home.feed("tools.home.feed", plugin=plugin.id, order=20)

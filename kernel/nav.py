@@ -30,6 +30,7 @@ class WsSection:
     need: str  # viewer | editor | owner
     plugin: str
     visible: str = ""  # مسیر تابع () -> bool؛ خالی = همیشه
+    extra: tuple = ()  # آرگومان‌های بعد از شناسه‌ی پایگاه در آدرس (صفحه‌های کیت صفحه: پلاگین و کلید صفحه)
 
 
 @dataclass(frozen=True)
@@ -64,9 +65,10 @@ def ws_group(key: str, title: str, *, order: int, plugin: str = KERNEL) -> None:
 
 
 def ws_section(group: str, label: str, url: str, icon: str, need: str, *, plugin: str, order: int,
-               views: tuple[str, ...] = (), visible: str = "") -> None:
-    registry.add(WS_SECTION, url, WsSection(group, label, url, tuple(views) or (url,), icon, need, plugin, visible),
-                 plugin=plugin, order=order)
+               views: tuple[str, ...] = (), visible: str = "", extra: tuple = ()) -> None:
+    key = "|".join([url, *map(str, extra)])
+    registry.add(WS_SECTION, key, WsSection(group, label, url, tuple(views) or (url,), icon, need, plugin, visible, tuple(extra)),
+                 plugin=plugin, order=order, replace=bool(extra))
 
 
 def home_group(key: str, title: str, *, order: int, plugin: str = KERNEL) -> None:
@@ -134,7 +136,11 @@ admin_group("support", "پشتیبانی و محتوا", "life", order=30)
 admin_group("infra", "زیرساخت", "server", order=40)
 admin_group("publish", "انتشار و داده", "globe", order=50)
 admin_group("marketing", "بازاریابی", "chart", order=60)
+admin_group("platform", "پلاگین‌ها و مشتریان سازمانی", "cube", order=65)
 admin_group("settings", "تنظیمات و امنیت", "settings", order=70)
+admin_item("platform", "kernel.pluginstate", "پلاگین‌ها و مجوزها", plugin=KERNEL, order=10)
+admin_item("platform", "kernel.pluginrelease", "بارگذاری و نسخه‌ها", plugin=KERNEL, order=15)
+admin_item("platform", "kernel.organization", None, plugin=KERNEL, order=20)
 
 
 def broken_paths() -> list[tuple[str, str, str]]:

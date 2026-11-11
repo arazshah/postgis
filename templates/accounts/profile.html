@@ -13,7 +13,7 @@
 
   <div class="tabs" role="tablist" aria-label="بخش‌های پروفایل" data-hash-tabs>
     <button type="button" role="tab" id="t-info" aria-selected="{% if open_tab == 'account' %}false{% else %}true{% endif %}" aria-controls="p-info"{% if open_tab == 'account' %} tabindex="-1"{% endif %}>مشخصات</button>
-    <button type="button" role="tab" id="t-ai" aria-selected="false" aria-controls="p-ai" tabindex="-1">مدل زبانی{% if cfg %} <span class="prof-ok" title="کلید ثبت شده">{% icon "check" 16 %}</span>{% endif %}</button>
+    {% for ps in profile_sections %}<button type="button" role="tab" id="t-{{ ps.key }}" aria-selected="false" aria-controls="p-{{ ps.key }}" tabindex="-1">{{ ps.title }}{% if ps.badge %} <span class="prof-ok" title="{{ ps.badge_title }}">{% icon "check" 16 %}</span>{% endif %}</button>{% endfor %}
     <button type="button" role="tab" id="t-account" aria-selected="{% if open_tab == 'account' %}true{% else %}false{% endif %}" aria-controls="p-account"{% if open_tab != 'account' %} tabindex="-1"{% endif %}>حساب و امنیت</button>
   </div>
 
@@ -26,31 +26,11 @@
     </form>
   </section>
 
-  <section class="tabpanel" id="p-ai" role="tabpanel" aria-labelledby="t-ai" hidden>
-    <div class="card">
-      <h2 class="prof-h">{% icon "spark" 20 %}مدل زبانی برای پرسش فارسی</h2>
-      <p class="small muted">یک بار اینجا تنظیم کنید؛ در «تحلیل» و «کنسول SQL» همه‌ی پایگاه‌ها استفاده می‌شود. هزینه‌ی مدل با حساب خود شماست. کلید رمزنگاری‌شده ذخیره می‌شود و دیگر نمایش داده نمی‌شود.</p>
-      {% if cfg %}<p class="msg success small">{% icon "check" 16 %} فعال: مدل <span class="ltr">{{ cfg.model }}</span> · کلید <span class="ltr">{{ cfg.key_hint }}</span></p>
-      {% elif SITE.llm_partner_enabled and SITE.llm_partner_url %}
-      <details class="llm-guide" open>
-        <summary>حساب مدل زبانی ندارید؟ در سه قدم بسازید</summary>
-        <ol class="llm-steps">
-          <li><b>ساخت حساب</b><span class="small muted">در {{ SITE.llm_partner_name }} ثبت‌نام کنید (چند دقیقه).</span></li>
-          <li><b>شارژ اعتبار</b><span class="small muted">مبلغ کم هم کافی است؛ هر پرسش معمولاً چند تومان هزینه دارد.</span></li>
-          <li><b>ساخت کلید API</b><span class="small muted">کلید را کپی کنید و در کادر زیر بچسبانید.</span></li>
-        </ol>
-        <a class="btn ghost sm" href="{{ SITE.llm_partner_url }}" target="_blank" rel="sponsored noopener noreferrer" data-llm-guide>ساخت حساب در {{ SITE.llm_partner_name }}</a>
-      </details>
-      {% endif %}
-      <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="llm_save"><input type="hidden" name="next" value="{{ next }}">
-        <div class="field"><label for="l-url">آدرس سرویس سازگار با OpenAI</label><input id="l-url" type="text" name="base_url" class="ltr" value="{{ cfg.base_url|default:'https://api.avalai.ir/v1' }}"></div>
-        <div class="field"><label for="l-model">مدل</label><input id="l-model" type="text" name="model" class="ltr" maxlength="100" value="{{ cfg.model|default:'gpt-4o' }}"></div>
-        <div class="field"><label for="l-key">کلید API {% if cfg %}(خالی بگذارید تا تغییر نکند){% endif %}</label><input id="l-key" type="password" name="api_key" class="ltr" autocomplete="off" {% if not cfg %}required{% endif %}></div>
-        <div class="prof-acts"><button class="btn" type="submit">{% icon "check" 18 %}ذخیره</button></div>
-      </form>
-      {% if cfg %}<form method="post" class="prof-del" data-confirm="کلید مدل زبانی حذف شود؟">{% csrf_token %}<input type="hidden" name="action" value="llm_delete"><button class="btn ghost sm danger" type="submit">{% icon "trash" 16 %}حذف کلید</button></form>{% endif %}
-    </div>
+  {% for ps in profile_sections %}
+  <section class="tabpanel" id="p-{{ ps.key }}" role="tabpanel" aria-labelledby="t-{{ ps.key }}" hidden>
+    {% include ps.template with ps=ps.ctx %}
   </section>
+  {% endfor %}
 
   <section class="tabpanel" id="p-account" role="tabpanel" aria-labelledby="t-account"{% if open_tab != 'account' %} hidden{% endif %}>
     <div class="card">

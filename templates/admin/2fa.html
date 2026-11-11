@@ -1,0 +1,43 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="content-main" style="max-width:520px">
+  {% if mode == 'codes' %}
+  <h2>کدهای بازیابی</h2>
+  <p>اگر دستگاه تأییدکننده را از دست دادید، هر کد یک‌بار جای رمز دوم را می‌گیرد. <b>همین حالا ذخیره‌شان کنید</b> (مدیر رمز عبور یا چاپ در جای امن)؛ دوباره نشان داده نمی‌شوند.</p>
+  <pre dir="ltr" style="font-size:1.1rem;line-height:1.9;user-select:all">{% for c in codes %}{{ c }}
+{% endfor %}</pre>
+  <p><a class="button default" href="{{ next }}">ذخیره کردم؛ ادامه</a></p>
+  {% elif mode == 'enroll' %}
+  <h2>فعال‌سازی ورود دومرحله‌ای</h2>
+  <p>برای ورود به پنل مدیریت، علاوه بر رمز عبور یک رمز زمانی هم لازم است. یک برنامه‌ی تأییدکننده (Google Authenticator، Authy، Aegis، 2FAS …) نصب کنید و این حساب را اضافه کنید:</p>
+  <ol>
+    <li>در برنامه «افزودن حساب با کلید» را بزنید و این کلید را وارد کنید (نوع: زمانی):<br><code dir="ltr" style="font-size:1.15rem;user-select:all">{{ secret }}</code></li>
+    <li>یا روی گوشی همین پیوند را باز کنید: <a href="{{ uri }}" dir="ltr">otpauth://…</a></li>
+    <li>رمز ۶ رقمی که برنامه نشان می‌دهد را اینجا بنویسید.</li>
+  </ol>
+  <form method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
+    <fieldset class="module aligned"><div class="form-row"><label for="code">رمز ۶ رقمی</label>
+      <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" dir="ltr" maxlength="7" autofocus required></div></fieldset>
+    <div class="submit-row"><input type="submit" class="default" value="تأیید و فعال‌سازی"></div>
+  </form>
+  {% elif mode == 'manage' %}
+  <h2>ورود دومرحله‌ای</h2>
+  <p>وضعیت: <b>فعال</b>. کدهای بازیابی باقی‌مانده: <b>{{ remaining }}</b>.</p>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="regenerate"><input type="hidden" name="next" value="{{ next }}">
+    <fieldset class="module aligned"><div class="form-row"><label for="code">رمز فعلی</label>
+      <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" dir="ltr" required></div></fieldset>
+    <div class="submit-row"><input type="submit" value="ساخت کدهای بازیابی تازه (قبلی‌ها باطل می‌شوند)"></div>
+  </form>
+  {% else %}
+  <h2>تأیید هویت</h2>
+  <p>{% if locked %}تأیید موقتاً قفل است؛ ۱۵ دقیقه دیگر دوباره تلاش کنید.{% else %}رمز ۶ رقمی برنامه‌ی تأییدکننده، یا یکی از کدهای بازیابی را بنویسید.{% endif %}</p>
+  {% if not locked %}
+  <form method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
+    <fieldset class="module aligned"><div class="form-row"><label for="code">رمز یا کد بازیابی</label>
+      <input id="code" name="code" autocomplete="one-time-code" dir="ltr" autofocus required></div></fieldset>
+    <div class="submit-row"><input type="submit" class="default" value="تأیید"></div>
+  </form>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

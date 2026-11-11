@@ -30,14 +30,14 @@ def pgrouting_available(db: UserDatabase) -> bool:
     """هر بار باز شدن صفحه نباید به سرور دیتابیس وصل شود؛ نتیجه موفق چند دقیقه نگه داشته می‌شود."""
     from django.core.cache import cache
 
-    from databases.provisioner import Provisioner
+    from kernel import workspace
 
     key = f"iranmap:pgr:{db.server_id}"
     hit = cache.get(key)
     if hit is not None:
         return hit
     try:
-        ok = Provisioner.for_server(db.server).extension_available("pgrouting")
+        ok = workspace.host(db).extension_available("pgrouting")
     except Exception:  # noqa: BLE001  سرور در دسترس نیست؛ نتیجه شکست نگه داشته نمی‌شود
         return False
     cache.set(key, ok, 300)
@@ -67,7 +67,7 @@ def request_import(db: UserDatabase, user, area: Area, datasets: list[str], rout
 
 
 def run_import(job: Job) -> str:
-    from databases.provisioner import Provisioner
+    from kernel import workspace
 
     db = job.database
     area = Area.objects.filter(pk=job.params.get("area")).first()
@@ -94,5 +94,5 @@ def run_import(job: Job) -> str:
             done.append(f"routing.ways ({n:,} یال)")
     # اطمینان: همه اشیای ساخته‌شده مال نقش خود کاربر باشند
     job.set_progress(96, "تنظیم دسترسی جدول‌ها")
-    Provisioner.for_server(db.server).reassign_browser_objects(db.db_name, db.role_name)
+    workspace.host(db).reassign_browser_objects(db.db_name, db.role_name)
     return f"{area.label}: " + "، ".join(done)

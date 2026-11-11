@@ -5,6 +5,8 @@ services:
     build: .
   worker:
     build: .
+  plugin-runner:
+    build: .
   qgis:
     build:
       context: docker/qgis
