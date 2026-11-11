@@ -6,8 +6,9 @@ from __future__ import annotations
 
 from psycopg import sql
 
-from databases.explorer import Explorer, ExplorerError
 from databases.gdal import TABLE_RE
+from kernel import tenantdb
+from kernel.tenantdb import TenantError
 
 from . import sdk
 from .sdk import ToolError
@@ -61,7 +62,7 @@ def _prepare(db, key: str, params: dict):
     out = (params.get("output") or "").strip().lower()
     if not TABLE_RE.match(out):
         raise ToolError("نام جدول خروجی: حروف کوچک لاتین، رقم و _ (مثلاً metro_buffer_500).")
-    ex = Explorer(db)
+    ex = tenantdb.catalog(db)
     tables = {f"{t.schema}.{t.name}": t for t in ex.tables()}
     if f"public.{out}" in tables and params.get("replace") != "on":
         raise ToolError(f"جدول {out} از قبل وجود دارد؛ نام دیگری بدهید یا «جایگزین شود» را بزنید.")
@@ -101,8 +102,7 @@ def run(db, key: str, params: dict, job=None, run_row=None) -> dict:
     from databases.provisioner import Provisioner
 
     try:
-        with ex.connect(read_only=False) as conn:
-            conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
+        with ex.connect(read_only=False, as_owner=True) as conn:
             conn.execute(sql.SQL("SET statement_timeout = {}").format(sql.Literal(TIMEOUT)))
             for q, cap, msg in guards:
                 if conn.execute(q).fetchone()[0] > cap:
@@ -120,7 +120,7 @@ def run(db, key: str, params: dict, job=None, run_row=None) -> dict:
             conn.execute(sql.SQL("ANALYZE {}").format(target))
             n = conn.execute(sql.SQL("SELECT count(*) FROM {}").format(target)).fetchone()[0]
             conn.commit()
-    except ExplorerError as exc:
+    except TenantError as exc:
         raise ToolError(str(exc)) from exc
     except Exception as exc:  # noqa: BLE001  خطای PostgreSQL (مثلاً timeout)
         msg = str(exc).splitlines()[0]

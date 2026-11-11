@@ -3,7 +3,7 @@ import json
 
 from psycopg import sql
 
-from databases.explorer import Explorer
+from kernel import tenantdb
 
 from . import ddl
 
@@ -33,7 +33,7 @@ def _rows(conn, project, table, cols, limit):
 
 def collections(db, project, limit: int = LIMIT) -> dict:
     """سه مجموعه GeoJSON (۴۳۲۶) و مختصات پروژه (x و y) در properties نقاط."""
-    with Explorer(db).connect() as conn:
+    with tenantdb.catalog(db).connect() as conn:
         return {
             "points": {"type": "FeatureCollection", "features": _rows(conn, project, "points", POINT_COLS, limit)},
             "lines": {"type": "FeatureCollection", "features": _rows(conn, project, "lines", LINE_COLS, limit)},
@@ -43,14 +43,14 @@ def collections(db, project, limit: int = LIMIT) -> dict:
 
 def counts(db, project) -> dict:
     ddl.check_slug(project.slug)
-    with Explorer(db).connect() as conn:
+    with tenantdb.catalog(db).connect() as conn:
         return {t: conn.execute(sql.SQL("SELECT count(*) FROM {} WHERE deleted_at IS NULL").format(
             sql.Identifier(project.slug, t))).fetchone()[0] for t in ("points", "lines", "polygons")}
 
 
 def codes(db, project) -> list[dict]:
     ddl.check_slug(project.slug)
-    with Explorer(db).connect() as conn:
+    with tenantdb.catalog(db).connect() as conn:
         rows = conn.execute(sql.SQL("SELECT code, name, geom_type, layer FROM {} ORDER BY sort, code").format(
             sql.Identifier(project.slug, "codes"))).fetchall()
     return [{"code": r[0], "name": r[1], "geom_type": r[2], "layer": r[3]} for r in rows]
@@ -59,7 +59,7 @@ def codes(db, project) -> list[dict]:
 def projected_lines(db, project) -> dict:
     """مختصات خط و چندضلعی در سیستم مختصات پروژه (برای DXF)؛ ترتیب همان collections است."""
     out = {}
-    with Explorer(db).connect() as conn:
+    with tenantdb.catalog(db).connect() as conn:
         for key, table in (("lines", "lines"), ("polygons", "polygons")):
             rows = conn.execute(sql.SQL("SELECT ST_AsGeoJSON(geom)::text FROM {} WHERE deleted_at IS NULL "
                                         "ORDER BY id LIMIT %s").format(sql.Identifier(project.slug, table)),
@@ -89,7 +89,7 @@ def tin(db, project, field: str, session=None):
     if session:
         where += sql.SQL(" AND session_id = %s")
         args = (str(session),)
-    with Explorer(db).connect() as conn:
+    with tenantdb.catalog(db).connect() as conn:
         n = conn.execute(sql.SQL("SELECT count(*) FROM {t} WHERE ").format(t=t) + where, args).fetchone()[0]
         if n < 3:
             raise SurfaceError("برای ساخت سطح دست‌کم ۳ نقطه با ارتفاع لازم است.")
@@ -120,7 +120,7 @@ def contours_wgs84(db, project, lines: list[dict]) -> dict:
     if not lines:
         return {"type": "FeatureCollection", "features": []}
     ddl.check_slug(project.slug)
-    with Explorer(db).connect() as conn:
+    with tenantdb.catalog(db).connect() as conn:
         rows = conn.execute("SELECT ST_AsGeoJSON(ST_Transform(ST_SetSRID(ST_GeomFromText(w), %s), 4326), 7)::text "
                             "FROM unnest(%s::text[]) WITH ORDINALITY AS u(w, i) ORDER BY i",
                             (project.srid, [_wkt(c["coords"]) for c in lines])).fetchall()
@@ -133,7 +133,7 @@ def save_contours(db, project, lines: list[dict]) -> int:
     """جدول معمولی <schema>.contours (برای نقشه‌های چندلایه، REST و QGIS)؛ هر بار جایگزین می‌شود."""
     ddl.check_slug(project.slug)
     t = sql.Identifier(project.slug, "contours")
-    with Explorer(db).connect(read_only=False) as conn:
+    with tenantdb.catalog(db).connect(read_only=False) as conn:
         conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(db.role_name)))
         conn.execute(sql.SQL("""CREATE TABLE IF NOT EXISTS {t} (id serial PRIMARY KEY, level double precision NOT NULL,
             is_index boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now(),
@@ -151,7 +151,7 @@ def save_contours(db, project, lines: list[dict]) -> int:
 def sessions(db, project) -> list[dict]:
     """نشست‌های برداشت با تعداد نقاط دارای ارتفاع (برای مقایسه دو برداشت)."""
     ddl.check_slug(project.slug)
-    with Explorer(db).connect() as conn:
+    with tenantdb.catalog(db).connect() as conn:
         rows = conn.execute(sql.SQL("""SELECT s.id::text, s.name, s.started_at, count(p.id) FILTER (WHERE p.deleted_at IS NULL
                 AND (p.h_ortho IS NOT NULL OR p.h_ellip IS NOT NULL))
             FROM {s} s LEFT JOIN {p} p ON p.session_id = s.id GROUP BY s.id ORDER BY s.started_at DESC LIMIT 100""").format(

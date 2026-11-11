@@ -10,8 +10,8 @@ from django.urls import reverse
 from django.utils import timezone
 from psycopg import sql
 
-from databases.explorer import Explorer
 from databases.models import UserDatabase
+from kernel import tenantdb
 from notifications.models import Notification
 from satgate import spec
 
@@ -148,7 +148,7 @@ def detect_drops(pairs: list[tuple], drop_pct: float) -> list[dict]:
 
 def _pairs(m: SatMonitor, since: date | None) -> list[tuple]:
     """برای هر قطعه: میانگین تصویر تازه (فقط اگر بعد از آخرین تصویر پردازش‌شده‌ی قبلی باشد) و تصویر معتبر قبل از آن."""
-    ex = Explorer(m.database)
+    ex = tenantdb.catalog(m.database)
     tbl = sql.Identifier(zonal_service.SCHEMA, m.table_name)
     with ex.connect() as conn:
         conn.execute("SET statement_timeout = 20000")

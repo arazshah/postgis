@@ -307,10 +307,9 @@ def import_dataset(db, pbf: Path, ds: Dataset, table_prefix: str = "osm_") -> in
                "-lco", "GEOMETRY_NAME=geom", "-lco", "FID=gid", "-lco", "SPATIAL_INDEX=GIST",
                "-lco", "LAUNDER=YES", "-lco", "PRECISION=NO", "-nlt",
                "PROMOTE_TO_MULTI", "-gt", "50000", "--config", "OSM_USE_CUSTOM_INDEXING", "NO"], env=tgt.env)
-    from databases.explorer import Explorer
+    from kernel import tenantdb
 
-    with Explorer(db).connect(read_only=False) as conn:
-        conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
+    with tenantdb.catalog(db).connect(read_only=False, as_owner=True) as conn:
         conn.execute(sql.SQL("COMMENT ON TABLE {} IS {}").format(
             sql.Identifier("public", table), sql.Literal(f"{ds.title} — {ATTRIBUTION}")))
         n = conn.execute(sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier("public", table))).fetchone()[0]
@@ -320,12 +319,11 @@ def import_dataset(db, pbf: Path, ds: Dataset, table_prefix: str = "osm_") -> in
 
 def import_routing(db, pbf: Path) -> int:
     """شبکه مسیریابی با osm2pgrouting در schema routing (جدول ways با cost و reverse_cost)."""
-    from databases.explorer import Explorer
     from databases.provisioner import Provisioner
+    from kernel import tenantdb
 
     Provisioner.for_server(db.server).install_extension(db.db_name, "pgrouting")
-    with Explorer(db).connect(read_only=False) as conn:
-        conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
+    with tenantdb.catalog(db).connect(read_only=False, as_owner=True) as conn:
         conn.execute("CREATE SCHEMA IF NOT EXISTS routing")
         conn.commit()
     tgt = gdal.target(db)
@@ -352,8 +350,7 @@ def import_routing(db, pbf: Path) -> int:
         _run([_bin("osm2pgrouting"), "--f", str(osm), "--conf", conf, "--dbname", db.db_name,
               "--username", user, "--host", server.host, "--port", str(server.port), "--schema", "routing",
               "--clean", "--chunk", "20000"], env=env, timeout=3600)
-    with Explorer(db).connect(read_only=False) as conn:
-        conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
+    with tenantdb.catalog(db).connect(read_only=False, as_owner=True) as conn:
         for t in ("ways", "ways_vertices_pgr"):
             conn.execute(sql.SQL("COMMENT ON TABLE {} IS {}").format(
                 sql.Identifier("routing", t), sql.Literal(f"شبکه مسیریابی — {ATTRIBUTION}")))

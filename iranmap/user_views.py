@@ -7,9 +7,9 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from accounts.decorators import site_user_required
-from databases.explorer import ExplorerError
 from databases.views import _explorer_db
 from jobs.models import Job
+from kernel.tenantdb import TenantError
 
 from . import osm, ready
 from .models import Area
@@ -43,7 +43,7 @@ def ready_data(request, pk):
                 return redirect("iranmap:ready", pk=db.pk)
     try:
         tables = ex.tables()
-    except ExplorerError as exc:
+    except TenantError as exc:
         messages.error(request, str(exc))
         tables = []
     recent = Job.objects.filter(database=db, kind=Job.Kind.OSM_IMPORT)[:8]

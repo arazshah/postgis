@@ -28,7 +28,7 @@ class PrepareTests(SimpleTestCase):
         ex.tables.return_value = LAYERS if layers is None else layers
         ex.columns.return_value = COLS
         p.setdefault("output", "out_t")
-        with mock.patch.object(tools, "Explorer", return_value=ex):
+        with mock.patch("kernel.tenantdb.catalog", return_value=ex):
             return tools._prepare(None, key, p)
 
     def render(self, composed):
@@ -142,7 +142,7 @@ class RealPostgisTests(unittest.TestCase):
             def __init__(self, db):
                 pass
 
-            def connect(self, read_only=True):
+            def connect(self, read_only=True, as_owner=False):
                 import psycopg
 
                 c = psycopg.connect(dbname="newtools_t", **RealPostgisTests.kw)
@@ -151,7 +151,7 @@ class RealPostgisTests(unittest.TestCase):
 
         p.setdefault("output", f"out_{key}")
         p["replace"] = "on"
-        with mock.patch.object(tools, "Explorer", Fake):
+        with mock.patch("kernel.tenantdb.catalog", Fake):
             _ex, out, target, body, guards = tools._prepare(None, key, p)
         for q, cap, _m in guards:
             self.assertLessEqual(conn.execute(q).fetchone()[0], cap)

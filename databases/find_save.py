@@ -265,8 +265,7 @@ def create(db, ex: Explorer, plan: Plan, step=lambda pct, text: None) -> dict:
 
     target = sql.Identifier(SCHEMA, plan.name)
     try:
-        with ex.connect(read_only=False) as conn:
-            conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
+        with ex.connect(read_only=False, as_owner=True) as conn:
             conn.execute(sql.SQL("SET statement_timeout = {}").format(sql.Literal(TIMEOUT)))
             step(10, "بررسی نام")
             row = conn.execute("SELECT c.relkind FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "

@@ -274,19 +274,20 @@ def _do_import(job: Job) -> None:
 def _do_import_into(job: Job, db) -> None:
     """ورود فایل به جدول موجود: خواندن در جدول موقت، بعد درج (یا جایگزینی) در یک تراکنش همه‌یاهیچ."""
     from databases import gdal, importinto
-    from databases.explorer import Explorer, ExplorerError
+    from kernel import tenantdb
+    from kernel.tenantdb import TenantError
 
     into = job.params["into"]
     layer = next((x for x in job.params["layers"] if x.get("selected")), None)
     if layer is None:
         raise JobError("لایه‌ای برای ورود انتخاب نشده است.")
     path = import_dir(job) / job.params["file"]
-    ex = Explorer(db)
+    ex = tenantdb.catalog(db)
     staging = importinto.staging_name(job.pk)
     try:
         try:
             table = ex.find(into["schema"], into["table"])
-        except ExplorerError as exc:
+        except TenantError as exc:
             raise JobError(f"جدول مقصد پیدا نشد: {exc}") from exc
         stage = {"name": layer["name"], "table": staging, "srid": layer.get("srid"),
                  "assign_srid": layer.get("assign_srid"), "to4326": False, "mode": "overwrite", "geom_type": "",
@@ -295,7 +296,7 @@ def _do_import_into(job: Job, db) -> None:
             gdal.import_layer(db, path, stage, job.params.get("encoding"))
             mapping = {k: int(v) for k, v in (job.params.get("into_map") or {}).items()}
             count = importinto.run_merge(ex, table, mapping, staging, replace=job.params.get("into_mode") == "replace")
-        except (gdal.GdalError, ExplorerError) as exc:
+        except (gdal.GdalError, TenantError) as exc:
             raise JobError(str(exc)) from exc
     finally:
         importinto.drop_staging(ex, staging)

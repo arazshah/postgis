@@ -455,7 +455,7 @@ class ConfirmFlowTests(SimpleTestCase):
         from unittest import mock
         FakeExplorer.layers = {"houses": _hs(30)}
         self.imported = []
-        self.patches = [mock.patch.object(ask, "Explorer", FakeExplorer),
+        self.patches = [mock.patch("kernel.tenantdb.catalog", FakeExplorer),
                         mock.patch("databases.gdal.import_layer",
                                    lambda db, path, layer, enc: self.imported.append((layer, path.read_text("utf-8"))))]
         for p in self.patches:

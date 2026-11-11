@@ -20,9 +20,9 @@ from accounts.decorators import site_user_required
 from core.models import SiteSettings
 from databases import team
 from databases.crypto import decrypt, encrypt
-from databases.explorer import ExplorerError
 from databases.models import UserDatabase
 from iranmap import basemap
+from kernel.tenantdb import TenantError
 from publish import access
 from publish.models import ApiKey
 from publish.views import base_config
@@ -112,7 +112,7 @@ def studio(request, pk, project_id):
     p = _project(db, project_id)
     try:
         counts, codes = data.counts(db, p), data.codes(db, p)
-    except ExplorerError as exc:
+    except TenantError as exc:
         messages.error(request, str(exc))
         return redirect("survey:index", pk=db.pk)
     if not GnssDriver.objects.exists():
@@ -157,7 +157,7 @@ def project_data(request, pk, project_id):
     p = _project(db, project_id)
     try:
         return _json({"counts": data.counts(db, p), **data.collections(db, p)})
-    except ExplorerError as exc:
+    except TenantError as exc:
         return _json({"error": str(exc)}, 503)
 
 
@@ -315,7 +315,7 @@ def export(request, pk, project_id, fmt):
         else:
             return render(request, "survey/report.html", {"db": db, "project": p,
                                                          "table": exports.report_html(cols, p, db.db_name)})
-    except ExplorerError as exc:
+    except TenantError as exc:
         messages.error(request, str(exc))
         return redirect("survey:studio", pk=db.pk, project_id=p.pk)
     except surface.SurfaceError as exc:
@@ -521,7 +521,7 @@ def project_surface(request, pk, project_id):
             out["table"] = f"{p.slug}.contours"
     except surface.SurfaceError as exc:
         return _json({"error": "surface", "message": str(exc)}, 400)
-    except ExplorerError as exc:
+    except TenantError as exc:
         return _json({"error": "unavailable", "message": str(exc)}, 503)
     return _json(out)
 
@@ -533,5 +533,5 @@ def surface_sessions(request, pk, project_id):
     p = _project(db, project_id)
     try:
         return _json({"sessions": data.sessions(db, p)})
-    except ExplorerError as exc:
+    except TenantError as exc:
         return _json({"error": "unavailable", "message": str(exc)}, 503)

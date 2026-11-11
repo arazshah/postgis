@@ -17,8 +17,9 @@ from django.views.decorators.http import require_GET, require_POST
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
 from databases import team
-from databases.explorer import Explorer, ExplorerError
 from iranmap import basemap
+from kernel import tenantdb
+from kernel.tenantdb import TenantError
 from satgate import protocol, spec
 
 from . import client, monitor_service, router, services, zonal_service
@@ -103,8 +104,8 @@ def layers(request, pk):
         return _json({"items": []})
     try:
         items = [{"name": f"{t.schema}.{t.name}" if t.schema != "public" else t.name, "kind": t.geo_kind,
-                  "rows": t.rows_estimate} for t in Explorer(db).tables() if t.geometry]
-    except ExplorerError:
+                  "rows": t.rows_estimate} for t in tenantdb.catalog(db).tables() if t.geometry]
+    except TenantError:
         items = []
     return _json({"items": items})
 
@@ -119,7 +120,7 @@ def extent(request, pk):
     name = request.GET.get("t", "")
     schema, _, table = name.rpartition(".")
     try:
-        ex = Explorer(db)
+        ex = tenantdb.catalog(db)
         t = ex.find(schema or "public", table)
         g = t.geometry[0]
         srid = g.get("srid") or 0
@@ -135,7 +136,7 @@ def extent(request, pk):
                                           t=sql.Identifier(t.name))).fetchone()
     except services.SatError as exc:
         return _err(exc)
-    except (ExplorerError, IndexError):
+    except (TenantError, IndexError):
         return _json({"ok": False, "error": "جدول مکانی پیدا نشد یا به آن دسترسی ندارید."}, 404)
     except Exception:  # noqa: BLE001 هر خطای SQL (جدول خالی، SRID نادرست)
         return _json({"ok": False, "error": "محدوده‌ی این جدول خوانده نشد؛ جدول خالی یا مختصات آن نامعتبر است."}, 422)
@@ -175,7 +176,7 @@ def an_layers(request, pk):
     db = team.get_db(request, pk, "viewer")
     try:
         layers = zonal_service.polygon_layers(db) if db.is_live else []
-    except ExplorerError:
+    except TenantError:
         layers = []
     rasters = [{"id": r.pk, "title": r.title, "bands": r.bands, "dtype": r.dtype}
                for r in Raster.objects.filter(database=db, status=Raster.Status.READY)]
@@ -213,7 +214,7 @@ def an_series(request, pk, an_id):
     an = get_object_or_404(SatAnalysis, pk=an_id, database=db, status=SatAnalysis.Status.READY)
     try:
         return _json({"ok": True, **zonal_service.series(an, request.GET.get("feature", "")[:80])})
-    except (ExplorerError, Exception):  # noqa: BLE001  جدول حذف شده یا اتصال
+    except (TenantError, Exception):  # noqa: BLE001  جدول حذف شده یا اتصال
         return _json({"ok": False, "error": "جدول نتیجه خوانده نشد؛ شاید حذف یا تغییر نام داده شده است."}, 404)
 
 

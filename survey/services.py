@@ -6,7 +6,8 @@ from django.db import transaction
 from django.utils import timezone
 from psycopg import sql
 
-from databases.explorer import Explorer, ExplorerError
+from kernel import tenantdb
+from kernel.tenantdb import TenantError
 
 from . import crs, ddl, presets
 from .models import SurveyProject
@@ -40,7 +41,7 @@ def create_project(db, user, name: str, srid, template: str = "blank") -> Survey
         raise SurveyError(f"سهمیه پروژه برداشت پلن شما ({db.plan.survey_projects}) پر شده است.")
 
     slug = ddl.new_slug()
-    explorer = Explorer(db)
+    explorer = tenantdb.catalog(db)
     try:
         with explorer.connect(read_only=False) as conn:
             try:
@@ -56,7 +57,7 @@ def create_project(db, user, name: str, srid, template: str = "blank") -> Survey
                 conn.rollback()
                 log.warning("survey ddl failed for %s: %s", db.pk, exc)
                 raise SurveyError("ساخت پروژه در پایگاه داده شما ممکن نشد.") from exc
-    except ExplorerError as exc:
+    except TenantError as exc:
         raise SurveyError(str(exc)) from exc
 
     try:
@@ -70,7 +71,7 @@ def create_project(db, user, name: str, srid, template: str = "blank") -> Survey
 
 def _drop_quietly(db, slug: str) -> None:
     try:
-        with Explorer(db).connect(read_only=False) as conn:
+        with tenantdb.catalog(db).connect(read_only=False) as conn:
             conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(db.role_name)))
             ddl.drop_schema(conn, slug)
             conn.commit()

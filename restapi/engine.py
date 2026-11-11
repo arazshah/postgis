@@ -12,7 +12,8 @@ from decimal import Decimal
 
 from psycopg import sql
 
-from databases.explorer import Explorer, ExplorerError
+from kernel import tenantdb
+from kernel.tenantdb import TenantError
 
 MAX_LIMIT = 1000
 DEFAULT_LIMIT = 100
@@ -28,11 +29,9 @@ class RestError(Exception):
 @contextmanager
 def _conn(db, write: bool):
     try:
-        with Explorer(db).connect(read_only=not write) as conn:
-            if write:
-                conn.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(db.role_name)))
+        with tenantdb.catalog(db).connect(read_only=not write, as_owner=write) as conn:
             yield conn
-    except ExplorerError as exc:
+    except TenantError as exc:
         raise RestError(str(exc), 503) from exc
 
 

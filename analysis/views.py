@@ -7,9 +7,9 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from accounts.decorators import site_user_required
-from databases.explorer import ExplorerError
 from databases.views import _explorer_db
 from jobs.models import Job
+from kernel.tenantdb import TenantError
 
 from . import ask, history
 from .models import LlmConfig, Question
@@ -85,7 +85,7 @@ def page(request, pk):
                 ask.request(db, request.user, request.POST.get("question", ""), request.POST.getlist("layers"),
                             request.POST.get("output", ""), share_values=request.POST.get("share_values") == "on",
                             confirm=request.POST.get("confirm") == "on", parent_pk=request.POST.get("parent"))
-            except (ask.AskError, ExplorerError) as exc:
+            except (ask.AskError, TenantError) as exc:
                 messages.error(request, str(exc))
             else:
                 messages.success(request, "پرسش در صف قرار گرفت؛ معمولاً کمتر از یک دقیقه طول می‌کشد.")
@@ -110,7 +110,7 @@ def page(request, pk):
         return here
     try:
         tables = ex.tables()
-    except ExplorerError as exc:
+    except TenantError as exc:
         messages.error(request, str(exc))
         tables = []
     spatial = [t for t in tables if t.geometry]

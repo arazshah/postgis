@@ -18,8 +18,8 @@ from django.views.decorators.http import require_GET, require_POST
 
 from accounts.decorators import site_user_required
 from databases import team
-from databases.explorer import ExplorerError
 from databases.models import UserDatabase
+from kernel.tenantdb import TenantError
 from publish import access, engine, styles
 from publish.styles import CATEGORY_COLORS
 from publish.views import base_config
@@ -70,7 +70,7 @@ def _layer_conf(request, layer: MapLayer, tiles: str, key: str, fields=False) ->
     if fields:
         try:
             conf["fields"] = services.all_fields(layer)
-        except (engine.EngineError, ExplorerError):
+        except (engine.EngineError, TenantError):
             conf["fields"], conf["missing"] = [], True
     return conf
 
@@ -108,7 +108,7 @@ def index(request, pk):
         return redirect("databases:detail", pk=db.pk)
     try:
         tables = services.spatial_tables(db)
-    except ExplorerError as exc:
+    except TenantError as exc:
         messages.error(request, str(exc))
         tables = []
     maps = list(WebMap.objects.filter(database=db).prefetch_related("layers"))
@@ -128,7 +128,7 @@ def create(request, pk):
     try:
         webmap = services.create_map(db, request.user, request.POST.get("title", "").strip(), keys,
                                      request.POST.get("description", "").strip())
-    except (MapError, ExplorerError) as exc:
+    except (MapError, TenantError) as exc:
         messages.error(request, str(exc))
         back = request.POST.get("back")
         if back == "quick" and keys:
@@ -158,7 +158,7 @@ def add_table(request, pk):
             except ValueError as exc:
                 raise Http404 from exc
             services.add_layer(webmap, schema, table)
-    except (MapError, ExplorerError) as exc:
+    except (MapError, TenantError) as exc:
         messages.error(request, str(exc))
         return back
     messages.success(request, f"جدول «{table}» به نقشه «{webmap.title}» اضافه شد.")
@@ -231,7 +231,7 @@ def _save(webmap: WebMap, data: dict):
         layer.visible = bool(item.get("visible", True))
         try:
             names = {n for n, _ in services.all_fields(layer)}
-        except (engine.EngineError, ExplorerError):
+        except (engine.EngineError, TenantError):
             continue  # جدول در دسترس نیست؛ سبک قبلی می‌ماند
         style = styles.clean(item.get("style"), names)
         style.pop("basemap", None)
@@ -295,7 +295,7 @@ def _prepare_charts(webmap: WebMap, items: list) -> list[tuple]:
         if layer.pk not in fields:
             try:
                 fields[layer.pk] = dict(services.all_fields(layer))
-            except (engine.EngineError, ExplorerError) as exc:
+            except (engine.EngineError, TenantError) as exc:
                 raise charts.ChartError(f"جدول «{layer.display_title}» در دسترس نیست.") from exc
         kind = str(item.get("kind") or "")
         out.append((item.get("id"), layer, kind, str(item.get("title") or "").strip()[:120],
@@ -347,7 +347,7 @@ def composer(request, pk, map_id):
         return _json(out)
     try:
         tables = services.spatial_tables(db)
-    except ExplorerError as exc:
+    except TenantError as exc:
         messages.error(request, str(exc))
         tables = []
     from iranmap import basemap
@@ -382,7 +382,7 @@ def chart_preview(request, pk, map_id):
         result = charts.data(layer, kind, config, _bbox_param(body.get("bbox")))
     except (ValueError, TypeError, AttributeError):
         return _json({"error": "داده نامعتبر است."}, 400)
-    except (charts.ChartError, engine.EngineError, ExplorerError) as exc:
+    except (charts.ChartError, engine.EngineError, TenantError) as exc:
         return _json({"error": str(exc)}, 400)
     return _json({"data": result, "config": config, "autoTitle": charts.title_for(kind, config)})
 
@@ -395,7 +395,7 @@ def layer_add(request, pk, map_id):
     schema, table = services.parse_key(request.POST.get("t", ""))
     try:
         layer = services.add_layer(webmap, schema, table)
-    except (MapError, ExplorerError) as exc:
+    except (MapError, TenantError) as exc:
         return _json({"error": str(exc)}, 400)
     return _json({"layer": _layer_conf(request, layer, _tiles_path(webmap, layer), f"ml{layer.pk}", fields=True)})
 
@@ -418,7 +418,7 @@ def layer_extent(request, pk, map_id, layer_id):
                               webmap=_map(db, map_id))
     try:
         bbox = engine.extent(layer)
-    except (engine.EngineError, ExplorerError) as exc:
+    except (engine.EngineError, TenantError) as exc:
         return _json({"error": str(exc)}, 400)
     if bbox != layer.bbox:
         layer.bbox = bbox
@@ -435,7 +435,7 @@ def layer_stats(request, pk, map_id, layer_id):
     mode = request.GET.get("mode", "graduated")
     try:
         stats = engine.field_stats(layer, request.GET.get("field", ""), mode, int(request.GET.get("classes", 5)))
-    except (engine.EngineError, ExplorerError, ValueError) as exc:
+    except (engine.EngineError, TenantError, ValueError) as exc:
         return _json({"error": str(exc)}, 400)
     if mode == "categorized":
         stats["colors"] = CATEGORY_COLORS[:len(stats["values"])]
@@ -484,7 +484,7 @@ def quick(request, pk):
     keys = request.GET.getlist("t")
     try:
         layers = services.quick_layers(db, keys)
-    except ExplorerError as exc:
+    except TenantError as exc:
         messages.error(request, str(exc))
         return redirect("databases:explore", pk=db.pk)
     if not layers:
@@ -515,7 +515,7 @@ def preview_tile(request, pk, schema, table, z, x, y):
     if info is None:
         try:
             info = services.find_table(db, schema, table)
-        except (MapError, ExplorerError) as exc:
+        except (MapError, TenantError) as exc:
             return _json({"error": str(exc)}, 404)
         cache.set(ck, info, 120)
     layer = MapLayer(webmap=WebMap(database=db), schema=schema, table=table, geom_column=info["geom_column"],

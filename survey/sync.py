@@ -13,7 +13,8 @@ from datetime import datetime
 import psycopg
 from psycopg import sql
 
-from databases.explorer import Explorer, ExplorerError
+from kernel import tenantdb
+from kernel.tenantdb import TenantError
 
 from . import ddl
 from .models import SurveyProject
@@ -107,7 +108,7 @@ def apply(db, project: SurveyProject, items: list, user_label: str = "") -> list
     ddl.check_slug(project.slug)
     results = []
     try:
-        with Explorer(db).connect(read_only=False) as conn:
+        with tenantdb.catalog(db).connect(read_only=False) as conn:
             conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(db.role_name)))
             used = points_used(conn, db)
             cap = db.plan.survey_max_points
@@ -124,7 +125,7 @@ def apply(db, project: SurveyProject, items: list, user_label: str = "") -> list
                 except psycopg.Error:
                     results.append({"client_uuid": cu, "status": "error", "code": "db"})
             conn.commit()
-    except ExplorerError as exc:
+    except TenantError as exc:
         raise ItemError("unavailable", str(exc)) from exc
     return results
 
