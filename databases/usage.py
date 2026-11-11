@@ -103,14 +103,6 @@ def history(db: UserDatabase, days: int = 30) -> list[dict]:
             for s in SizeSample.objects.filter(database=db, day__gte=since).order_by("day")]
 
 
-def requests(db: UserDatabase, days: int = 14) -> list[dict]:
-    from publish.models import DailyUsage
-
-    since = timezone.localdate() - timedelta(days=days - 1)
-    got = dict(DailyUsage.objects.filter(database=db, day__gte=since).values_list("day", "requests"))
-    return [{"day": since + timedelta(days=i), "n": got.get(since + timedelta(days=i), 0)} for i in range(days)]
-
-
 def safe_collect(db: UserDatabase) -> tuple[dict | None, str]:
     try:
         return collect(db), ""

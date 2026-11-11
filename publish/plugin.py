@@ -13,3 +13,8 @@ nav.admin_item("publish", "publish.dailyusage", None, plugin=plugin.id, order=30
 nav.admin_item("publish", "publish.owsproject", None, plugin=plugin.id, order=40)
 
 events.listen(events.WORKSPACE_DELETED, "publish.events.workspace_deleted", plugin=plugin.id)
+events.listen(events.TABLE_DROPPED, "publish.events.table_dropped", plugin=plugin.id, order=20)
+events.listen(events.TABLE_RENAMED, "publish.events.table_renamed", plugin=plugin.id, order=20)
+events.listen(events.TABLE_USAGE, "publish.events.table_usage", plugin=plugin.id, order=20)
+events.listen(events.USAGE_CARDS, "publish.events.usage_cards", plugin=plugin.id, order=20)
+

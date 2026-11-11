@@ -14,7 +14,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
-from kernel import home
+from kernel import charts, events, home
 from kernel.workspace import SESSION_PW_KEY
 
 from . import csvgeo, editor, importinto, services, tablealter, tablebuilder
@@ -443,8 +443,6 @@ def explore_table(request, pk, schema, table):
             if editing and t.kind in editor.EDITABLE_KINDS:
                 ctx["structure_cfg"] = _structure_config(request, db, t, ctx["columns"], ctx["indexes"])
         elif tab == "map":
-            from maps.models import WebMap
-
             mappable = [x for x in tables if any(not g["geography"] and g["srid"] for g in x.geometry)]
             ctx["mappable"] = t in mappable
             if ctx["mappable"]:
@@ -453,7 +451,10 @@ def explore_table(request, pk, schema, table):
 
                 analytics.record(request, Event.MAP_VIEWED)
             ctx["compare"] = len(mappable) > 1
-            ctx["maps"] = list(WebMap.objects.filter(database=db).only("pk", "title")) if db.can_edit else []
+            ctx["maps"] = []
+            for part in events.collect(events.TABLE_MAP_TARGETS, ws=db, editable=db.can_edit):
+                if isinstance(part, dict):
+                    ctx.update(part)
         else:
             try:
                 page = int(request.GET.get("page", "1"))
@@ -485,14 +486,8 @@ def explore_drop(request, pk, schema, table):
     except ExplorerError as exc:
         messages.error(request, str(exc))
         return redirect("databases:explore", pk=db.pk)
-    # لایه‌ها و APIهای منتشرشده از این جدول دیگر معنا ندارند
-    from maps.models import MapLayer
-    from publish.models import Layer
-    from restapi.models import ApiTable
-
-    MapLayer.objects.filter(webmap__database=db, schema=schema, table=table).delete()
-    gone = Layer.objects.filter(service__database=db, schema=schema, table=table).delete()[0]
-    gone += ApiTable.objects.filter(service__database=db, schema=schema, table=table).delete()[0]
+    # لایه‌ها و APIهای منتشرشده از این جدول دیگر معنا ندارند؛ پلاگین‌های صاحبشان پاک‌سازی می‌کنند (kernel.events)
+    gone = sum(n for n in events.collect(events.TABLE_DROPPED, ws=db, schema=schema, table=table) if n is not True)
     messages.success(request, f"جدول {table} حذف شد." + (" انتشار آن هم برداشته شد." if gone else ""))
     return redirect("databases:explore", pk=db.pk)
 
@@ -941,14 +936,12 @@ def import_review(request, pk, job_id):
 
 # ---------------------------------------------------------------------- تغییر ساختار جدول (ستون، ایندکس، SRID)
 def _table_usage(db, t) -> dict:
-    """لایه‌ها و APIهای منتشرشده یا نقشه‌هایی که از این جدول استفاده می‌کنند (برای هشدار قبل از تغییر ساختار)."""
-    from maps.models import MapLayer
-    from publish.models import Layer
-    from restapi.models import ApiTable
-
-    return {"maps": MapLayer.objects.filter(webmap__database=db, schema=t.schema, table=t.name).count(),
-            "published": Layer.objects.filter(service__database=db, schema=t.schema, table=t.name).count(),
-            "api": ApiTable.objects.filter(service__database=db, schema=t.schema, table=t.name).count()}
+    """لایه‌ها و APIهای منتشرشده یا نقشه‌هایی که از این جدول استفاده می‌کنند (برای هشدار قبل از تغییر ساختار)؛ هر پلاگین سهم خودش را می‌گوید."""
+    out: dict = {}
+    for part in events.collect(events.TABLE_USAGE, ws=db, schema=t.schema, table=t.name):
+        if isinstance(part, dict):
+            out.update(part)
+    return out
 
 
 def _structure_config(request, db, t, cols, indexes) -> dict:
@@ -992,13 +985,7 @@ def table_structure(request, pk, schema, table):
         EditBatch.objects.filter(database=db, schema=t.schema, table=t.name).delete()  # بازگردانی‌ها دیگر معنا ندارند
     final = plan.renamed_table or t.name
     if plan.renamed_table:
-        from maps.models import MapLayer
-        from publish.models import Layer
-        from restapi.models import ApiTable
-
-        MapLayer.objects.filter(webmap__database=db, schema=t.schema, table=t.name).update(table=final)
-        Layer.objects.filter(service__database=db, schema=t.schema, table=t.name).update(table=final)
-        ApiTable.objects.filter(service__database=db, schema=t.schema, table=t.name).update(table=final)
+        events.emit(events.TABLE_RENAMED, ws=db, schema=t.schema, table=t.name, new=final)
     services.logevent("table_alter", f"{t.qualified}: {plan.summary}", user=request.user, database=db)
     return JsonResponse({"ok": True, "url": reverse("databases:explore_table", args=[db.pk, t.schema, final]) + "?tab=columns"})
 
@@ -1235,33 +1222,12 @@ def usage_page(request, pk):
         return redirect("databases:usage", pk=db.pk)
     stats, error = usage.safe_collect(db) if db.is_live else (None, "پایگاه داده فعال نیست.")
     hist = usage.history(db)
-    reqs = usage.requests(db)
     return render(request, "databases/usage.html", {
-        "db": db, "stats": stats, "error": error, "history": hist, "requests": reqs,
-        "size_chart": _bars([h["size"] for h in hist], [h["day"] for h in hist], db.quota_bytes),
-        "req_chart": _bars([r["n"] for r in reqs], [r["day"] for r in reqs], db.plan.publish_daily_requests),
+        "db": db, "stats": stats, "error": error, "history": hist,
+        "size_chart": charts.bars([h["size"] for h in hist], [h["day"] for h in hist], db.quota_bytes),
+        "usage_cards": [c for c in events.collect(events.USAGE_CARDS, ws=db, request=request) if isinstance(c, dict)],
     })
 
-
-def _bars(values, days, cap=None, width=600, height=140):
-    """نمودار ستونی ساده SVG (بدون کتابخانه): مقادیر و خط سقف."""
-    if not values:
-        return None
-    top = max(max(values), 1)
-    if cap and cap < top * 3:
-        top = max(top, cap)
-    n = len(values)
-    gap = 4
-    bw = max(2, (width - gap * (n - 1)) / n)
-    bars = []
-    from datetime import datetime, time
-
-    for i, (v, d) in enumerate(zip(values, days, strict=True)):
-        d = timezone.make_aware(datetime.combine(d, time(12)))  # فیلتر jdate تاریخ‌وزمان می‌خواهد
-        h = 0 if not v else max(2, round(v / top * (height - 6)))
-        bars.append({"x": round(i * (bw + gap), 1), "y": height - h, "w": round(bw, 1), "h": h, "v": v, "day": d})
-    cap_y = round(height - cap / top * (height - 6), 1) if cap and cap <= top else None
-    return {"bars": bars, "w": width, "h": height, "cap_y": cap_y}
 
 
 # ---------------------------------------------------------------------- ویرایش جدول (حالت ویرایش)

@@ -4,7 +4,9 @@
 می‌شود و جلوی بقیه یا کار اصلی را نمی‌گیرد (هر شنونده باید خودش با شکست کنار بیاید).
 
 رویدادهای استاندارد: `workspace.created`، `workspace.deleted`، `workspace.renewed`، `workspace.status_changed`
-(payload: `ws` و در صورت وجود `actor`).
+(payload: `ws` و در صورت وجود `actor`) و رویدادهای جدول: `table.dropped` و `table.renamed` و پرسش `table.usage`
+(payload: `ws`, `schema`, `table` و برای تغییر نام `new`)، و پرسش‌های صفحه: `usage.cards` (کارت‌های مصرف:
+`{template, ctx}`) و `table.map_targets`.
 """
 from __future__ import annotations
 
@@ -18,6 +20,9 @@ POINT = "event.listener"
 
 WORKSPACE_CREATED, WORKSPACE_DELETED = "workspace.created", "workspace.deleted"
 WORKSPACE_RENEWED, WORKSPACE_STATUS = "workspace.renewed", "workspace.status_changed"
+USAGE_CARDS = "usage.cards"
+TABLE_DROPPED, TABLE_RENAMED, TABLE_USAGE = "table.dropped", "table.renamed", "table.usage"
+TABLE_MAP_TARGETS = "table.map_targets"
 
 
 def listen(event: str, func: str, *, plugin: str, order: int = 100) -> None:
@@ -25,19 +30,25 @@ def listen(event: str, func: str, *, plugin: str, order: int = 100) -> None:
     registry.add(POINT, f"{event}|{func}", (event, func), plugin=plugin, order=order)
 
 
-def emit(event: str, **payload) -> int:
-    """رویداد را به همه‌ی شنونده‌ها می‌رساند؛ تعداد شنونده‌های موفق را برمی‌گرداند."""
-    ok = 0
+def collect(event: str, **payload) -> list:
+    """رویداد را به همه‌ی شنونده‌ها می‌رساند و نتیجه‌های غیر None آن‌ها را به ترتیب برمی‌گرداند (شنونده‌ی خطادار حذف می‌شود)."""
+    out = []
     for c in registry.contributions(POINT):
         name, func = c.value
         if name != event:
             continue
         try:
-            load(func)(**payload)
-            ok += 1
+            got = load(func)(**payload)
         except Exception:  # noqa: BLE001
             log.exception("event %s listener %s (%s) failed", event, func, c.plugin)
-    return ok
+            continue
+        out.append(got if got is not None else True)
+    return out
+
+
+def emit(event: str, **payload) -> int:
+    """رویداد را به همه‌ی شنونده‌ها می‌رساند؛ تعداد شنونده‌های موفق را برمی‌گرداند."""
+    return len(collect(event, **payload))
 
 
 def broken_paths() -> list[tuple[str, str, str]]:
