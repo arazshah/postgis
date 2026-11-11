@@ -17,8 +17,8 @@ from django.views.decorators.clickjacking import xframe_options_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from accounts.decorators import site_user_required
-from databases import team
 from databases.models import UserDatabase
+from kernel import workspace
 from kernel.tenantdb import TenantError
 from publish import access, engine, styles
 from publish.styles import CATEGORY_COLORS
@@ -39,7 +39,7 @@ def _json(data, status=200):
 
 
 def _db(request, pk, need="editor") -> UserDatabase:
-    return team.get_db(request, pk, need)
+    return workspace.get(request, pk, need)
 
 
 def _live(request, db) -> bool:

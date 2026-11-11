@@ -75,16 +75,19 @@ unmatched_ignore_imports_alerting = "none"
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
-name = "پلاگین‌ها فقط از دروازه‌ی هسته به داده‌ی مشتری وصل می‌شوند (نه از مرورگر داده)"
+name = "پلاگین‌ها فقط از دروازه‌های هسته به داده‌ی مشتری، رمزنگاری و دسترسی فضای کار می‌رسند"
 type = "forbidden"
 source_modules = [
     "analysis", "tools", "maps", "publish", "restapi", "survey", "satellite", "iranmap", "enterprise", "classroom", "jobs",
+    "billing", "core", "kb", "support", "accounts", "analytics",
 ]
-forbidden_modules = ["databases.explorer"]
+forbidden_modules = ["databases.explorer", "databases.team", "databases.crypto"]
 ignore_imports = [
     "analysis.tests.** -> **", "tools.tests.** -> **", "maps.tests.** -> **", "publish.tests.** -> **",
     "restapi.tests.** -> **", "survey.tests.** -> **", "satellite.tests.** -> **", "iranmap.tests.** -> **",
-    "enterprise.tests.** -> **", "classroom.tests.** -> **", "jobs.tests.** -> **",
+    "enterprise.tests.** -> **", "classroom.tests.** -> **", "jobs.tests.** -> **", "billing.tests.** -> **",
+    "core.tests.** -> **", "kb.tests.** -> **", "support.tests.** -> **", "accounts.tests.** -> **",
+    "analytics.tests.** -> **",
 ]
 unmatched_ignore_imports_alerting = "none"
 allow_indirect_imports = true

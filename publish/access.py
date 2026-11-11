@@ -43,9 +43,9 @@ def key_for(request, db: UserDatabase) -> ApiKey | None:
 
 def is_owner(request, db: UserDatabase) -> bool:
     """مالک یا عضو تیم وارد شده: لایه‌های خصوصی را می‌بیند و درخواست‌هایش از سهمیه کم نمی‌شود."""
-    from databases import team
+    from kernel import workspace
 
-    return team.level(getattr(request, "user", None), db) > 0
+    return workspace.level(getattr(request, "user", None), db) > 0
 
 
 def full_access(request, db: UserDatabase) -> bool:

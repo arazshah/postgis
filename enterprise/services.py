@@ -48,11 +48,11 @@ def request_geoserver(db: UserDatabase, user) -> GeoServerInstance:
 
 def _geoserver_role(db: UserDatabase) -> tuple[str, str]:
     """کاربر فقط‌خواندنی جداگانه برای GeoServer (رمز اصلی مشتری در GeoServer نمی‌نشیند)."""
-    from databases import team
     from databases.services import limits_for, provisioner_for
+    from kernel import workspace
     from kernel.crypto import generate_password
 
-    name = team.role_name_for(db, geoserver.ROLE_SUFFIX)
+    name = workspace.extra_role_name(db, geoserver.ROLE_SUFFIX)
     password = generate_password()
     if DbRole.objects.filter(name=name).exists():
         provisioner_for(db.server).set_password(name, password)

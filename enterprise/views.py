@@ -9,11 +9,11 @@ from django.views.decorators.http import require_http_methods
 
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
-from databases import team
 from databases.models import UserDatabase
 from databases.views import SESSION_PW_KEY
 from iranmap import basemap
 from jobs.models import Job
+from kernel import workspace
 from publish import access
 
 from . import services, tiles
@@ -23,7 +23,7 @@ from .models import GeoServerInstance, Raster
 @site_user_required
 @require_http_methods(["GET", "POST"])
 def page(request, pk):
-    db = team.get_db(request, pk, "owner")
+    db = workspace.get(request, pk, "owner")
     here = redirect("enterprise:page", pk=db.pk)
     if request.method == "POST":
         action = request.POST.get("action", "")
@@ -77,7 +77,7 @@ def _raster(request, slug, count: bool = True) -> Raster:
     db = r.database
     if db.status not in UserDatabase.LIVE_STATUSES:
         raise Http404
-    member = team.level(request.user, db) > 0
+    member = workspace.level(request.user, db) > 0
     if not (r.is_public or member or access.key_for(request, db)):
         raise Http404
     if count and not member:

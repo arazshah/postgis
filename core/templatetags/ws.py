@@ -83,14 +83,14 @@ MAX_SWITCH = 60
 
 def _other_databases(user, db) -> list:
     """پایگاه‌های داده‌ی دیگر کاربر (خودش + اشتراکی) برای تعویض سریع؛ خود پایگاه فعلی در فهرست نیست."""
-    from databases import team
     from databases.models import UserDatabase
+    from kernel import workspace
 
     if not getattr(user, "is_authenticated", False):
         return []
     mine = list(user.databases.exclude(status=UserDatabase.Status.DELETED).order_by("db_name")[:MAX_SWITCH])
     seen = {d.pk for d in mine}
-    shared = [d for d in team.shared_with(user).order_by("db_name")[:MAX_SWITCH] if d.pk not in seen]
+    shared = [d for d in workspace.shared_with(user).order_by("db_name")[:MAX_SWITCH] if d.pk not in seen]
     out = []
     for d in mine + shared:
         if d.pk != db.pk:

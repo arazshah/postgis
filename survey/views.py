@@ -18,9 +18,9 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
-from databases import team
 from databases.models import UserDatabase
 from iranmap import basemap
+from kernel import workspace
 from kernel.crypto import decrypt, encrypt
 from kernel.tenantdb import TenantError
 from publish import access
@@ -50,7 +50,7 @@ def _on():
 
 def _db(request, pk, need="viewer") -> UserDatabase:
     _on()
-    return team.get_db(request, pk, need)
+    return workspace.get(request, pk, need)
 
 
 def _project(db, project_id) -> SurveyProject:

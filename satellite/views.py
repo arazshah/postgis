@@ -16,9 +16,8 @@ from django.views.decorators.http import require_GET, require_POST
 
 from accounts.decorators import site_user_required
 from core.models import SiteSettings
-from databases import team
 from iranmap import basemap
-from kernel import tenantdb
+from kernel import tenantdb, workspace
 from kernel.tenantdb import TenantError
 from satgate import protocol, spec
 
@@ -54,7 +53,7 @@ def _products() -> list[dict]:
 
 @site_user_required
 def index(request, pk):
-    db = team.get_db(request, pk, "viewer")
+    db = workspace.get(request, pk, "viewer")
     reqs = list(SatRequest.objects.filter(database=db).select_related("raster")[:40])
     st = services.status(db)
     cfg = {
@@ -87,7 +86,7 @@ def _pct(used: float, cap: float) -> int:
 @require_GET
 def cards(request, pk):
     """فهرست کارت‌ها برای تازه‌سازی خودکار هنگام پردازش."""
-    db = team.get_db(request, pk, "viewer")
+    db = workspace.get(request, pk, "viewer")
     reqs = list(SatRequest.objects.filter(database=db).select_related("raster")[:40])
     resp = render(request, "satellite/_cards.html", {
         "db": db, "reqs": reqs, "base": request.build_absolute_uri("/")[:-1], "configured": client.configured()})
@@ -99,7 +98,7 @@ def cards(request, pk):
 @require_GET
 def layers(request, pk):
     """جدول‌های مکانی پایگاه داده برای انتخاب محدوده."""
-    db = team.get_db(request, pk, "viewer")
+    db = workspace.get(request, pk, "viewer")
     if not db.is_live:
         return _json({"items": []})
     try:
@@ -116,7 +115,7 @@ def extent(request, pk):
     """محدوده‌ی WGS84 یک جدول مکانی (برای «محدوده را از این لایه بگیر»)."""
     from psycopg import sql
 
-    db = team.get_db(request, pk, "viewer")
+    db = workspace.get(request, pk, "viewer")
     name = request.GET.get("t", "")
     schema, _, table = name.rpartition(".")
     try:
@@ -149,7 +148,7 @@ def extent(request, pk):
 @require_GET
 def missions(request, pk):
     """ماهواره‌هایی که الان می‌شود از آن‌ها تصویر گرفت (دروازه وضعیتشان را می‌سنجد)."""
-    team.get_db(request, pk, "viewer")
+    workspace.get(request, pk, "viewer")
     return _json({"ok": True, "missions": services.missions(force=request.GET.get("refresh") == "1" and request.user.is_staff)})
 
 
@@ -160,7 +159,7 @@ def _analyses(db):
 @site_user_required
 @require_GET
 def an_cards(request, pk):
-    db = team.get_db(request, pk, "viewer")
+    db = workspace.get(request, pk, "viewer")
     items = _analyses(db)
     resp = render(request, "satellite/_analysis_cards.html", {"db": db, "items": items})
     resp["X-Sat-Active"] = "1" if any(a.active for a in items) else "0"
@@ -173,7 +172,7 @@ def an_layers(request, pk):
     """لایه‌های چندضلعی، ستون‌های شناسه و رسترهای آماده‌ی همین پایگاه داده برای فرم تحلیل."""
     from enterprise.models import Raster
 
-    db = team.get_db(request, pk, "viewer")
+    db = workspace.get(request, pk, "viewer")
     try:
         layers = zonal_service.polygon_layers(db) if db.is_live else []
     except TenantError:
@@ -188,7 +187,7 @@ def an_layers(request, pk):
 @site_user_required
 @require_POST
 def an_quote(request, pk):
-    db = team.get_db(request, pk, "viewer")
+    db = workspace.get(request, pk, "viewer")
     try:
         return _json({"ok": True, "quote": zonal_service.quote(db, _body(request))})
     except services.SatError as exc:
@@ -198,7 +197,7 @@ def an_quote(request, pk):
 @site_user_required
 @require_POST
 def an_order(request, pk):
-    db = team.get_db(request, pk, "editor")
+    db = workspace.get(request, pk, "editor")
     try:
         an = zonal_service.order(db, request.user, _body(request))
     except services.SatError as exc:
@@ -210,7 +209,7 @@ def an_order(request, pk):
 @require_GET
 def an_series(request, pk, an_id):
     """سری زمانی برای نمودار: از جدول نتیجه‌ی خود کاربر خوانده می‌شود، نه از پایگاه داده‌ی پنل."""
-    db = team.get_db(request, pk, "viewer")
+    db = workspace.get(request, pk, "viewer")
     an = get_object_or_404(SatAnalysis, pk=an_id, database=db, status=SatAnalysis.Status.READY)
     try:
         return _json({"ok": True, **zonal_service.series(an, request.GET.get("feature", "")[:80])})
@@ -221,7 +220,7 @@ def an_series(request, pk, an_id):
 @site_user_required
 @require_POST
 def mon_create(request, pk):
-    db = team.get_db(request, pk, "editor")
+    db = workspace.get(request, pk, "editor")
     try:
         m = monitor_service.create(db, request.user, _body(request))
     except services.SatError as exc:
@@ -232,7 +231,7 @@ def mon_create(request, pk):
 @site_user_required
 @require_POST
 def mon_action(request, pk, mon_id, action):
-    db = team.get_db(request, pk, "editor")
+    db = workspace.get(request, pk, "editor")
     m = get_object_or_404(SatMonitor, pk=mon_id, database=db)
     if action == "toggle":
         m.enabled = not m.enabled
@@ -255,7 +254,7 @@ def mon_action(request, pk, mon_id, action):
 @site_user_required
 @require_POST
 def an_delete(request, pk, an_id):
-    db = team.get_db(request, pk, "editor")
+    db = workspace.get(request, pk, "editor")
     an = get_object_or_404(SatAnalysis, pk=an_id, database=db)
     if an.active:
         messages.error(request, "تا پایان محاسبه نمی‌شود این تحلیل را حذف کرد.")
@@ -268,7 +267,7 @@ def an_delete(request, pk, an_id):
 @site_user_required
 @require_POST
 def quote(request, pk):
-    db = team.get_db(request, pk, "viewer")
+    db = workspace.get(request, pk, "viewer")
     data = _body(request)
     try:
         return _json({"ok": True, "quote": services.quote(db, data.get("bbox"), data.get("product"), data.get("mission"))})
@@ -279,7 +278,7 @@ def quote(request, pk):
 @site_user_required
 @require_POST
 def search(request, pk):
-    db = team.get_db(request, pk, "editor")
+    db = workspace.get(request, pk, "editor")
     try:
         return _json({"ok": True, "scenes": services.search(db, request.user, _body(request))})
     except services.SatError as exc:
@@ -289,7 +288,7 @@ def search(request, pk):
 @site_user_required
 @require_POST
 def order(request, pk):
-    db = team.get_db(request, pk, "editor")
+    db = workspace.get(request, pk, "editor")
     try:
         req = services.order(db, request.user, _body(request))
     except services.SatError as exc:
@@ -301,7 +300,7 @@ def order(request, pk):
 @require_GET
 def thumb(request, pk, collection, item):
     """پیش‌نمایش تصویر از طریق دروازه (مرورگر کاربر در ایران به منبع اصلی دسترسی ندارد)."""
-    team.get_db(request, pk, "viewer")
+    workspace.get(request, pk, "viewer")
     if collection not in (spec.COLLECTION_S2, spec.COLLECTION_LANDSAT) or not NAME_RE.match(item):
         raise Http404
     key = f"satthumb:{item}"
@@ -321,7 +320,7 @@ def thumb(request, pk, collection, item):
 @require_POST
 def toggle_public(request, pk, req):
     """عمومی یا خصوصی کردن تصویر: عمومی بدون کلید API در QGIS باز می‌شود."""
-    db = team.get_db(request, pk, "editor")
+    db = workspace.get(request, pk, "editor")
     r = get_object_or_404(SatRequest.objects.select_related("raster"), pk=req, database=db)
     if not r.raster_id:
         raise Http404
@@ -335,7 +334,7 @@ def toggle_public(request, pk, req):
 @site_user_required
 @require_POST
 def delete(request, pk, req):
-    db = team.get_db(request, pk, "editor")
+    db = workspace.get(request, pk, "editor")
     r = get_object_or_404(SatRequest, pk=req, database=db)
     if r.active:
         messages.error(request, "تا پایان پردازش نمی‌شود این درخواست را حذف کرد.")

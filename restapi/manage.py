@@ -4,8 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
 from accounts.decorators import site_user_required
-from databases import team
-from kernel import tenantdb
+from kernel import tenantdb, workspace
 from kernel.tenantdb import TenantError
 from publish import access
 from publish.models import Service
@@ -17,7 +16,7 @@ from .models import ApiTable, FieldForm
 @site_user_required
 @require_http_methods(["GET", "POST"])
 def manage(request, pk):
-    db = team.get_db(request, pk, "editor")
+    db = workspace.get(request, pk, "editor")
     if not db.is_live:
         messages.error(request, "پایگاه داده فعال نیست.")
         return redirect("databases:detail", pk=db.pk)

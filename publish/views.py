@@ -24,9 +24,9 @@ SESSION_KEY = "publish_new_key_{}"
 
 def _db(request, pk, need: str = "editor") -> UserDatabase:
     """انتشار: مالک و ویرایشگرهای تیم؛ کلیدهای API فقط مالک."""
-    from databases import team
+    from kernel import workspace
 
-    return team.get_db(request, pk, need)
+    return workspace.get(request, pk, need)
 
 
 @site_user_required
