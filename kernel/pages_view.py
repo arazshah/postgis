@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.shortcuts import redirect, render
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 
 from . import entitlements, metering, pagekit, tenantdb, workspace
 
@@ -38,3 +38,44 @@ def page(request, pk, plugin, page):
            "has_map": any(b["kind"] == "map" for b in blocks), "section": "pages"}
     template = "kernel/_page_body.html" if request.GET.get("fragment") == "1" else "kernel/page.html"
     return render(request, template, ctx)
+
+
+@login_required
+@require_POST
+def submit(request, pk, plugin, page, form):
+    """ثبت یک ردیف از فرم صفحه (فقط INSERT؛ سطح ویرایشگر، مجوز پلاگین، سقف ماهانه، ثبت در گزارش فعالیت)."""
+    spec = pagekit.get(plugin, page)
+    fm = pagekit.get_form(spec, form) if spec else None
+    if fm is None:
+        raise Http404
+    ws = workspace.get(request, pk, spec.need)
+    if not entitlements.allowed(plugin, user=request.user, ws=ws):
+        raise Http404
+    back = redirect("kernel:page", pk=ws.pk, plugin=plugin, page=page)
+    if not ws.is_live:
+        messages.error(request, "این صفحه فقط برای پایگاه داده‌ی فعال در دسترس است.")
+        return redirect("databases:detail", pk=ws.pk)
+    within, _now, cap = metering.check(plugin, "form_submits", user=request.user, ws=ws)
+    if not within:
+        messages.error(request, f"سقف ماهانه‌ی ثبت ({cap}) پر شده است؛ برای افزایش با پشتیبانی تماس بگیرید.")
+        return back
+    values, errors = pagekit.read_form(fm, request.POST)
+    if errors:
+        for e in errors:
+            messages.error(request, e)
+        return back
+    try:
+        pagekit.insert_row(ws, fm, values)
+    except pagekit.SpecError as exc:
+        messages.error(request, str(exc))
+        workspace.log_event("plugin_form", f"{plugin}/{page}/{form}: {exc}", user=request.user, database=ws, success=False)
+        return back
+    except Exception as exc:  # noqa: BLE001  خطای پایگاه داده (قید، نوع…): متن کوتاه
+        msg = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__
+        messages.error(request, "ثبت انجام نشد: " + ("زمان اجرا تمام شد." if "statement timeout" in msg else "داده با ساختار جدول نمی‌خواند."))
+        workspace.log_event("plugin_form", f"{plugin}/{page}/{form}: {msg}", user=request.user, database=ws, success=False)
+        return back
+    metering.record(plugin, "form_submits", user=request.user, ws=ws)
+    workspace.log_event("plugin_form", f"{plugin}/{page}/{form}: یک ردیف در {fm.table} ثبت شد", user=request.user, database=ws)
+    messages.success(request, fm.success)
+    return back

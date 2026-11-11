@@ -143,7 +143,7 @@ class InspectTests(TestCase):
         ins = self.inspect(build())
         self.assertTrue(ins.ok, ins.report())
         self.assertEqual((ins.publisher, ins.manifest["id"], len(ins.pages)), ("acme", "fleet", 1))
-        self.assertEqual(len(ins.steps), 5)
+        self.assertEqual(len(ins.steps), 6)  # آخری «دسترسی نوشتن» است
 
     def test_unsigned_untrusted_or_modified_never_reach_later_stages(self):
         self.assertEqual(self.failed(build(signed=False)).stage, "امضا و ناشر")

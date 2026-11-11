@@ -227,6 +227,9 @@ def inspect(data: bytes, *, keys: dict | None = None, new_release: bool = True) 
     pages = stage("مشخصات صفحه‌ها", lambda: _pages(manifest, files))
     if pages is not None:
         ins.pages = pages
+        writes = sorted({f"{pg.key}→{fm.table}" for pg in pages for fm in pg.forms})
+        # خبر برای بازبین: این بسته می‌تواند ردیف بنویسد (فقط INSERT در جدول‌های نام‌برده)؛ مانع نیست
+        ins.steps.append(Step("دسترسی نوشتن", True, ("فقط INSERT در: " + "، ".join(writes)) if writes else "بدون نوشتن (فقط خواندنی)"))
     return ins
 
 

@@ -62,6 +62,35 @@ class Block:
     columns: tuple[tuple[str, str], ...] = ()  # (نام ستون، برچسب)
 
 
+FIELD_KINDS = ("text", "int", "number", "bool", "date", "choice")
+MAX_FORMS, MAX_FIELDS, MAX_VALUE = 3, 12, 2000
+TABLE_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}(\.[a-z_][a-z0-9_]{0,62})?")
+
+
+@dataclass(frozen=True)
+class Field:
+    name: str  # نام ستون جدول مقصد
+    kind: str
+    label: str
+    required: bool = False
+    choices: tuple[tuple[str, str], ...] = ()
+    max: float | None = None  # برای متن: حداکثر طول؛ برای عدد: سقف
+    min: float | None = None
+
+
+@dataclass(frozen=True)
+class Form:
+    """فرم ثبت یک ردیف: **فقط INSERT** در یک جدول مشخص؛ SQL را خود هسته می‌سازد، نه پلاگین."""
+
+    key: str
+    title: str
+    table: str  # «schema.table» یا «table» (public)
+    fields: tuple[Field, ...]
+    submit: str = "ثبت"
+    hint: str = ""
+    success: str = "ثبت شد."
+
+
 @dataclass(frozen=True)
 class Page:
     plugin: str
@@ -75,6 +104,7 @@ class Page:
     refresh: int = 0  # ثانیه؛ ۰ = تازه‌سازی خودکار ندارد
     params: tuple[Param, ...] = ()
     blocks: tuple[Block, ...] = ()
+    forms: tuple[Form, ...] = ()
 
 
 _icon_known = lambda name: True  # noqa: E731  هسته فهرست آیکون‌ها را نمی‌شناسد؛ پلاگین هسته‌ی سایت آن را ثبت می‌کند
@@ -161,6 +191,45 @@ def parse_block(d: dict, params: dict[str, Param]) -> Block:
                  _str(d, "hint", limit=200), tuple((str(a), str(b)) for a, b in cols))
 
 
+def parse_field(d: dict) -> Field:
+    name = _str(d, "name", required=True, limit=63)
+    if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", name):
+        raise SpecError(f"نام ستون «{name}» نامعتبر است.")
+    kind = _str(d, "kind", default="text")
+    if kind not in FIELD_KINDS:
+        raise SpecError(f"نوع فیلد «{kind}» شناخته نیست.")
+    choices = ()
+    if kind == "choice":
+        raw = d.get("choices") or []
+        if not raw or not all(isinstance(c, (list, tuple)) and len(c) == 2 for c in raw):
+            raise SpecError(f"فیلد انتخابی «{name}» گزینه‌های [مقدار، برچسب] لازم دارد.")
+        choices = tuple((str(a), str(b)) for a, b in raw)
+    lo, hi = d.get("min"), d.get("max")
+    for v in (lo, hi):
+        if v is not None and (not isinstance(v, (int, float)) or isinstance(v, bool)):
+            raise SpecError(f"کران فیلد «{name}» باید عدد باشد.")
+    return Field(name, kind, _str(d, "label", required=True, limit=80), bool(d.get("required", False)), choices, hi, lo)
+
+
+def parse_form(d: dict) -> Form:
+    key = _str(d, "key", required=True, limit=31)
+    if not KEY_RE.fullmatch(key):
+        raise SpecError(f"کلید فرم «{key}» نامعتبر است.")
+    table = _str(d, "table", required=True, limit=127)
+    if not TABLE_RE.fullmatch(table):
+        raise SpecError(f"نام جدول «{table}» نامعتبر است (فقط schema.table با حروف کوچک لاتین).")
+    fields = [parse_field(f) for f in d.get("fields") or []]
+    if not fields:
+        raise SpecError("فرم دست‌کم یک فیلد لازم دارد.")
+    if len(fields) > MAX_FIELDS:
+        raise SpecError(f"حداکثر {MAX_FIELDS} فیلد در هر فرم.")
+    if len({f.name for f in fields}) != len(fields):
+        raise SpecError("ستون‌های فرم باید یکتا باشند.")
+    return Form(key, _str(d, "title", required=True, limit=80), table, tuple(fields),
+                _str(d, "submit", default="ثبت", limit=30), _str(d, "hint", limit=240),
+                _str(d, "success", default="ثبت شد.", limit=120))
+
+
 def parse_page(plugin: str, d: dict) -> Page:
     """مشخصات خام (dict از TOML/JSON) ← Page اعتبارسنجی‌شده. خطا = SpecError با پیام فارسی."""
     if not isinstance(d, dict):
@@ -187,12 +256,19 @@ def parse_page(plugin: str, d: dict) -> Page:
         raise SpecError("نام پارامترها باید یکتا باشد.")
     by_name = {p.name: p for p in params}
     blocks = [parse_block(b, by_name) for b in d.get("blocks") or []]
+    forms = [parse_form(f) for f in d.get("forms") or []]
+    if len(forms) > MAX_FORMS:
+        raise SpecError(f"حداکثر {MAX_FORMS} فرم در یک صفحه.")
+    if len({f.key for f in forms}) != len(forms):
+        raise SpecError("کلید فرم‌ها باید یکتا باشد.")
+    if forms and need == "viewer":
+        raise SpecError("صفحه‌ی دارای فرم (نوشتن) دست‌کم سطح «editor» می‌خواهد.")
     if not blocks:
         raise SpecError("صفحه دست‌کم یک بلوک لازم دارد.")
     if len(blocks) > 24:
         raise SpecError("حداکثر ۲۴ بلوک در یک صفحه.")
     return Page(plugin, key, _str(d, "title", required=True, limit=80), _str(d, "subtitle", limit=240), icon, group, need,
-                order, refresh, tuple(params), tuple(blocks))
+                order, refresh, tuple(params), tuple(blocks), tuple(forms))
 
 
 # ---------------------------------------------------------------------- ثبت
@@ -344,3 +420,88 @@ def render_block(ws, page: Page, block: Block, values: dict) -> dict:
         out["geojson"] = {"type": "FeatureCollection", "features": feats}
         out["count"] = len(feats)
     return out
+
+
+# ---------------------------------------------------------------------- فرم ثبت ردیف (نوشتن)
+def get_form(page: Page, key: str) -> Form | None:
+    return next((f for f in page.forms if f.key == key), None)
+
+
+def convert_field(f: Field, raw) -> object:
+    """مقدار خام POST ← مقدار نوع‌دار؛ ValueError با پیام فارسی. خالی و غیراجباری = None."""
+    text = (raw if raw is not None else "")
+    text = text.strip() if isinstance(text, str) else str(text)
+    if f.kind == "bool":
+        return text in ("1", "true", "on")
+    if text == "":
+        if f.required:
+            raise ValueError(f"«{f.label}» الزامی است.")
+        return None
+    if len(text) > MAX_VALUE:
+        raise ValueError(f"«{f.label}» بیش از حد بلند است.")
+    if f.kind in ("int", "number"):
+        try:
+            v = int(text) if f.kind == "int" else float(text)
+        except ValueError:
+            raise ValueError(f"«{f.label}» باید عدد باشد.") from None
+        if v != v or v in (float("inf"), float("-inf")):
+            raise ValueError(f"«{f.label}» نامعتبر است.")
+        if f.min is not None and v < f.min or f.max is not None and v > f.max:
+            raise ValueError(f"«{f.label}» باید بین {f.min} و {f.max} باشد.")
+        return v
+    if f.kind == "date":
+        try:
+            return date.fromisoformat(text)
+        except ValueError:
+            raise ValueError(f"«{f.label}» تاریخ معتبر نیست (سال-ماه-روز).") from None
+    if f.kind == "choice":
+        if text not in {c[0] for c in f.choices}:
+            raise ValueError(f"«{f.label}»: گزینه‌ی نامعتبر.")
+        return text
+    if f.max is not None and len(text) > f.max:
+        raise ValueError(f"«{f.label}» حداکثر {int(f.max)} نویسه است.")
+    return text
+
+
+def read_form(form: Form, post) -> tuple[dict, list[str]]:
+    values, errors = {}, []
+    for f in form.fields:
+        try:
+            values[f.name] = convert_field(f, post.get(f"f_{f.name}"))
+        except ValueError as exc:
+            errors.append(str(exc))
+    return values, errors
+
+
+def insert_row(ws, form: Form, values: dict) -> None:
+    """INSERT یک ردیف با نقش مالک. جدول و ستون‌ها باید در کاتالوگ باشند؛ فقط جدول عادی؛ ستون تولیدشده/identity-always رد می‌شود.
+
+    مقدارها همه پارامتر متصل هستند و نام‌ها با Identifier می‌آیند؛ هیچ متن پلاگینی وارد SQL نمی‌شود.
+    SpecError = مشکل در تعریف فرم یا ساختار جدول (پیام فارسی)؛ خطای پایگاه داده به‌صورت استثنا بالا می‌رود.
+    """
+    cat = tenantdb.catalog(ws)
+    schema, _, name = form.table.rpartition(".")
+    schema = schema or "public"
+    if schema.startswith("pg_") or schema == "information_schema" or name in ("spatial_ref_sys", "geometry_columns", "geography_columns"):
+        raise SpecError("نوشتن در جدول‌های سیستمی مجاز نیست.")
+    table = next((t for t in cat.tables() if t.schema == schema and t.name == name), None)
+    if table is None:
+        raise SpecError(f"جدول «{form.table}» در این پایگاه داده نیست.")
+    if table.kind not in ("r", "p"):
+        raise SpecError("فرم فقط روی جدول عادی ثبت می‌کند، نه نما یا جدول خارجی.")
+    cols = {c["name"]: c for c in cat.columns(table)}
+    for f in form.fields:
+        c = cols.get(f.name)
+        if c is None:
+            raise SpecError(f"ستون «{f.name}» در جدول «{form.table}» نیست.")
+        if c["generated"] or c["identity"] == "a" or c["spatial"]:
+            raise SpecError(f"ستون «{f.name}» قابل نوشتن از فرم نیست.")
+    names = [f.name for f in form.fields]
+    query = sql.SQL("INSERT INTO {rel} ({cols}) VALUES ({vals})").format(
+        rel=sql.Identifier(schema, name),
+        cols=sql.SQL(", ").join(sql.Identifier(n) for n in names),
+        vals=sql.SQL(", ").join(sql.Placeholder() for _ in names))
+    with tenantdb.connect(ws, write=True, as_owner=True) as conn:
+        conn.execute(sql.SQL("SET LOCAL statement_timeout = {}").format(sql.Literal(f"{TIMEOUT_S}s")))
+        conn.execute(query, [values[n] for n in names], prepare=True)
+        conn.commit()

@@ -23,3 +23,6 @@
   .pk-bars .pk-bt{grid-column:1/-1;order:3}
   .pk-map{height:300px}
 }
+
+.pk-form{margin-bottom:var(--s4)}
+.pk-form-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--s4);margin:var(--s3) 0 var(--s4)}
