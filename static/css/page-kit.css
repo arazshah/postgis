@@ -26,3 +26,5 @@
 
 .pk-form{margin-bottom:var(--s4)}
 .pk-form-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--s4);margin:var(--s3) 0 var(--s4)}
+.pk-form .btn{align-self:flex-start}
+.pk-form{margin-top:var(--s4);margin-bottom:0}

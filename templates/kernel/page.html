@@ -26,6 +26,8 @@
   </form>
   {% endif %}
 
+  <div id="pk-body" data-pk-refresh="{{ page.refresh }}">{% include "kernel/_page_body.html" %}</div>
+
   {% for f in page.forms %}
   <form method="post" action="{% url 'kernel:form' db.pk page.plugin page.key f.key %}" class="card pk-form" id="form-{{ f.key }}" novalidate>
     {% csrf_token %}
@@ -49,8 +51,6 @@
     <button class="btn" type="submit">{% icon "check" 18 %}{{ f.submit }}</button>
   </form>
   {% endfor %}
-
-  <div id="pk-body" data-pk-refresh="{{ page.refresh }}">{% include "kernel/_page_body.html" %}</div>
 </div>
 {% endblock %}
 {% block ws_scripts %}{% if has_map or page.refresh %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>{% endif %}<script src="{% static 'js/page-kit.js' %}" defer></script>{% endblock %}
