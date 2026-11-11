@@ -44,6 +44,8 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - name: Lint
         run: ruff check .
+      - name: Architecture dependency rules
+        run: lint-imports
       - name: Check migrations
         run: python manage.py makemigrations --check --dry-run
       - name: Tests (unit + PostGIS integration)

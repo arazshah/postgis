@@ -10,7 +10,7 @@ from django.utils import timezone
 from accounts.models import OTPCode, SiteUser
 from databases.models import DatabaseServer, UserDatabase
 
-from .admin_nav import QUICK
+from . import admin_nav
 from .models import SiteSettings
 
 DAYS = 30
@@ -186,6 +186,6 @@ def build():
                     "url": reverse("admin:support_ticket_change", args=[t.pk])})
     act.sort(key=lambda r: r["at"], reverse=True)
 
-    quick = [{"label": a, "icon": i, "url": reverse(n)} for a, i, n in QUICK]
+    quick = [{"label": a, "icon": i, "url": reverse(n)} for a, i, n in admin_nav.QUICK]
     return {"ap_attention": attention, "ap_health": health, "ap_kpis": kpis, "ap_activity": act[:8],
             "ap_quick": quick}

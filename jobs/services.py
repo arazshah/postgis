@@ -88,18 +88,11 @@ def claim_next() -> Job | None:
 
 
 def run(job: Job) -> None:
-    from iranmap import tasks as iranmap_tasks
+    """اجرای یک کار با handler ثبت‌شده‌ی نوع آن (kernel.jobs)؛ صف هیچ پلاگینی را مستقیم نمی‌شناسد."""
+    from kernel import jobs as kinds
 
-    handler = {Job.Kind.BACKUP: _do_backup, Job.Kind.RESTORE: _do_restore,
-               Job.Kind.RESTORE_TEST: _do_restore_test, Job.Kind.IMPORT: _do_import,
-               Job.Kind.BASEMAP: iranmap_tasks.do_basemap, Job.Kind.OSM_REFRESH: iranmap_tasks.do_osm_refresh,
-               Job.Kind.OSM_IMPORT: iranmap_tasks.do_osm_import, Job.Kind.ASK: _do_ask,
-               Job.Kind.GEOSERVER: _do_enterprise, Job.Kind.RASTER: _do_enterprise,
-               Job.Kind.CLONE: _do_enterprise, Job.Kind.TOOL: _do_tool,
-               Job.Kind.FIND: _do_find, Job.Kind.SATELLITE: _do_satellite,
-               Job.Kind.SAT_ANALYSIS: _do_sat_analysis}[job.kind]
     try:
-        handler(job)
+        kinds.handler_for(job.kind)(job)
     except Exception as exc:  # noqa: BLE001
         log.exception("job %s failed", job.pk)
         job.status = Job.Status.FAILED
@@ -111,77 +104,6 @@ def run(job: Job) -> None:
     if job.status == Job.Status.DONE:
         job.progress, job.stage = 100, "تمام شد"
     job.save()
-
-
-def _do_enterprise(job: Job) -> None:
-    from enterprise import services as ent
-
-    fn = {Job.Kind.GEOSERVER: ent.provision, Job.Kind.RASTER: ent.process_raster, Job.Kind.CLONE: ent.do_clone}[job.kind]
-    try:
-        job.message = fn(job)
-    except ent.EnterpriseError as exc:
-        raise JobError(str(exc)) from exc
-
-
-def _do_satellite(job: Job) -> None:
-    """دریافت فایل برش‌خورده از دروازه‌ی ماهواره و ورود آن به سرویس رستر."""
-    from enterprise import services as ent
-    from satellite import client
-    from satellite import services as sat
-
-    try:
-        job.message = sat.ingest(job)
-    except (ent.EnterpriseError, client.GatewayError) as exc:
-        raise JobError(str(exc)) from exc
-
-
-def _do_sat_analysis(job: Job) -> None:
-    """آمار هر ناحیه: نوشتن جدول نتیجه‌ی تحلیل دروازه، یا محاسبه‌ی سبک روی رستر موجود (با اولویت کم)."""
-    from satellite import client, zonal_service
-    from satellite.services import SatError
-
-    try:
-        job.message = zonal_service.ingest(job)
-    except (SatError, client.GatewayError) as exc:
-        raise JobError(str(exc)) from exc
-
-
-def _do_tool(job: Job) -> None:
-    from analysis import tools
-
-    try:
-        res = tools.run_job(job)
-    except tools.ToolError as exc:
-        raise JobError(str(exc)) from exc
-    job.message = f"جدول {res['table']} با {res['rows']:,} عارضه ساخته شد."
-
-
-def _do_find(job: Job) -> None:
-    """ذخیره‌ی نتیجه‌ی «یافتن عارضه» به‌صورت جدول ثابت یا نمای زنده."""
-    from databases import find_save
-    from databases.explorer import Explorer, ExplorerError
-    from databases.find import Finder, FindError
-
-    db = job.database
-    ex = Explorer(db)
-    try:
-        job.set_progress(5, "بررسی شرط‌ها")
-        plan = find_save.build(Finder(ex), job.params.get("spec"), job.params.get("opts"))
-        res = find_save.create(db, ex, plan, step=job.set_progress)
-    except (FindError, ExplorerError) as exc:
-        raise JobError(str(exc)) from exc
-    job.params = {**job.params, "result": res}
-    what = "نمای زنده" if res["kind"] == "view" else "لایه"
-    job.message = f"{what} {res['table']} با {res['rows']:,} عارضه ساخته شد."
-
-
-def _do_ask(job: Job) -> None:
-    from analysis import ask
-
-    try:
-        job.message = ask.run(job)
-    except ask.AskError as exc:
-        raise JobError(str(exc)) from exc
 
 
 def _clean(text: str) -> str:
@@ -488,16 +410,11 @@ def alerts() -> list[str]:
 
 
 def tick(now: datetime | None = None) -> dict:
-    """کارهای دوره‌ای worker (هر دقیقه)."""
-    from classroom import services as classroom_services
-    from enterprise import services as ent
-    from iranmap import tasks as iranmap_tasks
-    from satellite import monitor_service
-    from satellite import services as sat
+    """کارهای دوره‌ای worker (هر دقیقه): هر پلاگین کار خودش را در kernel.jobs ثبت می‌کند."""
+    from kernel import jobs as kinds
 
-    ent.cleanup_rasters_dir()
+    return kinds.run_ticks(now)
 
-    return {"classes": classroom_services.tick(now), "nightly": schedule_nightly(now),
-            "restore_test": schedule_restore_test(now),
-            "cleanup": cleanup(now), "alerts": len(alerts()), "map_data": iranmap_tasks.schedule(now),
-            "snapshots": ent.schedule_snapshots(now), "satellite": sat.poll(now), "monitors": monitor_service.run_due(now)}
+
+def _tick_alerts(now=None) -> int:
+    return len(alerts())
