@@ -4,13 +4,14 @@
 فرزند می‌تواند {"op":"sql","query":...,"params":...} بفرستد و پاسخ {"ok":true,"columns":[..],"rows":[..]} بگیرد؛
 پایان با {"op":"result","value":...} یا {"op":"error","message":...}.
 """
+import base64
 import builtins
 import json
 import os
 import resource
 import sys
 
-MAX_MSG = 4 * 1024 * 1024
+MAX_MSG = 7 * 1024 * 1024  # ورودی تا ۳ مگابایت فایل (base64 ≈ ۴ مگابایت) + بسته؛ خروجی تا ۴ مگابایت
 MAX_SQL_CALLS, MAX_LOGS = 20, 50
 
 _out = sys.stdout
@@ -40,9 +41,16 @@ def limit(kind, soft):
 
 
 class Ctx:
-    def __init__(self):
+    def __init__(self, file_bytes=None):
         self.sql_calls = 0
         self.logs = 0
+        self._file = file_bytes
+
+    def file(self):
+        """بایت فایل بارگذاری‌شده (فقط در handler ورود)؛ بدون فایل خطا می‌دهد."""
+        if self._file is None:
+            raise RuntimeError("این اجرا فایلی ندارد.")
+        return self._file
 
     def sql(self, query, params=None):
         """SELECT فقط‌خواندنی با نقش محدود مشتری (میزبان می‌سنجد). برمی‌گرداند: dict(columns=[…], rows=[[…]])."""
@@ -82,7 +90,8 @@ def main():
 
     safe = {k: v for k, v in vars(builtins).items() if k not in BANNED_NAMES}
     safe["__import__"] = guarded_import
-    ctx = Ctx()
+    b64 = req.get("file_b64")
+    ctx = Ctx(base64.b64decode(b64) if isinstance(b64, str) else None)
     safe["print"] = ctx.log
     handler = req["handler"]
     source = req["files"].get(f"code/{handler}.py")

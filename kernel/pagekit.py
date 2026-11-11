@@ -93,6 +93,31 @@ class Form:
 
 
 @dataclass(frozen=True)
+class ImportSpec:
+    """ورود فایل با handler سطح ۲ (docs/adr/0005): کاربر فایل و نام جدول تازه می‌دهد؛ هسته جدول را می‌سازد."""
+
+    key: str
+    title: str
+    handler: str
+    extensions: tuple[str, ...] = ()
+    hint: str = ""
+    submit: str = "ورود فایل"
+    success: str = "جدول ساخته شد."
+
+
+@dataclass(frozen=True)
+class ExportSpec:
+    """خروجی اختصاصی با handler سطح ۲؛ فقط attachment با نوع محتوای فهرست سفید."""
+
+    key: str
+    title: str
+    handler: str
+    format: str = "csv"
+    hint: str = ""
+    submit: str = "دریافت خروجی"
+
+
+@dataclass(frozen=True)
 class Page:
     plugin: str
     key: str
@@ -106,6 +131,8 @@ class Page:
     params: tuple[Param, ...] = ()
     blocks: tuple[Block, ...] = ()
     forms: tuple[Form, ...] = ()
+    imports: tuple[ImportSpec, ...] = ()
+    exports: tuple[ExportSpec, ...] = ()
 
 
 _icon_known = lambda name: True  # noqa: E731  هسته فهرست آیکون‌ها را نمی‌شناسد؛ پلاگین هسته‌ی سایت آن را ثبت می‌کند
@@ -239,6 +266,39 @@ def parse_form(d: dict) -> Form:
                 _str(d, "success", default="ثبت شد.", limit=120))
 
 
+EXT_RE = re.compile(r"\.[a-z0-9]{1,8}")
+EXPORT_FORMATS = ("csv", "json", "txt", "geojson")
+
+
+def _handler_name(d: dict) -> str:
+    h = _str(d, "handler", required=True, limit=31)
+    if not KEY_RE.fullmatch(h):
+        raise SpecError(f"نام handler «{h}» نامعتبر است.")
+    return h
+
+
+def parse_import(d: dict) -> ImportSpec:
+    key = _str(d, "key", required=True, limit=31)
+    if not KEY_RE.fullmatch(key):
+        raise SpecError(f"کلید ورود «{key}» نامعتبر است.")
+    exts = d.get("extensions") or []
+    if not isinstance(exts, list) or len(exts) > 8 or not all(isinstance(e, str) and EXT_RE.fullmatch(e) for e in exts):
+        raise SpecError("extensions فهرست پسوندهایی مثل [\".trk\"] است (حداکثر ۸).")
+    return ImportSpec(key, _str(d, "title", required=True, limit=80), _handler_name(d), tuple(exts), _str(d, "hint", limit=240),
+                      _str(d, "submit", default="ورود فایل", limit=30), _str(d, "success", default="جدول ساخته شد.", limit=120))
+
+
+def parse_export(d: dict) -> ExportSpec:
+    key = _str(d, "key", required=True, limit=31)
+    if not KEY_RE.fullmatch(key):
+        raise SpecError(f"کلید خروجی «{key}» نامعتبر است.")
+    fmt = _str(d, "format", default="csv")
+    if fmt not in EXPORT_FORMATS:
+        raise SpecError(f"قالب خروجی «{fmt}» نامعتبر است (مجاز: {'، '.join(EXPORT_FORMATS)}).")
+    return ExportSpec(key, _str(d, "title", required=True, limit=80), _handler_name(d), fmt, _str(d, "hint", limit=240),
+                      _str(d, "submit", default="دریافت خروجی", limit=30))
+
+
 def parse_page(plugin: str, d: dict) -> Page:
     """مشخصات خام (dict از TOML/JSON) ← Page اعتبارسنجی‌شده. خطا = SpecError با پیام فارسی."""
     if not isinstance(d, dict):
@@ -272,12 +332,20 @@ def parse_page(plugin: str, d: dict) -> Page:
         raise SpecError("کلید فرم‌ها باید یکتا باشد.")
     if forms and need == "viewer":
         raise SpecError("صفحه‌ی دارای فرم (نوشتن) دست‌کم سطح «editor» می‌خواهد.")
+    imports = [parse_import(i) for i in d.get("imports") or []]
+    exports = [parse_export(e) for e in d.get("exports") or []]
+    if len(imports) > 2 or len(exports) > 3:
+        raise SpecError("حداکثر ۲ ورود و ۳ خروجی در یک صفحه.")
+    if len({i.key for i in imports}) != len(imports) or len({e.key for e in exports}) != len(exports):
+        raise SpecError("کلید ورودها و خروجی‌ها باید یکتا باشد.")
+    if imports and need == "viewer":
+        raise SpecError("صفحه‌ی دارای ورود فایل (نوشتن) دست‌کم سطح «editor» می‌خواهد.")
     if not blocks:
         raise SpecError("صفحه دست‌کم یک بلوک لازم دارد.")
     if len(blocks) > 24:
         raise SpecError("حداکثر ۲۴ بلوک در یک صفحه.")
     return Page(plugin, key, _str(d, "title", required=True, limit=80), _str(d, "subtitle", limit=240), icon, group, need,
-                order, refresh, tuple(params), tuple(blocks), tuple(forms))
+                order, refresh, tuple(params), tuple(blocks), tuple(forms), tuple(imports), tuple(exports))
 
 
 # ---------------------------------------------------------------------- ثبت
@@ -471,6 +539,14 @@ def render_block(ws, page: Page, block: Block, values: dict) -> dict:
 
 
 # ---------------------------------------------------------------------- فرم ثبت ردیف (نوشتن)
+def get_import(page: Page, key: str) -> ImportSpec | None:
+    return next((i for i in page.imports if i.key == key), None)
+
+
+def get_export(page: Page, key: str) -> ExportSpec | None:
+    return next((e for e in page.exports if e.key == key), None)
+
+
 def get_form(page: Page, key: str) -> Form | None:
     return next((f for f in page.forms if f.key == key), None)
 

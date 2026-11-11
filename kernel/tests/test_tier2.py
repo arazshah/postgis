@@ -76,6 +76,18 @@ class Tier2PackageTests(TestCase):
         _i, bad = failed(build(files(**{"pages/live.toml": PAGE.replace('"stats"', '"ghost"')})))
         self.assertIn("handler «ghost»", bad.detail)
 
+    def test_import_and_export_must_reference_declared_handlers_and_are_flagged_as_writes(self):
+        io_page = PAGE + ('[[imports]]\nkey = "gps"\ntitle = "ورود"\nhandler = "stats"\n\n'
+                          '[[exports]]\nkey = "rep"\ntitle = "خروجی"\nhandler = "stats"\nformat = "csv"\n')
+        io_page = io_page.replace('group = "data"', 'group = "data"\nneed = "editor"')
+        ins, bad = failed(build(files(**{"pages/live.toml": io_page})))
+        self.assertIsNone(bad, ins.report())
+        self.assertIn("جدول تازه", ins.steps[-1].detail)
+        _i, bad = failed(build(files(**{"pages/live.toml": io_page.replace('handler = "stats"\n\n[[exports]]', 'handler = "ghost"\n\n[[exports]]')})))
+        self.assertIn("handler «ghost»", bad.detail)
+        _i, bad = failed(build(files(**{"pages/live.toml": io_page.replace('need = "editor"', 'need = "viewer"')})))
+        self.assertIn("editor", bad.detail)
+
     def test_only_safe_file_names_are_accepted(self):
         for name in ("code/Evil.py", "code/../x.py", "code/a.pyc", "code/sub/x.py", "lib/x.py"):
             with self.subTest(name=name):

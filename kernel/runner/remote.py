@@ -5,6 +5,7 @@ runner هیچ راز و اتصال پایگاه داده‌ای ندارد و ه
 """
 from __future__ import annotations
 
+import base64
 import json
 import urllib.error
 import urllib.request
@@ -26,16 +27,19 @@ def read_job_token(token: str) -> int:
     return int(signing.loads(token, salt=SALT, max_age=TOKEN_TTL)["ws"])
 
 
-def call(files: dict, handler: str, params: dict, ws_pk: int):
+def call(files: dict, handler: str, params: dict, ws_pk: int, *, file: bytes | None = None, io: bool = False):
     from .client import HandlerFailed, RunnerError
 
     base = getattr(settings, "PLUGIN_RUNNER_URL", "").rstrip("/")
     callback = getattr(settings, "PLUGIN_RUNNER_CALLBACK", "").rstrip("/")
     if not base or not callback or not getattr(settings, "PLUGIN_RUNNER_TOKEN", ""):
         raise RunnerError("سرویس اجرای کد پلاگین تنظیم نشده است.")
-    timeout = float(getattr(settings, "PLUGIN_RUNNER_TIMEOUT", 10))
-    body = json.dumps({"files": files, "handler": handler, "params": params, "timeout": timeout,
-                       "callback": {"url": f"{callback}/internal/runner/sql/", "token": job_token(ws_pk)}}).encode()
+    timeout = float(getattr(settings, "PLUGIN_RUNNER_TIMEOUT", 10)) * (3 if io else 1)
+    payload = {"files": files, "handler": handler, "params": params, "timeout": timeout, "io": bool(io),
+               "callback": {"url": f"{callback}/internal/runner/sql/", "token": job_token(ws_pk)}}
+    if file is not None:
+        payload["file_b64"] = base64.b64encode(file).decode()
+    body = json.dumps(payload).encode()
     req = urllib.request.Request(f"{base}/run", data=body, method="POST", headers={
         "Content-Type": "application/json", "Authorization": f"Bearer {settings.PLUGIN_RUNNER_TOKEN}"})
     try:
