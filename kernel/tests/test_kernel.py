@@ -99,3 +99,50 @@ def boom(now=None):
 
 def fine(now=None):
     return 7
+
+
+class SettingsAndAdminContributionTests(SimpleTestCase):
+    def test_settings_sections_belong_to_known_tabs_and_real_fields(self):
+        from django.contrib import admin as dj_admin
+
+        from core.models import SiteSettings
+        from kernel import settings as site_settings
+
+        self.assertEqual(site_settings.broken_paths(), [])
+        ma = dj_admin.site._registry[SiteSettings]
+        form_fields = set(ma.form.base_fields) | {f.name for f in SiteSettings._meta.get_fields()}
+        shown = set(ma.get_readonly_fields(None))
+        seen = []
+        for sec in site_settings.sections():
+            self.assertIn(sec.plugin, registry.plugins)
+            for f in sec.fields:
+                self.assertTrue(f in form_fields or f in shown, f"{sec.key}.{f}")
+                seen.append(f)
+        self.assertEqual(len(seen), len(set(seen)), "یک فیلد در دو بخش آمده است")
+        for name in site_settings.displays():
+            self.assertTrue(callable(getattr(ma, name)))
+            self.assertTrue(getattr(ma, name).short_description)
+        with self.assertRaises(AttributeError):
+            ma.no_such_display  # noqa: B018
+
+    def test_admin_dashboard_and_search_contributions_load(self):
+        from kernel import admin as dash
+
+        self.assertEqual(dash.broken_paths(), [])
+        for point in (dash.ATTENTION, dash.HEALTH, dash.KPI, dash.ACTIVITY, dash.SEARCH):
+            self.assertTrue(registry.contributions(point), point)
+
+    def test_a_failing_dashboard_contribution_is_dropped_not_fatal(self):
+        from kernel import admin as dash
+
+        registry.add("admin.zz", "kernel.tests.test_kernel.boom", "kernel.tests.test_kernel.boom", plugin="kernel", order=1)
+        registry.add("admin.zz", "kernel.tests.test_kernel.two", "kernel.tests.test_kernel.two", plugin="kernel", order=2)
+        try:
+            with self.assertLogs("kernel.admin", "ERROR"):
+                self.assertEqual(dash.collect("admin.zz"), [1, 2])
+        finally:
+            registry._points.pop("admin.zz")
+
+
+def two():
+    return [1, 2]

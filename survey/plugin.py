@@ -1,5 +1,6 @@
 """مانیفست پلاگین «برداشت میدانی» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
 from kernel import nav, plugins
+from kernel import settings as site_settings
 
 plugin = plugins.register("survey", "برداشت میدانی", kind="feature", requires=("databases",))
 
@@ -9,6 +10,10 @@ nav.home_action("data", "برداشت میدانی", "با GPS یا گیرنده
 nav.admin_item("publish", "survey.surveyproject", None, plugin=plugin.id, order=60)
 nav.admin_item("publish", "survey.gnssdriver", None, plugin=plugin.id, order=70)
 nav.admin_item("publish", "survey.ntripprofile", None, plugin=plugin.id, order=80)
+
+site_settings.section("survey", "map", "برداشت میدانی", plugin=plugin.id, order=130,
+                      fields=("survey_enabled",),
+                      description="نقشه‌برداری و اتصال گیرنده GNSS. تا خاموش است هیچ‌چیز برای کاربران دیده نمی‌شود.")
 
 
 def enabled() -> bool:

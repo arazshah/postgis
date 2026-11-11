@@ -12,6 +12,8 @@ class LlmPartnerSettingsTests(TestCase):
         self.assertEqual(conf.llm_partner_name, "AvalAI")
 
     def test_admin_section_present(self):
-        from core.admin import SiteSettingsAdmin
-        names = [f for _, o in SiteSettingsAdmin.fieldsets for f in o["fields"]]
+        from django.contrib import admin
+
+        from core.models import SiteSettings
+        names = [f for _, o in admin.site._registry[SiteSettings].get_fieldsets(None) for f in o["fields"]]
         self.assertIn("llm_partner_url", names)

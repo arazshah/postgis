@@ -61,3 +61,15 @@ forbidden_modules = [
     "publish", "notifications",
 ]
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "سایت و قاب پنل (core) پلاگین‌های دیگر را نمی‌شناسد، جز حساب، پایگاه و پایگاه دانش"
+type = "forbidden"
+source_modules = ["core"]
+forbidden_modules = [
+    "analysis", "analytics", "assistant", "billing", "classroom", "enterprise", "iranmap", "jobs", "maps",
+    "notifications", "publish", "restapi", "satellite", "satgate", "support", "survey", "tools",
+]
+ignore_imports = ["core.tests.** -> **"]
+unmatched_ignore_imports_alerting = "none"
+allow_indirect_imports = true

@@ -1,11 +1,12 @@
 from django import forms
-from django.contrib import admin, messages
+from django.contrib import admin
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from accounts.models import normalize_mobile
+from kernel import settings as site_settings
+from kernel.jobs import load
 
 from .admin_tabs import TabbedAdminMixin
 from .models import ContactRequest, HomeTrustButton, HomeTrustCard, SiteSettings, TeamMember, TrustItem
@@ -311,151 +312,43 @@ class HomeTrustButtonInline(admin.TabularInline):
     verbose_name_plural = "دکمه‌های زیر کارت‌ها"
 
 
-def _sat_configured() -> bool:
-    from satellite import client
-
-    return client.configured()
-
-
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
     form = SiteSettingsForm
     inlines = [HomeTrustCardInline, HomeTrustButtonInline]
-    tabs = [("site", "سایت و برند", "globe"), ("home", "صفحه‌ی اول", "home"), ("users", "کاربران و کلاس", "users"), ("pay", "پرداخت", "card"),
-            ("sms", "پیامک و ورود", "bell"), ("assistant", "دستیار هوشمند", "spark"),
-            ("track", "آمار و اعتماد", "chart"), ("backup", "بکاپ خارج از سرور", "db"),
-            ("map", "نقشه و برداشت", "pin"), ("sat", "ماهواره", "satellite")]
+    readonly_fields = ["enamad_status", "logo_preview", "updated_at"]
+
+    @property
+    def tabs(self):
+        return [(t.key, t.title, t.icon) for t in site_settings.tabs()]
 
     def tab_status(self, request, obj):
-        sms = ("warn", "آزمایشی") if obj.sms_backend == "console" else (
-            ("bad", "ناقص") if obj.sms_backend == "smsir" and (not obj.has_smsir_api_key or not obj.smsir_template_id)
-            else ("ok", "فعال"))
-        pay = ("warn", "غیرفعال") if not obj.pay_gateway_enabled else (
-            ("warn", "آزمایشی") if obj.gateway_sandbox else
-            (("ok", "فعال") if obj.gateway_merchant_encrypted else ("bad", "مرچنت وارد نشده")))
-        track = ("ok", "اینماد ثبت شده") if obj.enamad_meta_content and obj.enamad_badge_html.strip() \
-            else ("warn", "اینماد ناقص")
-        return {
-            "sms": sms, "pay": pay, "track": track,
-            "assistant": ("ok", "فعال") if obj.assistant_enabled and obj.assistant_key_ready else ("warn", "خاموش"),
-            "users": ("ok", "") if obj.signup_open and obj.allow_new_databases else ("warn", "محدود"),
-            "backup": ("ok", "فعال") if obj.offsite_ready else (
-                ("bad", "ناقص") if obj.offsite_enabled else ("warn", "خاموش")),
-            "sat": ("ok", "فعال") if _sat_configured() else (
-                ("bad", "ناقص") if (obj.satgate_url or obj.satgate_secret_encrypted) else ("warn", "خاموش")),
-        }
+        return {t.key: load(t.status)(obj) for t in site_settings.tabs() if t.status}
 
-    readonly_fields = ["api_key_status", "gateway_status", "gateway_tools", "sms_tools",
-                       "enamad_status", "logo_preview", "assistant_status", "assistant_tools", "updated_at",
-                       "offsite_status", "offsite_tools", "satgate_status", "satgate_tools"]
-    fieldsets = (
-        ("سایت", {"classes": ("ap-tab-site",), "fields": ("site_name", "logo_preview", "logo_file", "clear_logo", "tagline", "announcement", "announcement_level")}),
-        ("پشتیبانی", {"classes": ("ap-tab-site",), "fields": ("support_phone", "support_telegram", "support_email")}),
-        ("صفحه‌ی اول: بخش «داده‌ی شما مال شماست»", {
-            "classes": ("ap-tab-home",),
-            "fields": ("home_trust_enabled", "home_trust_title", "home_trust_subtitle"),
-            "description": "عنوان و زیرعنوان این بخش را اینجا و کارت‌ها و دکمه‌هایش را در جدول‌های پایین همین زبانه "
-                           "ویرایش کنید؛ ترتیب با عدد «ترتیب» (کوچک‌تر = جلوتر) است. با برداشتن تیک «نمایش» ردیف پنهان "
-                           "می‌شود و با «حذف» برای همیشه پاک می‌شود. بخشی که هیچ کارت و دکمه‌ی فعالی ندارد نمایش داده نمی‌شود.",
-        }),
-        ("اینماد و نمادهای اعتماد", {
-            "classes": ("ap-tab-track",),
-            "fields": ("enamad_status", "enamad_meta_content", "enamad_badge_html", "footer_badges_html"),
-            "description": "در پنل enamad.ir دو کد می‌دهند: «متاتگ تأیید مالکیت» که باید در head صفحه اصلی باشد "
-                           "(کادر اول)، و «کد نماد» که در فوتر نشان داده می‌شود (کادر دوم). "
-                           "نمادهای دیگر مثل ساماندهی را در کادر سوم بگذارید. بعد از ذخیره، سایت را باز کنید و فوتر را ببینید.",
-        }),
-        ("آمار بازدید (Umami)", {
-            "classes": ("ap-tab-track",),
-            "fields": ("umami_script_url", "umami_website_id"),
-            "description": "در Umami وب‌سایت postgis.ir را اضافه کنید، از Tracking code نشانی script و Website ID را اینجا بگذارید "
-                           "(یا کل تگ script را در کادر اول بچسبانید). اسکریپت فقط برای بازدیدکننده‌ها بارگذاری می‌شود، نه مدیران، "
-                           "و تنظیم «Do Not Track» مرورگر را رعایت می‌کند.",
-        }),
-        ("هویت شرکت و تماس", {
-            "classes": ("ap-tab-site",),
-            "fields": ("about_intro", "contact_intro", "support_whatsapp", "support_hours",
-                       "company_name", "company_national_id", "company_economic_code", "show_company_info"),
-            "description": "متن صفحه‌های «درباره ما» و «تماس». شماره‌ی پشتیبانی همان «تلفن پشتیبانی» بالاست و پیامک اطلاع از "
-                           "درخواست‌های تماس به همان شماره می‌رود (به شرط پر بودن «شماره خط» در بخش پنل پیامک). "
-                           "اعضای تیم را از بخش «اعضای تیم» اضافه کنید. اطلاعات شرکت تا «نمایش اطلاعات شرکت» روشن نشود دیده نمی‌شود.",
-        }),
-        ("اعتماد و محل داده", {
-            "classes": ("ap-tab-track",),
-            "fields": ("trust_location_line", "trust_intro", "trust_disk_encrypted"),
-            "description": "ردیف‌های صفحه‌ی «امنیت و محل داده» را از بخش «ردیف‌های صفحه‌ی اعتماد» ویرایش کنید. "
-                           "جمله‌ی کوتاه محل داده در چند صفحه‌ی حساس نمایش داده می‌شود؛ فقط چیزی بنویسید که دقیقاً درست است.",
-        }),
-        ("بکاپ خارج از سرور (فضای ابری)", {
-            "classes": ("ap-tab-backup",),
-            "fields": ("offsite_status", "offsite_enabled", "offsite_endpoint", "offsite_bucket", "offsite_region",
-                       "offsite_prefix", "offsite_access_key", "offsite_secret_key", "clear_offsite_keys",
-                       "offsite_encrypt", "offsite_tools"),
-            "description": "بعد از هر بکاپ موفق، نسخه‌ی دومی در باکت S3 (مثلاً پارس‌پک) ذخیره می‌شود. مدت نگهداری در باکت همان "
-                           "مدت نگهداری بکاپ در پلن است. ابتدا ذخیره کنید، سپس «آزمایش اتصال» را بزنید. "
-                           "کلیدها رمزنگاری‌شده ذخیره می‌شوند و هرگز دوباره نمایش داده نمی‌شوند.",
-        }),
-        ("دروازه‌ی ماهواره (دریافت تصویر ماهواره‌ای)", {
-            "classes": ("ap-tab-sat",),
-            "fields": ("satgate_status", "satgate_url", "satgate_secret", "generate_satgate_secret", "clear_satgate_secret",
-                       "satgate_tools"),
-            "description": "کار سنگین تصویر ماهواره‌ای روی یک سرور کوچک خارج از ایران (دروازه) انجام می‌شود؛ راه‌اندازی آن در "
-                           "satgate/README.md آمده است. نشانی و کلید را اینجا بدهید، ذخیره کنید و «آزمایش اتصال» را بزنید. "
-                           "نیازی به تغییر متغیرهای Coolify یا اجرای دوباره‌ی سرویس نیست.",
-        }),
-        ("فوتر سایت", {
-            "classes": ("ap-tab-site",),
-            "fields": ("footer_about", "footer_address", "footer_copyright", "footer_links",
-                       "social_telegram", "social_instagram", "social_linkedin", "social_github", "social_eitaa"),
-            "description": "تلفن، تلگرام و ایمیل پشتیبانی از بخش «پشتیبانی» بالا در فوتر نشان داده می‌شود. "
-                           "شبکه‌ای که آدرس نداشته باشد نمایش داده نمی‌شود.",
-        }),
-        ("کاربران و سرویس", {"classes": ("ap-tab-users",), "fields": ("signup_open", "allow_new_databases", "max_databases_per_user",
-                                         "renew_window_days", "expiry_warning_days", "expired_grace_days")}),
-        ("پرداخت و فروش پلن‌ها", {
-            "classes": ("ap-tab-pay",),
-            "fields": ("pay_enabled", "invoice_ttl_minutes",
-                       "pay_gateway_enabled", "gateway_provider", "gateway_status", "gateway_merchant",
-                       "gateway_sandbox", "gateway_tools",
-                       "pay_manual_enabled", "pay_card_number", "pay_card_holder", "pay_bank_name",
-                       "pay_link_url", "pay_manual_note"),
-            "description": "قیمت پلن‌ها را از بخش «پلن‌ها» تعیین کنید. پرداخت‌های منتظر تأیید در بخش «فاکتورها» هستند.",
-        }),
-        ("برداشت میدانی", {
-            "classes": ("ap-tab-map",),
-            "fields": ("survey_enabled",),
-            "description": "نقشه‌برداری و اتصال گیرنده GNSS. تا خاموش است هیچ‌چیز برای کاربران دیده نمی‌شود.",
-        }),
-        ("نقشه مرورگر پایگاه داده", {"classes": ("ap-tab-map",), "fields": ("map_tile_url", "map_tile_attribution")}),
-        ("راهنمای ساخت حساب مدل زبانی", {
-            "classes": ("ap-tab-assistant",),
-            "fields": ("llm_partner_enabled", "llm_partner_name", "llm_partner_url"),
-            "description": "اگر کاربر در صفحه تحلیل حساب مدل زبانی ندارد، دکمه ساخت حساب با پیوند همکاری شما نشان داده می‌شود.",
-        }),
-        ("دستیار هوشمند (پرسش و پاسخ روی پایگاه دانش)", {
-            "classes": ("ap-tab-assistant",),
-            "fields": ("assistant_enabled", "assistant_status", "assistant_base_url", "assistant_api_key",
-                       "clear_assistant_api_key", "assistant_chat_model", "assistant_embedding_model",
-                       "assistant_welcome", "assistant_member_daily", "assistant_guest_daily",
-                       "assistant_global_daily", "assistant_max_tokens", "assistant_tools"),
-            "description": "از سرویس‌های سازگار با OpenAI مثل AvalAI استفاده می‌شود: آدرس، کلید API و نام مدل را وارد کنید، "
-                           "ذخیره کنید، سپس «آزمایش اتصال» و «ساخت embedding» را بزنید. دستیار فقط از مقاله‌های پایگاه دانش "
-                           "جواب می‌دهد و به داده کاربران دسترسی ندارد. بعد از افزودن یا ویرایش مقاله‌ها، embedding هر ۱۰ دقیقه "
-                           "(با run_maintenance) خودکار به‌روز می‌شود.",
-        }),
-        ("پلن کلاس و دانشگاه", {"classes": ("ap-tab-users",), "fields": ("class_price_per_student",)}),
-        ("پنل پیامک (sms.ir)", {
-            "classes": ("ap-tab-sms",),
-            "fields": ("sms_backend", "api_key_status", "smsir_api_key", "clear_smsir_api_key",
-                       "smsir_template_id", "smsir_code_param", "smsir_line_number", "sms_tools"),
-            "description": "قالب کد تأیید را در پنل sms.ir بسازید، مثلاً «کد ورود شما: #CODE#»، "
-                           "و شناسه آن را اینجا وارد کنید.",
-        }),
-        ("رمز یک‌بار مصرف و امنیت ورود", {"classes": ("ap-tab-sms",), "fields": ("otp_length", "otp_ttl_seconds", "otp_resend_seconds",
-                                                    "otp_max_attempts", "otp_max_per_phone_hour",
-                                                    "otp_max_per_ip_hour")}),
-        (None, {"fields": ("updated_at",)}),
-    )
+    def get_fieldsets(self, request, obj=None):
+        """بخش‌های فرم را پلاگین‌ها ثبت می‌کنند (kernel.settings)؛ هر بخش در زبانه‌ی خودش."""
+        out = []
+        for sec in site_settings.sections():
+            opts = {"classes": (f"ap-tab-{sec.tab}",), "fields": sec.fields}
+            if sec.description:
+                opts["description"] = sec.description
+            out.append((sec.title, opts))
+        return (*out, (None, {"fields": ("updated_at",)}))
+
+    def get_readonly_fields(self, request, obj=None):
+        return [*self.readonly_fields, *site_settings.displays()]
+
+    def __getattr__(self, name):
+        """فیلد نمایشی ثبت‌شده‌ی یک پلاگین (وضعیت، دکمه‌ی ابزار) مثل متد همین کلاس دیده می‌شود."""
+        d = site_settings.displays().get(name) if not name.startswith("_") else None
+        if d is None:
+            raise AttributeError(name)
+
+        def show(obj):
+            return load(d.func)(obj)
+
+        show.short_description = d.label
+        return show
 
     def has_add_permission(self, request):
         return False
@@ -466,12 +359,6 @@ class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         obj = SiteSettings.get()
         return redirect(reverse("admin:core_sitesettings_change", args=[obj.pk]))
-
-    @admin.display(description="وضعیت کلید API")
-    def api_key_status(self, obj):
-        if obj.has_smsir_api_key:
-            return format_html('<b style="color:#1a7f4b">ذخیره شده</b>')
-        return format_html('<b style="color:#b42318">وارد نشده</b>')
 
     @admin.display(description="وضعیت اینماد")
     def enamad_status(self, obj):
@@ -491,223 +378,21 @@ class SiteSettingsAdmin(TabbedAdminMixin, admin.ModelAdmin):
             return format_html('<img src="{}" alt="" style="max-height:64px;max-width:200px;background:#eee;padding:4px">', obj.logo_url)
         return "لوگویی بارگذاری نشده؛ آیکن پیش‌فرض نمایش داده می‌شود."
 
-    @admin.display(description="وضعیت مرچنت کد")
-    def gateway_status(self, obj):
-        if obj.gateway_merchant_encrypted:
-            return format_html('<b style="color:#1a7f4b">ذخیره شده</b>')
-        if obj.gateway_sandbox:
-            return format_html('<b style="color:#b54708">وارد نشده — فقط حالت آزمایشی کار می‌کند</b>')
-        return format_html('<b style="color:#b42318">وارد نشده</b>')
-
-    @admin.display(description="وضعیت بکاپ ابری")
-    def offsite_status(self, obj):
-        from jobs import offsite
-        from jobs.models import Job
-
-        if not obj.offsite_enabled:
-            return format_html('<b style="color:#b54708">خاموش است</b>')
-        if not obj.offsite_ready:
-            return format_html('<b style="color:#b42318">روشن است ولی نشانی، باکت یا کلیدها کامل نیست</b>')
-        done = Job.objects.filter(kind=Job.Kind.BACKUP, status=Job.Status.DONE).exclude(offsite_key="").count()
-        failed = Job.objects.filter(kind=Job.Kind.BACKUP, status=Job.Status.DONE, offsite_key="").exclude(offsite_error="").count()
-        fp = offsite.key_fingerprint() if obj.offsite_encrypt else "—"
-        return format_html(
-            '<b style="color:#1a7f4b">فعال</b> — {} بکاپ در فضای ابری، {} در انتظار یا ناموفق. '
-            'اثر انگشت کلید رمزنگاری: <code dir="ltr">{}</code> (یک نسخه از <code>CREDENTIALS_ENCRYPTION_KEY</code> '
-            'را بیرون از سرور نگه دارید؛ بدون آن بکاپ‌های ابری باز نمی‌شوند).', done, failed, fp)
-
-    @admin.display(description="ابزار فضای ابری")
-    def offsite_tools(self, obj):
-        return format_html('<a class="button" href="{}">آزمایش اتصال به فضای ابری</a>',
-                           reverse("admin:core_sitesettings_offsitetest"))
-
-    @admin.display(description="وضعیت دروازه")
-    def satgate_status(self, obj):
-        from django.conf import settings
-
-        from satellite.models import SatRequest
-
-        if not _sat_configured():
-            return format_html('<b style="color:#b54708">تنظیم نشده — بخش «تصویر ماهواره‌ای» برای کاربران «به‌زودی» نشان داده می‌شود.</b>')
-        env = " (از متغیر محیطی)" if not obj.satgate_url and settings.SATGATE_URL else ""
-        n = SatRequest.objects.exclude(status=SatRequest.Status.FAILED).count()
-        bad = SatRequest.objects.filter(status=SatRequest.Status.FAILED).count()
-        return format_html('<b style="color:#1a7f4b">تنظیم شده{}</b> — {} درخواست موفق یا در جریان، {} ناموفق.', env, n, bad)
-
-    @admin.display(description="ابزار دروازه")
-    def satgate_tools(self, obj):
-        return format_html('<a class="button" href="{}">آزمایش اتصال به دروازه</a> '
-                           '<span class="help">اول تغییرها را ذخیره کنید؛ آزمون با مقدار ذخیره‌شده انجام می‌شود.</span>',
-                           reverse("admin:core_sitesettings_satgatetest"))
-
-    @admin.display(description="وضعیت دستیار")
-    def assistant_status(self, obj):
-        from kb import vectors
-
-        if not obj.assistant_key_ready:
-            return format_html('<b style="color:#b42318">کلید API وارد نشده</b>')
-        try:
-            total, done = vectors.stats(obj.assistant_embedding_model)
-            sem = vectors.available()
-        except Exception:
-            total, done, sem = 0, 0, False
-        state = "فعال" if obj.assistant_enabled else "کلید ذخیره شده، ولی دستیار خاموش است"
-        color = "#1a7f4b" if obj.assistant_enabled else "#b54708"
-        if sem:
-            detail = f"جست‌وجوی معنایی: {done} از {total} تکه آماده"
-        else:
-            detail = "pgvector روی پایگاه داده پنل نیست؛ فقط جست‌وجوی کلیدواژه‌ای کار می‌کند"
-        return format_html('<b style="color:{}">{}</b> — {}', color, state, detail)
-
-    @admin.display(description="ابزار دستیار")
-    def assistant_tools(self, obj):
-        return format_html(
-            '<a class="button" href="{}">آزمایش اتصال</a>&nbsp; <a class="button" href="{}">ساخت / به‌روزرسانی embedding</a>',
-            reverse("admin:core_sitesettings_assistanttest"), reverse("admin:core_sitesettings_assistantembed"))
-
-    @admin.display(description="ابزار درگاه")
-    def gateway_tools(self, obj):
-        return format_html('<a class="button" href="{}">آزمایش اتصال به درگاه</a>',
-                           reverse("admin:core_sitesettings_gatewaytest"))
-
-    @admin.display(description="ابزار پیامک")
-    def sms_tools(self, obj):
-        return format_html(
-            '<a class="button" href="{}">بررسی اعتبار پنل</a>&nbsp; '
-            '<a class="button" href="{}">ارسال کد آزمایشی</a>',
-            reverse("admin:core_sitesettings_credit"), reverse("admin:core_sitesettings_testsms"))
-
     def get_urls(self):
-        return [
-            path("credit/", self.admin_site.admin_view(self.credit_view), name="core_sitesettings_credit"),
-            path("gateway-test/", self.admin_site.admin_view(self.gateway_test_view),
-                 name="core_sitesettings_gatewaytest"),
-            path("test-sms/", self.admin_site.admin_view(self.test_sms_view), name="core_sitesettings_testsms"),
-            path("offsite-test/", self.admin_site.admin_view(self.offsite_test_view),
-                 name="core_sitesettings_offsitetest"),
-            path("satgate-test/", self.admin_site.admin_view(self.satgate_test_view),
-                 name="core_sitesettings_satgatetest"),
-            path("assistant-test/", self.admin_site.admin_view(self.assistant_test_view),
-                 name="core_sitesettings_assistanttest"),
-            path("assistant-embed/", self.admin_site.admin_view(self.assistant_embed_view),
-                 name="core_sitesettings_assistantembed"),
-        ] + super().get_urls()
+        def view(tool):
+            def run(request):
+                return load(tool.func)(request, self) or self._back()
+            return self.admin_site.admin_view(run)
+
+        return [path(t.route, view(t), name=f"core_sitesettings_{t.name}") for t in site_settings.tools()] + super().get_urls()
 
     def _back(self):
         return redirect(reverse("admin:core_sitesettings_change", args=[1]))
 
-    def gateway_test_view(self, request):
-        """یک درخواست پرداخت ۱۰ هزار تومانی می‌سازد (بدون پرداخت) تا مرچنت و دسترسی سرور به درگاه بررسی شود."""
-        from billing.gateways import GatewayError, get_gateway
-
-        conf = SiteSettings.get()
-        try:
-            gw = get_gateway(conf)
-            res = gw.request(amount_rial=100000, callback_url=request.build_absolute_uri("/billing/invoices/"),
-                             description="آزمایش اتصال از پنل مدیریت", order_id="TEST")
-        except GatewayError as exc:
-            messages.error(request, f"آزمایش درگاه ناموفق بود: {exc}")
-        else:
-            mode = " (حالت آزمایشی)" if conf.gateway_sandbox else ""
-            messages.success(request, format_html(
-                "اتصال به {}{} درست است. <a href=\"{}\" target=\"_blank\">صفحه پرداخت آزمایشی</a> "
-                "(پرداخت نکنید).", gw.title, mode, res.pay_url))
-        return self._back()
-
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
-        new = getattr(obj, "_new_satgate_secret", "")
-        if new:
-            messages.warning(request, format_html(
-                "کلید تازه‌ی دروازه ساخته شد؛ همین حالا کپی کنید، دوباره نمایش داده نمی‌شود و روی دروازه به‌عنوان "
-                "<code>SATGATE_SECRET</code> بگذارید: <code dir=\"ltr\" style=\"user-select:all\">{}</code>", new))
-
-    def satgate_test_view(self, request):
-        from satellite import probe
-
-        steps = probe.run()
-        for ok, text in steps:
-            (messages.success if ok else messages.error)(request, text)
-        if all(ok for ok, _ in steps):
-            messages.success(request, "همه‌ی مراحل موفق بود؛ دروازه آماده‌ی کار است.")
-        return self._back()
-
-    def offsite_test_view(self, request):
-        from jobs import offsite
-
-        try:
-            messages.success(request, offsite.test_connection(SiteSettings.get()))
-        except offsite.OffsiteError as exc:
-            messages.error(request, f"آزمایش ناموفق بود: {exc}")
-        return self._back()
-
-    def assistant_test_view(self, request):
-        from assistant import llm
-
-        conf = SiteSettings.get()
-        if not conf.assistant_key_ready:
-            messages.error(request, "اول کلید API را وارد و ذخیره کنید.")
-            return self._back()
-        try:
-            res = llm.ping(conf)
-        except llm.LLMError as exc:
-            messages.error(request, f"آزمایش ناموفق بود: {exc}")
-        else:
-            messages.success(request, f"اتصال درست است: مدل embedding بُردار {res['dims']}بُعدی داد و مدل گفتگو پاسخ داد "
-                                      f"(«{res['reply']}»).")
-        return self._back()
-
-    def assistant_embed_view(self, request):
-        from kb import embedding, vectors
-
-        conf = SiteSettings.get()
-        if not vectors.available() and not vectors.setup():
-            messages.error(request, "افزونه pgvector روی پایگاه داده پنل نصب نیست؛ ایمیج panel-db باید "
-                                    "pgvector/pgvector:pg16 باشد. تا آن زمان دستیار با جست‌وجوی کلیدواژه‌ای کار می‌کند.")
-            return self._back()
-        res = embedding.embed_pending(conf)
-        total, done = vectors.stats(conf.assistant_embedding_model)
-        if res["error"]:
-            messages.error(request, f"ساخت embedding کامل نشد ({res['embedded']} تکه انجام شد): {res['error']}")
-        else:
-            messages.success(request, f"{res['embedded']} تکه جدید ساخته شد؛ پوشش فعلی {done} از {total}.")
-        return self._back()
-
-    def credit_view(self, request):
-        from accounts.sms import get_credit
-
-        credit = get_credit()
-        if credit is None:
-            messages.error(request, "دریافت اعتبار ممکن نشد. کلید API و نوع سرویس پیامک را بررسی کنید.")
-        else:
-            messages.success(request, f"اعتبار پنل sms.ir: {credit}")
-        return self._back()
-
-    def test_sms_view(self, request):
-        from django.template.response import TemplateResponse
-
-        from accounts.sms import SMSError, send_otp
-
-        class TestForm(forms.Form):
-            phone = forms.CharField(label="شماره موبایل گیرنده", widget=forms.TextInput(attrs={"dir": "ltr"}))
-
-            def clean_phone(self):
-                return normalize_mobile(self.cleaned_data["phone"])
-
-        form = TestForm(request.POST or None)
-        if request.method == "POST" and form.is_valid():
-            phone = form.cleaned_data["phone"]
-            try:
-                send_otp(phone, "12345")
-                messages.success(request, "پیامک آزمایشی با کد 12345 ارسال شد.")
-            except (SMSError, ValidationError) as exc:
-                messages.error(request, f"ارسال ناموفق: {exc}")
-            return self._back()
-        return TemplateResponse(request, "admin/core/test_sms.html", {
-            **self.admin_site.each_context(request), "form": form, "title": "ارسال کد آزمایشی",
-            "opts": self.model._meta,
-        })
-
+        for hook in site_settings.save_hooks():
+            load(hook)(request, obj)
 
 
 class TeamMemberForm(forms.ModelForm):
