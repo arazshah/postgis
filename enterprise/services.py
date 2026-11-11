@@ -49,8 +49,8 @@ def request_geoserver(db: UserDatabase, user) -> GeoServerInstance:
 def _geoserver_role(db: UserDatabase) -> tuple[str, str]:
     """کاربر فقط‌خواندنی جداگانه برای GeoServer (رمز اصلی مشتری در GeoServer نمی‌نشیند)."""
     from databases import team
-    from databases.crypto import generate_password
     from databases.services import limits_for, provisioner_for
+    from kernel.crypto import generate_password
 
     name = team.role_name_for(db, geoserver.ROLE_SUFFIX)
     password = generate_password()
@@ -200,7 +200,7 @@ def delete_raster(r: Raster) -> None:
 def request_clone(db: UserDatabase, user, backup: Job | None, label: str) -> tuple[UserDatabase, str]:
     """پایگاه داده آزمایشی از آخرین بکاپ (یا بکاپ انتخابی): پایگاه داده جدید ساخته و داده در worker ریخته می‌شود."""
     from databases import services as db_services
-    from databases.crypto import generate_password
+    from kernel.crypto import generate_password
 
     if not db.plan.clone_enabled:
         raise EnterpriseError("کپی پایگاه داده در پلن سازمانی فعال است.")

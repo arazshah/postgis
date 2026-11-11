@@ -5,7 +5,7 @@ from pathlib import Path
 from django.conf import settings
 from django.db import models
 
-from databases.crypto import decrypt, encrypt
+from kernel.crypto import decrypt, encrypt
 
 
 def _slug() -> str:

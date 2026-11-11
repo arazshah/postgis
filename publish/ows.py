@@ -22,9 +22,8 @@ from django.views.decorators.http import require_http_methods
 from psycopg import sql
 
 from core.templatetags.fa import fanum
-from databases import crypto
 from databases.provisioner import Provisioner, ProvisionError
-from kernel import tenantdb
+from kernel import crypto, tenantdb
 from kernel.tenantdb import TenantError
 
 from . import access, qgis

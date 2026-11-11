@@ -10,9 +10,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from databases import services as db_services
-from databases.crypto import generate_password
 from databases.models import Member, Plan, UserDatabase
 from jobs.models import Job
+from kernel.crypto import generate_password
 
 from .models import Assignment, ClassMap, Classroom, Contract, Enrollment, Submission
 
