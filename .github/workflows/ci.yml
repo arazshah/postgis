@@ -41,21 +41,26 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - name: System packages (with retries)
-        timeout-minutes: 15
+      - name: System packages (GDAL، osmium، pgbouncer؛ اختیاری)
+        # آزمون‌هایی که به این ابزارها نیاز دارند با shutil.which خودشان skip می‌شوند؛ پس نبودن شبکه‌ی اوبونتو روی رانر
+        # (که گاهی DNS آن خراب است و apt نیم‌ساعت می‌ماند) نباید کل اجرا را بخواباند یا شکست بدهد.
+        continue-on-error: true
+        timeout-minutes: 8
         run: |
-          # آینه‌ی azure رانر گاهی DNS ندارد و apt نیم‌ساعت روی آن می‌ماند؛ مخزن اصلی را اولویت می‌دهیم،
-          # مهلت‌ها کوتاه است و چند بار از نو تلاش می‌کنیم تا خطای گذرای شبکه کل اجرا را نخواباند.
+          if ! timeout 10 getent hosts archive.ubuntu.com >/dev/null; then
+            echo "::warning::DNS مخزن اوبونتو روی این رانر کار نمی‌کند؛ نصب GDAL/osmium/pgbouncer رد شد و آزمون‌های وابسته skip می‌شوند."
+            exit 0
+          fi
           echo "http://archive.ubuntu.com/ubuntu/ priority:1" | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
-          APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+          APT="-o Acquire::Retries=2 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15"
           for i in 1 2 3; do
-            if sudo apt-get update -q $APT \
-               && timeout 300 sudo apt-get install -y -q --fix-missing $APT gdal-bin osmium-tool osm2pgrouting pgbouncer gettext-base; then
+            if timeout 120 sudo apt-get update -q $APT \
+               && timeout 240 sudo apt-get install -y -q --fix-missing $APT gdal-bin osmium-tool osm2pgrouting pgbouncer gettext-base; then
               exit 0
             fi
-            echo "تلاش $i برای نصب بسته‌ها ناموفق بود؛ ۳۰ ثانیه بعد دوباره"; sleep 30
+            echo "::warning::تلاش $i برای نصب بسته‌ها ناموفق بود"; sleep 20
           done
-          exit 1
+          exit 0
       - run: pip install -r requirements-dev.txt
       - name: Lint
         run: ruff check .
