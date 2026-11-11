@@ -80,7 +80,9 @@ def _home(user, dbs, stats) -> dict:
     from analysis.models import LlmConfig, Question, ToolRun
     from jobs.models import Job
     from maps.models import WebMap
-    from tools.catalog import INFO
+    from tools.catalog import info
+
+    tool_info = info()
 
     live = [d for d in dbs if d.is_live]
     attn_count = sum(1 for d in dbs if d.attn)
@@ -91,7 +93,7 @@ def _home(user, dbs, stats) -> dict:
             feed.append({"icon": "spark", "kind": "پرسش فارسی", "text": q.text, "db": q.database.db_name, "when": q.created_at,
                          "url": reverse("analysis:page", args=[q.database_id]) + "#history"})
         for t in ToolRun.objects.filter(database__in=dbs).select_related("database").order_by("-created_at")[:4]:
-            info = INFO.get(t.tool)
+            info = tool_info.get(t.tool)
             feed.append({"icon": "toolbox", "kind": "ابزار تحلیل", "text": getattr(info, "title", t.tool) + (f" — {t.summary}" if t.summary else ""),
                          "db": t.database.db_name, "when": t.created_at, "url": reverse("tools:page", args=[t.database_id])})
         for m in WebMap.objects.filter(database__in=dbs).select_related("database").order_by("-updated_at")[:4]:

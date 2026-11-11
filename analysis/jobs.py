@@ -1,27 +1,10 @@
-"""handler کارهای پس‌زمینه‌ی تحلیل (ابزار آماده و پرسش فارسی) و متن اعلان آن‌ها؛ در plugin.py ثبت می‌شوند."""
-
-
-def do_tool(job) -> None:
-    from . import tools
-
-    res = tools.run_job(job)
-    job.message = f"جدول {res['table']} با {res['rows']:,} عارضه ساخته شد."
+"""handler کارهای پس‌زمینه‌ی تحلیل (پرسش فارسی) و متن اعلان آن‌ها؛ در plugin.py ثبت می‌شوند."""
 
 
 def do_ask(job) -> None:
     from . import ask
 
     job.message = ask.run(job)
-
-
-def tool_subject(job):
-    run = getattr(job, "tool_run", None)
-    if run is None:
-        return None
-    from . import tools
-
-    t = tools.TOOL_MAP.get(run.tool)
-    return f"«{t.title if t else run.tool}»"
 
 
 def ask_subject(job):

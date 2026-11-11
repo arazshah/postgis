@@ -4,14 +4,13 @@ from unittest import mock
 from django.test import override_settings
 from django.urls import reverse
 
-from analysis import tools as engine
 from analysis.models import Question, ToolRun
 from core.icons import ICONS
 from databases import services
 from databases.explorer import ExplorerError, TableRef
 from databases.tests.test_services import BaseCase
 from jobs.models import Job
-from tools import catalog
+from tools import catalog, engine
 
 STORAGES = {"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
             "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}

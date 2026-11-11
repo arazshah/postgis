@@ -119,7 +119,7 @@ if __name__ == "__main__":
     import django
 
     django.setup()
-    from analysis import tools as engine
+    from tools import engine
 
     PATH.write_text(json.dumps(build(engine), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"{len(CASES)} مورد در {PATH.name} نوشته شد.")

@@ -5,8 +5,8 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
-from analysis import tools
 from databases.explorer import TableRef
+from tools import engine as tools
 
 PG_HOST = os.environ.get("TEST_PG_HOST", "")
 

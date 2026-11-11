@@ -64,10 +64,12 @@ def history_fragment(request, pk):
 def page(request, pk):
     # لینک‌های قدیمی «?tool=» به بخش مستقل ابزارها می‌روند
     if request.method == "GET" and request.GET.get("tool"):
-        from tools.catalog import INFO
+        from tools.catalog import info
+
+        tool_info = info()
 
         key = request.GET["tool"]
-        return redirect("tools:detail", pk=pk, key=key) if key in INFO else redirect("tools:page", pk=pk)
+        return redirect("tools:detail", pk=pk, key=key) if key in tool_info else redirect("tools:page", pk=pk)
     db, ex = _explorer_db(request, pk, "editor")
     if ex is None:
         return redirect("databases:detail", pk=db.pk)

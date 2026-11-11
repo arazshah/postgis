@@ -51,3 +51,13 @@ forbidden_modules = [
 ignore_imports = ["notifications.tests.** -> **"]
 unmatched_ignore_imports_alerting = "none"
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "ابزارها فقط SDK را می‌شناسند (نه موتور، نما یا اپ‌های دیگر)"
+type = "forbidden"
+source_modules = ["tools.plugins"]
+forbidden_modules = [
+    "tools.engine", "tools.views", "tools.catalog", "databases", "analysis", "jobs", "core", "accounts", "maps",
+    "publish", "notifications",
+]
+allow_indirect_imports = true
