@@ -15,8 +15,9 @@ class Command(BaseCommand):
         parser.add_argument("--key", required=True, help="فایل کلید خصوصی (خروجی plugin_keygen)")
         parser.add_argument("--publisher", required=True)
         parser.add_argument("--out", required=True, help="مسیر فایل خروجی، مثلاً fleet-1.0.0.gpkgx")
+        parser.add_argument("--tests", action="store_true", help="آزمون‌های بسته‌ی سطح ۲ را هم اجرا کن (PLUGIN_RUNNER_MODE=local در CI نویسنده)")
 
-    def handle(self, directory, key, publisher, out, **options):
+    def handle(self, directory, key, publisher, out, tests=False, **options):
         root = Path(directory)
         files = {}
         for path in sorted(p for p in root.rglob("*") if p.is_file()):
@@ -35,7 +36,7 @@ class Command(BaseCommand):
         Path(out).write_bytes(data)
         self.stdout.write(f"{out}: {len(data):,} بایت، {len(files)} فایل")
         pub = priv.public_key()
-        ins = pkg.inspect(data, keys={publisher: pub})
+        ins = pkg.inspect(data, keys={publisher: pub}, run_tests=tests)
         for s in ins.steps:
             self.stdout.write(f"  {'✓' if s.ok else '✗'} {s.stage}{': ' + s.detail if s.detail else ''}")
         if not ins.ok:

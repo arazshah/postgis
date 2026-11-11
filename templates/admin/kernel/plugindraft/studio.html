@@ -31,6 +31,8 @@
         <label>هشدار دوره‌ای هر <input name="alert_{{ name }}" value="{{ alert_mins|get:name|default_if_none:'' }}" size="5" dir="ltr" inputmode="numeric" placeholder="دقیقه"> دقیقه (خالی = بدون هشدار)</label>
         <button type="submit" class="button" name="op" value="delhandler:{{ name }}" onclick="return confirm('این handler حذف شود؟')">حذف handler</button>
       </div>
+      <details class="st-tests"><summary>آزمون‌های این handler (tests/{{ name }}.toml؛ الزامی)</summary>
+        <textarea class="st-code" rows="10" name="test_{{ name }}" spellcheck="false" dir="ltr" style="min-height:160px;height:160px">{{ tests|get:name|default_if_none:'' }}</textarea></details>
       {% if draft %}
       <div class="st-bar">
         <input name="trial_params" placeholder='ورودی نمونه (JSON)، مثلاً {"n": 1}' dir="ltr" size="34">
@@ -57,12 +59,20 @@
     <div class="submit-row">
       <button type="submit" name="op" value="save" class="button default">ذخیره</button>
       <button type="submit" class="button" name="op" value="check">ذخیره و بررسی</button>
+      {% if draft and codes %}<button type="submit" class="button" name="op" value="runtests">اجرای آزمون‌ها</button>{% endif %}
       {% if draft %}<a href="{% url 'admin:kernel_plugindraft_export' draft.pk %}" class="button">{% if valid %}دانلود پوشه‌ی بدون امضا{% else %}دانلود (پس از بررسی موفق){% endif %}</a>{% endif %}
     </div>
     {% if steps %}
     <fieldset class="module"><h2>گزارش بررسی</h2>
       <table class="st-rep">{% for s in steps %}<tr><td class="{% if s.ok %}st-ok{% else %}st-bad{% endif %}">{% if s.ok %}✓{% else %}✗{% endif %} {{ s.stage }}</td><td>{{ s.detail }}</td></tr>{% endfor %}</table>
     </fieldset>{% endif %}
+    {% if tests_out %}
+    <fieldset class="module"><h2>نتیجه‌ی آزمون‌ها</h2>
+      <table class="st-rep">
+        {% if tests_out.error %}<tr><td class="st-bad">✗</td><td>{{ tests_out.error }}</td></tr>{% endif %}
+        {% for r in tests_out.results %}<tr><td class="{% if r.ok %}st-ok{% else %}st-bad{% endif %}">{% if r.ok %}✓{% else %}✗{% endif %} {{ r.handler }} / {{ r.case }}</td><td>{{ r.message }}</td></tr>{% endfor %}
+      </table></fieldset>
+    {% endif %}
     {% if draft and valid %}
     <fieldset class="module aligned"><h2>پیش‌نمایش روی یک پایگاه داده</h2>
       <p class="help">فقط‌خواندنی با نقش محدود مشتری؛ فرم‌ها اجرا نمی‌شوند. به داده‌ی مشتری دست می‌زند، پس تأیید تازه (ورود دومرحله‌ای) و ثبت در گزارش فعالیت دارد.</p>

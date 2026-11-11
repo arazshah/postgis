@@ -76,6 +76,7 @@ class Handler(BaseHTTPRequestHandler):
             io = bool(req.get("io"))
             value = sandbox.run({k: str(v) for k, v in files.items()}, handler, req.get("params") or {}, sql, timeout=timeout,
                                 file=base64.b64decode(b64) if isinstance(b64, str) else None,
+                                mock_sql=req.get("mock_sql") if isinstance(req.get("mock_sql"), list) else None,
                                 max_result=sandbox.MAX_RESULT_IO if io else sandbox.MAX_RESULT)
             self._json(200, {"ok": True, "value": value})
         except sandbox.SandboxError as exc:

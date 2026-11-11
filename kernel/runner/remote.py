@@ -27,7 +27,7 @@ def read_job_token(token: str) -> int:
     return int(signing.loads(token, salt=SALT, max_age=TOKEN_TTL)["ws"])
 
 
-def call(files: dict, handler: str, params: dict, ws_pk: int, *, file: bytes | None = None, io: bool = False):
+def call(files: dict, handler: str, params: dict, ws_pk: int, *, file: bytes | None = None, io: bool = False, mock_sql: list | None = None):
     from .client import HandlerFailed, RunnerError
 
     base = getattr(settings, "PLUGIN_RUNNER_URL", "").rstrip("/")
@@ -39,6 +39,8 @@ def call(files: dict, handler: str, params: dict, ws_pk: int, *, file: bytes | N
                "callback": {"url": f"{callback}/internal/runner/sql/", "token": job_token(ws_pk)}}
     if file is not None:
         payload["file_b64"] = base64.b64encode(file).decode()
+    if mock_sql is not None:
+        payload["mock_sql"] = mock_sql
     body = json.dumps(payload).encode()
     req = urllib.request.Request(f"{base}/run", data=body, method="POST", headers={
         "Content-Type": "application/json", "Authorization": f"Bearer {settings.PLUGIN_RUNNER_TOKEN}"})

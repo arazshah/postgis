@@ -122,7 +122,8 @@ IO_PAGE = PAGE.replace('need = "viewer"', 'need = "editor"') + (
 
 def draft2(**kw):
     base = dict(plugin_id="fleet", name="پایش", version="1.0.0", kind="custom", requires="",
-                pages={"live": IO_PAGE}, code={"parse": IMPORTER, "report": EXPORTER}, alerts={"parse": 15})
+                pages={"live": IO_PAGE}, code={"parse": IMPORTER, "report": EXPORTER}, alerts={"parse": 15},
+                tests={"parse": studio.HANDLER_TESTS["importer"], "report": studio.HANDLER_TESTS["exporter"]})
     return PluginDraft(**{**base, **kw})
 
 
@@ -137,7 +138,8 @@ class StudioTier2CoreTests(TestCase):
     def test_every_template_passes_the_real_check(self):
         for name, (src, _label) in studio.HANDLER_TEMPLATES.items():
             with self.subTest(template=name):
-                d = draft2(code={"parse": src, "report": EXPORTER}, pages={"live": IO_PAGE})
+                d = draft2(code={"parse": src, "report": EXPORTER}, pages={"live": IO_PAGE},
+                           tests={"parse": studio.HANDLER_TESTS[name], "report": studio.HANDLER_TESTS["exporter"]})
                 steps = studio.check(d)
                 self.assertTrue(studio.ok(steps), steps)
 
@@ -152,7 +154,22 @@ class StudioTier2CoreTests(TestCase):
 
     def test_export_zip_contains_code_and_no_signature(self):
         names = zipfile.ZipFile(io.BytesIO(studio.export_zip(draft2()))).namelist()
-        self.assertEqual(sorted(names), ["code/parse.py", "code/report.py", "pages/live.toml", "plugin.toml"])
+        self.assertEqual(sorted(names), ["code/parse.py", "code/report.py", "pages/live.toml", "plugin.toml", "tests/parse.toml", "tests/report.toml"])
+
+    def test_tests_are_mandatory_and_run_in_studio(self):
+        steps = studio.check(draft2(tests={}))
+        bad = next(x for x in steps if not x["ok"])
+        self.assertEqual(bad["stage"], "آزمون‌های بسته (ساختار)")
+        self.assertIn("آزمون لازم است", bad["detail"])
+        res = studio.run_tests(draft2())
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(len(res["results"]), 2)
+        broken = draft2(tests={"parse": studio.HANDLER_TESTS["importer"].replace("rows_count = 2", "rows_count = 9"), "report": studio.HANDLER_TESTS["exporter"]})
+        res = studio.run_tests(broken)
+        self.assertFalse(res["ok"])
+        self.assertIn("انتظار 9", [r["message"] for r in res["results"] if not r["ok"]][0])
+        with _override(PLUGIN_RUNNER_MODE="off"):
+            self.assertIn("فعال نیست", studio.run_tests(draft2())["error"])
 
     def test_roles_detect_import_export_block(self):
         d = draft2(pages={"live": IO_PAGE + '\n[[blocks]]\nkind = "table"\nhandler = "calc"\n'}, code={"parse": IMPORTER, "report": EXPORTER, "calc": BLOCK})
@@ -228,6 +245,27 @@ class StudioTier2AdminTests(TestCase):
                                     "code_calc": BLOCK, "alert_calc": "30"})
         self.d.refresh_from_db()
         self.assertEqual((sorted(self.d.code), self.d.alerts), (["parse", "report"], {}))
+
+    def test_new_handler_gets_a_default_test_and_run_tests_button_works(self):
+        self.post("addhandler", newhandler="calc", htemplate="alert")
+        self.d.refresh_from_db()
+        self.assertIn("alerts_count", self.d.tests["calc"])
+        self.d.tests.update({"parse": studio.HANDLER_TESTS["importer"], "report": studio.HANDLER_TESTS["exporter"]})
+        self.d.save()
+        r = self.client.post(self.url, {**self.meta, "op": "runtests", "page_live": IO_PAGE, "code_parse": IMPORTER, "code_report": EXPORTER,
+                                        "code_calc": ALERT, "test_parse": self.d.tests["parse"], "test_report": self.d.tests["report"],
+                                        "test_calc": self.d.tests["calc"]})
+        self.assertContains(r, "نتیجه‌ی آزمون‌ها")
+        self.assertContains(r, "calc / زیاد: هشدار")
+        self.client.post(self.url, {**self.meta, "op": "delhandler:calc", "page_live": IO_PAGE, "code_parse": IMPORTER, "code_report": EXPORTER,
+                                    "code_calc": ALERT, "test_calc": self.d.tests["calc"]})
+        self.d.refresh_from_db()
+        self.assertNotIn("calc", self.d.tests)
+
+    def test_run_tests_needs_fresh_confirmation(self):
+        with _override(ADMIN_2FA_REQUIRED=True):
+            r = self.post("runtests")
+        self.assertEqual(r.status_code, 302)
 
     def test_bad_handler_name_rejected(self):
         self.post("addhandler", newhandler="Bad Name", htemplate="block")

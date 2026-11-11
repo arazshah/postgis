@@ -431,10 +431,12 @@ class PluginDraftAdmin(admin.ModelAdmin):
         meta = DraftMetaForm(request.POST if request.method == "POST" else None, instance=draft)
         steps, preview_html, texts = [], "", dict(draft.pages) if draft else {}
         codes, alert_mins, trial_out, trial_name = (dict(draft.code) if draft else {}), (dict(draft.alerts) if draft else {}), None, ""
+        tests, tests_out = (dict(draft.tests) if draft else {}), None
         if request.method == "POST":
             op = request.POST.get("op", "save")
             texts = {k[5:]: v for k, v in request.POST.items() if k.startswith("page_") and pagekit_key(k[5:])}
             codes = {k[5:]: v for k, v in request.POST.items() if k.startswith("code_") and pagekit_key(k[5:])}
+            tests = {k[5:]: v for k, v in request.POST.items() if k.startswith("test_") and pagekit_key(k[5:])}
             alert_mins = {}
             for k, v in request.POST.items():
                 if k.startswith("alert_") and pagekit_key(k[6:]) and v.strip().isdigit():
@@ -453,15 +455,18 @@ class PluginDraftAdmin(admin.ModelAdmin):
                     messages.error(request, "نام handler نامعتبر یا تکراری است (حروف کوچک لاتین، رقم و _؛ دست‌کم ۲ نویسه).")
                 else:
                     codes[name] = tpl
+                    tests[name] = studio.HANDLER_TESTS.get(request.POST.get("htemplate", "block"), studio.HANDLER_TESTS["block"])
             if op.startswith("delpage:"):
                 texts.pop(op.split(":", 1)[1], None)
             if op.startswith("delhandler:"):
                 gone = op.split(":", 1)[1]
                 codes.pop(gone, None)
                 alert_mins.pop(gone, None)
+                tests.pop(gone, None)
             if meta.is_valid():
                 d = meta.save(commit=False)
                 d.pages, d.code, d.alerts, d.updated_by = texts, codes, {k: v for k, v in alert_mins.items() if k in codes}, request.user
+                d.tests = {k: v for k, v in tests.items() if k in codes}
                 if draft is None and PluginDraft.objects.filter(plugin_id=d.plugin_id).exists():
                     messages.error(request, "پیش‌نویسی با این شناسه هست.")
                 else:
@@ -475,6 +480,10 @@ class PluginDraftAdmin(admin.ModelAdmin):
                         if not stepup.ok(request):
                             return redirect(stepup.url(request))
                         preview_html = self._preview(request, d)
+                    if op == "runtests":
+                        if not stepup.ok(request):
+                            return redirect(stepup.url(request))
+                        tests_out = studio.run_tests(d)
                     if op.startswith("trial:"):
                         if not stepup.ok(request):
                             return redirect(stepup.url(request))
@@ -487,7 +496,7 @@ class PluginDraftAdmin(admin.ModelAdmin):
             "texts": sorted(texts.items()), "steps": steps, "valid": studio.ok(steps), "preview_html": preview_html,
             "templates": [(k, v[1]) for k, v in studio.TEMPLATES.items()], "opts": self.model._meta,
             "codes": sorted(codes.items()), "alert_mins": alert_mins, "handler_templates": [(k, v[1]) for k, v in studio.HANDLER_TEMPLATES.items()],
-            "roles": {k: v[0] for k, v in (studio.roles(draft).items() if draft else [])}, "trial": trial_out, "trial_name": trial_name,
+            "roles": {k: v[0] for k, v in (studio.roles(draft).items() if draft else [])}, "trial": trial_out, "trial_name": trial_name, "tests": dict(sorted(tests.items())), "tests_out": tests_out,
             "installed": bool(draft and studio.installed(draft.plugin_id))})
 
     def _trial(self, request, d, name):

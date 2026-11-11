@@ -26,13 +26,13 @@ def mode() -> str:
 
 
 def run_files(files: dict, handler: str, params: dict, sql_fn, ws_pk: int = 0, *, file: bytes | None = None, io: bool = False,
-              on_log=None, allow_no_ws: bool = False):
+              on_log=None, allow_no_ws: bool = False, mock_sql: list | None = None):
     """اجرای مدل‌آگاه: off ← خطا، local ← جعبه‌ی همین سرور (فقط توسعه)، remote ← کانتینر runner. برای پلاگین نصب‌شده و استودیو مشترک است."""
     m = mode()
     if m == "local":
         try:
             return sandbox.run(files, handler, params, sql_fn, timeout=float(getattr(settings, "PLUGIN_RUNNER_TIMEOUT", 10)) * (3 if io else 1),
-                               file=file, max_result=sandbox.MAX_RESULT_IO if io else sandbox.MAX_RESULT, on_log=on_log)
+                               file=file, max_result=sandbox.MAX_RESULT_IO if io else sandbox.MAX_RESULT, on_log=on_log, mock_sql=mock_sql)
         except sandbox.SandboxError as exc:
             raise HandlerFailed(f"اجرای کد پلاگین ناموفق بود: {exc}") from exc
     if m == "remote":
@@ -40,7 +40,7 @@ def run_files(files: dict, handler: str, params: dict, sql_fn, ws_pk: int = 0, *
 
         if not ws_pk and not allow_no_ws:
             raise RunnerError("اجرای راه‌دور به پایگاه داده‌ی مشخص نیاز دارد.")
-        return remote.call(files, handler, params, ws_pk, file=file, io=io)
+        return remote.call(files, handler, params, ws_pk, file=file, io=io, mock_sql=mock_sql)
     raise RunnerError("اجرای کد پلاگین روی این استقرار فعال نیست.")
 
 

@@ -36,8 +36,20 @@ def handle(ctx, params):
 '''
 
 
+TESTS = '''[[cases]]
+name = "میانگین دو مقدار"
+[[cases.sql]]
+match = "select n"
+columns = ["n"]
+rows = [[2], [4]]
+[cases.expect]
+rows_count = 2
+equals = {columns = ["شاخص", "مقدار"], rows = [["میانگین", 3], ["تعداد", 2]]}
+'''
+
+
 def files(**over):
-    f = {"plugin.toml": MANIFEST.encode(), "pages/live.toml": PAGE.encode(), "code/stats.py": CODE.encode()}
+    f = {"plugin.toml": MANIFEST.encode(), "pages/live.toml": PAGE.encode(), "code/stats.py": CODE.encode(), "tests/stats.toml": TESTS.encode()}
     f.update({k: (v.encode() if isinstance(v, str) else v) for k, v in over.items()})
     return {k: v for k, v in f.items() if v is not None}
 
@@ -87,6 +99,20 @@ class Tier2PackageTests(TestCase):
         self.assertIn("handler «ghost»", bad.detail)
         _i, bad = failed(build(files(**{"pages/live.toml": io_page.replace('need = "editor"', 'need = "viewer"')})))
         self.assertIn("editor", bad.detail)
+
+    def test_tests_are_mandatory_and_validated_statically(self):
+        _i, bad = failed(build(files(**{"tests/stats.toml": None})))
+        self.assertEqual(bad.stage, "آزمون‌های بسته (ساختار)")
+        self.assertIn("آزمون لازم است", bad.detail)
+        for text, needle in [("not toml [", "خوانده نشد"), ("x = 1", "[[cases]]"), ('[[cases]]\nname = "a"\n', "expect خالی"),
+                             ('[[cases]]\n[cases.expect]\nweird = 1\n', "ناشناخته"), ('[[cases]]\n[[cases.sql]]\nx = 1\n[cases.expect]\nrows_count = 1\n', "match")]:
+            with self.subTest(text=text[:20]):
+                self.assertIn(needle, failed(build(files(**{"tests/stats.toml": text})))[1].detail)
+        _i, bad = failed(build(files(**{"tests/ghost.toml": TESTS})))
+        self.assertIn("handlerِ ناموجود", bad.detail)
+        _i, bad = failed(build(files(**{"plugin.toml": MANIFEST.replace("tier = 2", "tier = 1").replace('handlers = ["stats"]', ""),
+                                         "code/stats.py": None})))
+        self.assertIn("سطح ۲", bad.detail)
 
     def test_only_safe_file_names_are_accepted(self):
         for name in ("code/Evil.py", "code/../x.py", "code/a.pyc", "code/sub/x.py", "lib/x.py"):

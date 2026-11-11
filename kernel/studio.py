@@ -94,6 +94,52 @@ HANDLER_TEMPLATES = {
 }
 
 
+HANDLER_TESTS = {
+    "block": '''[[cases]]
+name = "نمونه"
+[[cases.sql]]
+match = "select 1"
+columns = ["n"]
+rows = [[1]]
+[cases.expect]
+rows_count = 1
+''',
+    "importer": '''[[cases]]
+name = "دو ردیف"
+file = "a,1.5\\nb,2"
+[cases.expect]
+rows_count = 2
+''',
+    "exporter": '''[[cases]]
+name = "نمونه"
+[[cases.sql]]
+match = "select 1"
+columns = ["n"]
+rows = [[1]]
+[cases.expect]
+text_contains = "1"
+''',
+    "alert": '''[[cases]]
+name = "کم: هشدار نیست"
+[[cases.sql]]
+match = "information_schema"
+columns = ["n"]
+rows = [[5]]
+[cases.expect]
+alerts_count = 0
+
+[[cases]]
+name = "زیاد: هشدار"
+[[cases.sql]]
+match = "information_schema"
+columns = ["n"]
+rows = [[5000]]
+[cases.expect]
+alerts_count = 1
+''',
+}
+
+
 def manifest_text(d) -> str:
     q = json.dumps  # رشته‌ی JSON معتبر TOML هم هست
     req = [r.strip() for r in (d.requires or "").split(",") if r.strip()]
@@ -116,6 +162,8 @@ def files_of(d) -> dict[str, bytes]:
         files[f"pages/{key}.toml"] = str(text).encode()
     for name, src in sorted((getattr(d, "code", None) or {}).items()):
         files[f"code/{name}.py"] = str(src).encode()
+    for name, text in sorted((getattr(d, "tests", None) or {}).items()):
+        files[f"tests/{name}.toml"] = str(text).encode()
     if (d.readme or "").strip():
         files["README.md"] = d.readme.encode()
     return files
@@ -147,6 +195,8 @@ def check(d) -> list[dict]:
     if code is None:
         return steps
     if stage("هشدارهای دوره‌ای", lambda: pkg._alerts(manifest, code)) is None:
+        return steps
+    if stage("آزمون‌های بسته (ساختار)", lambda: pkg._tests(files, code)) is None:
         return steps
     pages = stage("مشخصات صفحه‌ها", lambda: pkg._pages(manifest, files, set(code)))
     if pages:
@@ -279,4 +329,23 @@ def trial(d, handler: str, params: dict, file: bytes | None = None, ws=None) -> 
         res["error"] = f"خروجی handler معتبر نیست: {exc}"
         return res
     res["ok"] = True
+    return res
+
+
+def run_tests(d) -> dict:
+    """آزمون‌های پیش‌نویس را در runner اجرا می‌کند: {ok, error, results:[{handler, case, ok, message}]}. چیزی نوشته نمی‌شود."""
+    from . import pkgtest
+
+    res = {"ok": False, "error": "", "results": []}
+    files = files_of(d)
+    try:
+        manifest = pkg._manifest(files)
+        code = pkg._code(manifest, files)
+        tests = pkg._tests(files, code)
+        pages = pkg._pages(manifest, files, set(code))
+        res["results"] = pkgtest.run_all(code, tests, pkgtest.roles_of(pages))
+    except (pkg.PackageError, pkgtest.TestSpecError, ValueError) as exc:
+        res["error"] = str(exc)
+        return res
+    res["ok"] = bool(res["results"]) and all(r["ok"] for r in res["results"])
     return res
