@@ -9,8 +9,8 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 from django.utils.html import format_html, format_html_join
 
-from . import conf, entitlements, pkg, stepup, workspace
-from .models import Entitlement, Organization, OrgMember, PluginRelease, PluginState, PluginUsage
+from . import conf, entitlements, pagekit, pkg, stepup, studio, workspace
+from .models import Entitlement, Organization, OrgMember, PluginDraft, PluginRelease, PluginState, PluginUsage
 from .plugins import registry
 
 
@@ -342,3 +342,140 @@ class PluginUsageAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+# ---------------------------------------------------------------------- استودیوی ساخت پلاگین
+class DraftMetaForm(forms.ModelForm):
+    class Meta:
+        model = PluginDraft
+        fields = ("plugin_id", "name", "version", "kind", "requires", "readme")
+        widgets = {"kind": forms.Select(choices=[("custom", "اختصاصی"), ("feature", "قابلیت")]),
+                   "readme": forms.Textarea(attrs={"rows": 3})}
+
+
+@admin.register(PluginDraft)
+class PluginDraftAdmin(admin.ModelAdmin):
+    """استودیو: ویرایش پیش‌نویس، بررسی زنده، پیش‌نمایش روی یک پایگاه داده و خروجی بدون امضا برای plugin_pack."""
+
+    list_display = ("plugin_id", "name", "version", "page_count", "updated_by", "updated_at")
+    search_fields = ("plugin_id", "name")
+    change_form_template = "admin/kernel/plugindraft/studio_redirect.html"
+
+    def _allowed(self, request):
+        return request.user.has_perm("kernel.upload_pluginrelease")
+
+    def has_module_permission(self, request):
+        return self._allowed(request)
+
+    has_view_permission = has_change_permission = has_add_permission = lambda self, request, obj=None: self._allowed(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return self._allowed(request)
+
+    @admin.display(description="صفحه‌ها")
+    def page_count(self, obj):
+        return len(obj.pages or {})
+
+    def get_urls(self):
+        from django.urls import path
+
+        wrap = self.admin_site.admin_view
+        return [path("studio/new/", wrap(self.studio_view), name="kernel_plugindraft_new"),
+                path("<int:pk>/studio/", wrap(self.studio_view), name="kernel_plugindraft_studio"),
+                path("<int:pk>/export/", wrap(self.export_view), name="kernel_plugindraft_export"),
+                *super().get_urls()]
+
+    def add_view(self, request, form_url="", extra_context=None):
+        from django.urls import reverse
+
+        return redirect(reverse("admin:kernel_plugindraft_new"))
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        from django.urls import reverse
+
+        return redirect(reverse("admin:kernel_plugindraft_studio", args=[object_id]))
+
+    def export_view(self, request, pk):
+        from django.http import HttpResponse
+        from django.shortcuts import get_object_or_404
+
+        if not self._allowed(request):
+            raise PermissionDenied
+        d = get_object_or_404(PluginDraft, pk=pk)
+        steps = studio.check(d)
+        if not studio.ok(steps):
+            messages.error(request, "پیش‌نویس هنوز بررسی را نمی‌گذراند؛ خروجی ساخته نمی‌شود.")
+            return redirect("admin:kernel_plugindraft_studio", pk=d.pk)
+        r = HttpResponse(studio.export_zip(d), content_type="application/zip")
+        r["Content-Disposition"] = f'attachment; filename="{d.plugin_id}-{d.version}-draft.zip"'
+        return r
+
+    def studio_view(self, request, pk=None):
+
+        from django.shortcuts import get_object_or_404
+        from django.template.response import TemplateResponse
+        from django.urls import reverse
+
+        if not self._allowed(request):
+            raise PermissionDenied
+        draft = get_object_or_404(PluginDraft, pk=pk) if pk else None
+        meta = DraftMetaForm(request.POST if request.method == "POST" else None, instance=draft)
+        steps, preview_html, texts = [], "", dict(draft.pages) if draft else {}
+        if request.method == "POST":
+            op = request.POST.get("op", "save")
+            texts = {k[5:]: v for k, v in request.POST.items() if k.startswith("page_") and pagekit_key(k[5:])}
+            if op == "addpage":
+                key = request.POST.get("newkey", "").strip()
+                tpl = studio.TEMPLATES.get(request.POST.get("template", "monitor"), studio.TEMPLATES["monitor"])[0]
+                if not pagekit_key(key) or key in texts:
+                    messages.error(request, "کلید صفحه نامعتبر یا تکراری است (حروف کوچک لاتین، رقم و _).")
+                else:
+                    texts[key] = tpl.format(key=key)
+            if op.startswith("delpage:"):
+                texts.pop(op.split(":", 1)[1], None)
+            if meta.is_valid():
+                d = meta.save(commit=False)
+                d.pages, d.updated_by = texts, request.user
+                if draft is None and PluginDraft.objects.filter(plugin_id=d.plugin_id).exists():
+                    messages.error(request, "پیش‌نویسی با این شناسه هست.")
+                else:
+                    d.save()
+                    draft = d
+                    if op in ("save", "addpage") or op.startswith("delpage:"):
+                        messages.success(request, "پیش‌نویس ذخیره شد.")
+                        return redirect(reverse("admin:kernel_plugindraft_studio", args=[d.pk]))
+                    steps = studio.check(d)
+                    if op == "preview":
+                        if not stepup.ok(request):
+                            return redirect(stepup.url(request))
+                        preview_html = self._preview(request, d)
+        if draft and not steps and request.method == "GET":
+            steps = studio.check(draft)
+        return TemplateResponse(request, "admin/kernel/plugindraft/studio.html", {
+            **self.admin_site.each_context(request), "title": "استودیوی پلاگین", "draft": draft, "meta": meta,
+            "texts": sorted(texts.items()), "steps": steps, "valid": studio.ok(steps), "preview_html": preview_html,
+            "templates": [(k, v[1]) for k, v in studio.TEMPLATES.items()], "opts": self.model._meta,
+            "installed": bool(draft and studio.installed(draft.plugin_id))})
+
+    def _preview(self, request, d):
+        from django.template.loader import render_to_string
+
+        from . import workspace as ws_mod
+
+        pk = request.POST.get("preview_db", "")
+        key = request.POST.get("preview_page", "")
+        ws = ws_mod.peek(int(pk)) if pk.isdigit() else None
+        if ws is None or not getattr(ws, "is_live", False):
+            messages.error(request, "پایگاه داده‌ی فعال با این شناسه نیست.")
+            return ""
+        try:
+            ctx = studio.preview_page(d, key, ws, {})
+        except Exception as exc:  # noqa: BLE001 - خطای مشخصات یا اتصال: پیام کوتاه
+            messages.error(request, f"پیش‌نمایش ممکن نشد: {str(exc)[:200]}")
+            return ""
+        ws_mod.log_event("plugin_studio", f"پیش‌نمایش {d.plugin_id}/{key} روی پایگاه داده {ws.pk}", user=request.user, database=ws)
+        return render_to_string("kernel/_page_body.html", {**ctx, "SITE": {}}, request=request)
+
+
+def pagekit_key(k: str) -> bool:
+    return bool(pagekit.KEY_RE.fullmatch(k))

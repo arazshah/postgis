@@ -106,6 +106,28 @@ class PluginUsage(models.Model):
         return f"{self.plugin_id}.{self.metric} {self.day}: {self.count}"
 
 
+class PluginDraft(models.Model):
+    """پیش‌نویس پلاگین در استودیوی پنل مدیریت؛ امضا ندارد و فعال نمی‌شود، فقط به بسته‌ی بدون امضا تبدیل می‌شود (kernel.studio)."""
+
+    plugin_id = models.CharField("شناسه‌ی پلاگین", max_length=41, unique=True)
+    name = models.CharField("نام", max_length=120)
+    version = models.CharField("نسخه", max_length=20, default="0.1.0")
+    kind = models.CharField("نوع", max_length=10, default="custom")
+    requires = models.CharField("نیازمندی‌ها (با ویرگول)", max_length=200, blank=True)
+    readme = models.TextField("شرح", blank=True)
+    pages = models.JSONField("صفحه‌ها", default=dict, blank=True, help_text="کلید صفحه ← متن TOML")
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "پیش‌نویس پلاگین"
+        verbose_name_plural = "استودیوی پلاگین"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.plugin_id})"
+
+
 class Entitlement(models.Model):
     """مجوز: چه کسی (همه، پلن، سازمان، کاربر یا یک فضای کار) به یک پلاگین محدود دسترسی دارد."""
 
