@@ -25,7 +25,7 @@ from datetime import date
 
 from psycopg import sql
 
-from .explorer import CELL_MAX, PAGE_SIZE, Explorer, ExplorerError, TableRef
+from databases.explorer import CELL_MAX, PAGE_SIZE, Explorer, ExplorerError, TableRef
 
 MAX_CONDS = 12
 MAX_IN_VALUES = 200

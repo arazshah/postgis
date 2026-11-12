@@ -11,11 +11,12 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import User
-from databases import find_credits, find_save, services
+from databases import services
 from databases.explorer import Explorer
-from databases.find import Finder, FindError, _cond_sql, _date, _num, normalize, spec_hash, uses_other_layer
 from databases.models import DatabaseServer, FindLog, Plan
 from databases.provisioner import Provisioner
+from dbfind import find_credits, find_save
+from dbfind.find import Finder, FindError, _cond_sql, _date, _num, normalize, spec_hash, uses_other_layer
 
 PG_HOST = os.environ.get("TEST_PG_HOST", "")
 TEXT = {"name": "name", "base": "text", "spatial": False}

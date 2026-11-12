@@ -41,3 +41,5 @@
 - مصرف پلاگین را با `kernel.metering.record` بشمارید و سقف مجوز را با `metering.check` بسنجید.
 - تنظیم هر پلاگین با `kernel.conf` (اعلام گزینه در `plugin.py`، خواندن با `conf.get`؛ نه در جدول تنظیمات سایت).
 - ورود دومرحله‌ای پنل مدیریت (TOTP) در `accounts/admin_2fa.py`؛ کار حساس تازه در پنل را با `kernel.stepup.ok(request)` / `stepup.url(request)` محافظت کنید (تأیید تازه). در آزمون `override_settings(ADMIN_2FA_REQUIRED=True)`؛ بازنشانی: `manage.py admin_2fa_reset`.
+
+- بخش‌های داده‌ی یک پایگاه پلاگین جدا هستند (`dbtables`، `dbsql`، `dbfind`، `dbimport`، `dbhealth`، `dbbackup`، `dbusage`، `dbteam`؛ docs/adr/0006). مسیرشان را با `kernel.routes.add("databases", …)` در فضای‌نام `databases` ثبت کنید، نه با افزودن به `databases/urls.py`؛ بخش‌ها دیگری را import نمی‌کنند (قرارداد `independence`) و `databases.views` را هم نه.

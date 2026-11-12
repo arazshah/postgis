@@ -9,11 +9,12 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from accounts.models import User
-from databases import services, tablebuilder
+from databases import services
 from databases.explorer import Explorer
 from databases.models import DatabaseServer
 from databases.provisioner import Provisioner
-from databases.tablebuilder import BuildError, build
+from dbtables import tablebuilder
+from dbtables.tablebuilder import BuildError, build
 
 PG_HOST = os.environ.get("TEST_PG_HOST", "")
 

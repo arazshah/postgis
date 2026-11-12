@@ -10,7 +10,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 
-from .models import FindLog, UserDatabase
+from databases.models import FindLog, UserDatabase
 
 PERIOD = timedelta(days=30)
 REPEAT_FREE = timedelta(minutes=30)

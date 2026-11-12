@@ -5,8 +5,8 @@ from django.test import override_settings
 from django.utils import timezone
 
 from databases import services
-from databases.jobs import expire_import_drafts, import_dir
 from databases.tests.test_services import BaseCase
+from dbimport.jobs import expire_import_drafts, import_dir
 from jobs.models import Job
 
 

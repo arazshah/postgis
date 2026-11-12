@@ -63,8 +63,8 @@ class TablesListViewTests(BaseCase):
 
     def test_popover_list_shows_geometry_and_rows(self):
         with mock.patch.object(Explorer, "columns", return_value=[]), mock.patch.object(Explorer, "indexes", return_value=[]), \
-                mock.patch("databases.views._edit_config", return_value=None), \
-                mock.patch("databases.views._structure_config", return_value=None):
+                mock.patch("dbtables.views._edit_config", return_value=None), \
+                mock.patch("dbtables.views._structure_config", return_value=None):
             r = self.client.get(reverse("databases:explore_table", args=[self.db.pk, "public", "roads"]) + "?tab=columns")
         self.assertContains(r, 'data-geo="line"')
         self.assertContains(r, "data-ex-recent")

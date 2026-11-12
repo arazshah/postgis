@@ -1,9 +1,13 @@
 from django.urls import path
 
+from kernel import routes
+
 from . import views
 
 app_name = "databases"
 
+# نماهای خود میزبانی (ساخت، نمای کلی، رمز، افزونه، تمدید، حذف). بخش‌های داده (جدول‌ها، SQL، یافتن، ورود، سلامت،
+# بکاپ، مصرف، تیم) پلاگین جدا هستند و مسیرشان را با kernel.routes در همین فضای‌نام ثبت می‌کنند؛ نام و نشانی‌ها ثابت مانده است.
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
     path("new/", views.create, name="create"),
@@ -12,38 +16,5 @@ urlpatterns = [
     path("<int:pk>/extensions/", views.add_extension, name="add_extension"),
     path("<int:pk>/renew/", views.renew, name="renew"),
     path("<int:pk>/delete/", views.delete, name="delete"),
-    path("<int:pk>/team/", views.team_page, name="team"),
-    path("<int:pk>/usage/", views.usage_page, name="usage"),
-    path("<int:pk>/backups/", views.backups, name="backups"),
-    path("<int:pk>/backups/new/", views.backup_new, name="backup_new"),
-    path("<int:pk>/backups/<int:job_id>/download/", views.backup_download, name="backup_download"),
-    path("<int:pk>/backups/<int:job_id>/restore/", views.backup_restore, name="backup_restore"),
-    path("<int:pk>/explore/", views.explore, name="explore"),
-    path("<int:pk>/explore/new/", views.table_new, name="table_new"),
-    path("<int:pk>/explore/new/preview/", views.table_preview, name="table_preview"),
-    path("<int:pk>/explore/new/srid/", views.table_srid, name="table_srid"),
-    path("<int:pk>/explore/tables.json", views.tables_json, name="tables_json"),
-    path("<int:pk>/explore/sql/", views.explore_sql, name="explore_sql"),
-    path("<int:pk>/explore/sql/ask/", views.explore_sql_ask, name="explore_sql_ask"),
-    path("<int:pk>/explore/sql/why/", views.explore_sql_why, name="explore_sql_why"),
-    path("<int:pk>/explore/t/<str:schema>/<str:table>/", views.explore_table, name="explore_table"),
-    path("<int:pk>/explore/t/<str:schema>/<str:table>/structure/", views.table_structure, name="table_structure"),
-    path("<int:pk>/explore/t/<str:schema>/<str:table>/drop/", views.explore_drop, name="explore_drop"),
-    path("<int:pk>/explore/t/<str:schema>/<str:table>/edit/mode/", views.explore_edit_mode, name="explore_edit_mode"),
-    path("<int:pk>/explore/t/<str:schema>/<str:table>/edit/row/", views.explore_edit_row, name="explore_edit_row"),
-    path("<int:pk>/explore/t/<str:schema>/<str:table>/edit/apply/", views.explore_edit_apply, name="explore_edit_apply"),
-    path("<int:pk>/explore/t/<str:schema>/<str:table>/edit/undo/", views.explore_edit_undo, name="explore_edit_undo"),
-    path("<int:pk>/explore/t/<str:schema>/<str:table>/geojson/", views.explore_geojson, name="explore_geojson"),
-    path("<int:pk>/explore/t/<str:schema>/<str:table>/csv/", views.explore_csv, name="explore_csv"),
-    path("<int:pk>/explore/t/<str:schema>/<str:table>/export/<str:fmt>/", views.explore_export, name="explore_export"),
-    path("<int:pk>/explore/health/", views.explore_health, name="explore_health"),
-    path("<int:pk>/find/", views.find, name="find"),
-    path("<int:pk>/find/columns/", views.find_columns, name="find_columns"),
-    path("<int:pk>/find/values/", views.find_values, name="find_values"),
-    path("<int:pk>/find/run/", views.find_run, name="find_run"),
-    path("<int:pk>/find/save/", views.find_save, name="find_save"),
-    path("<int:pk>/find/save/status/", views.find_save_status, name="find_save_status"),
-    path("<int:pk>/find/sql/", views.find_sql, name="find_sql"),
-    path("<int:pk>/import/", views.import_start, name="import"),
-    path("<int:pk>/import/<int:job_id>/", views.import_review, name="import_review"),
 ]
+urlpatterns += routes.patterns("databases")

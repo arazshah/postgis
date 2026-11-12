@@ -6,8 +6,8 @@ from datetime import timedelta
 import psycopg
 from django.utils import timezone
 
-from .models import SizeSample, UserDatabase
-from .provisioner import Provisioner, ProvisionError
+from databases.models import SizeSample, UserDatabase
+from databases.provisioner import Provisioner, ProvisionError
 
 
 def _roles(db: UserDatabase, conn) -> list[str]:

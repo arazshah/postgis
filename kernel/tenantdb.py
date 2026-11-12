@@ -28,6 +28,9 @@ class TenantError(Exception):
     """خطای اتصال یا کاتالوگ پایگاه مشتری با پیام فارسی قابل نمایش."""
 
 
+WRITABLE_KINDS = frozenset({"r", "p"})  # relkindهایی که می‌شود در آن‌ها ردیف نوشت: جدول عادی و پارتیشن‌بندی‌شده
+
+
 @dataclass
 class TableRef:
     schema: str
