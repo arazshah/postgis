@@ -22,7 +22,7 @@ class AdminPanelShellTests(TestCase):
         shown = {i["label"] for g in admin_nav.build(req) for i in g["items"]}
         registered = {f"{m._meta.app_label}.{m._meta.model_name}" for m in admin.site._registry}
         # صفحه‌های اختصاصی (admin_link) مدل نیستند؛ مدل‌های برداشته‌شده (admin_hide) از راه صفحه‌ی «پلاگین‌ها» در دسترس‌اند
-        self.assertEqual((shown - {"plugin_hub"}) | nav.admin_hidden(), registered, "هر بخش ثبت‌شده باید در منو یا صفحه‌ی اختصاصی باشد")
+        self.assertEqual((shown - {"plugin_hub", "geocode_lab"}) | nav.admin_hidden(), registered, "هر بخش ثبت‌شده باید در منو یا صفحه‌ی اختصاصی باشد")
 
     def test_shell_has_sidebar_and_search(self):
         html = self.client.get("/manage/").content.decode()

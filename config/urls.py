@@ -4,6 +4,7 @@ from django.urls import include, path
 from accounts.admin_2fa import twofa as admin_2fa
 from accounts.admin_auth import LockoutAdminAuthenticationForm
 from core.admin_search import search as admin_search
+from kernel import geocode_admin as kernel_geocode_admin
 from kernel import hub as kernel_hub
 from kernel import routes as kernel_routes
 
@@ -28,6 +29,7 @@ urlpatterns = [
     path("manage/2fa/", admin_2fa, name="admin_2fa"),
     path("manage/plugins/", kernel_hub.hub, name="plugin_hub"),
     path("manage/plugins/sample/", kernel_hub.install_sample, name="plugin_sample"),
+    path("manage/geocode-lab/", kernel_geocode_admin.lab, name="geocode_lab"),
     path("manage/_search/", admin.site.admin_view(admin_search), name="admin_search"),
     path("manage/", admin.site.urls),
     path("accounts/", include("accounts.urls")),

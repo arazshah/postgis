@@ -66,12 +66,14 @@ def build(request):
             it = item(label, name, model, ma)
             if it["url"]:
                 items.append(it)
+        link_items = []
         for lk in nav.admin_links(key):
             try:
                 url = reverse(lk.url_name)
             except NoReverseMatch:
                 continue
-            items.insert(0, {"label": lk.url_name, "title": lk.title, "url": url, "on": path.startswith(url), "count": 0})
+            link_items.append({"label": lk.url_name, "title": lk.title, "url": url, "on": path.startswith(url), "count": 0})
+        items = link_items + items  # پیوندهای صفحه‌ی اختصاصی به ترتیب order، بالای مدل‌ها
         if items:
             groups.append({"key": key, "title": title, "icon": icon, "items": items,
                            "on": any(i["on"] for i in items), "count": sum(i["count"] for i in items)})
