@@ -10,9 +10,10 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 from django.utils.html import format_html, format_html_join
 
-from . import conf, entitlements, pagekit, pkg, platform, stepup, studio, workspace
+from . import conf, entitlements, notify, pagekit, pkg, platform, stepup, studio, workspace
 from .models import (
     Entitlement,
+    NotifyChannel,
     Organization,
     OrgMember,
     PluginDraft,
@@ -722,3 +723,60 @@ def _env_key_names() -> set[str]:
         return set(pkg.parse_keys(getattr(settings, "PLUGIN_PUBLISHER_KEYS", "")))
     except pkg.PackageError:
         return set()
+
+
+class NotifyChannelForm(forms.ModelForm):
+    key = forms.ChoiceField(label="کانال", choices=[(k, v["label"]) for k, v in notify.CHANNELS.items()])
+    new_token = forms.CharField(label="توکن ربات", required=False, widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "off", "dir": "ltr"}),
+                                help_text="رمزنگاری می‌شود و دیگر نمایش داده نمی‌شود. خالی = بدون تغییر.")
+
+    class Meta:
+        model = NotifyChannel
+        fields = ("key", "enabled", "bot_username", "api_base")
+
+    def clean_api_base(self):
+        try:
+            return notify.clean_base(self.cleaned_data.get("api_base", ""))
+        except ValueError as exc:
+            raise forms.ValidationError(str(exc)) from None
+
+
+@admin.register(NotifyChannel)
+class NotifyChannelAdmin(admin.ModelAdmin):
+    """کانال‌های هشدار (بله/تلگرام). تلگرام فیلتر است: نشانی رله‌ی سرور خارجی را در «نشانی پایه‌ی API» بگذارید."""
+
+    form = NotifyChannelForm
+    list_display = ("key", "enabled", "bot_username", "token_set", "api_base", "last_ok", "last_error")
+    actions = ["test_connection"]
+
+    @admin.display(boolean=True, description="توکن")
+    def token_set(self, obj):
+        return bool(obj.token_enc)
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser or request.user.has_perm("kernel.change_notifychannel")
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        if request.method == "POST" and not stepup.ok(request):
+            return redirect(stepup.url(request))
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def save_model(self, request, obj, form, change):
+        import logging
+
+        ch = notify.save_channel(form.cleaned_data["key"], enabled=form.cleaned_data["enabled"],
+                                 token=form.cleaned_data.get("new_token", ""), bot_username=form.cleaned_data["bot_username"],
+                                 api_base=form.cleaned_data["api_base"])
+        obj.pk = ch.pk
+        logging.getLogger(__name__).warning("notify channel %s changed by user %s", ch.key, request.user.pk)
+        if form.cleaned_data["enabled"] and not ch.enabled:
+            messages.warning(request, "بدون توکن نمی‌شود فعال کرد.")
+
+    @admin.action(description="آزمون اتصال")
+    def test_connection(self, request, queryset):
+        for ch in queryset:
+            ok, detail = notify.test_channel(ch.key)
+            (messages.success if ok else messages.error)(request, f"{ch.key}: {detail}")

@@ -49,7 +49,8 @@ class AlertTickTests(TestCase):
         Entitlement.objects.create(state=st, kind="workspace", subject="8", expires_at=timezone.now() - datetime.timedelta(days=1))
         Entitlement.objects.create(state=st, kind="user", subject="1")  # کاربر/همه شمرده نمی‌شود
         entitlements.invalidate()
-        self.owner = mock.Mock()
+        from django.contrib.auth import get_user_model
+        self.owner = get_user_model().objects.create_user(username="own", phone="09120000009", password="x")
         self.ws = mock.Mock(pk=7, is_live=True, owner=self.owner)
         self.rows = [[9]]
         for target, val in (("kernel.workspace.peek", lambda pk: self.ws if pk == 7 else None),
