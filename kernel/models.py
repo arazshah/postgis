@@ -261,6 +261,8 @@ class PluginRelease(models.Model):
                                     related_name="+", verbose_name="بارگذارنده")
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                     related_name="+", verbose_name="تأییدکننده")
+    access = models.JSONField("دسترسی و قیمت (ویزارد)", default=dict, blank=True,
+                              help_text="هنگام فعال‌شدن اعمال می‌شود (kernel.publish)؛ بسته‌ی بارگذاری‌شده‌ی بیرونی خالی است.")
     uploaded_at = models.DateTimeField(auto_now_add=True)
     activated_at = models.DateTimeField("زمان فعال‌سازی", null=True, blank=True)
 

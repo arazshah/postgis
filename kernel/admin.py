@@ -647,7 +647,7 @@ class PublisherKeyAdmin(admin.ModelAdmin):
 
         if not self.has_module_permission(request):
             raise PermissionDenied
-        mutating = {"add_key", "remove_key", "toggle_key", "save_runner"}
+        mutating = {"add_key", "remove_key", "toggle_key", "save_runner", "save_publish"}
         action = request.POST.get("action", "") if request.method == "POST" else ""
         if action in mutating and not stepup.ok(request):
             return redirect(stepup.url(request))
@@ -662,7 +662,7 @@ class PublisherKeyAdmin(admin.ModelAdmin):
             "url": platform.get("runner_url"), "callback": platform.get("runner_callback"),
             "timeout": platform.get("runner_timeout", "10"), "default_url": platform.DEFAULT_URL,
             "default_callback": platform.DEFAULT_CALLBACK, "token_ok": bool(platform.runner_token()),
-            "health_ok": ok, "health": detail, "from_panel": platform._from_panel(), **(extra_context or {})})
+            "health_ok": ok, "health": detail, "from_panel": platform._from_panel(), "second_approval": pkg.second_approval_required(), **(extra_context or {})})
 
     def _handle(self, request, action: str) -> None:
         import logging
@@ -707,6 +707,11 @@ class PublisherKeyAdmin(admin.ModelAdmin):
                 platform.set_(k, v)
             log.warning("runner config changed by user %s: mode=%s", request.user.pk, mode)
             messages.success(request, "تنظیم اجرای کد ذخیره شد.")
+        elif action == "save_publish":
+            on = post.get("require_second_approval") == "1"
+            platform.set_("require_second_approval", "1" if on else "")
+            log.warning("second approval for wizard publish %s by user %s", "on" if on else "off", request.user.pk)
+            messages.success(request, "تأیید مدیر دیگر برای انتشار ویزارد " + ("روشن شد." if on else "خاموش شد."))
         elif action == "test_runner":
             ok, detail = platform.runner_health()
             (messages.success if ok else messages.error)(request, detail)

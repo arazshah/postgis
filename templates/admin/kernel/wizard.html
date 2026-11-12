@@ -1,4 +1,4 @@
-{% extends "admin/base_site.html" %}
+{% extends "admin/base_site.html" %}{% load pk %}
 {% block extrastyle %}<style>
 .wz-steps{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 var(--s4,16px);padding:0;list-style:none}
 .wz-steps li a,.wz-steps li span{display:flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid var(--line);border-radius:999px;color:var(--ink-2);text-decoration:none;background:var(--card)}
@@ -90,6 +90,67 @@
   })();
   </script>
 
+  {% elif step == 4 %}
+  <form method="post" class="wz-card" id="wz-access">{% csrf_token %}
+    <h2>۴. دسترسی و قیمت</h2>
+    <p class="wz-muted">چه کسی این پلاگین را می‌بیند و چگونه؟ بعد از انتشار هر وقت خواستید همین‌جا عوضش کنید و دوباره منتشر کنید.</p>
+    <div class="wz-tiles">
+      <label><input type="radio" name="mode" value="public_free" {% if access.mode == "public_free" %}checked{% endif %} required><b>عمومی رایگان</b><small>همه‌ی مشتری‌ها می‌بینند.</small></label>
+      <label><input type="radio" name="mode" value="public_paid" {% if access.mode == "public_paid" %}checked{% endif %}><b>عمومی پولی</b><small>در فروشگاه با قیمت و مدت؛ بعد از خرید فعال می‌شود.</small></label>
+      <label><input type="radio" name="mode" value="private" {% if access.mode == "private" %}checked{% endif %}><b>اختصاصی</b><small>فقط سازمان/کاربر/پایگاه/پلن مشخص، با مدت دلخواه.</small></label>
+    </div>
+    <div class="wz-grp" data-modes="public_paid">
+      <div class="wz-row">
+        <div class="wz-field"><label>قیمت (تومان)</label><input name="price_toman" type="number" min="1" value="{{ access.price_toman|default:'' }}"></div>
+        <div class="wz-field"><label>مدت هر خرید</label><select name="duration_days">{% for d, l in durations %}<option value="{{ d }}" {% if access.duration_days == d %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+        <div class="wz-field"><label>واحد خرید</label><select name="scope"><option value="workspace" {% if access.scope == "workspace" %}selected{% endif %}>هر پایگاه داده</option><option value="user" {% if access.scope == "user" %}selected{% endif %}>حساب کاربر (همه‌ی پایگاه‌ها)</option></select></div>
+        <div class="wz-field"><label>دوره‌ی آزمایشی رایگان (روز؛ ۰ = ندارد)</label><input name="trial_days" type="number" min="0" max="90" value="{{ access.trial_days|default:0 }}"></div>
+      </div>
+      <p class="wz-muted">سقف مصرف ماهانه (اختیاری؛ خالی = نامحدود):</p>
+      <div class="wz-row">{% for k in limit_keys %}<div class="wz-field"><label class="ltr" dir="ltr">{{ k }}</label><input name="{{ k }}" type="number" min="1" value="{{ access.limits|get:k|default:'' }}"></div>{% endfor %}</div>
+    </div>
+    <div class="wz-grp" data-modes="private">
+      <p class="wz-muted">هر ردیف یک هدف است. شناسه‌ی عددی سازمان/کاربر/پایگاه، یا نام (slug) پلن. مدت خالی = بدون انقضا.</p>
+      <div id="wz-targets"></div><button type="button" id="wz-addt">+ هدف</button>
+    </div>
+    <div class="wz-act"><a class="button" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 3 %}">→ قبلی</a>
+      <button class="default" type="submit" style="padding:8px 18px">ذخیره و ادامه ←</button></div>
+  </form>
+  {{ access_targets|json_script:"wz-targets-data" }}
+  <script>
+  (function(){
+    var f=document.getElementById("wz-access");
+    function show(){var m=(f.querySelector('input[name=mode]:checked')||{}).value||""; f.querySelectorAll(".wz-grp").forEach(function(g){g.hidden=g.dataset.modes.split(" ").indexOf(m)<0;});}
+    f.addEventListener("change",show); show();
+    var box=document.getElementById("wz-targets");
+    var kinds=[["org","سازمان"],["user","کاربر"],["workspace","پایگاه داده"],["plan","پلن (slug)"]];
+    function row(t){
+      var d=document.createElement("div"); d.className="wz-row";
+      d.innerHTML='<div class="wz-field"><label>نوع</label><select name="t_kind">'+kinds.map(function(k){return '<option value="'+k[0]+'"'+(t.kind===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join("")+'</select></div>'+
+        '<div class="wz-field"><label>شناسه</label><input name="t_subject" dir="ltr" value="'+(t.subject||"")+'"></div>'+
+        '<div class="wz-field"><label>مدت (روز)</label><input name="t_days" type="number" min="1" value="'+(t.days||"")+'"></div>';
+      box.appendChild(d);
+    }
+    document.getElementById("wz-addt").addEventListener("click",function(){row({kind:"org"});});
+    var init=JSON.parse(document.getElementById("wz-targets-data").textContent); if(init.length){init.forEach(row);}else{row({kind:"org"});}
+  })();
+  </script>
+
+  {% elif step == 5 %}
+  <div class="wz-card">
+    <h2>۵. بازبینی و انتشار</h2>
+    <h3>بررسی خودکار بسته</h3>
+    <ul class="wz-list">{% for s in check_steps %}<li><b style="color:{% if s.ok %}var(--teal){% else %}#b42318{% endif %}">{% if s.ok %}✓{% else %}✗{% endif %}</b> {{ s.stage }}{% if s.detail %} <span class="wz-muted">— {{ s.detail }}</span>{% endif %}</li>{% endfor %}</ul>
+    <h3>دسترسی</h3>
+    {% if access_err %}<p class="wz-err">{{ access_err }} <a href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 4 %}">مرحله‌ی ۴</a></p>
+    {% else %}<p>{% if access.mode == "public_free" %}عمومی رایگان: همه‌ی مشتری‌ها می‌بینند.{% elif access.mode == "public_paid" %}عمومی پولی: {{ access.price_toman }} تومان برای {{ access.duration_days }} روز ({% if access.scope == "user" %}حساب کاربر{% else %}هر پایگاه داده{% endif %}){% if access.trial_days %}، {{ access.trial_days }} روز آزمایشی رایگان{% endif %}.{% else %}اختصاصی برای {{ access.targets|length }} هدف.{% endif %}</p>{% endif %}
+    <p class="wz-muted">نسخه‌ی بعدی: <span class="ltr" dir="ltr">{{ next_version }}</span>{% if installed %} (نسخه‌ی فعلی جایگزین می‌شود؛ قبلی برای بازگشت می‌ماند){% endif %}. {% if second_approval %}<b>تأیید مدیر دیگر لازم است:</b> نسخه بعد از انتشار منتظر تأیید می‌ماند.{% else %}بدون امضای بیرونی؛ با تأیید تازه‌ی ورود دومرحله منتشر می‌شود.{% endif %}</p>
+    <form method="post">{% csrf_token %}
+      <div class="wz-act"><a class="button" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 4 %}">→ قبلی</a>
+        <button class="default" name="op" value="publish" type="submit" style="padding:8px 22px" {% if not can_publish %}disabled{% endif %}>انتشار</button></div>
+    </form>
+  </div>
+
   {% else %}
   <div class="wz-card">
     <h2>۳. صفحه‌ها</h2>
@@ -154,7 +215,8 @@
     <div class="wz-act"><button class="default" name="op" value="addpage" type="submit" style="padding:8px 18px">افزودن صفحه</button></div>
   </form>
   <div class="wz-card"><b>ادامه:</b> بررسی کامل بسته، خروجی و ویرایش دستی در <a href="{{ studio_url }}">استودیو</a>. مراحل «کد»، «قیمت و دسترسی» و «انتشار» در به‌روزرسانی بعد به همین ویزارد افزوده می‌شود.
-    <div class="wz-act"><a class="button" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 2 %}">→ قبلی</a></div></div>
+    <div class="wz-act"><a class="button" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 2 %}">→ قبلی</a>
+      <a class="button default" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 4 %}" style="padding:8px 18px">ادامه: دسترسی و قیمت ←</a></div></div>
   {{ col_json|json_script:"wz-cols" }}
   <script>
   (function(){
