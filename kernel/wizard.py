@@ -17,9 +17,12 @@ from . import pagekit
 
 ID_RE = re.compile(r"^[a-z][a-z0-9_]{1,40}$")
 IDENT_RE = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
-DISPLAY = ("kpi", "table", "bars", "map", "text", "sql")
+DISPLAY = ("kpi", "table", "bars", "map", "text", "sql", "handler")
 ACTIONS = ("form", "ingest")
-KINDS = DISPLAY + ACTIONS
+FILE_ACTIONS = ("import", "export")
+KINDS = DISPLAY + ACTIONS + FILE_ACTIONS
+HANDLER_DISPLAY = ("table", "kpi", "bars", "map")
+EXPORT_FORMATS = ("csv", "json", "txt", "geojson")
 AGGS = {"count": "count(*)", "sum": "sum({c})", "avg": "avg({c})", "min": "min({c})", "max": "max({c})"}
 NUMERIC = ("integer", "bigint", "double")
 MAX_PAGES, MAX_BLOCKS = 6, 12
@@ -200,6 +203,9 @@ def _field_for(c: dict) -> dict:
     if kind is None:
         raise WizardError(f"ستون «{c['name']}» از نوع {c['type']} در فرم/دریافت داده پشتیبانی نمی‌شود.")
     f = {"name": c["name"], "kind": kind, "label": c.get("label") or c["name"], "required": bool(c.get("required"))}
+    for k in ("min", "max"):  # کران ستون (مثلاً عرض/طول جغرافیایی) در فرم و دریافت داده اعمال می‌شود
+        if isinstance(c.get(k), (int, float)) and not isinstance(c.get(k), bool):
+            f[k] = c[k]
     if kind == "text":
         f["max"] = 200
     return f
@@ -218,12 +224,50 @@ def _action_columns(t: dict, b: dict) -> list[dict]:
     return out
 
 
+def handler_for(spec: dict, name: str, role: str) -> str:
+    """handler موجود در مرحله‌ی «کد» با نقش درست (block|importer|exporter|ingest|alert)؛ نام را برمی‌گرداند یا WizardError."""
+    labels = {"block": "بلوک صفحه", "importer": "ورود فایل", "exporter": "خروجی فایل", "ingest": "تبدیل داده‌ی دریافتی", "alert": "هشدار دوره‌ای"}
+    h = (spec.get("code") or {}).get(name or "")
+    if h is None:
+        raise WizardError(f"handler «{name}» در مرحله‌ی «کد» نیست.")
+    if h.get("role") != role:
+        raise WizardError(f"handler «{name}» از نوع «{labels.get(h.get('role'), '؟')}» است، نه «{labels[role]}».")
+    return name
+
+
+def _exts(raw) -> list[str]:
+    out = [e.strip().lower() for e in (raw if isinstance(raw, list) else str(raw or "").replace("،", ",").split(",")) if str(e).strip()]
+    out = [e if e.startswith(".") else "." + e for e in out]
+    for e in out:
+        if not re.fullmatch(r"\.[a-z0-9]{1,8}", e):
+            raise WizardError(f"پسوند «{e}» نامعتبر است (مثل .csv).")
+    if len(out) > 8:
+        raise WizardError("حداکثر ۸ پسوند.")
+    return out
+
+
 def check_block(spec: dict, b: dict) -> None:
     """یک بلوک را تنها (بدون نیاز به کامل‌بودن صفحه) می‌سنجد؛ WizardError با پیام فارسی."""
     kind = b.get("kind")
     if kind == "text":
         return
+    if kind == "handler":
+        handler_for(spec, b.get("handler", ""), "block")
+        if b.get("display") not in HANDLER_DISPLAY:
+            raise WizardError("نوع نمایش خروجی کد را انتخاب کنید.")
+        return
+    if kind == "import":
+        handler_for(spec, b.get("handler", ""), "importer")
+        _exts(b.get("extensions"))
+        return
+    if kind == "export":
+        handler_for(spec, b.get("handler", ""), "exporter")
+        if b.get("format", "csv") not in EXPORT_FORMATS:
+            raise WizardError("قالب خروجی نامعتبر است.")
+        return
     if kind in ACTIONS:
+        if kind == "ingest" and b.get("handler"):
+            handler_for(spec, b["handler"], "ingest")
         _action_columns(_need_table(spec, b), b)
         return
     sql, _extra = block_sql(spec, b)
@@ -240,9 +284,17 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
                            "order": int(page.get("order", 100))}
     if int(page.get("refresh", 0) or 0):
         out["refresh"] = int(page["refresh"])
-    blocks, forms, ingests, used = [], [], [], []
+    blocks, forms, ingests, imports, exports, used = [], [], [], [], [], []
     for b in page.get("blocks") or []:
         kind = b["kind"]
+        if kind == "import":
+            imports.append({"key": f"imp{len(imports) + 1}", "title": b.get("title") or "ورود فایل", "handler": handler_for(spec, b.get("handler", ""), "importer"),
+                            "extensions": _exts(b.get("extensions"))})
+            continue
+        if kind == "export":
+            exports.append({"key": f"exp{len(exports) + 1}", "title": b.get("title") or "دریافت خروجی", "handler": handler_for(spec, b.get("handler", ""), "exporter"),
+                            "format": b.get("format") if b.get("format") in EXPORT_FORMATS else "csv"})
+            continue
         if kind in ACTIONS:
             t = _need_table(spec, b)
             used.append(t["name"])
@@ -251,8 +303,24 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
             if kind == "form":
                 forms.append({"key": key, "title": b.get("title") or "ثبت", "table": t["name"], "fields": flds})
             else:
-                ingests.append({"key": key, "title": b.get("title") or "دریافت داده‌ی دستگاه", "table": t["name"], "fields": flds,
-                                "max_rows": int(b.get("max_rows") or 100), "rate": int(b.get("rate") or 60)})
+                ing = {"key": key, "title": b.get("title") or "دریافت داده‌ی دستگاه", "table": t["name"], "fields": flds,
+                       "max_rows": int(b.get("max_rows") or 100), "rate": int(b.get("rate") or 60)}
+                if b.get("handler"):
+                    ing["handler"] = handler_for(spec, b["handler"], "ingest")
+                ingests.append(ing)
+            continue
+        if kind == "handler":
+            disp = b.get("display")
+            if disp not in HANDLER_DISPLAY:
+                raise WizardError("نوع نمایش خروجی کد را انتخاب کنید.")
+            hname = handler_for(spec, b.get("handler", ""), "block")
+            used += [t for t in (spec["code"][hname].get("tables") or []) if t in tmap]  # جدولی که کد می‌خواند باید ساخته شود
+            item = {"kind": disp, "title": b.get("title", ""), "handler": hname}
+            if disp == "kpi" and b.get("unit"):
+                item["unit"] = str(b["unit"])[:30]
+            if b.get("width") in ("full", "half", "third"):
+                item["width"] = b["width"]
+            blocks.append(item)
             continue
         item: dict[str, Any] = {"kind": kind, "title": b.get("title", "")}
         if kind == "text":
@@ -275,9 +343,13 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
         out["forms"] = forms
     if ingests:
         out["ingest"] = ingests
+    if imports:
+        out["imports"] = imports
+    if exports:
+        out["exports"] = exports
     if used:
         out["tables"] = [tmap[n] for n in dict.fromkeys(used)]
-    if (forms or ingests) and out["need"] == "viewer":
+    if (forms or ingests or imports) and out["need"] == "viewer":
         out["need"] = "editor"
     return out
 

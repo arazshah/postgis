@@ -11,7 +11,7 @@ import logging
 
 from django.db import transaction
 
-from . import entitlements, market, pkg, studio, wizard
+from . import entitlements, market, pkg, studio, wizard, wizard_code
 from .models import PluginRelease, PluginState
 from .plugins import registry
 
@@ -143,9 +143,15 @@ def publish(draft, user, access: dict) -> dict:
     """انتشار. {release, active, message} یا PublishError. ورود دومرحله‌ی تازه را نمای فراخوان می‌سنجد (stepup)."""
     access = {**normalize_access(access), "summary": str(((draft.wizard or {}).get("intro") or {}).get("summary", ""))[:240]}
     try:
+        wizard_code.validate_code(draft.wizard or {})
         wizard.compile_pages(draft.plugin_id, draft.wizard or {})
     except wizard.WizardError as exc:
         raise PublishError(str(exc)) from exc
+    if draft.code:
+        from .runner import client
+
+        if client.mode() not in ("local", "remote"):
+            raise PublishError("پلاگین دارای کد است و اجرای کد در این استقرار خاموش است؛ حالت «راه‌دور» را در پیشرفته ← کلیدهای ناشر روشن کنید.")
     if not draft.pages:
         raise PublishError("پلاگین دست‌کم یک صفحه‌ی کامل لازم دارد.")
     steps = studio.check(draft)

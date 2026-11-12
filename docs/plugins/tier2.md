@@ -23,8 +23,8 @@ def handle(ctx, params):
 - خروجی: `{"columns": [...], "rows": [[...]]}` (JSON، حداکثر ۱ مگابایت). بلوک جدول ۲۰۰ ردیف اول را نشان می‌دهد.
 
 ## چه چیزی مجاز است
-- **واردات فقط از فهرست سفید**: math, json, statistics, datetime, itertools, functools, collections, re, decimal, fractions, typing, dataclasses, string, textwrap, heapq, bisect, random, operator, enum, copy, hashlib, base64, unicodedata, zlib, array, numbers, time, calendar, uuid. هر چیز دیگر (os, sys, socket, subprocess, importlib …) رد می‌شود.
-- ممنوع: `eval/exec/compile/open/getattr/setattr/globals/__import__` و هر ویژگی یا نام `__dunder__`، `global/nonlocal`، کد ناهم‌گام.
+- **واردات فقط از فهرست سفید**: math, json, statistics, datetime, itertools, functools, collections, re, decimal, fractions, typing, dataclasses, string, textwrap, heapq, bisect, random, operator, enum, copy, hashlib, base64, unicodedata, zlib, array, numbers, time, calendar, uuid، و **`geo`** (کتابخانه‌ی مکانی خود سامانه؛ `docs/plugins/geo.md`). هر چیز دیگر (os, sys, socket, subprocess, importlib …) رد می‌شود.
+- ممنوع: `eval/exec/compile/open/getattr/setattr/globals/__import__`، هر ویژگی یا نام `__dunder__`، و `from x import __dunder__` یا `import *` (دسترسی به builtins واقعی ماژول)، `global/nonlocal`، کد ناهم‌گام.
 - بررسی ایستای AST هنگام بارگذاری انجام می‌شود و خطا را با شماره‌ی خط می‌گوید (مرحله‌ی «کد سطح ۲» در گزارش بسته).
 
 ## مدل امنیتی (صادقانه)
@@ -99,3 +99,6 @@ def to_report(ctx, params):
 
 ## هنوز نیست
 ورود/خروج فایل بزرگ‌تر از ۳ مگابایت، `append`/`overwrite`، ورود در مودال اصلی ورود سامانه، هشدار برای مجوز نوع پلن/سازمان/همه (فقط «فضای کار»)، حداقل «تعداد پایگاه متمایز» در قطع‌کن (تا خطای یک مشتری کل پلاگین را خاموش نکند)، و بتا/انتشار تدریجی با درصد.
+
+## ساخت از ویزارد
+در «پلاگین‌ها ← ساخت» مرحله‌ی «کد (اختیاری)» قالب‌های آماده دارد (آمار ستون، طبقه‌بندی NDVI، تبخیر-تعرق و درجه‌روز رشد، ورود CSV/GeoJSON، خروجی GeoJSON، تبدیل داده‌ی دستگاه، هشدار آستانه): جدول و ستون را از فهرست جدول‌های ویزارد انتخاب می‌کنید و جانشین‌ها فقط با نام‌های اعتبارسنجی‌شده پر می‌شوند. هر قالب آزمون خودش را دارد. ویرایشگر کد، «اجرای آزمون‌ها» و «اجرای آزمایشی» (ورودی JSON، فایل نمونه، پایگاه نمونه اختیاری) در همان صفحه است؛ بلوک‌های صفحه، ورود/خروج فایل و تبدیل دریافت داده در مرحله‌ی «صفحه‌ها» به handlerها وصل می‌شوند. انتشار پلاگین دارای کد نیاز به اجرای کد روشن دارد (حالت «راه‌دور»). جزئیات: `docs/adr/0008`.

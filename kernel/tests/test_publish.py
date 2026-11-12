@@ -85,14 +85,14 @@ class PublishFlowTests(TestCase):
         self.draft = PluginDraft.objects.get(plugin_id="monitoring")
         self.step = lambda n: reverse("admin:kernel_plugindraft_wizard", args=[self.draft.pk, n])
         self.client.post(self.step(2), TBL)
-        self.client.post(self.step(3), {"op": "addpage", "title": "پایش", "icon": "pulse"})
-        self.client.post(self.step(3), {"op": "addblock:p1", "kind": "kpi", "title": "تعداد", "table": "monitoring_points", "agg": "count"})
-        self.client.post(self.step(3), {"op": "addblock:p1", "kind": "ingest", "table": "monitoring_points", "fields": ["device", "lat", "lon"]})
+        self.client.post(self.step(4), {"op": "addpage", "title": "پایش", "icon": "pulse"})
+        self.client.post(self.step(4), {"op": "addblock:p1", "kind": "kpi", "title": "تعداد", "table": "monitoring_points", "agg": "count"})
+        self.client.post(self.step(4), {"op": "addblock:p1", "kind": "ingest", "table": "monitoring_points", "fields": ["device", "lat", "lon"]})
 
     def publish(self, access):
-        r = self.client.post(self.step(4), access)
+        r = self.client.post(self.step(5), access)
         self.assertEqual(r.status_code, 302, r.content[:200])
-        return self.client.post(self.step(5), {"op": "publish"})
+        return self.client.post(self.step(6), {"op": "publish"})
 
     def test_public_free_is_active_open_and_reachable(self):
         self.publish({"mode": "public_free"})
@@ -122,7 +122,7 @@ class PublishFlowTests(TestCase):
         self.assertFalse(entitlements.allowed("monitoring"))  # بدون مجوز دیده نمی‌شود
 
     def test_private_unknown_target_is_rejected(self):
-        r = self.client.post(self.step(4), {"mode": "private", "t_kind": ["org"], "t_subject": ["999999"], "t_days": [""]})
+        r = self.client.post(self.step(5), {"mode": "private", "t_kind": ["org"], "t_subject": ["999999"], "t_days": [""]})
         self.assertEqual(r.status_code, 302)
         self.assertNotIn("access", PluginDraft.objects.get(pk=self.draft.pk).wizard)
 
@@ -143,7 +143,7 @@ class PublishFlowTests(TestCase):
         self.assertFalse(a.is_public)
 
     def test_incomplete_draft_is_not_published(self):
-        self.client.post(self.step(3), {"op": "delpage:p1"})
+        self.client.post(self.step(4), {"op": "delpage:p1"})
         self.publish({"mode": "public_free"})
         self.assertFalse(PluginRelease.objects.filter(plugin_id="monitoring").exists())
 
@@ -168,11 +168,11 @@ class PublishFlowTests(TestCase):
     def test_step5_and_4_render_and_publish_requires_fresh_2fa(self):
         from kernel import stepup
 
-        self.client.post(self.step(4), {"mode": "public_free"})
-        r = self.client.get(self.step(5))
+        self.client.post(self.step(5), {"mode": "public_free"})
+        r = self.client.get(self.step(6))
         self.assertContains(r, "بررسی خودکار بسته")
         self.assertContains(r, "1.0.0")
-        self.assertEqual(self.client.get(self.step(4)).status_code, 200)
+        self.assertEqual(self.client.get(self.step(5)).status_code, 200)
 
         class Deny(stepup.Provider):
             def ok(self, request):
@@ -184,7 +184,7 @@ class PublishFlowTests(TestCase):
         old = stepup._provider
         stepup.set_provider(Deny())
         self.addCleanup(lambda: setattr(stepup, "_provider", old))
-        r = self.client.post(self.step(5), {"op": "publish"})
+        r = self.client.post(self.step(6), {"op": "publish"})
         self.assertEqual(r["Location"], "/fresh/")
         self.assertFalse(PluginRelease.objects.exists())
 
@@ -200,9 +200,25 @@ class PublishFlowTests(TestCase):
         self.assertIn("SIGNATURE", z.namelist())
         self.assertIn("plugin.toml", z.namelist())
 
+    def test_upload_only_staff_cannot_publish_directly(self):
+        from django.contrib.auth.models import Permission
+
+        staff = get_user_model().objects.create_admin("pubstaff", "Str0ng-Admin-Pass", superuser=False)
+        staff.user_permissions.add(*Permission.objects.filter(codename__in=["upload_pluginrelease", "view_pluginstate", "change_plugindraft", "view_plugindraft"]))
+        self.client.force_login(staff)
+        self.client.post(self.step(5), {"mode": "public_free"})
+        r = self.client.post(self.step(6), {"op": "publish"})
+        self.assertEqual(r.status_code, 302)
+        self.assertFalse(PluginRelease.objects.exists())
+        platform.set_("require_second_approval", "1")  # با تأیید نفر دوم همان نویسنده فقط ثبت می‌کند
+        self.client.post(self.step(6), {"op": "publish"})
+        rel = PluginRelease.objects.get()
+        self.assertEqual(rel.status, "checked")
+
     def test_market_without_provider_is_a_clear_error(self):
         saved = registry._points.get(market.POINT)
         registry._points.pop(market.POINT, None)
         self.addCleanup(lambda: registry._points.__setitem__(market.POINT, saved) if saved is not None else None)
         with self.assertRaises(market.MarketError):
             market.upsert("billing", market.Listing(title="x", price_toman=5))
+

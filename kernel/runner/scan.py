@@ -10,7 +10,7 @@ import ast
 ALLOWED_IMPORTS = frozenset({
     "math", "json", "statistics", "datetime", "itertools", "functools", "collections", "re", "decimal", "fractions",
     "typing", "dataclasses", "string", "textwrap", "heapq", "bisect", "random", "operator", "enum", "copy", "hashlib",
-    "base64", "unicodedata", "zlib", "array", "numbers", "time", "calendar", "uuid"})
+    "base64", "unicodedata", "zlib", "array", "numbers", "time", "calendar", "uuid", "geo"})
 BANNED_NAMES = frozenset({"eval", "exec", "compile", "open", "input", "breakpoint", "__import__", "globals", "locals",
                           "vars", "getattr", "setattr", "delattr", "memoryview", "help", "exit", "quit"})
 MAX_SOURCE = 100_000
@@ -41,6 +41,9 @@ def scan(source: str, filename: str = "code") -> list[str]:
         elif isinstance(node, ast.ImportFrom):
             if node.level or (node.module or "").split(".")[0] not in ALLOWED_IMPORTS or "." in (node.module or ""):
                 problems.append(f"{filename}:{line}: واردکردن از «{'.' * node.level}{node.module or ''}» مجاز نیست.")
+            for a in node.names:  # from math import __builtins__ ← دسترسی به builtins واقعی و دور زدن فهرست سفید
+                if a.name.startswith("__") or a.name == "*":
+                    problems.append(f"{filename}:{line}: واردکردن «{a.name}» مجاز نیست.")
         elif isinstance(node, ast.Name) and (node.id in BANNED_NAMES or (node.id.startswith("__") and node.id.endswith("__"))):
             problems.append(f"{filename}:{line}: استفاده از «{node.id}» مجاز نیست.")
         elif isinstance(node, ast.Attribute) and node.attr.startswith("__"):
