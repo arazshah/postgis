@@ -3,6 +3,7 @@
 - هر اجرای handler (سطح ۲) و هر اجرای هشدار دوره‌ای نتیجه‌اش (موفق/ناموفق) را اینجا ثبت می‌کند؛ خرابی زیرساخت (runner خاموش یا
   دردسترس‌نبودن) **شمرده نمی‌شود** چون تقصیر پلاگین نیست (kernel.runner.client.HandlerFailed فقط خطای خود کد است).
 - worker هر دقیقه می‌گذرد: در پنجره‌ی ۳۰ دقیقه‌ای اگر دست‌کم ۲۰ اجرا و دست‌کم ۵۰٪ آن‌ها ناموفق باشد ← قطع.
+  اگر چند پایگاه داده از پلاگین استفاده کرده‌اند، خطا باید از دست‌کم دو پایگاه باشد (داده‌ی خراب یک مشتری پلاگین را برای همه خاموش نکند).
 - اقدام: بازگشت به **آخرین نسخه‌ی تأییدشده‌ی قبلی** که خودش قطع نشده؛ اگر نبود، پلاگین خاموش (نسخه‌ی فعال بازنشسته) می‌شود.
   نسخه‌ی قطع‌شده دیگر هدف بازگشت نیست و فعال‌سازی دوباره‌اش دست مدیر است (اصل دونفره سر جایش).
 - ردپا در `PluginTrip` (پنل: «قطع‌های خودکار پلاگین») و اعلان به مدیران کل؛ شمارنده‌ی پلاگین پس از قطع صفر می‌شود.
@@ -47,7 +48,7 @@ def contribution_failed(plugin: str) -> None:
         record(plugin, False)
 
 
-def record(plugin: str, ok: bool, now=None) -> None:
+def record(plugin: str, ok: bool, now=None, ws: int = 0) -> None:
     """نتیجه‌ی یک اجرا؛ فقط برای پلاگین‌های بسته‌ی بارگذاری‌شده یا سطح ۳. هرگز استثنا نمی‌دهد."""
     from .models import PluginHealthBucket
 
@@ -55,7 +56,7 @@ def record(plugin: str, ok: bool, now=None) -> None:
         return
     try:
         with transaction.atomic():
-            row, _ = PluginHealthBucket.objects.get_or_create(plugin_id=plugin, bucket=_bucket(now or timezone.now()))
+            row, _ = PluginHealthBucket.objects.get_or_create(plugin_id=plugin, bucket=_bucket(now or timezone.now()), workspace_id=int(ws or 0))
             PluginHealthBucket.objects.filter(pk=row.pk).update(
                 runs=F("runs") + 1, errors=F("errors") + (0 if ok else 1))
     except Exception:  # noqa: BLE001 - سنجش سلامت نباید کار اصلی را بشکند
@@ -70,8 +71,24 @@ def stats(plugin: str, now=None) -> tuple[int, int]:
     return int(agg["r"] or 0), int(agg["e"] or 0)
 
 
-def should_trip(runs: int, errors: int) -> bool:
-    return runs >= MIN_RUNS and errors / runs >= MAX_RATE
+def stats_ws(plugin: str, now=None) -> tuple[int, int, int, int]:
+    """(اجرا، خطا، تعداد پایگاه‌های متمایزِ دارای اجرا، تعداد پایگاه‌های متمایزِ دارای خطا) در پنجره؛ پایگاه نامشخص (۰) شمرده نمی‌شود."""
+    from .models import PluginHealthBucket
+
+    since = _bucket((now or timezone.now()) - datetime.timedelta(minutes=WINDOW_MIN))
+    rows = list(PluginHealthBucket.objects.filter(plugin_id=plugin, bucket__gte=since).values("workspace_id")
+                .annotate(r=Sum("runs"), e=Sum("errors")))
+    known = [r for r in rows if r["workspace_id"]]
+    return (sum(r["r"] or 0 for r in rows), sum(r["e"] or 0 for r in rows),
+            len(known), sum(1 for r in known if r["e"]))
+
+
+def should_trip(runs: int, errors: int, run_ws: int = 0, err_ws: int = 0) -> bool:
+    """آستانه‌ی نرخ خطا، و اگر چند پایگاه داده از پلاگین استفاده کرده‌اند، خطا باید از دست‌کم دو پایگاه باشد (داده‌ی خراب یک
+    مشتری پلاگین را برای همه خاموش نکند). با یک پایگاه (یا نامشخص) همان رفتار قبلی."""
+    if runs < MIN_RUNS or errors / runs < MAX_RATE:
+        return False
+    return not (run_ws >= 2 and err_ws < 2)
 
 
 def _version_key(v: str):
@@ -163,8 +180,8 @@ def tick(now=None) -> dict:
     from .plugins import registry
 
     for plugin in sorted(set(pkg._loaded) | {p.id for p in registry.plugins.values() if p.tier == 3}):
-        runs, errors = stats(plugin, now)
-        if should_trip(runs, errors) and trip(plugin, runs, errors) is not None:
+        runs, errors, run_ws, err_ws = stats_ws(plugin, now)
+        if should_trip(runs, errors, run_ws, err_ws) and trip(plugin, runs, errors) is not None:
             tripped.append(plugin)
     PluginHealthBucket.objects.filter(bucket__lt=now - datetime.timedelta(hours=KEEP_HOURS)).delete()
     return {"tripped": tripped}

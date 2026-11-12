@@ -40,7 +40,7 @@ class PluginGateMiddleware:
             from . import health
 
             # ۴xx (۴۰۴ و ۴۰۳ و …) تقصیر پلاگین نیست؛ فقط ۵xx خطا شمرده می‌شود
-            health.record(pid, response.status_code < 500)
+            health.record(pid, response.status_code < 500, ws=self._ws(request))
         return response
 
     def process_exception(self, request, exception):
@@ -50,7 +50,7 @@ class PluginGateMiddleware:
             from . import health
 
             request._ext_counted = True
-            health.record(pid, False)
+            health.record(pid, False, ws=self._ws(request))
         return None
 
     def process_view(self, request, view_func, view_args, view_kwargs):
@@ -76,6 +76,13 @@ class PluginGateMiddleware:
             raise Http404  # درخواست غیرمجاز در قطع‌کن شمرده نمی‌شود (کسی با کاوش موفقیت جعلی نسازد)
         self._track(request, pid)
         return None
+
+    @staticmethod
+    def _ws(request) -> int:
+        """شناسه‌ی پایگاه داده‌ی درخواست (مسیر dashboard/<pk>/…) برای شمارش خطا به‌ازای پایگاه؛ نامشخص = ۰."""
+        match = getattr(request, "resolver_match", None)
+        pk = (match.kwargs.get("pk") if match else None) or 0
+        return int(pk) if str(pk).isdigit() else 0
 
     @staticmethod
     def _track(request, pid: str) -> None:

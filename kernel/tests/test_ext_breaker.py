@@ -175,3 +175,68 @@ class VisibleGuardTests(Base):
 
 def boom():
     raise RuntimeError("visible خراب")
+
+
+class WorkspaceSpreadTests(Base):
+    """خطای یک مشتری (داده‌ی خراب) پلاگین را برای همه خاموش نکند؛ خطای چند مشتری یا تک‌مشتری خاموش می‌کند."""
+
+    def feed(self, ws, ok, bad, plugin="t4_a"):
+        for _ in range(ok):
+            health.record(plugin, True, ws=ws)
+        for _ in range(bad):
+            health.record(plugin, False, ws=ws)
+
+    def test_one_bad_customer_among_many_does_not_trip(self):
+        self.feed(1, 0, 30)  # فقط پایگاه ۱ خطا می‌دهد
+        self.feed(2, 40, 0)
+        self.feed(3, 40, 0)
+        self.assertEqual(health.stats_ws("t4_a"), (110, 30, 3, 1))
+        self.assertEqual(health.tick()["tripped"], [])
+
+    def test_high_rate_but_single_failing_workspace_among_two_does_not_trip(self):
+        self.feed(1, 0, 40)
+        self.feed(2, 5, 0)
+        runs, errors, run_ws, err_ws = health.stats_ws("t4_a")
+        self.assertTrue(errors / runs >= 0.5)
+        self.assertFalse(health.should_trip(runs, errors, run_ws, err_ws))
+        self.assertEqual(health.tick()["tripped"], [])
+
+    def test_two_failing_workspaces_trip(self):
+        self.feed(1, 0, 15)
+        self.feed(2, 0, 15)
+        self.assertEqual(health.tick()["tripped"], ["t4_a"])
+
+    def test_single_customer_plugin_still_trips(self):
+        self.feed(7, 5, 30)
+        self.assertEqual(health.stats_ws("t4_a")[2:], (1, 1))
+        self.assertEqual(health.tick()["tripped"], ["t4_a"])
+
+    def test_unknown_workspace_keeps_old_behaviour(self):
+        self.feed(0, 5, 30)
+        self.assertEqual(health.tick()["tripped"], ["t4_a"])
+
+    def test_gate_records_workspace_of_the_request(self):
+        from types import SimpleNamespace
+
+        req = self.rf.get("/x")
+        req.resolver_match = SimpleNamespace(kwargs={"pk": 42})
+        self.assertEqual(gate.PluginGateMiddleware._ws(req), 42)
+        req.resolver_match = SimpleNamespace(kwargs={})
+        self.assertEqual(gate.PluginGateMiddleware._ws(req), 0)
+        req.resolver_match = None
+        self.assertEqual(gate.PluginGateMiddleware._ws(req), 0)
+
+
+class TierColumnTests(Base):
+    def test_plugin_list_shows_tier(self):
+        from django.contrib import admin as dj_admin
+
+        from kernel.admin import PluginStateAdmin
+
+        ma = PluginStateAdmin(PluginState, dj_admin.site)
+        registry.register("t4_t2", "دو", kind="custom", tier=2)
+        self.addCleanup(registry.remove_plugin, "t4_t2")
+        self.assertIn("۳", ma.tier(PluginState(plugin_id="t4_a")))
+        self.assertIn("۲", ma.tier(PluginState(plugin_id="t4_t2")))
+        self.assertEqual(ma.tier(PluginState(plugin_id="nothing")), "—")
+        self.assertIn("tier", ma.list_display)

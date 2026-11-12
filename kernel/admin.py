@@ -96,7 +96,7 @@ class EntitlementInline(admin.TabularInline):
 
 @admin.register(PluginState)
 class PluginStateAdmin(admin.ModelAdmin):
-    list_display = ("title", "plugin_id", "kind", "version", "access", "enabled", "grants", "health")
+    list_display = ("title", "plugin_id", "kind", "tier", "version", "access", "enabled", "grants", "health")
     list_filter = ("access", "enabled")
     search_fields = ("plugin_id", "note")
     inlines = [EntitlementInline]
@@ -164,6 +164,13 @@ class PluginStateAdmin(admin.ModelAdmin):
     def kind(self, obj):
         p = registry.plugins.get(obj.plugin_id)
         return {"system": "سیستمی", "feature": "قابلیت", "custom": "اختصاصی"}.get(p.kind, p.kind) if p else "—"
+
+    @admin.display(description="سطح")
+    def tier(self, obj):
+        p = registry.plugins.get(obj.plugin_id)
+        if not p:
+            return "—"
+        return {1: "۱ (صفحه)", 2: "۲ (کد در جعبه)", 3: "۳ (کد درون‌پردازه)"}.get(p.tier, p.tier) if p.kind != "system" else "سیستمی"
 
     @admin.display(description="نسخه")
     def version(self, obj):
