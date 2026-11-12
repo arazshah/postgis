@@ -19,7 +19,7 @@ from decimal import Decimal
 
 from psycopg import sql
 
-from . import nav, tenantdb
+from . import geomval, nav, tenantdb
 from .plugins import registry
 
 POINT = "page.spec"
@@ -63,7 +63,8 @@ class Block:
     handler: str = ""  # سطح ۲: نام handler کد ایزوله به‌جای sql (پاسخ: {"columns": [...], "rows": [[...]]})
 
 
-FIELD_KINDS = ("text", "int", "number", "bool", "date", "choice")
+FIELD_KINDS = ("text", "int", "number", "bool", "date", "choice", "geometry")
+GEOM_KINDS = ("point", "line", "polygon", "multipolygon")
 MAX_FORMS, MAX_FIELDS, MAX_VALUE = 3, 12, 2000
 TABLE_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}(\.[a-z_][a-z0-9_]{0,62})?")
 
@@ -77,6 +78,7 @@ class Field:
     choices: tuple[tuple[str, str], ...] = ()
     max: float | None = None  # برای متن: حداکثر طول؛ برای عدد: سقف
     min: float | None = None
+    geom: str = ""  # فقط kind = geometry: point | line | polygon | multipolygon
 
 
 @dataclass(frozen=True)
@@ -92,7 +94,22 @@ class Form:
     success: str = "ثبت شد."
 
 
-COLUMN_TYPES = ("text", "integer", "bigint", "double", "boolean", "date", "timestamptz", "jsonb", "point")
+@dataclass(frozen=True)
+class RecordSpec:
+    """ویرایش و حذف ردیف‌های یک جدول **همین پلاگین** (ADR-0009 مرحله‌ی ۳): UPDATE/DELETE فقط روی `id` و فقط ستون‌های
+    اعلام‌شده در `fields` را هسته می‌سازد (پارامتری)؛ SQL نوشتنی از پلاگین پذیرفته نمی‌شود. جدول باید در `[[tables]]` همین صفحه باشد."""
+
+    key: str
+    title: str
+    table: str
+    fields: tuple[Field, ...]
+    columns: tuple[str, ...]  # ستون‌های نمایشی فهرست (غیرهندسه)
+    can_delete: bool = True
+    limit: int = 50
+    hint: str = ""
+
+
+COLUMN_TYPES = ("text", "integer", "bigint", "double", "boolean", "date", "timestamptz", "jsonb", "point", "line", "polygon", "multipolygon")
 MAX_TABLES, MAX_COLUMNS, MAX_INDEXES = 5, 20, 3
 
 
@@ -212,6 +229,7 @@ class Page:
     ingests: tuple[IngestSpec, ...] = ()
     tables: tuple[TableSpec, ...] = ()
     sources: tuple[SourceSpec, ...] = ()
+    records: tuple[RecordSpec, ...] = ()
 
 
 _icon_known = lambda name: True  # noqa: E731  هسته فهرست آیکون‌ها را نمی‌شناسد؛ پلاگین هسته‌ی سایت آن را ثبت می‌کند
@@ -323,7 +341,12 @@ def parse_field(d: dict) -> Field:
     for v in (lo, hi):
         if v is not None and (not isinstance(v, (int, float)) or isinstance(v, bool)):
             raise SpecError(f"کران فیلد «{name}» باید عدد باشد.")
-    return Field(name, kind, _str(d, "label", required=True, limit=80), bool(d.get("required", False)), choices, hi, lo)
+    geom = ""
+    if kind == "geometry":
+        geom = _str(d, "geom", default="polygon")
+        if geom not in GEOM_KINDS:
+            raise SpecError(f"نوع هندسه‌ی فیلد «{name}» یکی از {'، '.join(GEOM_KINDS)} است.")
+    return Field(name, kind, _str(d, "label", required=True, limit=80), bool(d.get("required", False)), choices, hi, lo, geom)
 
 
 def parse_form(d: dict) -> Form:
@@ -359,7 +382,7 @@ def parse_table(plugin: str, d: dict) -> TableSpec:
         if not isinstance(c, dict):
             raise SpecError("هر ستون یک شیء است.")
         cname = _str(c, "name", required=True, limit=63)
-        if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", cname) or cname in ("id", "geom") and c.get("type") != "point":
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", cname) or cname in ("id", "geom") and c.get("type") not in GEOM_KINDS:
             raise SpecError(f"نام ستون «{cname}» نامعتبر یا رزروشده است (id را هسته می‌سازد).")
         ctype = _str(c, "type", default="text")
         if ctype not in COLUMN_TYPES:
@@ -421,6 +444,29 @@ SRC_BUILTIN = ("since", "today")
 MAX_SOURCE_FIELDS = 12
 
 
+def parse_record(d: dict) -> RecordSpec:
+    key = _str(d, "key", required=True, limit=31)
+    if not KEY_RE.fullmatch(key):
+        raise SpecError(f"کلید ویرایش ردیف «{key}» نامعتبر است.")
+    table = _str(d, "table", required=True, limit=127)
+    if not re.fullmatch(r"[a-z][a-z0-9_]{1,62}", table):
+        raise SpecError(f"جدول «{table}» نامعتبر است (فقط جدولی از [[tables]] همین صفحه، بدون schema).")
+    fields = [parse_field(f) for f in d.get("fields") or []]
+    if not fields or len(fields) > MAX_FIELDS or len({f.name for f in fields}) != len(fields):
+        raise SpecError(f"ویرایش ردیف ۱ تا {MAX_FIELDS} فیلد یکتا می‌خواهد.")
+    plain = [f.name for f in fields if f.kind != "geometry"]
+    cols = d.get("columns")
+    if cols is None:
+        cols = plain[:4]
+    if not isinstance(cols, list) or not cols or len(cols) > 6 or not all(isinstance(c, str) and c in plain for c in cols):
+        raise SpecError("«columns» فهرست ۱ تا ۶ نام فیلدِ غیرهندسه‌ی همین ویرایش است.")
+    limit = d.get("limit", 50)
+    if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
+        raise SpecError("«limit» عددی بین ۱ و ۱۰۰ است.")
+    return RecordSpec(key, _str(d, "title", required=True, limit=80), table, tuple(fields), tuple(cols),
+                      bool(d.get("can_delete", True)), limit, _str(d, "hint", limit=240))
+
+
 def parse_source(d: dict) -> SourceSpec:
     from urllib.parse import urlsplit
 
@@ -451,6 +497,8 @@ def parse_source(d: dict) -> SourceSpec:
         raise SpecError(f"منبع ۱ تا {MAX_SOURCE_FIELDS} فیلد لازم دارد.")
     for f in raw_fields:
         fd = parse_field(f)
+        if fd.kind == "geometry":
+            raise SpecError("فیلد هندسه برای منبع بیرونی پشتیبانی نمی‌شود.")
         path = _str(f, "path", default=fd.name, limit=120)
         if not SRC_PATH_RE.fullmatch(path):
             raise SpecError(f"مسیر فیلد «{fd.name}» نامعتبر است.")
@@ -603,12 +651,21 @@ def parse_page(plugin: str, d: dict) -> Page:
         raise SpecError("کلید منبع‌ها باید یکتا باشد.")
     if sources and need == "viewer":
         raise SpecError("صفحه‌ی دارای منبع بیرونی (نوشتن) دست‌کم سطح «editor» می‌خواهد.")
+    records = [parse_record(x) for x in d.get("records") or []]
+    if len(records) > 2 or len({x.key for x in records}) != len(records):
+        raise SpecError("حداکثر ۲ ویرایش ردیف با کلید یکتا در یک صفحه.")
+    own = {t.name for t in tables}
+    for x in records:
+        if x.table not in own:
+            raise SpecError(f"ویرایش ردیف «{x.key}»: جدول «{x.table}» باید در [[tables]] همین صفحه اعلام شده باشد.")
+    if records and need == "viewer":
+        raise SpecError("صفحه‌ی دارای ویرایش ردیف (نوشتن) دست‌کم سطح «editor» می‌خواهد.")
     if not blocks:
         raise SpecError("صفحه دست‌کم یک بلوک لازم دارد.")
     if len(blocks) > 24:
         raise SpecError("حداکثر ۲۴ بلوک در یک صفحه.")
     return Page(plugin, key, _str(d, "title", required=True, limit=80), _str(d, "subtitle", limit=240), icon, group, need,
-                order, refresh, tuple(params), tuple(blocks), tuple(forms), tuple(imports), tuple(exports), tuple(ingests), tuple(tables), tuple(sources))
+                order, refresh, tuple(params), tuple(blocks), tuple(forms), tuple(imports), tuple(exports), tuple(ingests), tuple(tables), tuple(sources), tuple(records))
 
 
 # ---------------------------------------------------------------------- ثبت
@@ -814,6 +871,10 @@ def get_ingest(page: Page, key: str) -> IngestSpec | None:
     return next((i for i in page.ingests if i.key == key), None)
 
 
+def get_record(page: Page, key: str) -> RecordSpec | None:
+    return next((r for r in page.records if r.key == key), None)
+
+
 def get_source(page: Page, key: str) -> SourceSpec | None:
     return next((x for x in page.sources if x.key == key), None)
 
@@ -832,6 +893,8 @@ def convert_field(f: Field, raw) -> object:
         if f.required:
             raise ValueError(f"«{f.label}» الزامی است.")
         return None
+    if f.kind == "geometry":
+        return geomval.validate(text, f.geom, f.label)
     if len(text) > MAX_VALUE:
         raise ValueError(f"«{f.label}» بیش از حد بلند است.")
     if f.kind in ("int", "number"):
@@ -890,13 +953,8 @@ def read_ingest_row(spec: IngestSpec, row) -> dict:
     return {f.name: convert_field(f, _norm_raw(row.get(f.name))) for f in spec.fields}
 
 
-def insert_rows(ws, form, rows: list[dict]) -> None:
-    """INSERT یک یا چند ردیف در **یک تراکنش** (همه یا هیچ). `form` هر شیئی با `.table` و `.fields` است (فرم یا IngestSpec).
-    یک ردیف با نقش مالک. جدول و ستون‌ها باید در کاتالوگ باشند؛ فقط جدول عادی؛ ستون تولیدشده/identity-always رد می‌شود.
-
-    مقدارها همه پارامتر متصل هستند و نام‌ها با Identifier می‌آیند؛ هیچ متن پلاگینی وارد SQL نمی‌شود.
-    SpecError = مشکل در تعریف فرم یا ساختار جدول (پیام فارسی)؛ خطای پایگاه داده به‌صورت استثنا بالا می‌رود.
-    """
+def _resolve(ws, form, *, need_id: bool = False):
+    """جدول و ستون‌های فرم را در کاتالوگ بررسی می‌کند؛ (schema، name، نام ستون‌ها، ستون‌های هندسه، جای‌نگهدار هر ستون)."""
     cat = tenantdb.catalog(ws)
     schema, _, name = form.table.rpartition(".")
     schema = schema or "public"
@@ -908,19 +966,106 @@ def insert_rows(ws, form, rows: list[dict]) -> None:
     if table.kind not in ("r", "p"):
         raise SpecError("فرم فقط روی جدول عادی ثبت می‌کند، نه نما یا جدول خارجی.")
     cols = {c["name"]: c for c in cat.columns(table)}
+    if need_id and not (cols.get("id") and cols["id"]["pk"]):
+        raise SpecError("ویرایش و حذف ردیف جدولی با کلید اصلی «id» می‌خواهد.")
     for f in form.fields:
         c = cols.get(f.name)
         if c is None:
             raise SpecError(f"ستون «{f.name}» در جدول «{form.table}» نیست.")
-        if c["generated"] or c["identity"] == "a" or c["spatial"]:
+        if c["generated"] or c["identity"] == "a":
+            raise SpecError(f"ستون «{f.name}» قابل نوشتن از فرم نیست.")
+        if f.kind == "geometry":
+            want = geomval.PG_TYPES[f.geom].lower()
+            have = str(c["type"]).lower().replace(" ", "")
+            if not c["spatial"] or have not in ("geometry", f"geometry({want},4326)"):
+                raise SpecError(f"ستون «{f.name}» از نوع هندسه‌ی {f.geom} با SRID ۴۳۲۶ نیست.")
+        elif c["spatial"]:
             raise SpecError(f"ستون «{f.name}» قابل نوشتن از فرم نیست.")
     names = [f.name for f in form.fields]
+    geom_cols = {f.name for f in form.fields if f.kind == "geometry"}
+    ph = {n: (sql.SQL("ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)") if n in geom_cols else sql.Placeholder()) for n in names}
+    return schema, name, names, geom_cols, ph
+
+
+def _check_geoms(conn, form, rows: list[dict]) -> None:
+    """هندسه‌ها را با PostGIS (ST_IsValid) می‌سنجد؛ SpecError با پیام فارسی."""
+    for f in form.fields:
+        if f.kind != "geometry":
+            continue
+        for r in rows:
+            if r[f.name] is not None and not conn.execute(
+                    "SELECT ST_IsValid(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))", (str(r[f.name]),)).fetchone()[0]:
+                raise SpecError(f"«{f.label}»: شکل معتبر نیست (مثلاً ضلع‌ها همدیگر را قطع کرده‌اند).")
+
+
+def _param(v, name, geom_cols):
+    return None if v is None else (str(v) if name in geom_cols else v)
+
+
+def insert_rows(ws, form, rows: list[dict]) -> None:
+    """INSERT یک یا چند ردیف در **یک تراکنش** (همه یا هیچ). `form` هر شیئی با `.table` و `.fields` است (فرم یا IngestSpec).
+    یک ردیف با نقش مالک. جدول و ستون‌ها باید در کاتالوگ باشند؛ فقط جدول عادی؛ ستون تولیدشده/identity-always رد می‌شود.
+
+    مقدارها همه پارامتر متصل هستند و نام‌ها با Identifier می‌آیند؛ هیچ متن پلاگینی وارد SQL نمی‌شود.
+    SpecError = مشکل در تعریف فرم یا ساختار جدول (پیام فارسی)؛ خطای پایگاه داده به‌صورت استثنا بالا می‌رود.
+    """
+    schema, name, names, geom_cols, ph = _resolve(ws, form)
     query = sql.SQL("INSERT INTO {rel} ({cols}) VALUES ({vals})").format(
         rel=sql.Identifier(schema, name),
         cols=sql.SQL(", ").join(sql.Identifier(n) for n in names),
-        vals=sql.SQL(", ").join(sql.Placeholder() for _ in names))
+        vals=sql.SQL(", ").join(ph[n] for n in names))
     with tenantdb.connect(ws, write=True, as_owner=True) as conn:
         conn.execute(sql.SQL("SET LOCAL statement_timeout = {}").format(sql.Literal(f"{TIMEOUT_S}s")))
+        _check_geoms(conn, form, rows)
         with conn.cursor() as cur:
-            cur.executemany(query, [[r[n] for n in names] for r in rows])
+            cur.executemany(query, [[_param(r[n], n, geom_cols) for n in names] for r in rows])
+        conn.commit()
+
+
+# ---------------------------------------------------------------------- ویرایش و حذف ردیف (`[[records]]`)
+def fetch_records(ws, rec: RecordSpec) -> tuple[list[str], list[list]]:
+    """(سرستون‌ها، ردیف‌ها: [id، مقدارهای ستون‌های نمایشی…])؛ تازه‌ترین‌ها اول. فقط‌خواندنی با نقش مرورگر."""
+    schema, name, _n, _g, _p = _resolve(ws, rec, need_id=True)
+    cols = [sql.Identifier("id")] + [sql.Identifier(c) for c in rec.columns]
+    with tenantdb.connect(ws) as conn:
+        conn.execute(sql.SQL("SET LOCAL statement_timeout = {}").format(sql.Literal(f"{TIMEOUT_S}s")))
+        cur = conn.execute(sql.SQL("SELECT {cols} FROM {rel} ORDER BY id DESC LIMIT {n}").format(
+            cols=sql.SQL(", ").join(cols), rel=sql.Identifier(schema, name), n=sql.Literal(rec.limit)))
+        return [d.name for d in cur.description], [[_fmt(v) if i else v for i, v in enumerate(r)] for r in cur.fetchall()]
+
+
+def fetch_record(ws, rec: RecordSpec, rid: int) -> dict | None:
+    """مقدارهای قابل‌ویرایش یک ردیف (هندسه به‌صورت GeoJSON)؛ None اگر نیست."""
+    schema, name, names, geom_cols, _ph = _resolve(ws, rec, need_id=True)
+    cols = [sql.SQL("ST_AsGeoJSON({c})").format(c=sql.Identifier(n)) if n in geom_cols else sql.Identifier(n) for n in names]
+    with tenantdb.connect(ws) as conn:
+        conn.execute(sql.SQL("SET LOCAL statement_timeout = {}").format(sql.Literal(f"{TIMEOUT_S}s")))
+        row = conn.execute(sql.SQL("SELECT {cols} FROM {rel} WHERE id = %s").format(
+            cols=sql.SQL(", ").join(cols), rel=sql.Identifier(schema, name)), (rid,)).fetchone()
+    return None if row is None else dict(zip(names, row, strict=True))
+
+
+def update_record(ws, rec: RecordSpec, rid: int, values: dict) -> None:
+    """UPDATE فقط ستون‌های اعلام‌شده‌ی یک ردیف با شناسه‌ی `id` (پارامتری؛ SpecError اگر ردیف نیست)."""
+    schema, name, names, geom_cols, ph = _resolve(ws, rec, need_id=True)
+    sets = sql.SQL(", ").join(sql.SQL("{} = {}").format(sql.Identifier(n), ph[n]) for n in names)
+    with tenantdb.connect(ws, write=True, as_owner=True) as conn:
+        conn.execute(sql.SQL("SET LOCAL statement_timeout = {}").format(sql.Literal(f"{TIMEOUT_S}s")))
+        _check_geoms(conn, rec, [values])
+        cur = conn.execute(sql.SQL("UPDATE {rel} SET {sets} WHERE id = %s").format(rel=sql.Identifier(schema, name), sets=sets),
+                           [_param(values[n], n, geom_cols) for n in names] + [rid])
+        if cur.rowcount != 1:
+            conn.rollback()
+            raise SpecError("ردیف پیدا نشد.")
+        conn.commit()
+
+
+def delete_record(ws, rec: RecordSpec, rid: int) -> None:
+    schema, name, _n, _g, _p = _resolve(ws, rec, need_id=True)
+    with tenantdb.connect(ws, write=True, as_owner=True) as conn:
+        conn.execute(sql.SQL("SET LOCAL statement_timeout = {}").format(sql.Literal(f"{TIMEOUT_S}s")))
+        cur = conn.execute(sql.SQL("DELETE FROM {rel} WHERE id = %s").format(rel=sql.Identifier(schema, name)), (rid,))
+        if cur.rowcount != 1:
+            conn.rollback()
+            raise SpecError("ردیف پیدا نشد.")
         conn.commit()

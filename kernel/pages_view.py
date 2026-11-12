@@ -57,9 +57,20 @@ def page(request, pk, plugin, page):
             vals = (st.inputs if st else {}) or {}
             srcs.append({"spec": x, "state": st, "host_ok": sources.host_allowed(x.host),
                          "inputs": [{"i": i, "value": vals.get(i.name, i.default)} for i in x.inputs]})
-    ctx = {"db": ws, "page": spec, "blocks": blocks, "ingests": ingests, "sources": srcs, "sources_on": platform.sources_enabled(), "can_manage_ingest": workspace.level(request.user, ws) >= 2,
+    recs = []
+    for rc in spec.records:
+        try:
+            heads, rows = pagekit.fetch_records(ws, rc)
+            recs.append({"spec": rc, "heads": heads[1:], "rows": rows, "error": ""})
+        except pagekit.SpecError as exc:
+            recs.append({"spec": rc, "heads": [], "rows": [], "error": str(exc)})
+        except Exception:  # noqa: BLE001  جدول هنوز ساخته نشده یا خطای پایگاه داده: پیام کوتاه
+            recs.append({"spec": rc, "heads": [], "rows": [], "error": "خواندن ردیف‌ها ممکن نشد."})
+    ctx = {"db": ws, "page": spec, "blocks": blocks, "ingests": ingests, "sources": srcs, "records": recs, "sources_on": platform.sources_enabled(), "can_manage_ingest": workspace.level(request.user, ws) >= 2,
            "ingest_url": request.build_absolute_uri("/ingest/"), "values": values, "layers": layers, "param_errors": errors,
-           "has_map": any(b["kind"] == "map" for b in blocks), "section": "pages"}
+           "has_map": any(b["kind"] == "map" for b in blocks),
+           "has_draw": any(fd.kind == "geometry" for fm in spec.forms for fd in fm.fields),
+           "can_edit_rows": workspace.level(request.user, ws) >= 1 and spec.need != "viewer", "section": "pages"}
     template = "kernel/_page_body.html" if request.GET.get("fragment") == "1" else "kernel/page.html"
     return render(request, template, ctx)
 
@@ -319,4 +330,70 @@ def source_run(request, pk, plugin, page, key):
     ws, spec, item, back = _source_target(request, pk, plugin, page, key)
     err = sources.run_now(ws, plugin, spec, item, request.user)
     (messages.error if err else messages.success)(request, err or "دریافت انجام شد.")
+    return back
+
+
+# ---------------------------------------------------------------------- ویرایش و حذف ردیف (`[[records]]`)
+def _record_target(request, pk, plugin, page, key, rid):
+    spec = pagekit.get(plugin, page)
+    rc = pagekit.get_record(spec, key) if spec else None
+    if rc is None:
+        raise Http404
+    ws = workspace.get(request, pk, spec.need)
+    if not entitlements.allowed(plugin, user=request.user, ws=ws):
+        raise Http404
+    if not ws.is_live:
+        raise Http404
+    return ws, spec, rc, redirect(f"{reverse('kernel:page', kwargs={'pk': ws.pk, 'plugin': plugin, 'page': page})}#record-{key}")
+
+
+@login_required
+def record_edit(request, pk, plugin, page, key, rid):
+    """فرم ویرایش یک ردیف (GET پر می‌کند، POST با UPDATE پارامتری ذخیره می‌کند)."""
+    ws, spec, rc, back = _record_target(request, pk, plugin, page, key, rid)
+    if request.method == "POST":
+        values, errors = pagekit.read_form(rc, request.POST)
+        if not errors:
+            try:
+                pagekit.update_record(ws, rc, rid, values)
+            except pagekit.SpecError as exc:
+                errors = [str(exc)]
+            except Exception as exc:  # noqa: BLE001
+                msg = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__
+                errors = ["ذخیره انجام نشد: " + ("زمان اجرا تمام شد." if "statement timeout" in msg else "داده با ساختار جدول نمی‌خواند.")]
+                workspace.log_event("plugin_record", f"{plugin}/{page}/{key}#{rid}: {msg}", user=request.user, database=ws, success=False)
+        if not errors:
+            workspace.log_event("plugin_record", f"{plugin}/{page}/{key}: ردیف {rid} در {rc.table} ویرایش شد", user=request.user, database=ws)
+            messages.success(request, "ردیف ذخیره شد.")
+            return back
+        for e in errors:
+            messages.error(request, e)
+        current = {f.name: request.POST.get(f"f_{f.name}", "") for f in rc.fields}
+    else:
+        try:
+            current = pagekit.fetch_record(ws, rc, rid)
+        except pagekit.SpecError as exc:
+            messages.error(request, str(exc))
+            return back
+        if current is None:
+            raise Http404
+        current = {k: ("" if v is None else v) for k, v in current.items()}
+    fields = [{"fd": f, "val": current.get(f.name, "")} for f in rc.fields]
+    return render(request, "kernel/record_edit.html", {"db": ws, "page": spec, "rc": rc, "rid": rid, "fields": fields, "section": "pages",
+                                                      "has_draw": any(f.kind == "geometry" for f in rc.fields), "back_url": back.url})
+
+
+@login_required
+@require_POST
+def record_delete(request, pk, plugin, page, key, rid):
+    ws, _spec, rc, back = _record_target(request, pk, plugin, page, key, rid)
+    if not rc.can_delete:
+        raise Http404
+    try:
+        pagekit.delete_record(ws, rc, rid)
+    except pagekit.SpecError as exc:
+        messages.error(request, str(exc))
+        return back
+    workspace.log_event("plugin_record", f"{plugin}/{page}/{key}: ردیف {rid} از {rc.table} حذف شد", user=request.user, database=ws)
+    messages.success(request, "ردیف حذف شد.")
     return back

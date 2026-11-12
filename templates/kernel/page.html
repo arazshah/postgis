@@ -1,6 +1,6 @@
 {% extends "databases/_ws.html" %}{% load fa pk static ws %}
 {% block title %}{{ page.title }} — {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
-{% block head %}<link rel="stylesheet" href="{% static 'css/page-kit.css' %}">{% if has_map %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endif %}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/page-kit.css' %}">{% if has_map or has_draw %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endif %}{% if has_draw %}<link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">{% endif %}{% endblock %}
 {% block ws %}
 <div class="wrap page">
   <div class="page-head"><div><h1>{{ page.title }}</h1>{% if page.subtitle %}<p class="muted page-sub">{{ page.subtitle }}</p>{% endif %}</div>
@@ -56,22 +56,28 @@
     <div class="ch"><h2>{{ f.title }}</h2></div>
     {% if f.hint %}<p class="small muted">{{ f.hint }}</p>{% endif %}
     <div class="pk-form-fields">
-      {% for fd in f.fields %}
-      <div class="field">
-        {% if fd.kind == 'bool' %}
-        <label class="pick-chip"><input type="checkbox" name="f_{{ fd.name }}" value="1"><span>{{ fd.label }}</span></label>
-        {% elif fd.kind == 'choice' %}
-        <span class="lbl" id="fl-{{ f.key }}-{{ fd.name }}">{{ fd.label }}{% if fd.required %} *{% endif %}</span>
-        <div class="chips" role="radiogroup" aria-labelledby="fl-{{ f.key }}-{{ fd.name }}">{% for val, text in fd.choices %}<label class="pick-chip"><input type="radio" name="f_{{ fd.name }}" value="{{ val }}" {% if fd.required and forloop.first %}checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</div>
-        {% else %}
-        <label for="f-{{ f.key }}-{{ fd.name }}">{{ fd.label }}{% if fd.required %} *{% endif %}</label>
-        <input id="f-{{ f.key }}-{{ fd.name }}" name="f_{{ fd.name }}" {% if fd.kind == 'date' %}type="date" dir="ltr"{% elif fd.kind == 'int' or fd.kind == 'number' %}inputmode="decimal" dir="ltr"{% endif %} {% if fd.required %}required{% endif %} {% if fd.kind == 'text' %}maxlength="{{ fd.max|default:2000|floatformat:0 }}"{% endif %} autocomplete="off">
-        {% endif %}
-      </div>
+      {% for fd in f.fields %}{% include "kernel/_field.html" with fd=fd idp=f.key val="" %}
       {% endfor %}
     </div>
     <button class="btn" type="submit">{% icon "check" 18 %}{{ f.submit }}</button>
   </form>
+  {% endfor %}
+  {% for rc in records %}
+  <section class="card pk-form" id="record-{{ rc.spec.key }}">
+    <div class="ch"><h2>{{ rc.spec.title }}</h2></div>
+    {% if rc.spec.hint %}<p class="small muted">{{ rc.spec.hint }}</p>{% endif %}
+    {% if rc.error %}<div class="msg warning">{{ rc.error }}</div>
+    {% elif rc.rows %}
+    <div class="table-scroll"><table class="data-table"><thead><tr>{% for h in rc.heads %}<th>{{ h }}</th>{% endfor %}<th class="pk-act"><span class="sr-only">عملیات</span></th></tr></thead>
+      <tbody>{% for r in rc.rows %}<tr>{% for c in r|slice:"1:" %}<td>{{ c }}</td>{% endfor %}
+        <td class="pk-act">{% if can_edit_rows %}<div class="pop-wrap"><button class="ib sm" type="button" data-pop="rm-{{ rc.spec.key }}-{{ r.0 }}" aria-haspopup="menu" aria-expanded="false" aria-label="عملیات ردیف {{ r.0 }}">{% icon "more" 16 %}</button>
+          <div class="pop-m" id="rm-{{ rc.spec.key }}-{{ r.0 }}" role="menu" hidden>
+            <a role="menuitem" href="{% url 'kernel:record_edit' db.pk page.plugin page.key rc.spec.key r.0 %}"><span class="i">{% icon "edit" 16 %}</span>ویرایش</a>
+            {% if rc.spec.can_delete %}<form method="post" action="{% url 'kernel:record_delete' db.pk page.plugin page.key rc.spec.key r.0 %}" data-confirm="این ردیف حذف شود؟ بازگشت ندارد." data-confirm-title="حذف ردیف" data-confirm-text="حذف کن">{% csrf_token %}<button role="menuitem" class="danger" type="submit"><span class="i">{% icon "trash" 16 %}</span>حذف</button></form>{% endif %}
+          </div></div>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+    <p class="small muted">تازه‌ترین {{ rc.spec.limit }} ردیف.</p>
+    {% else %}<div class="empty">{% icon "table" 28 %}<p>هنوز ردیفی ثبت نشده است.</p></div>{% endif %}
+  </section>
   {% endfor %}
   {% for ig in ingests %}
   <section class="card pk-form" id="ingest-{{ ig.spec.key }}">
@@ -136,4 +142,4 @@
   {% endfor %}
 </div>
 {% endblock %}
-{% block ws_scripts %}{% if has_map or page.refresh %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>{% endif %}<script src="{% static 'js/page-kit.js' %}" defer></script>{% endblock %}
+{% block ws_scripts %}{% if has_map or page.refresh or has_draw %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>{% endif %}{% if has_draw %}<script src="{% static 'vendor/leaflet-geoman/leaflet-geoman.min.js' %}" defer></script>{% endif %}<script src="{% static 'js/page-kit.js' %}" defer></script>{% endblock %}

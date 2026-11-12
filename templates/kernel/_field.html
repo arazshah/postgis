@@ -1,0 +1,16 @@
+{% load fa %}<div class="field">
+  {% if fd.kind == 'bool' %}
+  <label class="pick-chip"><input type="checkbox" name="f_{{ fd.name }}" value="1" {% if val %}checked{% endif %}><span>{{ fd.label }}</span></label>
+  {% elif fd.kind == 'geometry' %}
+  <span class="lbl" id="fl-{{ idp }}-{{ fd.name }}">{{ fd.label }}{% if fd.required %} *{% endif %}</span>
+  <div class="pk-draw" data-pk-draw data-geom="{{ fd.geom }}" data-target="f-{{ idp }}-{{ fd.name }}" data-tiles="{{ SITE.map_tile_url }}" data-attr="{{ SITE.map_tile_attribution }}" role="application" aria-labelledby="fl-{{ idp }}-{{ fd.name }}"></div>
+  <input type="hidden" id="f-{{ idp }}-{{ fd.name }}" name="f_{{ fd.name }}" value="{{ val|default:'' }}">
+  <p class="small muted">{% if fd.geom == 'point' %}با ابزار نشانه یک نقطه بگذارید.{% elif fd.geom == 'line' %}با ابزار خط، نقاط مسیر را بزنید و روی آخرین نقطه دوباره بزنید.{% elif fd.geom == 'multipolygon' %}با ابزار چندضلعی یا مستطیل، یک یا چند محدوده بکشید.{% else %}با ابزار چندضلعی یا مستطیل، محدوده را بکشید؛ با ابزار ویرایش اصلاحش کنید.{% endif %}</p>
+  {% elif fd.kind == 'choice' %}
+  <span class="lbl" id="fl-{{ idp }}-{{ fd.name }}">{{ fd.label }}{% if fd.required %} *{% endif %}</span>
+  <div class="chips" role="radiogroup" aria-labelledby="fl-{{ idp }}-{{ fd.name }}">{% for v, text in fd.choices %}<label class="pick-chip"><input type="radio" name="f_{{ fd.name }}" value="{{ v }}" {% if val %}{% if val == v %}checked{% endif %}{% elif fd.required and forloop.first %}checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</div>
+  {% else %}
+  <label for="f-{{ idp }}-{{ fd.name }}">{{ fd.label }}{% if fd.required %} *{% endif %}</label>
+  <input id="f-{{ idp }}-{{ fd.name }}" name="f_{{ fd.name }}" value="{{ val|default:'' }}" {% if fd.kind == 'date' %}type="date" dir="ltr"{% elif fd.kind == 'int' or fd.kind == 'number' %}inputmode="decimal" dir="ltr"{% endif %} {% if fd.required %}required{% endif %} {% if fd.kind == 'text' %}maxlength="{{ fd.max|default:2000|floatformat:0 }}"{% endif %} autocomplete="off">
+  {% endif %}
+</div>

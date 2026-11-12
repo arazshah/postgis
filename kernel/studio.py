@@ -207,9 +207,10 @@ def check(d) -> list[dict]:
                         {f"{pg.key}→جدول تازه ({im.handler})" for pg in pages for im in pg.imports} |
                         {f"{pg.key}→{ig.table} (دریافت عمومی با توکن)" for pg in pages for ig in pg.ingests} |
                         {f"{pg.key}→{sx.table} (واکشی دوره‌ای از {sx.host}؛ نیازمند تأیید میزبان در پنل)" for pg in pages for sx in pg.sources} |
+                        {f"{pg.key}→{rc.table} (ویرایش و حذف ردیف)" for pg in pages for rc in pg.records} |
                         {f"{pg.key}→ساخت جدول {t.name}" for pg in pages for t in pg.tables})
         steps.append({"stage": "دسترسی نوشتن", "ok": True,
-                      "detail": ("فقط INSERT در: " + "، ".join(writes)) if writes else "بدون نوشتن (فقط خواندنی)"})
+                      "detail": (("INSERT، UPDATE و DELETE در: " if any(pg.records for pg in pages) else "فقط INSERT در: ") + "، ".join(writes)) if writes else "بدون نوشتن (فقط خواندنی)"})
     return steps
 
 
