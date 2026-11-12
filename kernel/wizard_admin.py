@@ -15,12 +15,12 @@ from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
 from django.urls import reverse
 
-from . import pagekit, stepup, studio, tables, wizard
+from . import pagekit, pkg, publish, stepup, studio, tables, wizard
 from . import workspace as ws_mod
 from .models import PluginDraft
 from .plugins import registry
 
-STEPS = ((1, "معرفی"), (2, "داده"), (3, "صفحه‌ها"))
+STEPS = ((1, "معرفی"), (2, "داده"), (3, "صفحه‌ها"), (4, "دسترسی و قیمت"), (5, "بازبینی و انتشار"))
 ICON_CHOICES = ("chart", "pulse", "gauge", "table", "pin", "layers", "satellite", "bell", "globe", "db", "clock", "bolt")
 KIND_TILES = (("kpi", "شمارنده", "یک عدد درشت (تعداد، میانگین، بیشینه…)"), ("table", "جدول", "آخرین ردیف‌ها"),
               ("bars", "نمودار میله‌ای", "مقایسه‌ی گروه‌ها"), ("map", "نقشه", "نقطه‌ها روی نقشه"), ("text", "متن", "راهنما یا توضیح"),
@@ -111,7 +111,7 @@ def view(request, pk=None, step=1):
     if not _allowed(request):
         raise PermissionDenied
     draft = get_object_or_404(PluginDraft, pk=pk) if pk else None
-    step = step if step in (1, 2, 3) else 1
+    step = step if step in (1, 2, 3, 4, 5) else 1
     if draft is None:
         step = 1
     spec = copy.deepcopy(draft.wizard) if draft and draft.wizard else {"intro": {}, "tables": [], "pages": []}
@@ -139,8 +139,25 @@ def view(request, pk=None, step=1):
         "prefix": f"{draft.plugin_id}_" if draft else "", "studio_url": reverse("admin:kernel_plugindraft_studio", args=[draft.pk]) if draft else "",
         "col_json": {n: [{"name": c["name"], "type": c["type"]} for c in t["columns"]] for n, t in tmap.items()},
         "has_map": "map" in preview_html or 'data-pk-map' in preview_html,
+        "access": spec.get("access") or {}, "limit_keys": publish.LIMIT_KEYS, "access_targets": (spec.get("access") or {}).get("targets", []),
+        "durations": ((30, "۳۰ روز"), (90, "۹۰ روز"), (180, "۱۸۰ روز"), (365, "۳۶۵ روز")),
     }
+    if step == 5 and draft:
+        ctx.update(_review(draft, spec))
     return TemplateResponse(request, "admin/kernel/wizard.html", ctx)
+
+
+def _review(draft, spec) -> dict:
+    """داده‌ی مرحله‌ی بازبینی: بررسی کامل بسته، دسترسی، نسخه‌ی بعدی و وضعیت پلاگین فعلی."""
+    steps = studio.check(draft) if draft.pages else [{"stage": "صفحه‌ها", "ok": False, "detail": "هنوز صفحه‌ی کاملی نیست."}]
+    access_err = ""
+    try:
+        publish.normalize_access(spec.get("access") or {})
+    except publish.PublishError as exc:
+        access_err = str(exc)
+    return {"check_steps": steps, "check_ok": studio.ok(steps), "access_err": access_err,
+            "next_version": publish.next_version(draft.plugin_id, draft.version), "second_approval": pkg.second_approval_required(),
+            "installed": draft.plugin_id in registry.plugins, "can_publish": studio.ok(steps) and not access_err}
 
 
 def _site(request):
@@ -159,8 +176,12 @@ def _post(request, draft, spec, step):
             raise PermissionDenied
         if step == 2:
             return _step2(request, draft, spec, op), ""
-        return _step3(request, draft, spec, op)
-    except wizard.WizardError as exc:
+        if step == 3:
+            return _step3(request, draft, spec, op)
+        if step == 4:
+            return _step4(request, draft, spec), ""
+        return _step5(request, draft, spec), ""
+    except (wizard.WizardError, publish.PublishError) as exc:
         messages.error(request, str(exc))
         return (redirect(_url(draft, step)) if draft else redirect(reverse("admin:kernel_plugindraft_wizard_new"))), ""
 
@@ -263,6 +284,42 @@ def _step3(request, draft, spec, op):
         preview = _preview(request, draft, spec, key)
         return None, preview
     return redirect(_url(draft, 3)), preview
+
+
+def _access_from_post(post) -> dict:
+    mode = post.get("mode", "")
+    a: dict = {"mode": mode}
+    if mode == "public_paid":
+        a.update(price_toman=post.get("price_toman", ""), duration_days=post.get("duration_days", "30"), scope=post.get("scope", "workspace"),
+                 trial_days=post.get("trial_days", "0") or "0",
+                 limits={k: _int(post.get(k)) for k in publish.LIMIT_KEYS if post.get(k, "").strip().isdigit()})
+    elif mode == "private":
+        kinds, subjects, days = post.getlist("t_kind"), post.getlist("t_subject"), post.getlist("t_days")
+        a["targets"] = [{"kind": k, "subject": subjects[i] if i < len(subjects) else "", "days": days[i] if i < len(days) else ""}
+                        for i, k in enumerate(kinds) if (subjects[i] if i < len(subjects) else "").strip()]
+    return a
+
+
+def _step4(request, draft, spec):
+    access = publish.normalize_access(_access_from_post(request.POST))
+    bad = publish.check_targets(access)
+    if bad:
+        raise publish.PublishError("هدف‌های پیدا‌نشده: " + "، ".join(bad))
+    spec["access"] = {**access, **({"limits": access.get("limits", {})} if access["mode"] == "public_paid" else {})}
+    _save(draft, spec, request.user)
+    messages.success(request, "دسترسی و قیمت ذخیره شد.")
+    return redirect(_url(draft, 5))
+
+
+def _step5(request, draft, spec):
+    if request.POST.get("op") != "publish":
+        return redirect(_url(draft, 5))
+    if not stepup.ok(request):
+        return redirect(stepup.url(request))
+    out = publish.publish(draft, request.user, spec.get("access") or {})
+    (messages.success if out["active"] else messages.warning)(request, f"{out['message']} (نسخه‌ی {out['release'].version})")
+    ws_mod.log_event("plugin_publish", f"{draft.plugin_id} {out['release'].version}: {out['message']}", user=request.user)
+    return redirect(_url(draft, 5))
 
 
 def _preview(request, draft, spec, key) -> str:

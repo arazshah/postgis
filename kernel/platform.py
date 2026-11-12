@@ -18,7 +18,7 @@ from django.conf import settings
 TTL = 10.0
 RUNNER_MODES = ("off", "remote")  # «local» فقط توسعه/آزمون است و از پنل داده نمی‌شود
 KEYS = {"runner_mode": "PLUGIN_RUNNER_MODE", "runner_url": "PLUGIN_RUNNER_URL", "runner_callback": "PLUGIN_RUNNER_CALLBACK",
-        "runner_timeout": "PLUGIN_RUNNER_TIMEOUT"}
+        "runner_timeout": "PLUGIN_RUNNER_TIMEOUT", "require_second_approval": "PLUGIN_REQUIRE_SECOND_APPROVAL"}
 DEFAULT_URL, DEFAULT_CALLBACK = "http://plugin-runner:8090", "http://web:8000"
 TOKEN_FILE = os.environ.get("RUNNER_TOKEN_FILE", "/run/runner-auth/token")
 NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{1,39}$")

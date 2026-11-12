@@ -28,6 +28,13 @@
     <div class="submit-row"><button type="button" id="kgen">ساخت جفت‌کلید و دانلود کلید خصوصی</button> <input type="submit" class="default" value="افزودن کلید عمومی"></div>
   </form>
 
+  <h2>انتشار از ویزارد</h2>
+  <form method="post">{% csrf_token %}
+    <p class="help">پلاگینی که در ویزارد ساخته می‌شود بدون امضای بیرونی و با تأیید تازه‌ی ورود دومرحله منتشر می‌شود. اگر تیم چندنفره دارید، می‌توانید تأیید مدیر دیگر را اجباری کنید.</p>
+    <label><input type="checkbox" name="require_second_approval" value="1" {% if second_approval %}checked{% endif %}> انتشار ویزارد تأیید مدیر دیگر بخواهد</label>
+    <div class="submit-row"><button name="action" value="save_publish" class="default">ذخیره</button></div>
+  </form>
+
   <h2>اجرای کد سطح ۲ (runner)</h2>
   <p>وضعیت: {% if mode == "remote" %}<b>راه‌دور</b>{% else %}<b>خاموش</b>{% endif %}
     {% if mode == "remote" %} — {% if health_ok %}<span style="color:green">{{ health }}</span>{% else %}<span style="color:#b00">{{ health }}</span>{% endif %}{% endif %}

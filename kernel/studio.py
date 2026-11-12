@@ -235,6 +235,17 @@ def export_zip(d) -> bytes:
     return buf.getvalue()
 
 
+def sealed_zip(d) -> bytes:
+    """بسته‌ی مهرشده‌ی «panel» برای انتشار مستقیم از ویزارد (kernel.pkg.seal)؛ همان قالب بسته‌ی امضاشده."""
+    files = files_of(d)
+    files[pkg.SIG_NAME] = pkg.seal(files)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in files.items():
+            z.writestr(name, data)
+    return buf.getvalue()
+
+
 def parse_pages(d) -> list[pagekit.Page]:
     out = []
     for _key, text in sorted(d.pages.items()):

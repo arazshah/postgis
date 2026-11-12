@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import io
 import json
 import logging
@@ -74,6 +75,20 @@ def sign(files: dict[str, bytes], private_key: Ed25519PrivateKey, publisher: str
     return json.dumps({"publisher": publisher, "alg": "ed25519", "sig": base64.b64encode(sig).decode()}).encode()
 
 
+PANEL = "panel"  # ناشر «ویزارد پنل» (docs/adr/0008): مهر HMAC با کلید مشتق‌شده از SECRET_KEY همین سرور، نه کلید ناشر بیرونی
+
+
+def _seal_key() -> bytes:
+    return hashlib.sha256(b"geopaygah-panel-seal|" + settings.SECRET_KEY.encode()).digest()
+
+
+def seal(files: dict[str, bytes]) -> bytes:
+    """SIGNATURE پلاگین ساخته‌ی ویزارد: HMAC روی همان چکیده‌ی قانونی. فقط سرور با SECRET_KEY می‌تواند بسازد (بسته‌ی بیرونی نمی‌تواند جعلش کند)؛
+    با تعویض SECRET_KEY مهر نسخه‌های ویزارد نامعتبر می‌شود و باید دوباره منتشر شوند."""
+    mac = hmac.new(_seal_key(), digest(files), hashlib.sha256).digest()
+    return json.dumps({"publisher": PANEL, "alg": "hmac-sha256", "sig": base64.b64encode(mac).decode()}).encode()
+
+
 def verify(files: dict[str, bytes], keys: dict[str, Ed25519PublicKey]) -> str:
     """نام ناشر را برمی‌گرداند یا PackageError."""
     if SIG_NAME not in files:
@@ -81,9 +96,18 @@ def verify(files: dict[str, bytes], keys: dict[str, Ed25519PublicKey]) -> str:
     try:
         sig = json.loads(files[SIG_NAME])
         publisher, raw = sig["publisher"], base64.b64decode(sig["sig"], validate=True)
-        assert sig.get("alg") == "ed25519"
+        alg = sig.get("alg")
+        assert alg in ("ed25519", "hmac-sha256")
     except Exception as exc:  # noqa: BLE001
         raise PackageError("فایل SIGNATURE نامعتبر است.") from exc
+    if alg == "hmac-sha256":
+        if publisher != PANEL:
+            raise PackageError("مهر HMAC فقط برای ناشر «panel» (ویزارد این سرور) معتبر است.")
+        if not hmac.compare_digest(raw, hmac.new(_seal_key(), digest(files), hashlib.sha256).digest()):
+            raise PackageError("مهر ویزارد با محتوای بسته نمی‌خواند (بسته تغییر کرده یا از سرور دیگری است).")
+        return PANEL
+    if publisher == PANEL:
+        raise PackageError("ناشر «panel» فقط با مهر ویزارد معتبر است.")
     key = keys.get(publisher)
     if key is None:
         raise PackageError(f"ناشر «{publisher}» مجاز نیست (کلیدش در تنظیم استقرار نیست).")
@@ -415,20 +439,29 @@ def submit(data: bytes, user) -> PluginRelease:  # noqa: F821
         report=ins.report(), uploaded_by=user)
 
 
+def second_approval_required() -> bool:
+    """انتشار ویزارد تأیید مدیر دیگر بخواهد؟ تنظیم پنل «تأیید نفر دوم» (پیش‌فرض خاموش)."""
+    from . import platform
+
+    return platform.get("require_second_approval") == "1"
+
+
 def can_approve(release, user) -> str:
     """دلیل ممنوع بودن تأیید برای این کاربر (خالی = مجاز)."""
     from .models import PluginRelease
 
     if release.status not in (PluginRelease.Status.CHECKED, PluginRelease.Status.RETIRED):
         return "فقط نسخه‌ی بررسی‌شده یا جایگزین‌شده فعال می‌شود."
-    if release.status == PluginRelease.Status.CHECKED and release.uploaded_by_id == getattr(user, "pk", None) \
-            and not getattr(settings, "PLUGIN_SELF_APPROVAL", False):
+    same = release.uploaded_by_id == getattr(user, "pk", None)
+    if release.status == PluginRelease.Status.CHECKED and same and not getattr(settings, "PLUGIN_SELF_APPROVAL", False):
+        if release.publisher == PANEL and not second_approval_required():
+            return ""  # ساخته‌ی ویزارد و «تأیید نفر دوم» خاموش است (ADR-0008)
         return "بارگذارنده نمی‌تواند خودش تأیید کند (اصل دونفره)."
     return ""
 
 
 @transaction.atomic
-def activate(release, user) -> None:
+def activate(release, user, *, apply_access: bool = True) -> None:
     """نسخه را فعال می‌کند (قبلی جایگزین می‌شود)؛ پلاگین تازه با «محدود و بدون مجوز» ساخته می‌شود: تا مدیر مجوز ندهد کسی نمی‌بیندش."""
     from .models import PluginRelease, PluginState
 
@@ -445,6 +478,13 @@ def activate(release, user) -> None:
     release.activated_at = timezone.now()
     release.save()
     PluginState.objects.get_or_create(plugin_id=release.plugin_id, defaults={"access": PluginState.Access.RESTRICTED})
+    if release.access and apply_access:  # انتشار از ویزارد با تأیید بعدی: دسترسی/مجوز/قیمتی که مدیر انتخاب کرده اعمال شود
+        from . import market, publish
+
+        try:
+            publish.apply_access(release.plugin_id, release.access)
+        except market.MarketError:
+            log.exception("market listing failed for %s", release.plugin_id)  # فعال‌سازی را برنمی‌گردانیم
 
 
 @transaction.atomic
