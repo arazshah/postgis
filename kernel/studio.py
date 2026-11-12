@@ -201,7 +201,8 @@ def check(d) -> list[dict]:
     pages = stage("مشخصات صفحه‌ها", lambda: pkg._pages(manifest, files, set(code)))
     if pages:
         writes = sorted({f"{pg.key}→{fm.table}" for pg in pages for fm in pg.forms} |
-                        {f"{pg.key}→جدول تازه ({im.handler})" for pg in pages for im in pg.imports})
+                        {f"{pg.key}→جدول تازه ({im.handler})" for pg in pages for im in pg.imports} |
+                        {f"{pg.key}→{ig.table} (دریافت عمومی با توکن)" for pg in pages for ig in pg.ingests})
         steps.append({"stage": "دسترسی نوشتن", "ok": True,
                       "detail": ("فقط INSERT در: " + "، ".join(writes)) if writes else "بدون نوشتن (فقط خواندنی)"})
     return steps
@@ -282,6 +283,9 @@ def roles(d) -> dict[str, tuple[str, object]]:
             out[im.handler] = ("import", im)
         for ex in pg.exports:
             out[ex.handler] = ("export", ex)
+        for ig in pg.ingests:
+            if ig.handler:
+                out[ig.handler] = ("ingest", ig)
     return out
 
 
@@ -310,7 +314,7 @@ def trial(d, handler: str, params: dict, file: bytes | None = None, ws=None) -> 
     sql_fn = (lambda q, a: pagekit.read_select(ws, q, a)) if ws is not None else None
     try:
         out = client.run_files({f"code/{handler}.py": src}, handler, params, sql_fn, getattr(ws, "pk", 0) or 0, file=file,
-                               io=role in ("import", "export"), on_log=res["logs"].append, allow_no_ws=True, plugin="studio")
+                               io=role in ("import", "export", "ingest"), on_log=res["logs"].append, allow_no_ws=True, plugin="studio")
     except client.RunnerError as exc:
         res["error"] = str(exc)
         return res
@@ -320,6 +324,10 @@ def trial(d, handler: str, params: dict, file: bytes | None = None, ws=None) -> 
         if role == "import":
             t = pluginio.normalize_import("trial_table", out)
             res["verdict"].append(f"ورود معتبر است: {len(t.rows):,} ردیف، {len(t.columns)} ستون" + ("، با ستون نقطه‌ی geom" if t.geometry else ""))
+        elif role == "ingest":
+            from . import pkgtest
+
+            res["verdict"].append(f"دریافت معتبر است: {pkgtest._check_ingest(spec, out):,} ردیف مطابق فیلدهای {spec.table}")
         elif role == "export":
             name, body, ctype = pluginio.normalize_export(out, spec.format)
             res["verdict"].append(f"خروجی معتبر است: {name} ({len(body):,} بایت، {ctype})")

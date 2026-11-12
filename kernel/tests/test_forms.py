@@ -74,6 +74,22 @@ class FakeConn:
     def commit(self):
         self.calls.append(("COMMIT", None))
 
+    def cursor(self):
+        conn = self
+
+        class Cur:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def executemany(self, q, rows):
+                for r in rows:
+                    conn.execute(q, r)
+
+        return Cur()
+
 
 class InsertTests(SimpleTestCase):
     def setUp(self):

@@ -93,6 +93,21 @@ class Form:
 
 
 @dataclass(frozen=True)
+class IngestSpec:
+    """نقطه‌ی دریافت داده‌ی دستگاه (docs/plugins/ingest.md): نشانی عمومی با توکن هر پایگاه؛ **فقط INSERT** در جدول مشخص با
+    فیلدهای اعلام‌شده (هسته می‌سازد، مثل فرم). `handler` سطح ۲ اختیاری است: بدنه را به ردیف‌ها تبدیل می‌کند."""
+
+    key: str
+    title: str
+    table: str
+    fields: tuple[Field, ...]
+    handler: str = ""
+    max_rows: int = 100  # سقف ردیف در هر درخواست
+    rate: int = 60  # سقف درخواست در دقیقه برای هر توکن
+    hint: str = ""
+
+
+@dataclass(frozen=True)
 class ImportSpec:
     """ورود فایل با handler سطح ۲ (docs/adr/0005): کاربر فایل و نام جدول تازه می‌دهد؛ هسته جدول را می‌سازد."""
 
@@ -133,6 +148,7 @@ class Page:
     forms: tuple[Form, ...] = ()
     imports: tuple[ImportSpec, ...] = ()
     exports: tuple[ExportSpec, ...] = ()
+    ingests: tuple[IngestSpec, ...] = ()
 
 
 _icon_known = lambda name: True  # noqa: E731  هسته فهرست آیکون‌ها را نمی‌شناسد؛ پلاگین هسته‌ی سایت آن را ثبت می‌کند
@@ -266,6 +282,31 @@ def parse_form(d: dict) -> Form:
                 _str(d, "success", default="ثبت شد.", limit=120))
 
 
+def parse_ingest(d: dict) -> IngestSpec:
+    key = _str(d, "key", required=True, limit=31)
+    if not KEY_RE.fullmatch(key):
+        raise SpecError(f"کلید دریافت «{key}» نامعتبر است.")
+    table = _str(d, "table", required=True, limit=127)
+    if not TABLE_RE.fullmatch(table):
+        raise SpecError(f"نام جدول «{table}» نامعتبر است (فقط schema.table با حروف کوچک لاتین).")
+    fields = [parse_field(f) for f in d.get("fields") or []]
+    if not fields:
+        raise SpecError("نقطه‌ی دریافت دست‌کم یک فیلد لازم دارد.")
+    if len(fields) > MAX_FIELDS:
+        raise SpecError(f"حداکثر {MAX_FIELDS} فیلد.")
+    if len({f.name for f in fields}) != len(fields):
+        raise SpecError("فیلدها باید یکتا باشند.")
+    handler = _handler_name(d) if d.get("handler") else ""
+    out = []
+    for name, default, lo, hi in (("max_rows", 100, 1, 1000), ("rate", 60, 1, 600)):
+        v = d.get(name, default)
+        if not isinstance(v, int) or isinstance(v, bool) or not lo <= v <= hi:
+            raise SpecError(f"«{name}» عددی بین {lo} و {hi} است.")
+        out.append(v)
+    return IngestSpec(key, _str(d, "title", required=True, limit=80), table, tuple(fields), handler, out[0], out[1],
+                      _str(d, "hint", limit=240))
+
+
 EXT_RE = re.compile(r"\.[a-z0-9]{1,8}")
 EXPORT_FORMATS = ("csv", "json", "txt", "geojson")
 
@@ -340,12 +381,19 @@ def parse_page(plugin: str, d: dict) -> Page:
         raise SpecError("کلید ورودها و خروجی‌ها باید یکتا باشد.")
     if imports and need == "viewer":
         raise SpecError("صفحه‌ی دارای ورود فایل (نوشتن) دست‌کم سطح «editor» می‌خواهد.")
+    ingests = [parse_ingest(i) for i in d.get("ingest") or []]
+    if len(ingests) > 2:
+        raise SpecError("حداکثر ۲ نقطه‌ی دریافت داده در یک صفحه.")
+    if len({i.key for i in ingests}) != len(ingests):
+        raise SpecError("کلید نقطه‌های دریافت باید یکتا باشد.")
+    if ingests and need == "viewer":
+        raise SpecError("صفحه‌ی دارای دریافت داده (نوشتن) دست‌کم سطح «editor» می‌خواهد.")
     if not blocks:
         raise SpecError("صفحه دست‌کم یک بلوک لازم دارد.")
     if len(blocks) > 24:
         raise SpecError("حداکثر ۲۴ بلوک در یک صفحه.")
     return Page(plugin, key, _str(d, "title", required=True, limit=80), _str(d, "subtitle", limit=240), icon, group, need,
-                order, refresh, tuple(params), tuple(blocks), tuple(forms), tuple(imports), tuple(exports))
+                order, refresh, tuple(params), tuple(blocks), tuple(forms), tuple(imports), tuple(exports), tuple(ingests))
 
 
 # ---------------------------------------------------------------------- ثبت
@@ -547,6 +595,10 @@ def get_export(page: Page, key: str) -> ExportSpec | None:
     return next((e for e in page.exports if e.key == key), None)
 
 
+def get_ingest(page: Page, key: str) -> IngestSpec | None:
+    return next((i for i in page.ingests if i.key == key), None)
+
+
 def get_form(page: Page, key: str) -> Form | None:
     return next((f for f in page.forms if f.key == key), None)
 
@@ -598,7 +650,30 @@ def read_form(form: Form, post) -> tuple[dict, list[str]]:
 
 
 def insert_row(ws, form: Form, values: dict) -> None:
-    """INSERT یک ردیف با نقش مالک. جدول و ستون‌ها باید در کاتالوگ باشند؛ فقط جدول عادی؛ ستون تولیدشده/identity-always رد می‌شود.
+    insert_rows(ws, form, [values])
+
+
+def _norm_raw(raw):
+    """مقدار JSON ← متن برای convert_field؛ ساختار تودرتو پذیرفته نیست."""
+    if isinstance(raw, bool):
+        return "1" if raw else ""
+    if raw is None:
+        return ""
+    if isinstance(raw, (dict, list)):
+        raise ValueError("مقدار تودرتو پذیرفته نمی‌شود.")
+    return raw if isinstance(raw, str) else str(raw)
+
+
+def read_ingest_row(spec: IngestSpec, row) -> dict:
+    """یک ردیف دریافتی (dict) ← مقدارهای نوع‌دار طبق فیلدها؛ ValueError با پیام فارسی. فیلد ناشناخته نادیده گرفته می‌شود."""
+    if not isinstance(row, dict):
+        raise ValueError("هر ردیف باید یک شیء باشد.")
+    return {f.name: convert_field(f, _norm_raw(row.get(f.name))) for f in spec.fields}
+
+
+def insert_rows(ws, form, rows: list[dict]) -> None:
+    """INSERT یک یا چند ردیف در **یک تراکنش** (همه یا هیچ). `form` هر شیئی با `.table` و `.fields` است (فرم یا IngestSpec).
+    یک ردیف با نقش مالک. جدول و ستون‌ها باید در کاتالوگ باشند؛ فقط جدول عادی؛ ستون تولیدشده/identity-always رد می‌شود.
 
     مقدارها همه پارامتر متصل هستند و نام‌ها با Identifier می‌آیند؛ هیچ متن پلاگینی وارد SQL نمی‌شود.
     SpecError = مشکل در تعریف فرم یا ساختار جدول (پیام فارسی)؛ خطای پایگاه داده به‌صورت استثنا بالا می‌رود.
@@ -627,5 +702,6 @@ def insert_row(ws, form: Form, values: dict) -> None:
         vals=sql.SQL(", ").join(sql.Placeholder() for _ in names))
     with tenantdb.connect(ws, write=True, as_owner=True) as conn:
         conn.execute(sql.SQL("SET LOCAL statement_timeout = {}").format(sql.Literal(f"{TIMEOUT_S}s")))
-        conn.execute(query, [values[n] for n in names], prepare=True)
+        with conn.cursor() as cur:
+            cur.executemany(query, [[r[n] for n in names] for r in rows])
         conn.commit()

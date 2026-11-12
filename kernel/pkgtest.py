@@ -84,7 +84,27 @@ def roles_of(pages) -> dict:
             out[im.handler] = ("import", im)
         for ex in pg.exports:
             out[ex.handler] = ("export", ex)
+        for ig in pg.ingests:
+            if ig.handler:
+                out[ig.handler] = ("ingest", ig)
     return out
+
+
+def _check_ingest(spec, out) -> int:
+    """خروجی handler دریافت: {rows: [{فیلد: مقدار}]} و هر ردیف باید از اعتبارسنجی فیلدهای هسته بگذرد؛ شمار ردیف."""
+    from . import pagekit
+
+    rows = out.get("rows") if isinstance(out, dict) else None
+    if not isinstance(rows, list) or not rows:
+        raise pluginio.PluginIOError("handler باید {rows: [{...}]} با دست‌کم یک ردیف برگرداند.")
+    if len(rows) > spec.max_rows:
+        raise pluginio.PluginIOError(f"بیش از سقف {spec.max_rows} ردیف.")
+    for i, r in enumerate(rows, 1):
+        try:
+            pagekit.read_ingest_row(spec, r)
+        except ValueError as exc:
+            raise pluginio.PluginIOError(f"ردیف {i}: {exc}") from exc
+    return len(rows)
 
 
 def run_case(handler: str, source: str, role: str, spec, case: Case) -> str:
@@ -93,7 +113,7 @@ def run_case(handler: str, source: str, role: str, spec, case: Case) -> str:
 
     try:
         out = client.run_files({f"code/{handler}.py": source}, handler, case.params, None, 0, file=case.file,
-                               io=role in ("import", "export"), allow_no_ws=True, mock_sql=list(case.sql), plugin="pkgtest")
+                               io=role in ("import", "export", "ingest"), allow_no_ws=True, mock_sql=list(case.sql), plugin="pkgtest")
     except client.HandlerFailed as exc:
         want = case.expect.get("error_contains")
         return "" if want and str(want) in str(exc) else f"اجرا شکست خورد: {exc}"
@@ -105,6 +125,8 @@ def run_case(handler: str, source: str, role: str, spec, case: Case) -> str:
         if role == "import":
             t = pluginio.normalize_import("test_table", out)
             rows = len(t.rows)
+        elif role == "ingest":
+            rows = _check_ingest(spec, out)
         elif role == "export":
             _name, body, _ct = pluginio.normalize_export(out, spec.format)
             rows, text = None, body.decode("utf-8")

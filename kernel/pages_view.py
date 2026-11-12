@@ -6,7 +6,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from . import entitlements, gate, metering, pagekit, pluginio, tenantdb, workspace
+from . import entitlements, gate, ingest, metering, pagekit, pluginio, tenantdb, workspace
 
 
 @login_required
@@ -35,7 +35,14 @@ def page(request, pk, plugin, page):
         metering.record(plugin, "page_views", user=request.user, ws=ws)
     values, errors = pagekit.read_values(spec, request.GET, layers)
     blocks = [pagekit.render_block(ws, spec, b, values) for b in spec.blocks]
-    ctx = {"db": ws, "page": spec, "blocks": blocks, "values": values, "layers": layers, "param_errors": errors,
+    ingests = []
+    if spec.ingests:
+        new = request.session.pop("ingest_new", None)
+        for i in spec.ingests:
+            ingests.append({"spec": i, "tokens": ingest.tokens_for(ws, plugin, page, i.key),
+                            "new": new if new and new.get("key") == i.key and new.get("ws") == ws.pk else None})
+    ctx = {"db": ws, "page": spec, "blocks": blocks, "ingests": ingests, "can_manage_ingest": workspace.level(request.user, ws) >= 2,
+           "ingest_url": request.build_absolute_uri("/ingest/"), "values": values, "layers": layers, "param_errors": errors,
            "has_map": any(b["kind"] == "map" for b in blocks), "section": "pages"}
     template = "kernel/_page_body.html" if request.GET.get("fragment") == "1" else "kernel/page.html"
     return render(request, template, ctx)
@@ -197,3 +204,56 @@ def export_file(request, pk, plugin, page, key):
     resp["X-Content-Type-Options"] = "nosniff"
     resp["Cache-Control"] = "no-store"
     return resp
+
+
+# ---------------------------------------------------------------------- دریافت داده‌ی دستگاه (docs/plugins/ingest.md)
+@csrf_exempt
+@gate.public
+@require_POST
+def ingest_receive(request):
+    """نشانی عمومی دریافت: احراز هویت فقط با توکن (Authorization: Bearer)؛ پاسخ JSON کوتاه بدون جزئیات داخلی."""
+    try:
+        out = ingest.receive(request)
+    except ingest.IngestError as exc:
+        resp = JsonResponse({"ok": False, "error": exc.message}, status=exc.status)
+    else:
+        resp = JsonResponse({"ok": True, **out})
+    resp["Cache-Control"] = "no-store"
+    return resp
+
+
+def _ingest_target(request, pk, plugin, page, key):
+    spec = pagekit.get(plugin, page)
+    item = pagekit.get_ingest(spec, key) if spec else None
+    if item is None:
+        raise Http404
+    ws = workspace.get(request, pk, "owner")  # توکن مثل رمز است: فقط مالک می‌سازد و باطل می‌کند
+    if not entitlements.allowed(plugin, user=request.user, ws=ws):
+        raise Http404
+    return ws, redirect("kernel:page", pk=ws.pk, plugin=plugin, page=page)
+
+
+@login_required
+@require_POST
+def ingest_token_create(request, pk, plugin, page, key):
+    ws, back = _ingest_target(request, pk, plugin, page, key)
+    try:
+        row, raw = ingest.create_token(ws, plugin, page, key, request.user, request.POST.get("label", ""))
+    except ingest.IngestError as exc:
+        messages.error(request, exc.message)
+        return back
+    request.session["ingest_new"] = {"ws": ws.pk, "key": key, "token": raw, "id": row.pk}  # یک‌بار نمایش
+    workspace.log_event("plugin_ingest_token", f"{plugin}/{page}/{key}: توکن {row.prefix}… ساخته شد", user=request.user, database=ws)
+    return back
+
+
+@login_required
+@require_POST
+def ingest_token_revoke(request, pk, plugin, page, key, token_id):
+    ws, back = _ingest_target(request, pk, plugin, page, key)
+    if ingest.revoke_token(ws, token_id):
+        workspace.log_event("plugin_ingest_token", f"{plugin}/{page}/{key}: توکن {token_id} باطل شد", user=request.user, database=ws)
+        messages.success(request, "توکن باطل شد.")
+    else:
+        messages.error(request, "توکن پیدا نشد.")
+    return back

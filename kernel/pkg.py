@@ -248,7 +248,8 @@ def inspect(data: bytes, *, keys: dict | None = None, new_release: bool = True, 
     if pages is not None:
         ins.pages = pages
         writes = sorted({f"{pg.key}→{fm.table}" for pg in pages for fm in pg.forms} |
-                        {f"{pg.key}→جدول تازه ({im.handler})" for pg in pages for im in pg.imports})
+                        {f"{pg.key}→جدول تازه ({im.handler})" for pg in pages for im in pg.imports} |
+                        {f"{pg.key}→{ig.table} (دریافت عمومی با توکن)" for pg in pages for ig in pg.ingests})
         # خبر برای بازبین: این بسته می‌تواند ردیف بنویسد (فقط INSERT در جدول‌های نام‌برده)؛ مانع نیست
         if run_tests and code:
             stage("آزمون‌های بسته (اجرا)", lambda: _run_tests(code, tests, pages))
@@ -381,7 +382,7 @@ def _pages(manifest: dict, files: dict[str, bytes], known: set[str] | None = Non
         for b in page.blocks:
             if b.handler and b.handler not in (known or set()):
                 raise PackageError(f"{name}: handler «{b.handler}» در بسته نیست.")
-        for item in (*page.imports, *page.exports):
+        for item in (*page.imports, *page.exports, *(i for i in page.ingests if i.handler)):
             if item.handler not in (known or set()):
                 raise PackageError(f"{name}: handler «{item.handler}» در بسته نیست.")
         if page.key in keys:
