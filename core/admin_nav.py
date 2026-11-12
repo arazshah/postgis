@@ -46,7 +46,8 @@ def build(request):
     """گروه‌های ناوبری مجاز برای این کاربر؛ بخش فعال با تطبیق مسیر مشخص می‌شود."""
     path = request.path
     counts = badges()
-    used, groups = set(), []
+    used, groups = set(nav.admin_hidden()), []
+    hidden = set(used)
     perm_ok = lambda ma: ma.has_module_permission(request) and ma.has_view_or_change_permission(request)  # noqa: E731
 
     def item(label, title, model, ma):
@@ -60,11 +61,17 @@ def build(request):
         for label, name in rows:
             model, ma = _find(label)
             used.add(label)
-            if model is None or not perm_ok(ma):
+            if label in hidden or model is None or not perm_ok(ma):
                 continue
             it = item(label, name, model, ma)
             if it["url"]:
                 items.append(it)
+        for lk in nav.admin_links(key):
+            try:
+                url = reverse(lk.url_name)
+            except NoReverseMatch:
+                continue
+            items.insert(0, {"label": lk.url_name, "title": lk.title, "url": url, "on": path.startswith(url), "count": 0})
         if items:
             groups.append({"key": key, "title": title, "icon": icon, "items": items,
                            "on": any(i["on"] for i in items), "count": sum(i["count"] for i in items)})

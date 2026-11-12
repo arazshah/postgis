@@ -4,6 +4,7 @@ from django.urls import include, path
 from accounts.admin_2fa import twofa as admin_2fa
 from accounts.admin_auth import LockoutAdminAuthenticationForm
 from core.admin_search import search as admin_search
+from kernel import hub as kernel_hub
 from kernel import routes as kernel_routes
 
 # پنل مدیریت جدا از حساب کاربران: ورود با نام کاربری و رمز عبور
@@ -25,6 +26,7 @@ admin.site.index = _index_with_stats
 
 urlpatterns = [
     path("manage/2fa/", admin_2fa, name="admin_2fa"),
+    path("manage/plugins/", kernel_hub.hub, name="plugin_hub"),
     path("manage/_search/", admin.site.admin_view(admin_search), name="admin_search"),
     path("manage/", admin.site.urls),
     path("accounts/", include("accounts.urls")),

@@ -10,6 +10,7 @@ from .plugins import registry
 
 WS_GROUP, WS_SECTION, HOME_ACTION = "nav.ws_group", "nav.ws_section", "nav.home_action"
 ADMIN_GROUP, ADMIN_ITEM, ADMIN_QUICK, ADMIN_BADGE = "nav.admin_group", "nav.admin_item", "nav.admin_quick", "nav.admin_badge"
+ADMIN_LINK, ADMIN_HIDE = "nav.admin_link", "nav.admin_hide"
 KERNEL = "kernel"
 
 
@@ -88,6 +89,33 @@ def admin_item(group: str, model: str, title: str | None = None, *, plugin: str,
     registry.add(ADMIN_ITEM, model, AdminItem(group, model, title, plugin), plugin=plugin, order=order)
 
 
+@dataclass(frozen=True)
+class AdminLink:
+    group: str
+    title: str
+    url_name: str  # نام مسیر (reverse)
+    plugin: str
+    icon: str = ""
+
+
+def admin_link(group: str, title: str, url_name: str, *, plugin: str, order: int) -> None:
+    """بخش ناوبری پنل که مدل جنگو نیست (صفحه‌ی اختصاصی، مثل «پلاگین‌ها»)."""
+    registry.add(ADMIN_LINK, url_name, AdminLink(group, title, url_name, plugin), plugin=plugin, order=order)
+
+
+def admin_hide(model: str, *, plugin: str) -> None:
+    """مدل `app.model` از فهرست کناری پنل برداشته می‌شود (و در «سایر» هم نمی‌آید)؛ از راه صفحه‌ی اختصاصی در دسترس است."""
+    registry.add(ADMIN_HIDE, model, model, plugin=plugin)
+
+
+def admin_hidden() -> set[str]:
+    return {c.value for c in registry.contributions(ADMIN_HIDE)}
+
+
+def admin_links(group: str) -> list[AdminLink]:
+    return [x for x in registry.values(ADMIN_LINK) if x.group == group]
+
+
 def admin_quick(label: str, icon: str, url: str, *, plugin: str, order: int) -> None:
     registry.add(ADMIN_QUICK, url, AdminQuick(label, icon, url, plugin), plugin=plugin, order=order)
 
@@ -138,9 +166,12 @@ admin_group("publish", "انتشار و داده", "globe", order=50)
 admin_group("marketing", "بازاریابی", "chart", order=60)
 admin_group("platform", "پلاگین‌ها و مشتریان سازمانی", "cube", order=65)
 admin_group("settings", "تنظیمات و امنیت", "settings", order=70)
-admin_item("platform", "kernel.pluginstate", "پلاگین‌ها و مجوزها", plugin=KERNEL, order=10)
-admin_item("platform", "kernel.pluginrelease", "بارگذاری و نسخه‌ها", plugin=KERNEL, order=15)
+admin_link("platform", "پلاگین‌ها", "plugin_hub", plugin=KERNEL, order=10)
 admin_item("platform", "kernel.organization", None, plugin=KERNEL, order=20)
+# صفحه‌ی «پلاگین‌ها» (kernel.hub) همه‌ی این‌ها را زیر چهار زبانه جمع می‌کند؛ از فهرست کناری برداشته می‌شوند
+for _m in ("kernel.pluginstate", "kernel.pluginrelease", "kernel.plugindraft", "kernel.pluginusage", "kernel.plugintrip",
+           "kernel.publisherkey", "billing.pluginaddon"):
+    admin_hide(_m, plugin=KERNEL)
 
 
 def broken_paths() -> list[tuple[str, str, str]]:

@@ -250,7 +250,8 @@ class PluginAdminTests(TestCase):
 
     def test_platform_group_is_in_the_admin_menu(self):
         html = self.client.get("/manage/").content.decode()
-        self.assertIn("پلاگین‌ها و مجوزها", html)
+        self.assertIn("پلاگین‌ها و مشتریان سازمانی", html)
+        self.assertIn(reverse("plugin_hub"), html)  # یک ورودی «پلاگین‌ها»؛ بقیه زیر زبانه‌هاست (ADR-0008)
         self.assertIn("سازمان", html)
 
     def test_organization_admin_pages_render(self):
