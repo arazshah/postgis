@@ -1,0 +1,66 @@
+{% extends "admin/base_site.html" %}
+{% block extrastyle %}<style>
+.ph-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 var(--s4,16px);border-bottom:1px solid var(--line)}
+.ph-tabs a{padding:10px 16px;border-radius:var(--r-ctl) var(--r-ctl) 0 0;color:var(--ink-2);text-decoration:none;font-weight:600}
+.ph-tabs a.on{background:var(--teal);color:var(--on-accent)}
+.ph-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--s3,12px)}
+.ph-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s3,14px);display:flex;flex-direction:column;gap:8px}
+.ph-card.sys{opacity:.75}
+.ph-card h3{margin:0;font-size:1.02rem}
+.ph-meta{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--ink-3)}
+.ph-chip{border:1px solid var(--line-2);border-radius:999px;padding:1px 9px;background:var(--paper)}
+.ph-st{font-size:13px;font-weight:700}
+.ph-st.ok{color:var(--teal)}.ph-st.warn{color:#9a5b00}.ph-st.bad{color:#b42318}.ph-st.off{color:var(--ink-3)}
+.ph-act{margin-top:auto;display:flex;gap:8px;flex-wrap:wrap}
+.ph-act a{font-size:13px}
+.ph-list{list-style:none;margin:0;padding:0;display:grid;gap:var(--s3,12px)}
+.ph-list li{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s3,14px)}
+.ph-list a{font-weight:700}
+.ph-wrap{overflow-x:auto}
+</style>{% endblock %}
+{% block content %}
+<div id="content-main">
+  <nav class="ph-tabs" aria-label="بخش‌های پلاگین">{% for key, label in tabs %}<a href="?tab={{ key }}" class="{% if key == tab %}on{% endif %}">{{ label }}</a>{% endfor %}</nav>
+
+  {% if tab == "all" %}
+  <p class="help">هر پلاگین یک قابلیت است: <b>عمومی</b> برای همه یا <b>اختصاصی</b> برای مشتری مشخص. مدیر روشن/خاموش یا به دارندگان مجوز محدودش می‌کند.</p>
+  <div class="ph-grid">
+    {% for c in cards %}
+    <section class="ph-card{% if c.system %} sys{% endif %}">
+      <h3>{{ c.name }}</h3>
+      <div class="ph-meta"><span class="ph-chip">{{ c.kind }}</span>{% if c.tier %}<span class="ph-chip">{{ c.tier }}</span>{% endif %}<span class="ph-chip ltr">v{{ c.version }}</span>{% if c.delivery %}<span class="ph-chip">{{ c.delivery }}</span>{% endif %}</div>
+      {% if c.description %}<p class="small" style="margin:0">{{ c.description }}</p>{% endif %}
+      <div class="ph-st {{ c.status.0 }}">{{ c.status.1 }}</div>
+      <div class="ph-st {{ c.health.0 }}" style="font-weight:500">{{ c.health.1 }}{% if c.grants %} · {{ c.grants }} مجوز{% endif %}</div>
+      {% if c.edit %}<div class="ph-act"><a href="{{ c.edit }}">وضعیت و مجوزها</a>{% if c.options %}<a href="{{ c.options }}">تنظیمات</a>{% endif %}</div>{% endif %}
+    </section>
+    {% empty %}<p>پلاگین قابل مدیریتی نصب نیست.</p>{% endfor %}
+  </div>
+  {% if system_cards %}
+  <details style="margin-top:var(--s4,16px)"><summary><b>پلاگین‌های سیستمی ({{ system_cards|length }})</b> — همیشه روشن، همراه ایمیج</summary>
+    <div class="ph-grid" style="margin-top:var(--s3,12px)">{% for c in system_cards %}
+      <section class="ph-card sys"><h3>{{ c.name }}</h3><div class="ph-meta"><span class="ph-chip ltr">v{{ c.version }}</span></div>
+        <div class="ph-st {{ c.health.0 }}" style="font-weight:500">{{ c.health.1 }}</div></section>{% endfor %}
+    </div>
+  </details>
+  {% endif %}
+
+  {% elif tab == "create" %}
+  <p>ساخت پلاگین تازه: صفحه‌ها (شمارنده، جدول، نقشه، فرم، دریافت داده‌ی دستگاه) را در استودیو بسازید و بررسی کنید. ویزارد مرحله‌به‌مرحله (جدول، کد، قیمت، انتشار) در گام‌های بعدی همین‌جا می‌آید.</p>
+  {% if studio_url %}<p><a class="button default" href="{{ studio_url }}">باز کردن استودیوی پلاگین</a></p>{% endif %}
+
+  {% elif tab == "sales" %}
+  <ul class="ph-list">{% for l in links %}<li><a href="{{ l.url }}">{{ l.title }}</a><div class="help">{{ l.hint }}</div></li>{% endfor %}</ul>
+  <h2>مجوزهای اخیر</h2>
+  <div class="ph-wrap"><table>
+    <thead><tr><th>پلاگین</th><th>دارنده</th><th>منبع</th><th>انقضا</th><th>یادداشت</th></tr></thead>
+    <tbody>{% for g in grants %}<tr><td>{{ g.state.plugin_id }}</td><td>{{ g.get_kind_display }} {{ g.subject }}</td><td>{{ g.get_source_display }}</td><td>{{ g.expires_at|date:"Y-m-d"|default:"بدون انقضا" }}</td><td>{{ g.note }}</td></tr>
+    {% empty %}<tr><td colspan="5">هنوز مجوزی داده نشده است.</td></tr>{% endfor %}</tbody>
+  </table></div>
+
+  {% else %}
+  <p class="help">این بخش‌ها فقط وقتی لازم می‌شوند که بسته‌ی امضاشده از بیرون بارگذاری کنید یا مشکلی را بررسی کنید.</p>
+  <ul class="ph-list">{% for l in links %}<li><a href="{{ l.url }}">{{ l.title }}</a><div class="help">{{ l.hint }}</div></li>{% endfor %}</ul>
+  {% endif %}
+</div>
+{% endblock %}

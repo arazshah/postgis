@@ -1,0 +1,46 @@
+key = "live"
+title = "مانیتورینگ آنلاین"
+subtitle = "آخرین وضعیت دستگاه‌ها"
+icon = "pulse"
+group = "data"
+need = "editor"
+refresh = 15
+
+[[blocks]]
+kind = "kpi"
+title = "دستگاه فعال (۵ دقیقه‌ی اخیر)"
+width = "third"
+unit = "دستگاه"
+sql = "select count(distinct device) from monitor_points where at > now() - interval '5 minutes'"
+
+[[blocks]]
+kind = "kpi"
+title = "رکورد امروز"
+width = "third"
+unit = "رکورد"
+sql = "select count(*) from monitor_points where at::date = current_date"
+
+[[blocks]]
+kind = "map"
+title = "آخرین موقعیت دستگاه‌ها"
+sql = "select distinct on (device) device, speed, at, st_setsrid(st_makepoint(lon, lat), 4326) as geom from monitor_points order by device, at desc"
+
+[[blocks]]
+kind = "table"
+title = "۲۰ رکورد آخر"
+sql = "select device, speed, lat, lon, at from monitor_points order by at desc limit 20"
+columns = [["device", "دستگاه"], ["speed", "سرعت"], ["lat", "عرض"], ["lon", "طول"], ["at", "زمان"]]
+
+[[ingest]]
+key = "feed"
+title = "دریافت داده‌ی دستگاه"
+table = "monitor_points"
+max_rows = 100
+rate = 60
+hint = "دستگاه با توکن، JSON می‌فرستد: device، lat، lon و اختیاری speed."
+fields = [
+  { name = "device", kind = "text", label = "دستگاه", required = true, max = 40 },
+  { name = "lat", kind = "number", label = "عرض", required = true, min = -90, max = 90 },
+  { name = "lon", kind = "number", label = "طول", required = true, min = -180, max = 180 },
+  { name = "speed", kind = "number", label = "سرعت", min = 0, max = 400 },
+]
