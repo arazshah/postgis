@@ -137,7 +137,9 @@ def install_sample(request):
         return redirect(stepup.url(request))
     try:
         out = samples.install(request.user)
-        (messages.success if out["active"] else messages.warning)(request, "پلاگین «آزمایشگاه ژئوپایگاه»: " + out["message"])
+        (messages.success if out["active"] else messages.warning)(
+            request, "پلاگین «آزمایشگاه ژئوپایگاه»: " + out["message"]
+            + " حالا با حساب مشتری یک پایگاه PostGIS فعال را باز کنید؛ در ریل کناری پایگاه، زیر «داده»، گزینه‌ی «آزمایشگاه ژئوپایگاه» پیدا می‌شود (تا ۳۰ ثانیه ممکن است دیر بیاید).")
     except publish.PublishError as exc:
         messages.error(request, f"ساخت نمونه انجام نشد: {exc}")
     return redirect(reverse("plugin_hub") + "?tab=create")

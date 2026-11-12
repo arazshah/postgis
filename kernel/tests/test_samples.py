@@ -14,7 +14,7 @@ class SampleTests(TestCase):
         self.assertEqual((len(p.tables), len(p.forms), len(p.records), len(p.sources), len(p.reports)), (2, 1, 1, 1, 1))
         self.assertEqual({f.kind for f in p.forms[0].fields}, {"text", "choice", "geometry"})
         self.assertEqual(p.sources[0].host, "api.open-meteo.com")
-        self.assertEqual(p.reports[0].blocks, (1, 2, 3, 4))
+        self.assertEqual(p.reports[0].blocks, (2, 3, 4, 5))
 
     def test_install_publishes_open_plugin(self):
         self.addCleanup(entitlements.invalidate)

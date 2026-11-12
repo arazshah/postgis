@@ -140,6 +140,7 @@
         {% if sx.state.enabled %}<button class="btn ghost sm" type="submit" name="do" value="disable">خاموش کردن</button>{% endif %}
       </div>
     </form>
+    {% if not sx.state.enabled and can_manage_ingest %}<p class="small muted">برای دریافت: اول مقدارها را بنویسید و «ذخیره و فعال‌سازی» را بزنید؛ بعد دکمه‌ی «دریافت همین حالا» اینجا ظاهر می‌شود.</p>{% endif %}
     {% if sx.state.enabled %}<form method="post" action="{% url 'kernel:source_run' db.pk page.plugin page.key sx.spec.key %}">{% csrf_token %}<button class="btn ghost sm" type="submit">{% icon "refresh" 16 %}دریافت همین حالا</button></form>{% endif %}
     {% else %}<p class="muted small">تنظیم منبع با مالک پایگاه داده است.</p>{% endif %}
   </section>
