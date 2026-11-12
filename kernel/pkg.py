@@ -274,6 +274,7 @@ def inspect(data: bytes, *, keys: dict | None = None, new_release: bool = True, 
         writes = sorted({f"{pg.key}→{fm.table}" for pg in pages for fm in pg.forms} |
                         {f"{pg.key}→جدول تازه ({im.handler})" for pg in pages for im in pg.imports} |
                         {f"{pg.key}→{ig.table} (دریافت عمومی با توکن)" for pg in pages for ig in pg.ingests} |
+                        {f"{pg.key}→{sx.table} (واکشی دوره‌ای از {sx.host}؛ نیازمند تأیید میزبان در پنل)" for pg in pages for sx in pg.sources} |
                         {f"{pg.key}→ساخت جدول {t.name}" for pg in pages for t in pg.tables})
         # خبر برای بازبین: این بسته می‌تواند ردیف بنویسد (فقط INSERT در جدول‌های نام‌برده)؛ مانع نیست
         if run_tests and code:

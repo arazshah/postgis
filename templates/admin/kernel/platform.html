@@ -35,6 +35,13 @@
     <div class="submit-row"><button name="action" value="save_publish" class="default">ذخیره</button></div>
   </form>
 
+  <h2>منابع بیرونی (ورود دوره‌ای از API)</h2>
+  <form method="post">{% csrf_token %}
+    <p class="help">وقتی روشن باشد، سرور برای پلاگین‌هایی که منبع بیرونی دارند، به‌صورت دوره‌ای داده می‌گیرد؛ فقط از میزبان‌هایی که شما در «میزبان‌های مجاز منابع بیرونی» تأیید کرده‌اید (<a href="{% url 'admin:kernel_sourcehost_changelist' %}">فهرست میزبان‌ها</a>). برای اجرا، سرویس worker باید بالا باشد.</p>
+    <label><input type="checkbox" name="sources_enabled" value="1" {% if sources_on %}checked{% endif %}> واکشی از منابع بیرونی روشن باشد</label>
+    <div class="submit-row"><button name="action" value="save_sources" class="default">ذخیره</button></div>
+  </form>
+
   <h2>اجرای کد سطح ۲ (runner)</h2>
   <p>وضعیت: {% if mode == "remote" %}<b>راه‌دور</b>{% else %}<b>خاموش</b>{% endif %}
     {% if mode == "remote" %} — {% if health_ok %}<span style="color:green">{{ health }}</span>{% else %}<span style="color:#b00">{{ health }}</span>{% endif %}{% endif %}

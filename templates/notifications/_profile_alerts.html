@@ -1,0 +1,34 @@
+{% load fa ws %}
+<div class="card">
+  <h2 class="prof-h">{% icon "bell" 20 %}کانال‌های هشدار</h2>
+  <p class="small muted">هشدارهای پلاگین‌ها (مثلاً افت سطح آب چاه) را در پیام‌رسان بگیرید. پیام فقط به حساب تأییدشده‌ی خودتان می‌رود.</p>
+  {% if not ps.rows %}<p class="small muted">هنوز کانال پیام‌رسانی از طرف مدیر فعال نشده است؛ هشدارها با پیامک/ایمیل می‌رسند.</p>{% endif %}
+  {% for r in ps.rows %}
+  <div class="prof-row">
+    <b>{{ r.label }}</b>
+    {% if r.addr and r.addr.chat_id %}
+      <span class="msg success small">{% icon "check" 16 %} متصل</span>
+      <form method="post" data-confirm="اتصال {{ r.label }} حذف شود؟">{% csrf_token %}<input type="hidden" name="action" value="notify_unlink"><input type="hidden" name="channel" value="{{ r.key }}"><button class="btn ghost sm danger" type="submit">{% icon "trash" 16 %}قطع اتصال</button></form>
+    {% else %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="notify_link"><input type="hidden" name="channel" value="{{ r.key }}"><button class="btn sm" type="submit">{% icon "link" 16 %}اتصال</button></form>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% if ps.link %}
+  <div class="msg info small">
+    <p>برای تکمیل اتصال ({{ ps.link.channel }}) تا ۱۵ دقیقه: {% if ps.link.url %}<a href="{{ ps.link.url }}" target="_blank" rel="noopener noreferrer">ربات را باز کنید</a> و Start بزنید، یا {% endif %}این کد را برای ربات بفرستید:</p>
+    <p class="ltr"><b>{{ ps.link.code }}</b></p>
+    <p class="muted">بعد از ارسال، تا یک دقیقه صبر کنید و صفحه را تازه کنید.</p>
+  </div>
+  {% endif %}
+  <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="notify_pref">
+    <div class="field"><label for="q-from">ساعت سکوت (هشدار عادی بی‌صدا می‌رسد؛ بحرانی همیشه)</label>
+      <div class="row">
+        <select id="q-from" name="quiet_from"><option value="">—</option>{% for h in ps.hours %}<option value="{{ h }}" {% if ps.pref.quiet_from == h %}selected{% endif %}>{{ h }}</option>{% endfor %}</select>
+        <span class="muted">تا</span>
+        <select name="quiet_to" aria-label="تا ساعت"><option value="">—</option>{% for h in ps.hours %}<option value="{{ h }}" {% if ps.pref.quiet_to == h %}selected{% endif %}>{{ h }}</option>{% endfor %}</select>
+      </div></div>
+    <label class="check"><input type="checkbox" name="fallback" value="1" {% if not ps.pref or ps.pref.fallback %}checked{% endif %}> اگر پیام‌رسان نرسید، پیامک/ایمیل بفرست</label>
+    <div class="prof-acts"><button class="btn" type="submit">{% icon "check" 18 %}ذخیره</button></div>
+  </form>
+</div>

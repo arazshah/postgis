@@ -357,3 +357,101 @@ class PluginTable(models.Model):
 
     def __str__(self):
         return f"{self.plugin_id}.{self.table} @ {self.workspace_id}"
+
+
+class NotifyChannel(models.Model):
+    """کانال پیام‌رسان (بله، تلگرام…): توکن ربات رمزنگاری‌شده؛ `api_base` برای رله‌ی سرور خارجی (مثلاً تلگرام)."""
+
+    key = models.CharField("کانال", max_length=20, unique=True)
+    enabled = models.BooleanField("فعال", default=False)
+    token_enc = models.TextField("توکن ربات (رمزنگاری‌شده)", blank=True)
+    token_hint = models.CharField(max_length=12, blank=True)
+    bot_username = models.CharField("نام کاربری ربات", max_length=64, blank=True)
+    api_base = models.CharField("نشانی پایه‌ی API", max_length=200, blank=True,
+                                help_text="خالی = نشانی رسمی. برای تلگرام نشانی رله‌ی سرور خارجی را بگذارید.")
+    update_offset = models.BigIntegerField(default=0)
+    last_ok = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = "کانال پیام‌رسان"
+        verbose_name_plural = "کانال‌های پیام‌رسان"
+
+    def __str__(self):
+        return self.key
+
+
+class NotifyAddress(models.Model):
+    """مقصد پیام‌رسان یک کاربر. تا وقتی `chat_id` خالی است «در انتظار تأیید» است و فقط کد یک‌بارمصرف (هش) دارد."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notify_addresses")
+    channel = models.CharField(max_length=20)
+    chat_id = models.CharField(max_length=40, blank=True)
+    code_hash = models.CharField(max_length=64, blank=True, db_index=True)
+    code_expires = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "channel"], name="notify_addr_user_channel")]
+        verbose_name = "مقصد پیام‌رسان"
+        verbose_name_plural = "مقصدهای پیام‌رسان"
+
+
+class NotifyPref(models.Model):
+    """ترجیح اعلان کاربر: ساعت سکوت (محلی؛ هشدار بحرانی نادیده می‌گیرد) و پیامک/ایمیل پشتیبان."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notify_pref")
+    quiet_from = models.PositiveSmallIntegerField(null=True, blank=True)
+    quiet_to = models.PositiveSmallIntegerField(null=True, blank=True)
+    fallback = models.BooleanField("پیامک/ایمیل اگر پیام‌رسان نرسید", default=True)
+
+
+class NotifyLog(models.Model):
+    """سابقه‌ی ارسال (برای سقف نرخ، جلوگیری از تکرار و عیب‌یابی). متن پیام نگهداری نمی‌شود."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    channel = models.CharField(max_length=20)
+    key = models.CharField(max_length=80, blank=True)
+    ok = models.BooleanField(default=True)
+    error = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+class SourceHost(models.Model):
+    """میزبان بیرونی مجاز برای `[[sources]]`: فقط مدیر می‌افزاید؛ فهرست سفید دقیق (بدون wildcard)."""
+
+    host = models.CharField("میزبان", max_length=120, unique=True)
+    note = models.CharField("یادداشت", max_length=200, blank=True)
+    added_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "میزبان مجاز منبع بیرونی"
+        verbose_name_plural = "میزبان‌های مجاز منابع بیرونی"
+
+    def __str__(self):
+        return self.host
+
+
+class SourceState(models.Model):
+    """وضعیت و تنظیم یک منبع بیرونی در یک پایگاه (ADR-0009). کلید API رمزنگاری‌شده؛ `cursor` آخرین مقدار دریافت‌شده."""
+
+    plugin_id = models.CharField(max_length=64)
+    page = models.CharField(max_length=40)
+    key = models.CharField(max_length=40)
+    workspace_id = models.PositiveBigIntegerField()
+    enabled = models.BooleanField(default=False)
+    inputs = models.JSONField(default=dict)
+    secret_enc = models.TextField(blank=True)
+    cursor = models.CharField(max_length=64, blank=True)
+    next_run = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_run = models.DateTimeField(null=True, blank=True)
+    last_ok = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=200, blank=True)
+    last_rows = models.PositiveIntegerField(default=0)
+    fails = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["plugin_id", "page", "key", "workspace_id"], name="source_state_unique")]
+        verbose_name = "وضعیت منبع بیرونی"
+        verbose_name_plural = "وضعیت منابع بیرونی"

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 from django.utils import timezone
 
-from . import entitlements, metering, workspace
+from . import entitlements, metering, notify, workspace
 from .plugins import registry
 
 log = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ def run_one(alert: Alert, ws, state, now) -> bool:
         owner = getattr(ws, "owner", None)
         if owner is not None and (digest != state.last_hash or fresh):
             for title, body in found:
-                workspace.notify_user(owner, title, body or title)
+                notify.deliver(owner, title, body or title)  # تکرارگیری را همین ماژول با digest انجام می‌دهد
             state.last_hash, state.last_sent, sent = digest, now, True
     elif state.last_hash:
         state.last_hash = ""  # وضعیت خوب شد؛ هشدار بعدی دوباره فرستاده شود
