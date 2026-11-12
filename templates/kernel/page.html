@@ -104,6 +104,36 @@
     {% else %}<p class="muted small">ساخت و ابطال توکن با مالک پایگاه داده است.</p>{% endif %}
   </section>
   {% endfor %}
+  {% for sx in sources %}
+  <section class="card pk-form" id="source-{{ sx.spec.key }}">
+    <div class="ch"><h2>{{ sx.spec.title }}</h2></div>
+    {% if sx.spec.hint %}<p class="small muted">{{ sx.spec.hint }}</p>{% endif %}
+    <p class="small muted">داده را سرور هر <b>{{ sx.spec.every_minutes }}</b> دقیقه از <span class="ltr">{{ sx.spec.host }}</span> می‌گیرد و در جدول <b class="ltr">{{ sx.spec.table }}</b> ثبت می‌کند.</p>
+    {% if not sources_on %}<p class="msg warning small">دریافت از منابع بیرونی را مدیر سایت هنوز روشن نکرده است.</p>
+    {% elif not sx.host_ok %}<p class="msg warning small">میزبان این منبع (<span class="ltr">{{ sx.spec.host }}</span>) هنوز توسط مدیر سایت تأیید نشده است.</p>{% endif %}
+    {% if sx.state.enabled %}<p class="msg success small">{% icon "check" 16 %} فعال{% if sx.state.last_ok %} · آخرین دریافت موفق: {{ sx.state.last_ok|date:"Y-m-d H:i" }} ({{ sx.state.last_rows }} ردیف){% else %} · هنوز دریافتی انجام نشده{% endif %}</p>
+    {% elif sx.state %}<p class="muted small">خاموش</p>{% endif %}
+    {% if sx.state.last_error %}<p class="msg error small">{{ sx.state.last_error }}</p>{% endif %}
+    {% if can_manage_ingest %}
+    <form method="post" action="{% url 'kernel:source_save' db.pk page.plugin page.key sx.spec.key %}" class="pk-form-fields">
+      {% csrf_token %}
+      {% for it in sx.inputs %}
+      <div class="field"><label for="sx-{{ sx.spec.key }}-{{ it.i.name }}">{{ it.i.label }}</label>
+        <input id="sx-{{ sx.spec.key }}-{{ it.i.name }}" name="i_{{ it.i.name }}" value="{{ it.value }}" class="ltr" {% if it.i.kind == "text" %}maxlength="60"{% else %}inputmode="decimal"{% endif %} {% if it.i.required %}required{% endif %} autocomplete="off"></div>
+      {% endfor %}
+      {% if sx.spec.secret_header or sx.spec.secret_param %}
+      <div class="field"><label for="sx-{{ sx.spec.key }}-secret">کلید API {% if sx.state.secret_enc %}(ثبت شده؛ خالی = بدون تغییر){% endif %}</label>
+        <input id="sx-{{ sx.spec.key }}-secret" name="secret" type="password" class="ltr" autocomplete="off"></div>
+      {% endif %}
+      <div class="prof-acts">
+        <button class="btn" type="submit" name="do" value="enable">{% icon "check" 18 %}{% if sx.state.enabled %}ذخیره{% else %}ذخیره و فعال‌سازی{% endif %}</button>
+        {% if sx.state.enabled %}<button class="btn ghost sm" type="submit" name="do" value="disable">خاموش کردن</button>{% endif %}
+      </div>
+    </form>
+    {% if sx.state.enabled %}<form method="post" action="{% url 'kernel:source_run' db.pk page.plugin page.key sx.spec.key %}">{% csrf_token %}<button class="btn ghost sm" type="submit">{% icon "refresh" 16 %}دریافت همین حالا</button></form>{% endif %}
+    {% else %}<p class="muted small">تنظیم منبع با مالک پایگاه داده است.</p>{% endif %}
+  </section>
+  {% endfor %}
 </div>
 {% endblock %}
 {% block ws_scripts %}{% if has_map or page.refresh %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>{% endif %}<script src="{% static 'js/page-kit.js' %}" defer></script>{% endblock %}

@@ -129,6 +129,46 @@ class IngestSpec:
 
 
 @dataclass(frozen=True)
+class SourceInput:
+    """مقدار قابل‌تنظیم هر پایگاه برای منبع (مثلاً عرض و طول جغرافیایی)."""
+
+    name: str
+    label: str
+    kind: str = "number"  # number | int | text
+    required: bool = True
+    default: str = ""
+    min: float | None = None
+    max: float | None = None
+
+
+@dataclass(frozen=True)
+class SourceSpec:
+    """واکشی دوره‌ای از API بیرونی (ADR-0009): **هسته** واکشی می‌کند (کد پلاگین شبکه ندارد) و با INSERT پارامتری می‌نویسد.
+
+    `url` فقط https و بدون query؛ query از `query` (مقدارها با `{ورودی}`، `{since}`، `{today}`). میزبان باید در فهرست سفید مدیر باشد.
+    `layout`: «rows» (آرایه‌ی اشیاء) یا «columns» (شیء از آرایه‌ها، مثل Open-Meteo) در `rows_path` (مسیر نقطه‌ای)."""
+
+    key: str
+    title: str
+    url: str
+    host: str
+    path: str
+    query: tuple[tuple[str, str], ...]
+    table: str
+    fields: tuple[Field, ...]
+    paths: tuple[tuple[str, str], ...]  # (نام ستون، مسیر در پاسخ)
+    layout: str = "rows"
+    rows_path: str = ""
+    cursor: str = ""  # نام فیلدی که مقدار بیشینه‌اش پایه‌ی «فقط تازه‌ها» است
+    every_minutes: int = 180
+    since_days: int = 2
+    inputs: tuple[SourceInput, ...] = ()
+    secret_header: str = ""
+    secret_param: str = ""
+    hint: str = ""
+
+
+@dataclass(frozen=True)
 class ImportSpec:
     """ورود فایل با handler سطح ۲ (docs/adr/0005): کاربر فایل و نام جدول تازه می‌دهد؛ هسته جدول را می‌سازد."""
 
@@ -171,6 +211,7 @@ class Page:
     exports: tuple[ExportSpec, ...] = ()
     ingests: tuple[IngestSpec, ...] = ()
     tables: tuple[TableSpec, ...] = ()
+    sources: tuple[SourceSpec, ...] = ()
 
 
 _icon_known = lambda name: True  # noqa: E731  هسته فهرست آیکون‌ها را نمی‌شناسد؛ پلاگین هسته‌ی سایت آن را ثبت می‌کند
@@ -365,6 +406,110 @@ def parse_ingest(d: dict) -> IngestSpec:
                       _str(d, "hint", limit=240))
 
 
+SRC_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,40}(\.[A-Za-z0-9_]{1,40}){0,5}$")
+SRC_HOST_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
+
+
+def valid_host(h: str) -> bool:
+    """نام دامنه‌ی عمومی (دست‌کم دو بخش، برچسب آخر غیرعددی ⇒ نشانی IP پذیرفته نیست)."""
+    return bool(SRC_HOST_RE.fullmatch(h)) and not h.rsplit(".", 1)[-1].isdigit()
+
+
+SRC_HEADER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9-]{1,39}$")
+PLACEHOLDER_RE = re.compile(r"\{([a-z][a-z0-9_]{0,30})\}")
+SRC_BUILTIN = ("since", "today")
+MAX_SOURCE_FIELDS = 12
+
+
+def parse_source(d: dict) -> SourceSpec:
+    from urllib.parse import urlsplit
+
+    key = _str(d, "key", required=True, limit=31)
+    if not KEY_RE.fullmatch(key):
+        raise SpecError(f"کلید منبع «{key}» نامعتبر است.")
+    url = _str(d, "url", required=True, limit=300)
+    u = urlsplit(url)
+    if u.scheme != "https" or not u.hostname or u.username or u.password or u.query or u.fragment or u.port not in (None, 443):
+        raise SpecError("نشانی منبع باید https بدون نام‌کاربری، پورت و پارامتر باشد (پارامترها در «query»).")
+    host = u.hostname.lower()
+    if not valid_host(host):
+        raise SpecError("میزبان منبع نامعتبر است (نام دامنه؛ نشانی IP پذیرفته نیست).")
+    if "{" in url or "%" in u.path:
+        raise SpecError("نشانی منبع ثابت است؛ مقدار متغیر فقط در «query» می‌آید.")
+    table = _str(d, "table", required=True, limit=127)
+    if not TABLE_RE.fullmatch(table):
+        raise SpecError(f"نام جدول «{table}» نامعتبر است.")
+    layout = _str(d, "layout", default="rows")
+    if layout not in ("rows", "columns"):
+        raise SpecError("«layout» یکی از rows یا columns است.")
+    rows_path = _str(d, "rows_path", limit=120)
+    if rows_path and not SRC_PATH_RE.fullmatch(rows_path):
+        raise SpecError("«rows_path» نامعتبر است (مسیر نقطه‌ای).")
+    fields, paths = [], []
+    raw_fields = d.get("fields") or []
+    if not raw_fields or len(raw_fields) > MAX_SOURCE_FIELDS:
+        raise SpecError(f"منبع ۱ تا {MAX_SOURCE_FIELDS} فیلد لازم دارد.")
+    for f in raw_fields:
+        fd = parse_field(f)
+        path = _str(f, "path", default=fd.name, limit=120)
+        if not SRC_PATH_RE.fullmatch(path):
+            raise SpecError(f"مسیر فیلد «{fd.name}» نامعتبر است.")
+        fields.append(fd)
+        paths.append((fd.name, path))
+    if len({f.name for f in fields}) != len(fields):
+        raise SpecError("فیلدهای منبع باید یکتا باشند.")
+    cursor = _str(d, "cursor", limit=63)
+    if cursor and cursor not in {f.name for f in fields}:
+        raise SpecError("«cursor» باید نام یکی از فیلدها باشد.")
+    inputs = []
+    for i in d.get("inputs") or []:
+        name = _str(i, "name", required=True, limit=30)
+        if not PARAM_RE.fullmatch(name) or name in SRC_BUILTIN:
+            raise SpecError(f"نام ورودی «{name}» نامعتبر یا رزروشده است.")
+        kind = _str(i, "kind", default="number")
+        if kind not in ("number", "int", "text"):
+            raise SpecError(f"نوع ورودی «{name}» نامعتبر است.")
+        lo, hi = i.get("min"), i.get("max")
+        for v in (lo, hi):
+            if v is not None and (not isinstance(v, (int, float)) or isinstance(v, bool)):
+                raise SpecError(f"کران ورودی «{name}» باید عدد باشد.")
+        inputs.append(SourceInput(name, _str(i, "label", required=True, limit=80), kind, bool(i.get("required", True)),
+                                  _str(i, "default", limit=60), lo, hi))
+    if len(inputs) > 6 or len({i.name for i in inputs}) != len(inputs):
+        raise SpecError("حداکثر ۶ ورودی یکتا.")
+    known = {i.name for i in inputs} | set(SRC_BUILTIN)
+    raw_q = d.get("query") or {}
+    if not isinstance(raw_q, dict) or len(raw_q) > 12:
+        raise SpecError("«query» باید جدول کلید-مقدار (حداکثر ۱۲) باشد.")
+    query = []
+    for k, v in raw_q.items():
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,39}", str(k)) or not isinstance(v, (str, int, float)) or isinstance(v, bool):
+            raise SpecError(f"پارامتر «{k}» نامعتبر است.")
+        v = str(v)
+        if len(v) > 200 or set(PLACEHOLDER_RE.findall(v)) - known:
+            raise SpecError(f"مقدار پارامتر «{k}» نامعتبر است (جای‌نگه‌دار ناشناخته یا طولانی).")
+        if "{" in PLACEHOLDER_RE.sub("", v) or "}" in PLACEHOLDER_RE.sub("", v):
+            raise SpecError(f"مقدار پارامتر «{k}»: آکولاد فقط برای جای‌نگه‌دار است.")
+        query.append((str(k), v))
+    sh, sp = _str(d, "secret_header", limit=40), _str(d, "secret_param", limit=40)
+    if sh and sp:
+        raise SpecError("فقط یکی از secret_header یا secret_param.")
+    if sh and not SRC_HEADER_RE.fullmatch(sh):
+        raise SpecError("نام هدر کلید API نامعتبر است.")
+    if sp and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,39}", sp):
+        raise SpecError("نام پارامتر کلید API نامعتبر است.")
+    if sp and sp in dict(query):
+        raise SpecError("نام پارامتر کلید API با query تکراری است.")
+    out = []
+    for name, default, lo, hi in (("every_minutes", 180, 15, 1440), ("since_days", 2, 1, 30)):
+        v = d.get(name, default)
+        if not isinstance(v, int) or isinstance(v, bool) or not lo <= v <= hi:
+            raise SpecError(f"«{name}» عددی بین {lo} و {hi} است.")
+        out.append(v)
+    return SourceSpec(key, _str(d, "title", required=True, limit=80), url, host, u.path or "/", tuple(query), table, tuple(fields),
+                      tuple(paths), layout, rows_path, cursor, out[0], out[1], tuple(inputs), sh, sp, _str(d, "hint", limit=240))
+
+
 EXT_RE = re.compile(r"\.[a-z0-9]{1,8}")
 EXPORT_FORMATS = ("csv", "json", "txt", "geojson")
 
@@ -451,12 +596,19 @@ def parse_page(plugin: str, d: dict) -> Page:
         raise SpecError("کلید نقطه‌های دریافت باید یکتا باشد.")
     if ingests and need == "viewer":
         raise SpecError("صفحه‌ی دارای دریافت داده (نوشتن) دست‌کم سطح «editor» می‌خواهد.")
+    sources = [parse_source(x) for x in d.get("sources") or []]
+    if len(sources) > 2:
+        raise SpecError("حداکثر ۲ منبع بیرونی در یک صفحه.")
+    if len({x.key for x in sources}) != len(sources):
+        raise SpecError("کلید منبع‌ها باید یکتا باشد.")
+    if sources and need == "viewer":
+        raise SpecError("صفحه‌ی دارای منبع بیرونی (نوشتن) دست‌کم سطح «editor» می‌خواهد.")
     if not blocks:
         raise SpecError("صفحه دست‌کم یک بلوک لازم دارد.")
     if len(blocks) > 24:
         raise SpecError("حداکثر ۲۴ بلوک در یک صفحه.")
     return Page(plugin, key, _str(d, "title", required=True, limit=80), _str(d, "subtitle", limit=240), icon, group, need,
-                order, refresh, tuple(params), tuple(blocks), tuple(forms), tuple(imports), tuple(exports), tuple(ingests), tuple(tables))
+                order, refresh, tuple(params), tuple(blocks), tuple(forms), tuple(imports), tuple(exports), tuple(ingests), tuple(tables), tuple(sources))
 
 
 # ---------------------------------------------------------------------- ثبت
@@ -660,6 +812,10 @@ def get_export(page: Page, key: str) -> ExportSpec | None:
 
 def get_ingest(page: Page, key: str) -> IngestSpec | None:
     return next((i for i in page.ingests if i.key == key), None)
+
+
+def get_source(page: Page, key: str) -> SourceSpec | None:
+    return next((x for x in page.sources if x.key == key), None)
 
 
 def get_form(page: Page, key: str) -> Form | None:

@@ -415,3 +415,43 @@ class NotifyLog(models.Model):
     ok = models.BooleanField(default=True)
     error = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+class SourceHost(models.Model):
+    """میزبان بیرونی مجاز برای `[[sources]]`: فقط مدیر می‌افزاید؛ فهرست سفید دقیق (بدون wildcard)."""
+
+    host = models.CharField("میزبان", max_length=120, unique=True)
+    note = models.CharField("یادداشت", max_length=200, blank=True)
+    added_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "میزبان مجاز منبع بیرونی"
+        verbose_name_plural = "میزبان‌های مجاز منابع بیرونی"
+
+    def __str__(self):
+        return self.host
+
+
+class SourceState(models.Model):
+    """وضعیت و تنظیم یک منبع بیرونی در یک پایگاه (ADR-0009). کلید API رمزنگاری‌شده؛ `cursor` آخرین مقدار دریافت‌شده."""
+
+    plugin_id = models.CharField(max_length=64)
+    page = models.CharField(max_length=40)
+    key = models.CharField(max_length=40)
+    workspace_id = models.PositiveBigIntegerField()
+    enabled = models.BooleanField(default=False)
+    inputs = models.JSONField(default=dict)
+    secret_enc = models.TextField(blank=True)
+    cursor = models.CharField(max_length=64, blank=True)
+    next_run = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_run = models.DateTimeField(null=True, blank=True)
+    last_ok = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=200, blank=True)
+    last_rows = models.PositiveIntegerField(default=0)
+    fails = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["plugin_id", "page", "key", "workspace_id"], name="source_state_unique")]
+        verbose_name = "وضعیت منبع بیرونی"
+        verbose_name_plural = "وضعیت منابع بیرونی"

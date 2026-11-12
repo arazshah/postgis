@@ -3,10 +3,11 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from . import entitlements, gate, ingest, metering, pagekit, pluginio, tables, tenantdb, workspace
+from . import entitlements, gate, ingest, metering, pagekit, platform, pluginio, sources, tables, tenantdb, workspace
 
 
 @login_required
@@ -46,7 +47,17 @@ def page(request, pk, plugin, page):
         for i in spec.ingests:
             ingests.append({"spec": i, "tokens": ingest.tokens_for(ws, plugin, page, i.key),
                             "new": new if new and new.get("key") == i.key and new.get("ws") == ws.pk else None})
-    ctx = {"db": ws, "page": spec, "blocks": blocks, "ingests": ingests, "can_manage_ingest": workspace.level(request.user, ws) >= 2,
+    srcs = []
+    if spec.sources:
+        from .models import SourceState
+
+        states = {x.key: x for x in SourceState.objects.filter(plugin_id=plugin, page=page, workspace_id=ws.pk)}
+        for x in spec.sources:
+            st = states.get(x.key)
+            vals = (st.inputs if st else {}) or {}
+            srcs.append({"spec": x, "state": st, "host_ok": sources.host_allowed(x.host),
+                         "inputs": [{"i": i, "value": vals.get(i.name, i.default)} for i in x.inputs]})
+    ctx = {"db": ws, "page": spec, "blocks": blocks, "ingests": ingests, "sources": srcs, "sources_on": platform.sources_enabled(), "can_manage_ingest": workspace.level(request.user, ws) >= 2,
            "ingest_url": request.build_absolute_uri("/ingest/"), "values": values, "layers": layers, "param_errors": errors,
            "has_map": any(b["kind"] == "map" for b in blocks), "section": "pages"}
     template = "kernel/_page_body.html" if request.GET.get("fragment") == "1" else "kernel/page.html"
@@ -267,4 +278,45 @@ def ingest_token_revoke(request, pk, plugin, page, key, token_id):
         messages.success(request, "توکن باطل شد.")
     else:
         messages.error(request, "توکن پیدا نشد.")
+    return back
+
+
+def _source_target(request, pk, plugin, page, key):
+    spec = pagekit.get(plugin, page)
+    item = pagekit.get_source(spec, key) if spec else None
+    if item is None:
+        raise Http404
+    ws = workspace.get(request, pk, "owner")  # کلید API مثل رمز است: فقط مالک
+    if not entitlements.allowed(plugin, user=request.user, ws=ws):
+        raise Http404
+    return ws, spec, item, redirect(f"{reverse('kernel:page', kwargs={'pk': ws.pk, 'plugin': plugin, 'page': page})}#source-{key}")
+
+
+@login_required
+@require_POST
+def source_save(request, pk, plugin, page, key):
+    """ذخیره‌ی ورودی‌ها/کلید و فعال‌سازی یا خاموش‌کردن منبع."""
+    ws, spec, item, back = _source_target(request, pk, plugin, page, key)
+    if request.POST.get("do") == "disable":
+        sources.disable(ws, plugin, page, key)
+        workspace.log_event("plugin_source", f"{plugin}/{page}/{key}: خاموش شد", user=request.user, database=ws)
+        messages.success(request, "دریافت خودکار خاموش شد.")
+        return back
+    try:
+        sources.configure(ws, plugin, spec, item, request.POST, enable=request.POST.get("do") == "enable")
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return back
+    workspace.log_event("plugin_source", f"{plugin}/{page}/{key}: تنظیم ذخیره شد", user=request.user, database=ws)
+    messages.success(request, "ذخیره شد." if request.POST.get("do") != "enable" else "دریافت خودکار فعال شد؛ اولین دریافت در چند دقیقه‌ی آینده انجام می‌شود.")
+    return back
+
+
+@login_required
+@require_POST
+def source_run(request, pk, plugin, page, key):
+    """دریافت دستی یک‌بار (حداکثر هر ۵ دقیقه)."""
+    ws, spec, item, back = _source_target(request, pk, plugin, page, key)
+    err = sources.run_now(ws, plugin, spec, item, request.user)
+    (messages.error if err else messages.success)(request, err or "دریافت انجام شد.")
     return back
