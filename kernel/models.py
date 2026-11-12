@@ -455,3 +455,22 @@ class SourceState(models.Model):
         constraints = [models.UniqueConstraint(fields=["plugin_id", "page", "key", "workspace_id"], name="source_state_unique")]
         verbose_name = "وضعیت منبع بیرونی"
         verbose_name_plural = "وضعیت منابع بیرونی"
+
+
+class ReportLayout(models.Model):
+    """چیدمان ذخیره‌شده‌ی گزارش PDF یک صفحه در یک پایگاه (مشترک بین ویرایشگرها) + لوگوی بازکدگذاری‌شده (≤۱ مگابایت)."""
+
+    workspace_id = models.PositiveBigIntegerField()
+    plugin_id = models.CharField(max_length=64)
+    page = models.CharField(max_length=40)
+    key = models.CharField(max_length=40)
+    layout = models.JSONField(default=dict)
+    logo = models.BinaryField(null=True, blank=True, editable=False)
+    logo_mime = models.CharField(max_length=20, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["workspace_id", "plugin_id", "page", "key"], name="report_layout_unique")]
+        verbose_name = "چیدمان گزارش"
+        verbose_name_plural = "چیدمان گزارش‌ها"

@@ -17,7 +17,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl postgresql-client gdal-bin osmium-tool osm2pgrouting \
+ && apt-get install -y --no-install-recommends curl postgresql-client gdal-bin osmium-tool osm2pgrouting libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
  && rm -rf /var/lib/apt/lists/* \
  && if [ -n "$PMTILES_URL" ]; then curl -fsSL --retry 6 --retry-delay 10 --retry-all-errors "$PMTILES_URL" | tar -xz -C /usr/local/bin pmtiles || echo "pmtiles not installed"; fi \
  && useradd --create-home --uid 1000 app

@@ -146,6 +146,19 @@ class IngestSpec:
 
 
 @dataclass(frozen=True)
+class ReportSpec:
+    """گزارش PDF صفحه (ADR-0009 مرحله‌ی ۴): بلوک‌های انتخابی صفحه (شماره‌ی ۱-پایه؛ خالی = همه) با فیلترهای فعلی، با هدر،
+    تاریخ شمسی و نقشه‌ی برداری. قالب را هسته می‌سازد، نه پلاگین."""
+
+    key: str
+    title: str
+    blocks: tuple[int, ...] = ()
+    landscape: bool = False
+    subtitle: str = ""
+    button: str = "گزارش PDF"
+
+
+@dataclass(frozen=True)
 class SourceInput:
     """مقدار قابل‌تنظیم هر پایگاه برای منبع (مثلاً عرض و طول جغرافیایی)."""
 
@@ -230,6 +243,7 @@ class Page:
     tables: tuple[TableSpec, ...] = ()
     sources: tuple[SourceSpec, ...] = ()
     records: tuple[RecordSpec, ...] = ()
+    reports: tuple[ReportSpec, ...] = ()
 
 
 _icon_known = lambda name: True  # noqa: E731  هسته فهرست آیکون‌ها را نمی‌شناسد؛ پلاگین هسته‌ی سایت آن را ثبت می‌کند
@@ -442,6 +456,21 @@ SRC_HEADER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9-]{1,39}$")
 PLACEHOLDER_RE = re.compile(r"\{([a-z][a-z0-9_]{0,30})\}")
 SRC_BUILTIN = ("since", "today")
 MAX_SOURCE_FIELDS = 12
+
+
+def parse_report(d: dict) -> ReportSpec:
+    key = _str(d, "key", required=True, limit=31)
+    if not KEY_RE.fullmatch(key):
+        raise SpecError(f"کلید گزارش «{key}» نامعتبر است.")
+    raw = d.get("blocks") or []
+    if not isinstance(raw, list) or len(raw) > 24 or not all(isinstance(i, int) and not isinstance(i, bool) and i >= 1 for i in raw) \
+            or len(set(raw)) != len(raw):
+        raise SpecError("«blocks» فهرست شماره‌های یکتای بلوک (از ۱) است.")
+    orient = _str(d, "orientation", default="portrait")
+    if orient not in ("portrait", "landscape"):
+        raise SpecError("«orientation» یکی از portrait یا landscape است.")
+    return ReportSpec(key, _str(d, "title", required=True, limit=80), tuple(raw), orient == "landscape", _str(d, "subtitle", limit=240),
+                      _str(d, "button", default="گزارش PDF", limit=30))
 
 
 def parse_record(d: dict) -> RecordSpec:
@@ -660,12 +689,18 @@ def parse_page(plugin: str, d: dict) -> Page:
             raise SpecError(f"ویرایش ردیف «{x.key}»: جدول «{x.table}» باید در [[tables]] همین صفحه اعلام شده باشد.")
     if records and need == "viewer":
         raise SpecError("صفحه‌ی دارای ویرایش ردیف (نوشتن) دست‌کم سطح «editor» می‌خواهد.")
+    reports = [parse_report(x) for x in d.get("reports") or []]
+    if len(reports) > 3 or len({x.key for x in reports}) != len(reports):
+        raise SpecError("حداکثر ۳ گزارش با کلید یکتا در یک صفحه.")
+    for x in reports:
+        if any(i > len(blocks) for i in x.blocks):
+            raise SpecError(f"گزارش «{x.key}»: شماره‌ی بلوک از تعداد بلوک‌های صفحه ({len(blocks)}) بیشتر است.")
     if not blocks:
         raise SpecError("صفحه دست‌کم یک بلوک لازم دارد.")
     if len(blocks) > 24:
         raise SpecError("حداکثر ۲۴ بلوک در یک صفحه.")
     return Page(plugin, key, _str(d, "title", required=True, limit=80), _str(d, "subtitle", limit=240), icon, group, need,
-                order, refresh, tuple(params), tuple(blocks), tuple(forms), tuple(imports), tuple(exports), tuple(ingests), tuple(tables), tuple(sources), tuple(records))
+                order, refresh, tuple(params), tuple(blocks), tuple(forms), tuple(imports), tuple(exports), tuple(ingests), tuple(tables), tuple(sources), tuple(records), tuple(reports))
 
 
 # ---------------------------------------------------------------------- ثبت
@@ -869,6 +904,10 @@ def get_export(page: Page, key: str) -> ExportSpec | None:
 
 def get_ingest(page: Page, key: str) -> IngestSpec | None:
     return next((i for i in page.ingests if i.key == key), None)
+
+
+def get_report(page: Page, key: str) -> ReportSpec | None:
+    return next((r for r in page.reports if r.key == key), None)
 
 
 def get_record(page: Page, key: str) -> RecordSpec | None:
