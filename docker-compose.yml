@@ -113,9 +113,9 @@ services:
   plugin-runner:
     image: ${APP_IMAGE:-ghcr.io/arazshah/postgis:latest}
     restart: unless-stopped
-    # entrypoint عمداً خالی: ورودی ایمیج pip و migrate اجرا می‌کند و به شبکه/پایگاه داده نیاز دارد؛ runner هیچ‌کدام را ندارد.
-    entrypoint: []
-    command: ["python", "-m", "kernel.runner.server"]
+    # entrypoint ایمیج (pip و migrate، نیازمند شبکه/پایگاه داده) را با فرمان خود runner جایگزین می‌کنیم. «entrypoint: []» را
+    # Coolify نمی‌پذیرد («must be a null»)؛ پس فهرست غیرخالی و بدون command (با entrypoint، CMD ایمیج نادیده می‌شود).
+    entrypoint: ["python", "-m", "kernel.runner.server"]
     working_dir: /app
     user: "10001:10001"
     read_only: true
