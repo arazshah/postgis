@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import tomllib
@@ -235,6 +236,23 @@ def export_zip(d) -> bytes:
         for name, data in files_of(d).items():
             z.writestr(name, data)
     return buf.getvalue()
+
+
+@contextlib.contextmanager
+def temp_handlers(d):
+    """کد پیش‌نویس را فقط برای مدت پیش‌نمایش در رجیستری handler می‌گذارد (اگر پلاگین نصب نیست) و بعد برمی‌دارد."""
+    from . import handlers
+
+    added = []
+    if d.plugin_id not in registry.plugins:
+        for name, src in (getattr(d, "code", None) or {}).items():
+            handlers.register(d.plugin_id, name, src)
+            added.append(f"{d.plugin_id}:{name}")
+    try:
+        yield
+    finally:
+        for key in added:
+            registry._points.get(handlers.POINT, {}).pop(key, None)
 
 
 def sealed_zip(d) -> bytes:

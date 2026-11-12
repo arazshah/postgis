@@ -26,7 +26,7 @@
 .wz-list li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line-2)}
 .wz-muted{color:var(--ink-3);font-size:13px}
 .wz-err{background:#fdecea;border:1px solid #f3b8b1;color:#7a1a10;border-radius:var(--r-card);padding:10px 14px;margin-bottom:12px}
-.wz-grp[hidden]{display:none}
+.wz-card [hidden],.wz-grp[hidden],.wz-need[hidden]{display:none!important}
 .wz-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 </style>{% endblock %}
 {% block content %}
@@ -90,9 +90,66 @@
   })();
   </script>
 
-  {% elif step == 4 %}
+  {% elif step == 3 %}
+  <div class="wz-card">
+    <h2>۳. کد (اختیاری)</h2>
+    <p class="wz-muted">برای محاسبه‌هایی که با SQL شدنی نیست: شاخص‌های سنجش‌ازدور، تبخیر-تعرق، تبدیل فرمت‌های ورودی، خروجی GeoJSON، هشدار آستانه. کد در جعبه‌ی امن اجرا می‌شود (فقط کتابخانه‌ی استاندارد و <span class="ltr">geo</span>، بدون شبکه و فایل). اگر نیازی ندارید، «ادامه» را بزنید.</p>
+    {% if not runner_ready %}<p class="wz-err">اجرای کد در این استقرار خاموش است؛ می‌توانید کد بنویسید ولی تا روشن‌شدن «اجرای کد» (پیشرفته ← کلیدهای ناشر) آزمون، اجرای آزمایشی و انتشار ممکن نیست.</p>{% endif %}
+    {% for h in handlers_list %}
+    <section class="wz-card" style="background:var(--paper)">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0" class="ltr" dir="ltr">{{ h.name }}</h3><span class="wz-muted">{{ h.role_label }}{% if h.tables %} · {{ h.tables|join:"، " }}{% endif %}</span>
+        <form method="post" style="margin-inline-start:auto">{% csrf_token %}<button name="op" value="delhandler:{{ h.name }}" onclick="return confirm('کد و بلوک‌های وابسته‌اش برداشته شود؟')">حذف</button></form></div>
+      {% if h.error %}<p class="wz-err">{{ h.error }}</p>{% endif %}
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}
+        <details {% if h.error %}open{% endif %}><summary><b>کد پایتون</b> <span class="wz-muted">(<span class="ltr">def handle(ctx, params)</span>)</span></summary>
+          <div class="wz-field" style="margin:8px 0"><textarea name="source" rows="16" dir="ltr" spellcheck="false" style="font-family:var(--f-mono,monospace);font-size:13px">{{ h.source }}</textarea></div>
+          <details><summary><b>آزمون خودکار</b> <span class="wz-muted">(TOML؛ برای انتشار الزامی است)</span></summary>
+            <div class="wz-field" style="margin:8px 0"><textarea name="test" rows="10" dir="ltr" spellcheck="false" style="font-family:var(--f-mono,monospace);font-size:13px">{{ h.test }}</textarea></div></details>
+          {% if h.role == "alert" %}<div class="wz-field" style="max-width:240px"><label>هر چند دقیقه اجرا شود (۵ تا ۱۴۴۰)</label><input name="every" type="number" min="5" max="1440" value="{{ h.every|default:60 }}"></div>{% endif %}
+        </details>
+        <div class="wz-act"><button name="op" value="savehandler:{{ h.name }}" class="default" type="submit" style="padding:6px 16px">ذخیره‌ی کد و آزمون</button>
+          <button name="op" value="tests:{{ h.name }}" type="submit">اجرای آزمون‌ها</button></div>
+        <details style="margin-top:8px"><summary><b>اجرای آزمایشی</b></summary>
+          <div class="wz-row" style="margin-top:8px">
+            <div class="wz-field"><label>ورودی (JSON)</label><input name="params" dir="ltr" value="{}"></div>
+            {% if h.role == "importer" or h.role == "ingest" %}<div class="wz-field"><label>فایل نمونه (تا ۳ مگابایت)</label><input type="file" name="file"></div>{% endif %}
+            <div class="wz-field"><label>شناسه‌ی پایگاه داده‌ی نمونه (برای <span class="ltr">ctx.sql</span>؛ اختیاری)</label><input name="preview_db" inputmode="numeric"></div>
+            <button name="op" value="trial:{{ h.name }}" type="submit">اجرا</button></div>
+        </details>
+      </form>
+    </section>
+    {% empty %}<p class="wz-muted">هنوز کدی نیست.</p>{% endfor %}
+  </div>
+  {% if preview_html %}<div class="wz-card">{{ preview_html|safe }}</div>{% endif %}
+  <form method="post" class="wz-card" id="wz-newcode">{% csrf_token %}
+    <h3>کد تازه از روی قالب</h3>
+    <div class="wz-tiles" id="wz-tpl">{% for t in templates %}<label><input type="radio" name="template" value="{{ t.key }}" data-needs="{{ t.needs|join:' ' }}" data-nums="{{ t.nums|join:' ' }}" required><b>{{ t.title }}</b><small><b>{{ t.role_label }}:</b> {{ t.hint }}</small></label>{% endfor %}</div>
+    <div class="wz-row">
+      <div class="wz-field"><label for="wz-hname">نام handler (لاتین)</label><input id="wz-hname" name="name" dir="ltr" required pattern="[a-z][a-z0-9_]{1,30}"></div>
+      <div class="wz-field wz-need" data-need="table"><label>جدول</label><select name="table" id="wz-ctbl"><option value="">—</option>{% for t in tables_ %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}</select></div>
+      {% for k, label in col_labels.items %}<div class="wz-field wz-need" data-need="{{ k }}"><label>{{ label }}</label><select name="{{ k }}" class="wz-ccol" data-kind="{{ k }}"></select></div>{% endfor %}
+      {% for k, label in num_labels.items %}<div class="wz-field wz-need" data-need="{{ k }}"><label>{{ label }}</label><input name="{{ k }}" type="number" step="any"></div>{% endfor %}
+    </div>
+    <div class="wz-act"><button class="default" name="op" value="addhandler" type="submit" style="padding:8px 18px">ساخت</button></div>
+  </form>
+  {{ col_json|json_script:"wz-cols" }}
+  <script>
+  (function(){
+    var cols=JSON.parse(document.getElementById("wz-cols").textContent), f=document.getElementById("wz-newcode");
+    var NUM=["integer","bigint","double"], T={num:NUM,nir:NUM,red:NUM,tmin:NUM,tmax:NUM,lat:["double"],lon:["double"],time:["timestamptz","date"]};
+    function fill(){var cs=cols[document.getElementById("wz-ctbl").value]||[];
+      f.querySelectorAll("select.wz-ccol").forEach(function(s){var ok=T[s.dataset.kind]||[];s.innerHTML=cs.filter(function(c){return ok.indexOf(c.type)>=0;}).map(function(c){return '<option value="'+c.name+'">'+c.name+'</option>';}).join("");});}
+    function show(){var r=f.querySelector('input[name=template]:checked'); var need=r?(r.dataset.needs+" "+r.dataset.nums).split(" "):[];
+      f.querySelectorAll(".wz-need").forEach(function(e){e.hidden=need.indexOf(e.dataset.need)<0;});}
+    f.addEventListener("change",function(e){ if(e.target.id==="wz-ctbl") fill(); show(); }); fill(); show();
+  })();
+  </script>
+  <div class="wz-act"><a class="button" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 2 %}">→ قبلی</a>
+    <a class="button default" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 4 %}" style="padding:8px 18px">ادامه: صفحه‌ها ←</a></div>
+
+  {% elif step == 5 %}
   <form method="post" class="wz-card" id="wz-access">{% csrf_token %}
-    <h2>۴. دسترسی و قیمت</h2>
+    <h2>۵. دسترسی و قیمت</h2>
     <p class="wz-muted">چه کسی این پلاگین را می‌بیند و چگونه؟ بعد از انتشار هر وقت خواستید همین‌جا عوضش کنید و دوباره منتشر کنید.</p>
     <div class="wz-tiles">
       <label><input type="radio" name="mode" value="public_free" {% if access.mode == "public_free" %}checked{% endif %} required><b>عمومی رایگان</b><small>همه‌ی مشتری‌ها می‌بینند.</small></label>
@@ -113,7 +170,7 @@
       <p class="wz-muted">هر ردیف یک هدف است. شناسه‌ی عددی سازمان/کاربر/پایگاه، یا نام (slug) پلن. مدت خالی = بدون انقضا.</p>
       <div id="wz-targets"></div><button type="button" id="wz-addt">+ هدف</button>
     </div>
-    <div class="wz-act"><a class="button" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 3 %}">→ قبلی</a>
+    <div class="wz-act"><a class="button" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 4 %}">→ قبلی</a>
       <button class="default" type="submit" style="padding:8px 18px">ذخیره و ادامه ←</button></div>
   </form>
   {{ access_targets|json_script:"wz-targets-data" }}
@@ -136,24 +193,25 @@
   })();
   </script>
 
-  {% elif step == 5 %}
+  {% elif step == 6 %}
   <div class="wz-card">
-    <h2>۵. بازبینی و انتشار</h2>
+    <h2>۶. بازبینی و انتشار</h2>
     <h3>بررسی خودکار بسته</h3>
     <ul class="wz-list">{% for s in check_steps %}<li><b style="color:{% if s.ok %}var(--teal){% else %}#b42318{% endif %}">{% if s.ok %}✓{% else %}✗{% endif %}</b> {{ s.stage }}{% if s.detail %} <span class="wz-muted">— {{ s.detail }}</span>{% endif %}</li>{% endfor %}</ul>
     <h3>دسترسی</h3>
-    {% if access_err %}<p class="wz-err">{{ access_err }} <a href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 4 %}">مرحله‌ی ۴</a></p>
+    {% if access_err %}<p class="wz-err">{{ access_err }} <a href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 5 %}">مرحله‌ی ۵</a></p>
     {% else %}<p>{% if access.mode == "public_free" %}عمومی رایگان: همه‌ی مشتری‌ها می‌بینند.{% elif access.mode == "public_paid" %}عمومی پولی: {{ access.price_toman }} تومان برای {{ access.duration_days }} روز ({% if access.scope == "user" %}حساب کاربر{% else %}هر پایگاه داده{% endif %}){% if access.trial_days %}، {{ access.trial_days }} روز آزمایشی رایگان{% endif %}.{% else %}اختصاصی برای {{ access.targets|length }} هدف.{% endif %}</p>{% endif %}
+    {% if has_code and not runner_ok %}<p class="wz-err">پلاگین دارای کد است و اجرای کد در این استقرار خاموش است؛ «پیشرفته ← کلیدهای ناشر» حالت «راه‌دور» را روشن کنید.</p>{% endif %}
     <p class="wz-muted">نسخه‌ی بعدی: <span class="ltr" dir="ltr">{{ next_version }}</span>{% if installed %} (نسخه‌ی فعلی جایگزین می‌شود؛ قبلی برای بازگشت می‌ماند){% endif %}. {% if second_approval %}<b>تأیید مدیر دیگر لازم است:</b> نسخه بعد از انتشار منتظر تأیید می‌ماند.{% else %}بدون امضای بیرونی؛ با تأیید تازه‌ی ورود دومرحله منتشر می‌شود.{% endif %}</p>
     <form method="post">{% csrf_token %}
-      <div class="wz-act"><a class="button" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 4 %}">→ قبلی</a>
+      <div class="wz-act"><a class="button" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 5 %}">→ قبلی</a>
         <button class="default" name="op" value="publish" type="submit" style="padding:8px 22px" {% if not can_publish %}disabled{% endif %}>انتشار</button></div>
     </form>
   </div>
 
   {% else %}
   <div class="wz-card">
-    <h2>۳. صفحه‌ها</h2>
+    <h2>۴. صفحه‌ها</h2>
     <p class="wz-muted">هر صفحه یک بخش در منوی پایگاه داده‌ی مشتری است. بلوک‌ها را از کاشی‌ها بیفزایید؛ SQL را هسته می‌سازد.</p>
     {% for p in pages %}
     <section class="wz-card" style="background:var(--paper)">
@@ -166,7 +224,7 @@
       <form method="post" class="wz-block" data-page="{{ p.key }}" style="margin-top:10px">{% csrf_token %}
         <div class="wz-tiles">{% for k, label, hint in kind_tiles %}<label><input type="radio" name="kind" value="{{ k }}" required><b>{{ label }}</b><small>{{ hint }}</small></label>{% endfor %}</div>
         <div class="wz-row">
-          <div class="wz-field wz-grp" data-kinds="kpi table bars map text form ingest sql"><label>عنوان بلوک</label><input name="title" maxlength="80"></div>
+          <div class="wz-field wz-grp" data-kinds="kpi table bars map text form ingest sql handler import export"><label>عنوان بلوک</label><input name="title" maxlength="80"></div>
           <div class="wz-field wz-grp" data-kinds="kpi table bars map form ingest"><label>جدول</label>
             <select name="table" class="wz-tbl"><option value="">—</option>{% for t in tables_ %}<option value="{{ t.name }}">{{ t.name }}</option>{% endfor %}</select></div>
           <div class="wz-field wz-grp" data-kinds="kpi table bars map"><label>عرض</label><select name="width"><option value="">خودکار</option><option value="third">یک‌سوم</option><option value="half">نیمه</option><option value="full">تمام‌عرض</option></select></div>
@@ -192,6 +250,13 @@
           <div class="wz-field wz-grp" data-kinds="ingest"><label>حداکثر ردیف در هر درخواست</label><input name="max_rows" type="number" min="1" max="1000" value="100"></div>
           <div class="wz-field wz-grp" data-kinds="ingest"><label>درخواست در دقیقه (هر توکن)</label><input name="rate" type="number" min="1" max="600" value="60"></div></div>
         <div class="wz-row wz-grp" data-kinds="text"><div class="wz-field"><label>متن</label><textarea name="text" rows="3"></textarea></div></div>
+        <div class="wz-row wz-grp" data-kinds="handler"><div class="wz-field"><label>کد</label><select name="handler">{% for n in handlers.block %}<option value="{{ n }}">{{ n }}</option>{% empty %}<option value="">در مرحله‌ی «کد» یک «بلوک صفحه» بسازید</option>{% endfor %}</select></div>
+          <div class="wz-field"><label>نمایش به‌صورت</label><select name="display"><option value="table">جدول</option><option value="kpi">شمارنده</option><option value="bars">میله‌ای (label,value)</option><option value="map">نقشه (geom)</option></select></div></div>
+        <div class="wz-row wz-grp" data-kinds="import"><div class="wz-field"><label>کد ورود</label><select name="import_handler">{% for n in handlers.importer %}<option value="{{ n }}">{{ n }}</option>{% empty %}<option value="">در مرحله‌ی «کد» یک «ورود فایل» بسازید</option>{% endfor %}</select></div>
+          <div class="wz-field"><label>پسوندهای مجاز (مثلاً .csv,.geojson)</label><input name="extensions" dir="ltr"></div></div>
+        <div class="wz-row wz-grp" data-kinds="export"><div class="wz-field"><label>کد خروجی</label><select name="export_handler">{% for n in handlers.exporter %}<option value="{{ n }}">{{ n }}</option>{% empty %}<option value="">در مرحله‌ی «کد» یک «خروجی فایل» بسازید</option>{% endfor %}</select></div>
+          <div class="wz-field"><label>قالب</label><select name="format">{% for f in export_formats %}<option value="{{ f }}">{{ f }}</option>{% endfor %}</select></div></div>
+        <div class="wz-row wz-grp" data-kinds="ingest"><div class="wz-field"><label>تبدیل با کد (اختیاری؛ برای بدنه‌ی غیر JSON)</label><select name="ingest_handler"><option value="">— JSON ساده —</option>{% for n in handlers.ingest %}<option value="{{ n }}">{{ n }}</option>{% endfor %}</select></div></div>
         <div class="wz-row wz-grp" data-kinds="sql"><div class="wz-field"><label>نمایش به‌صورت</label><select name="display"><option value="table">جدول</option><option value="kpi">شمارنده</option><option value="bars">میله‌ای (label,value)</option><option value="map">نقشه (geom)</option></select></div>
           <div class="wz-field" style="flex:3"><label>SQL (فقط SELECT)</label><textarea name="sql" rows="3" dir="ltr"></textarea></div></div>
         <div class="wz-act"><button class="default" name="op" value="addblock:{{ p.key }}" type="submit" style="padding:6px 16px">افزودن بلوک</button></div>
@@ -215,8 +280,8 @@
     <div class="wz-act"><button class="default" name="op" value="addpage" type="submit" style="padding:8px 18px">افزودن صفحه</button></div>
   </form>
   <div class="wz-card"><b>ادامه:</b> بررسی کامل بسته، خروجی و ویرایش دستی در <a href="{{ studio_url }}">استودیو</a>. مراحل «کد»، «قیمت و دسترسی» و «انتشار» در به‌روزرسانی بعد به همین ویزارد افزوده می‌شود.
-    <div class="wz-act"><a class="button" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 2 %}">→ قبلی</a>
-      <a class="button default" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 4 %}" style="padding:8px 18px">ادامه: دسترسی و قیمت ←</a></div></div>
+    <div class="wz-act"><a class="button" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 3 %}">→ قبلی</a>
+      <a class="button default" href="{% url 'admin:kernel_plugindraft_wizard' draft.pk 5 %}" style="padding:8px 18px">ادامه: دسترسی و قیمت ←</a></div></div>
   {{ col_json|json_script:"wz-cols" }}
   <script>
   (function(){

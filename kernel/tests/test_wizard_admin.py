@@ -68,10 +68,10 @@ class WizardFlowTests(TestCase):
     def test_step3_builds_pages_and_blocks(self):
         self.step1()
         self.client.post(self.url(2), TBL)
-        self.client.post(self.url(3), {"op": "addpage", "title": "پایش", "group": "data", "need": "viewer", "refresh": "15", "icon": "pulse"})
+        self.client.post(self.url(4), {"op": "addpage", "title": "پایش", "group": "data", "need": "viewer", "refresh": "15", "icon": "pulse"})
         page = self.draft().wizard["pages"][0]
         self.assertEqual((page["key"], page["refresh"]), ("p1", 15))
-        add = reverse("admin:kernel_plugindraft_wizard", args=[self.draft().pk, 3])
+        add = reverse("admin:kernel_plugindraft_wizard", args=[self.draft().pk, 4])
         blocks = [
             {"kind": "kpi", "title": "فعال", "table": "monitoring_points", "agg": "count", "distinct": "device", "since_col": "at", "since_minutes": "5"},
             {"kind": "table", "title": "آخرین‌ها", "table": "monitoring_points", "columns": ["device", "speed"], "order_by": "at", "limit": "10"},
@@ -90,33 +90,33 @@ class WizardFlowTests(TestCase):
     def test_invalid_blocks_are_not_added(self):
         self.step1()
         self.client.post(self.url(2), TBL)
-        self.client.post(self.url(3), {"op": "addpage", "title": "پایش", "icon": "pulse"})
+        self.client.post(self.url(4), {"op": "addpage", "title": "پایش", "icon": "pulse"})
         for bad in ({"kind": "kpi", "table": "other"}, {"kind": "kpi", "table": "monitoring_points", "agg": "avg", "column": "device"},
                     {"kind": "table", "table": "monitoring_points", "columns": ["nope"]}, {"kind": "nothing"},
                     {"kind": "map", "table": "monitoring_points", "lat": "device", "lon": "lon"},
                     {"kind": "ingest", "table": "monitoring_points", "fields": ["at"]},
                     {"kind": "sql", "display": "table", "sql": ""}):
-            self.client.post(self.url(3), {"op": "addblock:p1", **bad})
+            self.client.post(self.url(4), {"op": "addblock:p1", **bad})
         self.assertEqual(self.draft().wizard["pages"][0]["blocks"], [])
 
     def test_delete_block_page_and_table_cascade(self):
         self.step1()
         self.client.post(self.url(2), TBL)
-        self.client.post(self.url(3), {"op": "addpage", "title": "پایش", "icon": "pulse"})
-        self.client.post(self.url(3), {"op": "addblock:p1", "kind": "kpi", "table": "monitoring_points", "agg": "count"})
-        self.client.post(self.url(3), {"op": "addblock:p1", "kind": "text", "text": "x"})
-        self.client.post(self.url(3), {"op": "delblock:p1:1"})
+        self.client.post(self.url(4), {"op": "addpage", "title": "پایش", "icon": "pulse"})
+        self.client.post(self.url(4), {"op": "addblock:p1", "kind": "kpi", "table": "monitoring_points", "agg": "count"})
+        self.client.post(self.url(4), {"op": "addblock:p1", "kind": "text", "text": "x"})
+        self.client.post(self.url(4), {"op": "delblock:p1:1"})
         self.assertEqual([b["kind"] for b in self.draft().wizard["pages"][0]["blocks"]], ["kpi"])
         self.client.post(self.url(2), {"op": "deltable:monitoring_points"})  # بلوک وابسته هم پاک می‌شود
         self.assertEqual(self.draft().wizard["pages"][0]["blocks"], [])
-        self.client.post(self.url(3), {"op": "delpage:p1"})
+        self.client.post(self.url(4), {"op": "delpage:p1"})
         self.assertEqual(self.draft().wizard["pages"], [])
 
     def test_incomplete_page_shows_errors_but_keeps_spec(self):
         self.step1()
         self.client.post(self.url(2), TBL)
-        self.client.post(self.url(3), {"op": "addpage", "title": "خالی", "icon": "pulse"})
-        r = self.client.get(self.url(3))
+        self.client.post(self.url(4), {"op": "addpage", "title": "خالی", "icon": "pulse"})
+        r = self.client.get(self.url(4))
         self.assertContains(r, "دست‌کم یک بلوک نمایشی")
         self.assertEqual(self.draft().pages, {})  # صفحه‌ی ناقص ساخته نشد
 
@@ -125,8 +125,8 @@ class WizardFlowTests(TestCase):
 
         self.step1()
         self.client.post(self.url(2), TBL)
-        self.client.post(self.url(3), {"op": "addpage", "title": "پایش", "icon": "pulse"})
-        self.client.post(self.url(3), {"op": "addblock:p1", "kind": "kpi", "table": "monitoring_points", "agg": "count"})
+        self.client.post(self.url(4), {"op": "addpage", "title": "پایش", "icon": "pulse"})
+        self.client.post(self.url(4), {"op": "addblock:p1", "kind": "kpi", "table": "monitoring_points", "agg": "count"})
         steps = studio.check(self.draft())
         self.assertTrue(studio.ok(steps), steps)
         self.assertContains(self.client.get(reverse("admin:kernel_plugindraft_studio", args=[self.draft().pk])), "monitoring")
@@ -134,17 +134,17 @@ class WizardFlowTests(TestCase):
     def test_preview_uses_sample_database_and_can_create_tables(self):
         self.step1()
         self.client.post(self.url(2), TBL)
-        self.client.post(self.url(3), {"op": "addpage", "title": "پایش", "icon": "pulse"})
-        self.client.post(self.url(3), {"op": "addblock:p1", "kind": "kpi", "table": "monitoring_points", "agg": "count"})
+        self.client.post(self.url(4), {"op": "addpage", "title": "پایش", "icon": "pulse"})
+        self.client.post(self.url(4), {"op": "addblock:p1", "kind": "kpi", "table": "monitoring_points", "agg": "count"})
         ws = mock.Mock(is_live=True, pk=9)
         ctx = {"page": None, "blocks": [], "values": {}, "layers": {}, "param_errors": [], "has_map": False}
         with mock.patch("kernel.workspace.peek", return_value=ws), mock.patch("kernel.studio.preview_page", return_value=ctx), \
                 mock.patch("kernel.tables.ensure", return_value=1) as ens, mock.patch("kernel.workspace.log_event"):
-            r = self.client.post(self.url(3), {"op": "preview:p1", "preview_db": "9", "create_tables": "1"})
+            r = self.client.post(self.url(4), {"op": "preview:p1", "preview_db": "9", "create_tables": "1"})
         self.assertEqual(r.status_code, 200)
         self.assertEqual(ens.call_count, 1)
         with mock.patch("kernel.workspace.peek", return_value=None):
-            r = self.client.post(self.url(3), {"op": "preview:p1", "preview_db": "9"})
+            r = self.client.post(self.url(4), {"op": "preview:p1", "preview_db": "9"})
         self.assertContains(r, "پایگاه داده‌ی فعال")
 
     def test_permissions_and_hub_links(self):

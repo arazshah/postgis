@@ -15,14 +15,16 @@ from django.template.loader import render_to_string
 from django.template.response import TemplateResponse
 from django.urls import reverse
 
-from . import pagekit, pkg, publish, stepup, studio, tables, wizard
+from . import pagekit, pkg, pkgtest, publish, stepup, studio, tables, wizard, wizard_code
 from . import workspace as ws_mod
 from .models import PluginDraft
 from .plugins import registry
 
-STEPS = ((1, "معرفی"), (2, "داده"), (3, "صفحه‌ها"), (4, "دسترسی و قیمت"), (5, "بازبینی و انتشار"))
+STEPS = ((1, "معرفی"), (2, "داده"), (3, "کد (اختیاری)"), (4, "صفحه‌ها"), (5, "دسترسی و قیمت"), (6, "بازبینی و انتشار"))
 ICON_CHOICES = ("chart", "pulse", "gauge", "table", "pin", "layers", "satellite", "bell", "globe", "db", "clock", "bolt")
 KIND_TILES = (("kpi", "شمارنده", "یک عدد درشت (تعداد، میانگین، بیشینه…)"), ("table", "جدول", "آخرین ردیف‌ها"),
+              ("handler", "خروجی کد", "نمایش نتیجه‌ی یکی از کدهای مرحله‌ی «کد»"), ("import", "ورود فایل (کد)", "کاربر فایل می‌دهد، جدول تازه ساخته می‌شود"),
+              ("export", "خروجی فایل (کد)", "دکمه‌ی دانلود با کد شما"),
               ("bars", "نمودار میله‌ای", "مقایسه‌ی گروه‌ها"), ("map", "نقشه", "نقطه‌ها روی نقشه"), ("text", "متن", "راهنما یا توضیح"),
               ("form", "فرم ثبت", "کاربر ردیف تازه ثبت می‌کند"), ("ingest", "دریافت از دستگاه", "دستگاه با توکن داده می‌فرستد"),
               ("sql", "SQL پیشرفته", "پرس‌وجوی فقط‌خواندنی دلخواه"))
@@ -44,7 +46,12 @@ def _save(draft: PluginDraft, spec: dict, user) -> str:
     draft.wizard = spec
     draft.updated_by = user
     err = ""
+    code = spec.get("code") or {}
+    draft.code = {n: h.get("source", "") for n, h in code.items()}
+    draft.tests = {n: h.get("test", "") for n, h in code.items()}
+    draft.alerts = {n: h["every"] for n, h in code.items() if h.get("role") == "alert" and isinstance(h.get("every"), int)}
     try:
+        wizard_code.validate_code(spec)
         draft.pages = wizard.compile_pages(draft.plugin_id, spec)
     except wizard.WizardError as exc:
         err = str(exc)
@@ -100,6 +107,14 @@ def _block_from_post(post) -> dict:
         b["text"] = post.get("text", "").strip()[:2000]
     elif kind in wizard.ACTIONS:
         b.update(fields=post.getlist("fields"), max_rows=_int(post.get("max_rows"), 100), rate=_int(post.get("rate"), 60))
+        if kind == "ingest" and post.get("ingest_handler"):
+            b["handler"] = post["ingest_handler"]
+    elif kind == "handler":
+        b.update(handler=post.get("handler", ""), display=post.get("display", "table"), unit=post.get("unit", "").strip()[:30])
+    elif kind == "import":
+        b.update(handler=post.get("import_handler", ""), extensions=post.get("extensions", ""))
+    elif kind == "export":
+        b.update(handler=post.get("export_handler", ""), format=post.get("format", "csv"))
     elif kind == "sql":
         b.update(display=post.get("display", "table"), sql=post.get("sql", ""))
     if kind in ("kpi", "table", "bars", "map") and post.get("since_col"):
@@ -111,7 +126,7 @@ def view(request, pk=None, step=1):
     if not _allowed(request):
         raise PermissionDenied
     draft = get_object_or_404(PluginDraft, pk=pk) if pk else None
-    step = step if step in (1, 2, 3, 4, 5) else 1
+    step = step if step in (1, 2, 3, 4, 5, 6) else 1
     if draft is None:
         step = 1
     spec = copy.deepcopy(draft.wizard) if draft and draft.wizard else {"intro": {}, "tables": [], "pages": []}
@@ -142,9 +157,31 @@ def view(request, pk=None, step=1):
         "access": spec.get("access") or {}, "limit_keys": publish.LIMIT_KEYS, "access_targets": (spec.get("access") or {}).get("targets", []),
         "durations": ((30, "۳۰ روز"), (90, "۹۰ روز"), (180, "۱۸۰ روز"), (365, "۳۶۵ روز")),
     }
-    if step == 5 and draft:
+    if step == 3 and draft:
+        ctx.update(_code_ctx(spec))
+    if step == 4:
+        ctx["handlers"] = {r: [n for n, h in (spec.get("code") or {}).items() if h.get("role") == r] for r in wizard_code.ROLES}
+        ctx["export_formats"] = wizard.EXPORT_FORMATS
+    if step == 6 and draft:
         ctx.update(_review(draft, spec))
     return TemplateResponse(request, "admin/kernel/wizard.html", ctx)
+
+
+def _code_ctx(spec) -> dict:
+    code = spec.get("code") or {}
+    items = []
+    for n, h in code.items():
+        err = ""
+        try:
+            wizard_code.check_source(h.get("source", ""), n)
+        except wizard.WizardError as exc:
+            err = str(exc)
+        items.append({"name": n, "role": h["role"], "role_label": wizard_code.ROLE_LABEL[h["role"]], "source": h.get("source", ""),
+                      "test": h.get("test", ""), "every": h.get("every"), "tables": h.get("tables") or [], "error": err})
+    tpl = [{"key": k, "role": t["role"], "role_label": wizard_code.ROLE_LABEL[t["role"]], "title": t["title"], "hint": t["hint"], "needs": t["needs"], "nums": t.get("nums", [])}
+           for k, t in wizard_code.TEMPLATES.items()]
+    return {"handlers_list": items, "templates": tpl, "runner_ready": _runner_ready(), "col_labels": {k: v[0] for k, v in wizard_code.COLS.items()},
+            "num_labels": {k: v[0] for k, v in wizard_code.NUMS.items()}, "role_labels": wizard_code.ROLE_LABEL}
 
 
 def _review(draft, spec) -> dict:
@@ -157,7 +194,8 @@ def _review(draft, spec) -> dict:
         access_err = str(exc)
     return {"check_steps": steps, "check_ok": studio.ok(steps), "access_err": access_err,
             "next_version": publish.next_version(draft.plugin_id, draft.version), "second_approval": pkg.second_approval_required(),
-            "installed": draft.plugin_id in registry.plugins, "can_publish": studio.ok(steps) and not access_err}
+            "installed": draft.plugin_id in registry.plugins, "has_code": bool(draft.code), "runner_ok": _runner_ready(),
+            "can_publish": studio.ok(steps) and not access_err and (not draft.code or _runner_ready())}
 
 
 def _site(request):
@@ -177,8 +215,10 @@ def _post(request, draft, spec, step):
         if step == 2:
             return _step2(request, draft, spec, op), ""
         if step == 3:
-            return _step3(request, draft, spec, op)
+            return _step_code(request, draft, spec, op)
         if step == 4:
+            return _step3(request, draft, spec, op)
+        if step == 5:
             return _step4(request, draft, spec), ""
         return _step5(request, draft, spec), ""
     except (wizard.WizardError, publish.PublishError) as exc:
@@ -240,6 +280,158 @@ def _step2(request, draft, spec, op):
     return redirect(_url(draft, 2))
 
 
+ROLE_RUN = {"block": "block", "alert": "block", "importer": "import", "exporter": "export", "ingest": "ingest"}
+
+
+def _runner_ready() -> bool:
+    from .runner import client
+
+    return client.mode() in ("local", "remote")
+
+
+def _test_results(name: str, h: dict) -> list[dict]:
+    """آزمون‌های یک handler در runner (همان آزمون بسته)؛ [{case, ok, message}]. TestSpecError اگر ساختار آزمون نامعتبر یا runner خاموش است."""
+    from types import SimpleNamespace
+
+    cases = pkgtest.parse(h.get("test", ""), name)
+    role = ROLE_RUN.get(h.get("role", "block"), "block")
+    spec = SimpleNamespace(format="txt", max_rows=1000, table="", fields=()) if role == "export" else None
+    if role == "ingest":
+        role = "block"  # ساختار ردیف‌ها را بلوک نمی‌داند؛ شمار ردیف‌ها سنجیده می‌شود
+    out = []
+    for c in cases:
+        msg = pkgtest.run_case(name, h.get("source", ""), role, spec, c)
+        out.append({"case": c.name, "ok": not msg, "message": msg})
+    return out
+
+
+def _results_html(title: str, rows: list[dict]) -> str:
+    from django.utils.html import format_html, format_html_join
+
+    items = format_html_join("", "<li><b style=\"color:{}\">{}</b> {} <span class=\"wz-muted\">{}</span></li>",
+                             (("var(--teal)" if r["ok"] else "#b42318", "✓" if r["ok"] else "✗", r["case"], r["message"]) for r in rows))
+    return str(format_html("<h3>{}</h3><ul class=\"wz-list\">{}</ul>", title, items))
+
+
+def _trial(request, draft, name: str, h: dict) -> str:
+    """اجرای آزمایشی یک handler با ورودی و فایل نمونه (اختیاری روی یک پایگاه داده‌ی نمونه)؛ چیزی نوشته نمی‌شود."""
+    import json
+
+    from django.utils.html import format_html
+
+    from . import pluginio
+    from .runner import client
+
+    post = request.POST
+    try:
+        params = json.loads(post.get("params") or "{}")
+        if not isinstance(params, dict):
+            raise ValueError
+    except ValueError:
+        raise wizard.WizardError("ورودی باید یک شیء JSON باشد، مثل {\"n\": 3}.") from None
+    data = None
+    up = request.FILES.get("file")
+    if up is not None:
+        if up.size > client.sandbox.MAX_FILE:
+            raise wizard.WizardError("حجم فایل نمونه بیش از ۳ مگابایت است.")
+        data = up.read()
+    pk = post.get("preview_db", "").strip()
+    ws = ws_mod.peek(int(pk)) if pk.isdigit() else None
+    if pk and (ws is None or not getattr(ws, "is_live", False)):
+        raise wizard.WizardError("پایگاه داده‌ی فعال با این شناسه نیست.")
+    role = ROLE_RUN.get(h.get("role", "block"), "block")
+    logs: list[str] = []
+    sql_fn = (lambda q, a: pagekit.read_select(ws, q, a)) if ws is not None else None  # noqa: E731
+    try:
+        out = client.run_files({f"code/{name}.py": h["source"]}, name, params, sql_fn, getattr(ws, "pk", 0) or 0, file=data,
+                               io=role != "block", on_log=logs.append, allow_no_ws=True, plugin="studio")
+        if role == "import":
+            t = pluginio.normalize_import("trial_table", out)
+            verdict = f"ورود معتبر است: {len(t.rows):,} ردیف، {len(t.columns)} ستون" + ("، با ستون مکانی" if t.geometry else "")
+        elif role == "export":
+            fname, body, ctype = pluginio.normalize_export(out, "txt")
+            verdict = f"خروجی معتبر است: {fname} ({len(body):,} بایت)"
+        elif role == "ingest":
+            verdict = f"{len(out.get('rows', [])):,} ردیف تبدیل شد." if isinstance(out, dict) and isinstance(out.get("rows"), list) else "خروجی باید {rows: [...]} باشد."
+        else:
+            verdict = "اجرا موفق بود."
+    except client.RunnerError as exc:
+        return str(format_html("<h3>اجرای آزمایشی «{}» ناموفق بود</h3><p class=\"wz-err\">{}</p>", name, str(exc)))
+    except pluginio.PluginIOError as exc:
+        return str(format_html("<h3>خروجی «{}» معتبر نیست</h3><p class=\"wz-err\">{}</p>", name, str(exc)))
+    shown = json.dumps(out, ensure_ascii=False, indent=2, default=str)
+    shown = shown if len(shown) <= 6000 else shown[:6000] + "\n… (کوتاه‌شده)"
+    ws_mod.log_event("plugin_studio", f"اجرای آزمایشی ویزارد {draft.plugin_id}/{name}", user=request.user, database=ws)
+    return str(format_html("<h3>اجرای آزمایشی «{}»</h3><p>{}</p><pre dir=\"ltr\" style=\"max-height:320px;overflow:auto\">{}</pre><p class=\"wz-muted\">{}</p>",
+                           name, verdict, shown, "\n".join(logs)))
+
+
+def _step_code(request, draft, spec, op):
+    post = request.POST
+    code = spec.setdefault("code", {})
+    html = ""
+    if op == "addhandler":
+        name = post.get("name", "").strip()
+        if not wizard_code.NAME_RE.fullmatch(name) or name in code:
+            raise wizard.WizardError("نام handler نامعتبر یا تکراری است (حروف کوچک لاتین، رقم و _؛ ۲ تا ۳۱ نویسه).")
+        if len(code) >= wizard_code.MAX_HANDLERS:
+            raise wizard.WizardError(f"حداکثر {wizard_code.MAX_HANDLERS} handler.")
+        params = {k: post.get(k, "") for k in (*wizard_code.COLS, *wizard_code.NUMS, "table")}
+        code[name] = wizard_code.build(spec, post.get("template", ""), params)
+        _save(draft, spec, request.user)
+        messages.success(request, f"handler «{name}» ساخته شد؛ کد را بخوانید، آزمون و اجرای آزمایشی بزنید.")
+    elif op.startswith("savehandler:"):
+        name = op.split(":", 1)[1]
+        h = code.get(name)
+        if h is None:
+            raise wizard.WizardError("handler پیدا نشد.")
+        src, test = post.get("source", ""), post.get("test", "")
+        wizard_code.check_source(src, name)
+        try:
+            pkgtest.parse(test, name)
+        except pkgtest.TestSpecError as exc:
+            raise wizard.WizardError(f"آزمون: {exc}") from exc
+        h.update(source=src, test=test)
+        if h["role"] == "alert":
+            every = _int(post.get("every"), h.get("every") or 60)
+            if not 5 <= every <= 1440:
+                raise wizard.WizardError("فاصله‌ی هشدار بین ۵ و ۱۴۴۰ دقیقه باشد.")
+            h["every"] = every
+        err = _save(draft, spec, request.user)
+        messages.success(request, "ذخیره شد." + (f" توجه: {err}" if err else ""))
+    elif op.startswith("delhandler:"):
+        name = op.split(":", 1)[1]
+        code.pop(name, None)
+        for p in spec.get("pages", []):
+            p["blocks"] = [b for b in p.get("blocks", []) if b.get("handler") != name or b["kind"] == "ingest"]
+            for b in p["blocks"]:
+                if b["kind"] == "ingest" and b.get("handler") == name:
+                    b.pop("handler")
+        _save(draft, spec, request.user)
+        messages.warning(request, f"handler «{name}» و بلوک‌های وابسته‌اش برداشته شد.")
+    elif op.startswith(("trial:", "tests:")):
+        if not stepup.ok(request):
+            messages.warning(request, "برای اجرا تأیید تازه‌ی ورود دومرحله لازم است.")
+            return redirect(stepup.url(request)), ""
+        if not _runner_ready():
+            raise wizard.WizardError("اجرای کد در این استقرار خاموش است. از «پلاگین‌ها ← پیشرفته ← کلیدهای ناشر و اجرای کد» حالت «راه‌دور» را روشن کنید.")
+        name = op.split(":", 1)[1]
+        h = code.get(name)
+        if h is None:
+            raise wizard.WizardError("handler پیدا نشد.")
+        if op.startswith("trial:"):
+            html = _trial(request, draft, name, h)
+        else:
+            try:
+                html = _results_html(f"آزمون‌های «{name}»", _test_results(name, h))
+            except (pkgtest.TestSpecError, wizard.WizardError) as exc:
+                raise wizard.WizardError(f"آزمون: {exc}") from exc
+            except Exception as exc:  # noqa: BLE001 - خطای runner
+                raise wizard.WizardError(f"آزمون اجرا نشد: {str(exc)[:200]}") from exc
+        return None, html
+    return redirect(_url(draft, 3)), html
+
+
 def _step3(request, draft, spec, op):
     post = request.POST
     preview = ""
@@ -283,7 +475,7 @@ def _step3(request, draft, spec, op):
         key = op.split(":", 1)[1]
         preview = _preview(request, draft, spec, key)
         return None, preview
-    return redirect(_url(draft, 3)), preview
+    return redirect(_url(draft, 4)), preview
 
 
 def _access_from_post(post) -> dict:
@@ -308,18 +500,18 @@ def _step4(request, draft, spec):
     spec["access"] = {**access, **({"limits": access.get("limits", {})} if access["mode"] == "public_paid" else {})}
     _save(draft, spec, request.user)
     messages.success(request, "دسترسی و قیمت ذخیره شد.")
-    return redirect(_url(draft, 5))
+    return redirect(_url(draft, 6))
 
 
 def _step5(request, draft, spec):
     if request.POST.get("op") != "publish":
-        return redirect(_url(draft, 5))
+        return redirect(_url(draft, 6))
     if not stepup.ok(request):
         return redirect(stepup.url(request))
     out = publish.publish(draft, request.user, spec.get("access") or {})
     (messages.success if out["active"] else messages.warning)(request, f"{out['message']} (نسخه‌ی {out['release'].version})")
     ws_mod.log_event("plugin_publish", f"{draft.plugin_id} {out['release'].version}: {out['message']}", user=request.user)
-    return redirect(_url(draft, 5))
+    return redirect(_url(draft, 6))
 
 
 def _preview(request, draft, spec, key) -> str:
@@ -347,7 +539,8 @@ def _preview(request, draft, spec, key) -> str:
         if n:
             messages.success(request, f"{n} جدول در پایگاه نمونه ساخته شد.")
     try:
-        ctx = studio.preview_page(draft, key, ws, {})
+        with studio.temp_handlers(draft):
+            ctx = studio.preview_page(draft, key, ws, {})
     except Exception as exc:  # noqa: BLE001
         messages.error(request, f"پیش‌نمایش ممکن نشد: {str(exc)[:200]}")
         return ""
