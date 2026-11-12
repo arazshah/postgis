@@ -87,13 +87,12 @@
     </div>
     {% endif %}
     {% if ig.tokens %}
-    <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>توکن</th><th>برچسب</th><th>آخرین استفاده</th><th></th></tr></thead>
-      <tbody>{% for t in ig.tokens %}<tr>
-        <td class="ltr">{{ t.prefix }}…</td><td>{{ t.label|default:"—" }}</td><td>{% if t.last_used_at %}{{ t.last_used_at|date:"Y-m-d H:i" }}{% else %}هنوز استفاده نشده{% endif %}</td>
-        <td>{% if can_manage_ingest %}<form method="post" action="{% url 'kernel:ingest_revoke' db.pk page.plugin page.key ig.spec.key t.pk %}">{% csrf_token %}<button class="btn ghost sm" type="submit">باطل کردن</button></form>{% endif %}</td>
-      </tr>{% endfor %}</tbody>
-    </table></div>
+    <ul class="pk-tokens">{% for t in ig.tokens %}<li>
+      <span class="ltr">{{ t.prefix }}…</span>
+      <span>{{ t.label|default:"بدون برچسب" }}</span>
+      <span class="small muted">{% if t.last_used_at %}آخرین استفاده: {{ t.last_used_at|date:"Y-m-d H:i" }}{% else %}هنوز استفاده نشده{% endif %}</span>
+      {% if can_manage_ingest %}<form method="post" action="{% url 'kernel:ingest_revoke' db.pk page.plugin page.key ig.spec.key t.pk %}">{% csrf_token %}<button class="btn ghost sm" type="submit">باطل کردن</button></form>{% endif %}
+    </li>{% endfor %}</ul>
     {% else %}<p class="muted small">توکن فعالی نیست؛ دستگاه‌ها تا ساختن توکن نمی‌توانند داده بفرستند.</p>{% endif %}
     {% if can_manage_ingest %}
     <form method="post" action="{% url 'kernel:ingest_token' db.pk page.plugin page.key ig.spec.key %}" class="pk-form-fields">

@@ -28,3 +28,7 @@
 .pk-form-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--s4);margin:var(--s3) 0 var(--s4)}
 .pk-form .btn{align-self:flex-start}
 .pk-form{margin-top:var(--s4);margin-bottom:0}
+
+.pk-tokens{list-style:none;margin:var(--s3) 0;padding:0}
+.pk-tokens li{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s4);padding:var(--s3) 0;border-bottom:1px solid var(--line)}
+.pk-tokens li form{margin-inline-start:auto}
