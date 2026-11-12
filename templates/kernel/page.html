@@ -5,7 +5,9 @@
 <div class="wrap page">
   <div class="page-head"><div><h1>{{ page.title }}</h1>{% if page.subtitle %}<p class="muted page-sub">{{ page.subtitle }}</p>{% endif %}</div>
     {% if page.refresh or page.reports %}<div class="page-acts">
-      {% for rp in page.reports %}<a class="btn ghost" href="{% url 'kernel:report' db.pk page.plugin page.key rp.key %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" download>{% icon "download" 18 %}{{ rp.button }}</a>{% endfor %}
+      {% for rp in page.reports %}<a class="btn ghost" href="{% url 'kernel:report' db.pk page.plugin page.key rp.key %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" download>{% icon "download" 18 %}{{ rp.button }}</a>
+      <a class="btn ghost sm" href="{% url 'kernel:report_png' db.pk page.plugin page.key rp.key %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" download>{% icon "image" 16 %}تصویر</a>
+      {% if can_edit_rows %}<a class="btn ghost sm" href="{% url 'kernel:report_editor' db.pk page.plugin page.key rp.key %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}">{% icon "edit" 16 %}چیدمان</a>{% endif %}{% endfor %}
       {% if page.refresh %}<span class="small muted pk-live" data-pk-live>{% icon "clock" 16 %}به‌روزرسانی خودکار هر {{ page.refresh|fanum }} ثانیه</span>{% endif %}</div>{% endif %}</div>
 
   {% if page.params %}

@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from databases import services
 from databases.tests.test_services import BaseCase
-from kernel import entitlements, pagekit, reports
+from kernel import entitlements, pagekit, reportlayout, reports
 from kernel.models import PluginUsage
 from kernel.plugins import registry
 from kernel.tests.test_pagekit import STORAGES
@@ -83,7 +83,9 @@ class SvgMapTests(SimpleTestCase):
 
 class HtmlAndPdfTests(SimpleTestCase):
     def html(self, **kw):
-        args = dict(report=rep(), page_title="صفحه", blocks=BLOCKS, site_name="ژئو", db_label="tehran", filters=["شهر: تهران"], now=timezone.now())
+        layout = reportlayout.default_layout(rep(), 4)
+        args = dict(layout=layout, doc_title="گزارش ماهانه", page_title="صفحه", blocks=dict(enumerate(BLOCKS, 1)), site_name="ژئو", db_label="tehran",
+                    filters=["شهر: تهران"], now=timezone.now())
         return reports.build_html(**{**args, **kw})
 
     def test_content_jalali_persian_digits_and_escape(self):
@@ -95,13 +97,13 @@ class HtmlAndPdfTests(SimpleTestCase):
         self.assertRegex(h, r"تاریخ گزارش: ۱[۳۴]\d\d/")  # تاریخ شمسی با رقم فارسی
 
     def test_hostile_titles_are_escaped(self):
-        blocks = [{**BLOCKS[1], "title": '"><img src=x onerror=1>'}]
+        blocks = {2: {**BLOCKS[1], "title": '"><img src=x onerror=1>'}}
         h = self.html(blocks=blocks, db_label="<b>x</b>")
         self.assertNotIn("<img", h)
         self.assertNotIn("<b>x</b>", h)
 
     def test_error_block_shows_short_message(self):
-        h = self.html(blocks=[{"kind": "table", "title": "t", "error": "خواندن داده ممکن نشد.", "width": "full"}])
+        h = self.html(blocks={2: {"kind": "table", "title": "t", "error": "خواندن داده ممکن نشد.", "width": "full"}})
         self.assertIn("خواندن داده ممکن نشد.", h)
 
     def test_fetcher_allows_only_bundled_fonts(self):
@@ -176,7 +178,7 @@ class ViewTests(BaseCase):
     def test_only_selected_blocks_in_report(self):
         with mock.patch.object(reports, "build_html", wraps=reports.build_html) as bh:
             self.client.get(self.url)
-        self.assertEqual([b["kind"] for b in bh.call_args.kwargs["blocks"]], ["kpi", "table", "map"])  # بلوک ۳ (نمودار) نیست
+        self.assertEqual(sorted(bh.call_args.kwargs["blocks"]), [1, 2, 4])  # بلوک ۳ (نمودار) نیست
 
     def test_filters_are_passed_to_blocks(self):
         page = pagekit.parse_page("demo", {**PAGE, "params": [{"name": "city", "kind": "choice", "label": "شهر", "choices": [["a", "الف"], ["b", "ب"]]}]})

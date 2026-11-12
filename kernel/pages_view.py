@@ -412,68 +412,242 @@ def record_delete(request, pk, plugin, page, key, rid):
     return back
 
 
-# ---------------------------------------------------------------------- گزارش PDF (`[[reports]]`)
-REPORT_PER_MIN = 6
+# ---------------------------------------------------------------------- گزارش PDF و تصویر (`[[reports]]`)
+REPORT_PER_MIN, PREVIEW_PER_MIN, MAX_LAYOUT_BYTES = 6, 40, 100_000
 
 
-@login_required
-def report_pdf(request, pk, plugin, page, key):
-    """PDF صفحه با فیلترهای فعلی (GET؛ فقط‌خواندنی). سقف نرخ هر کاربر، سقف ماهانه‌ی مجوز و ثبت مصرف."""
+def _rate(prefix: str, user, limit: int) -> bool:
+    """True اگر در همین دقیقه از سقف نگذشته."""
     from django.core.cache import cache
 
+    ck = f"{prefix}:{user.pk}"
+    cache.add(ck, 0, 60)
+    try:
+        return cache.incr(ck) <= limit
+    except ValueError:
+        return True
+
+
+def _report_target(request, pk, plugin, page, key, *, write: bool = False):
     spec = pagekit.get(plugin, page)
     rp = pagekit.get_report(spec, key) if spec else None
     if rp is None:
         raise Http404
-    ws = workspace.get(request, pk, spec.need)
+    need = spec.need if not write or spec.need == "owner" else "editor"
+    ws = workspace.get(request, pk, need)
     if not entitlements.allowed(plugin, user=request.user, ws=ws):
         raise Http404
-    back = redirect("kernel:page", pk=ws.pk, plugin=plugin, page=page)
-    if not ws.is_live:
-        messages.error(request, "گزارش فقط برای پایگاه داده‌ی فعال ساخته می‌شود.")
-        return back
-    ck = f"report-rate:{request.user.pk}"
-    cache.add(ck, 0, 60)
-    try:
-        n = cache.incr(ck)
-    except ValueError:
-        n = 1
-    if n > REPORT_PER_MIN:
-        messages.error(request, "درخواست گزارش زیاد بود؛ یک دقیقه بعد دوباره تلاش کنید.")
-        return back
-    within, _now, cap = metering.check(plugin, "report_pdfs", user=request.user, ws=ws)
-    if not within:
-        messages.error(request, f"سقف ماهانه‌ی گزارش ({cap}) پر شده است.")
-        return back
+    return ws, spec, rp
+
+
+def _report_layout(ws, plugin, spec, rp):
+    """(چیدمان، ردیف ذخیره‌شده یا None). چیدمان خراب ذخیره‌شده به پیش‌فرض برمی‌گردد."""
+    from . import reportlayout
+    from .models import ReportLayout
+
+    row = ReportLayout.objects.filter(workspace_id=ws.pk, plugin_id=plugin, page=spec.key, key=rp.key).first()
+    if row is not None:
+        try:
+            return reportlayout.validate(row.layout, len(spec.blocks)), row
+        except ValueError:
+            pass
+    return reportlayout.default_layout(rp, len(spec.blocks)), row
+
+
+def _report_values(request, ws, spec):
     layers = {}
     if any(p.kind == "layer" for p in spec.params):
         try:
             layers = {f"{t.schema}.{t.name}": t.name for t in tenantdb.catalog(ws).tables()}
         except tenantdb.TenantError:
             layers = {}
-    values, errors = pagekit.read_values(spec, request.GET, layers)
-    if errors:
-        messages.error(request, errors[0])
-        return back
-    chosen = [spec.blocks[i - 1] for i in rp.blocks] if rp.blocks else list(spec.blocks)
-    rendered = [pagekit.render_block(ws, spec, b, values) for b in chosen]
-    filters = [f"{p.label}: {values.get(p.name)}" for p in spec.params if values.get(p.name) not in (None, "")]
+    return pagekit.read_values(spec, request.GET, layers)
+
+
+def _report_html(request, ws, spec, rp, layout, row, *, preview: bool):
+    """(html، logo bytes، mime)؛ بلوک‌های استفاده‌شده را با فیلترهای درخواست می‌سازد."""
     from django.utils import timezone
 
+    from . import reportlayout
+
+    values, errors = _report_values(request, ws, spec)
+    if errors:
+        raise reports.ReportError(errors[0])
+    blocks = {i: pagekit.render_block(ws, spec, spec.blocks[i - 1], values) for i in reportlayout.referenced_blocks(layout)}
+    filters = [f"{p.label}: {values.get(p.name)}" for p in spec.params if values.get(p.name) not in (None, "")]
+    logo = bytes(row.logo) if row is not None and row.logo else None
+    mime = row.logo_mime if row is not None else ""
+    if logo:
+        import base64
+
+        src = f"data:{mime};base64,{base64.b64encode(logo).decode()}" if preview else reports.LOGO_URL
+    else:
+        src = ""
+    html = reports.build_html(layout=layout, doc_title=rp.title, page_title=spec.title, blocks=blocks, site_name=workspace_site_name(),
+                              db_label=getattr(ws, "db_name", "") or str(ws.pk), filters=filters, now=timezone.now(), logo_src=src,
+                              preview=preview)
+    return html, logo, mime or "image/png"
+
+
+def _report_export(request, pk, plugin, page, key, fmt: str):
+    """خروجی گزارش با چیدمان ذخیره‌شده: PDF یا تصویر PNG یک صفحه (`?page=N`). فقط‌خواندنی؛ سقف نرخ و مصرف."""
+    from django.utils import timezone
+
+    ws, spec, rp = _report_target(request, pk, plugin, page, key)
+    back = redirect("kernel:page", pk=ws.pk, plugin=plugin, page=page)
+    if not ws.is_live:
+        messages.error(request, "گزارش فقط برای پایگاه داده‌ی فعال ساخته می‌شود.")
+        return back
+    if not _rate("report-rate", request.user, REPORT_PER_MIN):
+        messages.error(request, "درخواست گزارش زیاد بود؛ یک دقیقه بعد دوباره تلاش کنید.")
+        return back
+    within, _now, cap = metering.check(plugin, "report_pdfs", user=request.user, ws=ws)
+    if not within:
+        messages.error(request, f"سقف ماهانه‌ی گزارش ({cap}) پر شده است.")
+        return back
+    layout, row = _report_layout(ws, plugin, spec, rp)
     try:
-        html = reports.build_html(report=rp, page_title=spec.title, blocks=rendered, site_name=workspace_site_name(),
-                                  db_label=getattr(ws, "db_name", "") or str(ws.pk), filters=filters, now=timezone.now())
-        pdf = reports.to_pdf(html, rp.title)
+        html, logo, mime = _report_html(request, ws, spec, rp, layout, row, preview=False)
+        pdf = reports.to_pdf(html, rp.title, logo=logo, logo_mime=mime)
+        if fmt == "png":
+            n = request.GET.get("page", "1")
+            data = reports.pdf_to_png(pdf, int(n) if n.isdigit() else 1)
     except reports.ReportError as exc:
         messages.error(request, str(exc))
         return back
     metering.record(plugin, "report_pdfs", user=request.user, ws=ws)
-    workspace.log_event("plugin_report", f"{plugin}/{page}/{key}: گزارش PDF ساخته شد", user=request.user, database=ws)
-    resp = HttpResponse(pdf, content_type="application/pdf")
-    resp["Content-Disposition"] = f'attachment; filename="report-{key}-{timezone.localdate():%Y%m%d}.pdf"'
+    workspace.log_event("plugin_report", f"{plugin}/{page}/{key}: گزارش {fmt.upper()} ساخته شد", user=request.user, database=ws)
+    stamp = f"{timezone.localdate():%Y%m%d}"
+    if fmt == "png":
+        resp = HttpResponse(data, content_type="image/png")
+        resp["Content-Disposition"] = f'attachment; filename="report-{key}-{stamp}.png"'
+    else:
+        resp = HttpResponse(pdf, content_type="application/pdf")
+        resp["Content-Disposition"] = f'attachment; filename="report-{key}-{stamp}.pdf"'
     resp["Cache-Control"] = "no-store"
     resp["X-Content-Type-Options"] = "nosniff"
     return resp
+
+
+@login_required
+def report_pdf(request, pk, plugin, page, key):
+    return _report_export(request, pk, plugin, page, key, "pdf")
+
+
+@login_required
+def report_png(request, pk, plugin, page, key):
+    return _report_export(request, pk, plugin, page, key, "png")
+
+
+@login_required
+def report_editor(request, pk, plugin, page, key):
+    """ویرایشگر چیدمان گزارش (سطح ویرایشگر): فهرست عنصرها، ویژگی‌ها، پیش‌نمایش و ذخیره."""
+    from . import reportlayout
+
+    ws, spec, rp = _report_target(request, pk, plugin, page, key, write=True)
+    layout, row = _report_layout(ws, plugin, spec, rp)
+    q = request.GET.urlencode()
+    base = {"pk": ws.pk, "plugin": plugin, "page": page, "key": key}
+    ctx = {"db": ws, "page": spec, "rp": rp, "section": "pages", "has_logo": bool(row is not None and row.logo),
+           "layout_json": layout,
+           "blocks_json": [{"index": i, "kind": b.kind, "title": b.title or {"kpi": "شمارنده", "table": "جدول", "bars": "نمودار", "map": "نقشه", "text": "متن"}.get(b.kind, b.kind)}
+                           for i, b in enumerate(spec.blocks, 1)],
+           "types_json": reportlayout.TYPE_LABELS, "query": q,
+           "urls": {"save": reverse("kernel:report_save", kwargs=base), "preview": reverse("kernel:report_preview", kwargs=base) + (f"?{q}" if q else ""),
+                    "logo": reverse("kernel:report_logo", kwargs=base), "back": reverse("kernel:page", kwargs={k: base[k] for k in ("pk", "plugin", "page")}) + (f"?{q}" if q else ""),
+                    "pdf": reverse("kernel:report", kwargs=base) + (f"?{q}" if q else ""), "png": reverse("kernel:report_png", kwargs=base) + (f"?{q}" if q else "")}}
+    return render(request, "kernel/report_editor.html", ctx)
+
+
+def _json_body(request):
+    import json
+
+    if len(request.body) > MAX_LAYOUT_BYTES:
+        raise ValueError("چیدمان بیش از حد بزرگ است.")
+    try:
+        return json.loads(request.body or b"{}")
+    except ValueError:
+        raise ValueError("درخواست نامعتبر است.") from None
+
+
+@login_required
+@require_POST
+def report_save(request, pk, plugin, page, key):
+    from . import reportlayout
+    from .models import ReportLayout
+
+    ws, spec, rp = _report_target(request, pk, plugin, page, key, write=True)
+    try:
+        body = _json_body(request)
+        layout = reportlayout.validate(body.get("layout") if body.get("layout") is not None else body, len(spec.blocks)) if body.get("reset") is not True \
+            else reportlayout.default_layout(rp, len(spec.blocks))
+    except (ValueError, AttributeError) as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    ReportLayout.objects.update_or_create(workspace_id=ws.pk, plugin_id=plugin, page=page, key=key,
+                                          defaults={"layout": layout, "updated_by": request.user})
+    workspace.log_event("plugin_report", f"{plugin}/{page}/{key}: چیدمان گزارش ذخیره شد", user=request.user, database=ws)
+    return JsonResponse({"ok": True, "layout": layout})
+
+
+@login_required
+@require_POST
+def report_preview(request, pk, plugin, page, key):
+    """پیش‌نمایش HTML همان چیدمانِ ذخیره‌نشده (برای iframe بدون اسکریپت)؛ همان داده و فیلترها."""
+    from . import reportlayout
+
+    ws, spec, rp = _report_target(request, pk, plugin, page, key, write=True)
+    if not ws.is_live:
+        return HttpResponse("پایگاه فعال نیست.", status=409)
+    if not _rate("report-preview", request.user, PREVIEW_PER_MIN):
+        return HttpResponse("پیش‌نمایش زیاد بود؛ کمی صبر کنید.", status=429)
+    try:
+        if "layout_json" in request.POST:  # فرم هدف‌گرفته به iframe (CSP جداگانه‌ی پاسخ)
+            import json
+
+            raw = request.POST["layout_json"]
+            if len(raw) > MAX_LAYOUT_BYTES:
+                raise ValueError("چیدمان بیش از حد بزرگ است.")
+            layout = reportlayout.validate(json.loads(raw), len(spec.blocks))
+        else:
+            layout = reportlayout.validate(_json_body(request).get("layout"), len(spec.blocks))
+    except (ValueError, AttributeError) as exc:
+        return HttpResponse("چیدمان نامعتبر است: " + str(exc), status=400)
+    _l, row = _report_layout(ws, plugin, spec, rp)
+    try:
+        html, _logo, _mime = _report_html(request, ws, spec, rp, layout, row, preview=True)
+    except reports.ReportError as exc:
+        return HttpResponse(str(exc), status=400)
+    resp = HttpResponse(html, content_type="text/html; charset=utf-8")
+    resp["Content-Security-Policy"] = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"
+    resp["Cache-Control"] = "no-store"
+    resp["X-Content-Type-Options"] = "nosniff"
+    return resp
+
+
+@login_required
+@require_POST
+def report_logo(request, pk, plugin, page, key):
+    """بارگذاری یا حذف لوگو (فقط PNG/JPEG؛ بازکدگذاری با Pillow)."""
+    from . import reportlayout
+    from .models import ReportLayout
+
+    ws, _spec, _rp = _report_target(request, pk, plugin, page, key, write=True)
+    row, _c = ReportLayout.objects.get_or_create(workspace_id=ws.pk, plugin_id=plugin, page=page, key=key)
+    if request.POST.get("do") == "delete":
+        row.logo, row.logo_mime = None, ""
+        row.save(update_fields=["logo", "logo_mime", "updated_at"])
+        return JsonResponse({"ok": True, "has_logo": False})
+    f = request.FILES.get("logo")
+    if f is None:
+        return JsonResponse({"ok": False, "error": "فایلی انتخاب نشده است."}, status=400)
+    try:
+        data, mime = reportlayout.process_logo(f.read(reportlayout.MAX_LOGO_BYTES + 1))
+    except ValueError as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    row.logo, row.logo_mime, row.updated_by = data, mime, request.user
+    row.save()
+    workspace.log_event("plugin_report", f"{plugin}/{page}/{key}: لوگوی گزارش تغییر کرد", user=request.user, database=ws)
+    return JsonResponse({"ok": True, "has_logo": True})
 
 
 def workspace_site_name() -> str:

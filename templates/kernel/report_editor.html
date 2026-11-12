@@ -1,0 +1,52 @@
+{% extends "databases/_ws.html" %}{% load fa static ws %}
+{% block title %}چیدمان گزارش — {{ rp.title }} — {{ SITE_NAME }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/page-kit.css' %}">{% endblock %}
+{% block ws %}
+<div class="wrap page" id="re-root">
+  <div class="page-head"><div><h1>چیدمان گزارش</h1><p class="muted page-sub">{{ rp.title }} · {{ page.title }}</p></div>
+    <div class="page-acts">
+      <a class="btn ghost" href="{{ urls.back }}">{% icon "back" 18 %}بازگشت به صفحه</a>
+      <button class="btn ghost" type="button" id="re-reset">{% icon "refresh" 18 %}بازنشانی</button>
+      <button class="btn" type="button" id="re-save">{% icon "check" 18 %}ذخیره</button>
+      <button class="btn ghost" type="button" data-export="pdf">{% icon "download" 18 %}PDF</button>
+      <button class="btn ghost" type="button" data-export="png">{% icon "image" 18 %}تصویر</button>
+      <span class="small muted" id="re-state" role="status"></span>
+    </div>
+  </div>
+  <div class="re-grid">
+    <div class="re-side">
+      <section class="card">
+        <div class="ch"><h2>عنصرهای گزارش</h2></div>
+        <ol class="re-list" id="re-list"></ol>
+        <p class="small muted" id="re-empty" hidden>عنصری نیست؛ از پایین یکی اضافه کنید.</p>
+        <span class="lbl">افزودن عنصر</span>
+        <div class="chips" id="re-add"></div>
+      </section>
+      <section class="card" id="re-props" aria-live="polite">
+        <div class="ch"><h2>ویژگی‌های عنصر</h2></div>
+        <div id="re-props-body"><p class="small muted">یک عنصر را از فهرست انتخاب کنید.</p></div>
+      </section>
+      <section class="card">
+        <div class="ch"><h2>صفحه</h2></div>
+        <div class="pk-form-fields" id="re-page"></div>
+      </section>
+      <section class="card">
+        <div class="ch"><h2>لوگو</h2></div>
+        <p class="small muted">فقط PNG یا JPEG تا ۱ مگابایت؛ تصویر بازکدگذاری می‌شود. جای لوگو را با عنصر «لوگو» تعیین کنید.</p>
+        <p class="msg success small" id="re-logo-on" {% if not has_logo %}hidden{% endif %}>{% icon "check" 16 %} لوگو بارگذاری شده است.</p>
+        <div class="field"><label for="re-logo-file">انتخاب فایل</label><input id="re-logo-file" type="file" accept="image/png,image/jpeg"></div>
+        <button class="btn ghost sm danger" type="button" id="re-logo-del" {% if not has_logo %}hidden{% endif %}>{% icon "trash" 16 %}حذف لوگو</button>
+      </section>
+    </div>
+    <div class="re-view">
+      <div class="re-view-bar"><span class="small muted">پیش‌نمایش (با داده و فیلترهای فعلی صفحه)</span>
+        <button class="btn ghost sm" type="button" id="re-refresh">{% icon "refresh" 16 %}تازه‌سازی</button></div>
+      <iframe class="re-frame" name="re-frame" title="پیش‌نمایش گزارش" sandbox=""></iframe>
+    </div>
+  </div>
+  <form id="re-pv" method="post" action="{{ urls.preview }}" target="re-frame" hidden>{% csrf_token %}<textarea name="layout_json"></textarea></form>
+  {{ urls|json_script:"re-urls" }}{{ layout_json|json_script:"re-layout" }}{{ blocks_json|json_script:"re-blocks" }}{{ types_json|json_script:"re-types" }}
+  <template id="ic-up">{% icon "up" 16 %}</template><template id="ic-down">{% icon "down" 16 %}</template><template id="ic-trash">{% icon "trash" 16 %}</template><template id="ic-plus">{% icon "plus" 16 %}</template>
+</div>
+{% endblock %}
+{% block ws_scripts %}<script src="{% static 'js/report-editor.js' %}" defer></script>{% endblock %}

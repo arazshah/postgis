@@ -209,9 +209,11 @@ def grant(plugin_id: str, kind: str, subject: str = "", *, source: str = "purcha
 
 
 def workspace_deleted(*, ws, **_) -> None:
-    from .models import Entitlement
+    from .models import Entitlement, IngestToken, ReportLayout, SourceState
 
     Entitlement.objects.filter(kind=Entitlement.Kind.WORKSPACE, subject=str(ws.pk)).delete()
+    for model in (SourceState, ReportLayout, IngestToken):  # داده‌ی وابسته به پایگاه (کلید API رمزنگاری‌شده، لوگو، توکن)
+        model.objects.filter(workspace_id=ws.pk).delete()
 
 
 events.listen(events.WORKSPACE_DELETED, "kernel.entitlements.workspace_deleted", plugin="kernel", order=10)

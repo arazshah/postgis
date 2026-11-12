@@ -179,13 +179,12 @@ def svg_map(geojson: dict, width: int = MAP_W, height: int = MAP_H) -> str:
 
 # ---------------------------------------------------------------------- HTML
 CSS = """
-@page { size: %(size)s; margin: 16mm 14mm 18mm; @bottom-center { content: counter(page, persian) " / " counter(pages, persian); font: 9pt Vazirmatn; color: #7A7566 } }
+@page { size: %(size)s; margin: %(margin)smm; @bottom-center { content: %(footer)s; font: 9pt Vazirmatn; color: #7A7566 } }
 * { box-sizing: border-box }
-body { font-family: Vazirmatn, sans-serif; font-size: 10pt; color: #1F2933; line-height: 1.7; direction: rtl }
-h1 { font-size: 18pt; margin: 0 0 2pt; color: #0F5C59 }
-.sub { color: #7A7566; margin: 0 0 4pt }
-.meta { display: flex; justify-content: space-between; border-bottom: 1.5pt solid #0F5C59; padding-bottom: 6pt; margin-bottom: 10pt; font-size: 9pt; color: #52606D }
-h2 { font-size: 12pt; margin: 14pt 0 5pt; color: #0F5C59; break-after: avoid }
+body { font-family: Vazirmatn, sans-serif; font-size: %(base)spt; color: #1F2933; line-height: 1.7; direction: rtl; margin: 0 }
+h1, h2, p { margin: 0 } .tl { margin-bottom: 3pt } .sub { color: #7A7566 }
+.meta { font-size: 9pt; color: #52606D; margin-bottom: 4pt }
+h2.bt { font-size: 12pt; margin: 12pt 0 5pt; color: #0F5C59; break-after: avoid }
 .kpis { display: flex; flex-wrap: wrap; gap: 8pt; margin-bottom: 6pt }
 .kpi { flex: 1 1 28%%; border: 0.8pt solid #CFCABB; border-radius: 4pt; padding: 6pt 8pt; break-inside: avoid }
 .kpi b { display: block; font-size: 16pt; color: #0F5C59 }
@@ -198,61 +197,143 @@ thead { display: table-header-group } tr { break-inside: avoid }
 .bars li { display: flex; align-items: center; gap: 6pt; margin: 2pt 0; break-inside: avoid }
 .bl { width: 28%% } .bt { flex: 1; height: 8pt; background: #EFEBDD; border-radius: 4pt } .bt i { display: block; height: 100%%; background: #E0A526; border-radius: 4pt }
 .bv { width: 14%%; text-align: left; direction: ltr }
-.map svg { width: 100%%; height: auto; display: block; break-inside: avoid }
+.map svg { width: 100%%; height: 100%%; display: block } .map { break-inside: avoid; margin-bottom: 3pt }
 .note, .err { color: #7A7566; font-size: 9pt } .err { color: #B3261E }
+.logo { margin-bottom: 4pt } .logo img { display: inline-block }
+hr { border: 0; border-top: 1.5pt solid; margin: 6pt 0 }
+.pb { break-after: page }
 """
+PREVIEW_CSS = "html{background:#E4E0D3} body{background:#fff;max-width:%(w)spx;margin:12px auto;padding:%(pad)spx;box-shadow:0 1px 6px rgba(0,0,0,.25)}"
+MM_PX = 3.7795
 
 
 def _cell(v) -> str:
     return escape(fa(v)) if v is not None else "—"
 
 
-def build_html(*, report, page_title: str, blocks: list[dict], site_name: str, db_label: str, filters: list[str], now) -> str:
-    j = jdatetime.datetime.fromgregorian(datetime=timezone.localtime(now)).strftime("%Y/%m/%d %H:%M")
-    head = [f'<h1>{escape(report.title)}</h1>']
-    if report.subtitle:
-        head.append(f'<p class="sub">{escape(report.subtitle)}</p>')
-    meta = (f'<div class="meta"><span>{escape(site_name)} · {escape(page_title)} · پایگاه «{escape(db_label)}»</span>'
-            f'<span>تاریخ گزارش: {escape(fa(j))}</span></div>')
-    body = []
-    kpis = [b for b in blocks if b["kind"] == "kpi"]
-    if kpis:
-        cells = "".join(f'<div class="kpi">{("<small>" + escape(b["error"]) + "</small>") if b.get("error") else "<b>" + escape(fa(b["value"])) + (" <small>" + escape(b.get("unit", "")) + "</small>" if b.get("unit") else "") + "</b>"}<small>{escape(b["title"])}</small></div>' for b in kpis)
-        body.append(f'<div class="kpis">{cells}</div>')
-    for b in blocks:
-        if b["kind"] == "kpi":
+def _css_str(text: str) -> str:
+    """متن برای رشته‌ی CSS (پاورقی) درون <style>: فقط حرف، رقم، فاصله و نشانه‌های بی‌خطر؛ هیچ نویسه‌ی ساختاری (< > & \\ " ' { })."""
+    return "".join(ch for ch in text if ch.isalnum() or ch in " .,:;-_/()،؛")[:200]
+
+
+def _block_html(b: dict, el: dict) -> str:
+    out = []
+    title = el.get("title") or b.get("title", "")
+    if title and not el.get("hide_title") and b["kind"] != "kpi":
+        out.append(f'<h2 class="bt">{escape(title)}</h2>')
+    if b.get("error"):
+        out.append(f'<p class="err">{escape(b["error"])}</p>')
+    elif b["kind"] == "text":
+        out.extend(f"<p>{escape(p)}</p>" for p in b.get("paras", []))
+    elif b["kind"] == "table":
+        if b.get("rows"):
+            th = "".join(f"<th>{escape(h)}</th>" for h in b["headers"])
+            tr = "".join("<tr>" + "".join(f"<td>{_cell(c)}</td>" for c in r) + "</tr>" for r in b["rows"])
+            out.append(f"<table><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table>")
+            if b.get("truncated"):
+                out.append('<p class="note">فقط ۲۰۰ ردیف اول آمده است.</p>')
+        else:
+            out.append('<p class="note">داده‌ای برای نمایش نیست.</p>')
+    elif b["kind"] == "bars":
+        if b.get("bars"):
+            li = "".join(f'<li><span class="bl">{escape(x["label"])}</span><span class="bt"><i style="width:{int(x["pct"])}%"></i></span>'
+                         f'<span class="bv">{escape(fa(x["value"]))}</span></li>' for x in b["bars"])
+            out.append(f'<ul class="bars">{li}</ul>')
+        else:
+            out.append('<p class="note">داده‌ای برای نمایش نیست.</p>')
+    elif b["kind"] == "map":
+        svg = svg_map(b.get("geojson") or {})
+        h = int(el.get("height_mm", 90))
+        out.append(f'<div class="map" style="height:{h}mm">{svg}</div><p class="note">نقشه‌ی برداری بدون نقشه‌ی پایه؛ {escape(fa(b.get("count", 0)))} عارضه.</p>'
+                   if svg else '<p class="note">داده‌ی مکانی برای نقشه نیست.</p>')
+    return "".join(out)
+
+
+def _kpi_html(b: dict) -> str:
+    if b.get("error"):
+        val = f"<small>{escape(b['error'])}</small>"
+    else:
+        unit = f' <small>{escape(b["unit"])}</small>' if b.get("unit") else ""
+        val = f"<b>{escape(fa(b['value']))}{unit}</b>"
+    return f'<div class="kpi">{val}<small>{escape(b.get("title", ""))}</small></div>'
+
+
+def build_html(*, layout: dict, doc_title: str, page_title: str, blocks: dict[int, dict], site_name: str, db_label: str,
+               filters: list[str], now, logo_src: str = "", preview: bool = False) -> str:
+    """چیدمان اعتبارسنجی‌شده + بلوک‌های ساخته‌شده (نمایه‌ی ۱-پایه ← مدل بلوک) ← HTML چاپی (یا پیش‌نمایش صفحه)."""
+    from .reportlayout import COLORS, SIZES, fill
+
+    j = fa(jdatetime.datetime.fromgregorian(datetime=timezone.localtime(now)).strftime("%Y/%m/%d %H:%M"))
+    flt = "؛ ".join(filters)
+    ctx = {"date": j, "db": db_label, "site": site_name, "page": page_title, "filters": flt}
+    pg = layout["page"]
+    scale = pg["font_scale"]
+    body: list[str] = []
+    kpi_row: list[str] = []
+
+    def flush():
+        if kpi_row:
+            body.append(f'<div class="kpis">{"".join(kpi_row)}</div>')
+            kpi_row.clear()
+
+    for el in layout["elements"]:
+        t = el["type"]
+        if t == "block":
+            b = blocks.get(el["index"])
+            if b is None:
+                continue
+            if b["kind"] == "kpi":
+                kpi_row.append(_kpi_html(b))
+                continue
+            flush()
+            body.append(_block_html(b, el))
             continue
-        if b.get("title"):
-            body.append(f'<h2>{escape(b["title"])}</h2>')
-        if b.get("error"):
-            body.append(f'<p class="err">{escape(b["error"])}</p>')
-        elif b["kind"] == "text":
-            body.extend(f'<p>{escape(p)}</p>' for p in b.get("paras", []))
-        elif b["kind"] == "table":
-            if b.get("rows"):
-                th = "".join(f"<th>{escape(h)}</th>" for h in b["headers"])
-                tr = "".join("<tr>" + "".join(f"<td>{_cell(c)}</td>" for c in r) + "</tr>" for r in b["rows"])
-                body.append(f"<table><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table>")
-                if b.get("truncated"):
-                    body.append('<p class="note">فقط ۲۰۰ ردیف اول آمده است.</p>')
-            else:
-                body.append('<p class="note">داده‌ای برای نمایش نیست.</p>')
-        elif b["kind"] == "bars":
-            if b.get("bars"):
-                li = "".join(f'<li><span class="bl">{escape(x["label"])}</span><span class="bt"><i style="width:{int(x["pct"])}%"></i></span><span class="bv">{escape(fa(x["value"]))}</span></li>' for x in b["bars"])
-                body.append(f'<ul class="bars">{li}</ul>')
-            else:
-                body.append('<p class="note">داده‌ای برای نمایش نیست.</p>')
-        elif b["kind"] == "map":
-            svg = svg_map(b.get("geojson") or {})
-            body.append(f'<div class="map">{svg}</div><p class="note">نقشه‌ی برداری بدون نقشه‌ی پایه؛ {escape(fa(b.get("count", 0)))} عارضه.</p>' if svg
-                        else '<p class="note">داده‌ی مکانی برای نقشه نیست.</p>')
-    flt = f'<p class="note">فیلترها: {escape("؛ ".join(filters))}</p>' if filters else ""
-    css = CSS % {"size": "A4 landscape" if report.landscape else "A4"}
-    return (f'<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>{escape(report.title)}</title><style>'
+        flush()
+        al = f'text-align:{el.get("align", "right")}'
+        if t == "logo":
+            if logo_src:
+                body.append(f'<div class="logo" style="{al}"><img src="{logo_src}" style="height:{int(el["height_mm"])}mm" alt=""></div>')
+        elif t == "title":
+            body.append(f'<h1 class="tl" style="{al};font-size:{SIZES[el["size"]] * scale:g}pt;color:{COLORS[el["color"]]}">{escape(fill(el["text"], ctx))}</h1>')
+            if el["subtitle"]:
+                body.append(f'<p class="sub" style="{al}">{escape(fill(el["subtitle"], ctx))}</p>')
+        elif t == "text":
+            style = f'{al};font-size:{SIZES[el["size"]] * scale:g}pt;color:{COLORS[el["color"]]}' + (";font-weight:700" if el["bold"] else "")
+            paras = [p for p in fill(el["text"], ctx).split("\n\n") if p.strip()]
+            body.extend(f'<p style="{style}">{escape(p).replace(chr(10), "<br>")}</p>' for p in paras)
+        elif t == "meta":
+            parts = []
+            if el["show_site"]:
+                parts.append(site_name)
+            parts.append(page_title)
+            if el["show_db"]:
+                parts.append(f"پایگاه «{db_label}»")
+            if el["show_date"]:
+                parts.append(f"تاریخ گزارش: {j}")
+            line = " · ".join(escape(x) for x in parts)
+            body.append(f'<p class="meta" style="{al}">{line}</p>')
+            if el["show_filters"] and flt:
+                body.append(f'<p class="meta" style="{al}">فیلترها: {escape(flt)}</p>')
+        elif t == "divider":
+            body.append(f'<hr style="color:{COLORS[el["color"]]}">')
+        elif t == "spacer":
+            body.append(f'<div style="height:{int(el["height_mm"])}mm"></div>')
+        elif t == "pagebreak":
+            body.append('<div class="pb"></div>')
+    flush()
+    foot = _css_str(fill(pg["footer"], ctx))
+    nums = 'counter(page, persian) " / " counter(pages, persian)'
+    parts = ([f'"{foot}"'] if foot else []) + ([nums] if pg["page_numbers"] else [])
+    footer = " ' · ' ".join(parts) if parts else '""'
+    land = pg["orientation"] == "landscape"
+    css = CSS % {"size": "A4 landscape" if land else "A4", "margin": pg["margin_mm"], "footer": footer, "base": f"{10 * scale:g}"}
+    if preview:
+        w = (297 if land else 210) - 2 * pg["margin_mm"]
+        css += PREVIEW_CSS % {"w": int(w * MM_PX), "pad": 12}
+    return (f'<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>{escape(doc_title)}</title><style>'
             f'@font-face{{font-family:Vazirmatn;font-weight:400;src:url({FONT_URL.format(w=400)})}}'
             f'@font-face{{font-family:Vazirmatn;font-weight:700;src:url({FONT_URL.format(w=700)})}}{css}</style></head><body>'
-            f'{"".join(head)}{meta}{flt}{"".join(body)}</body></html>')
+            f'{"".join(body)}</body></html>')
 
 
 # ---------------------------------------------------------------------- PDF
@@ -268,8 +349,12 @@ def _fetcher(url, *args, **kwargs):
     return {"string": _font_for(url), "mime_type": "font/ttf"}
 
 
-def make_fetcher():
-    """فقط دو فونت داخلی؛ هر نشانی دیگر (شبکه، فایل محلی، data) رد می‌شود. WeasyPrint ≥ ۶۸: زیرکلاس URLFetcher."""
+LOGO_URL = "https://logo.report.invalid/logo"
+
+
+def make_fetcher(logo: bytes | None = None, logo_mime: str = "image/png"):
+    """فقط دو فونت داخلی و (اگر داده شد) لوگوی بازکدگذاری‌شده؛ هر نشانی دیگر (شبکه، فایل محلی، data) رد می‌شود.
+    WeasyPrint ≥ ۶۸: زیرکلاس URLFetcher."""
     try:
         from weasyprint.urls import URLFetcher, URLFetcherResponse
     except ImportError:  # pragma: no cover - نسخه‌ی قدیمی
@@ -277,18 +362,20 @@ def make_fetcher():
 
     class ClosedFetcher(URLFetcher):
         def fetch(self, url, headers=None):
+            if logo and url == LOGO_URL:
+                return URLFetcherResponse(url, body=logo, headers={"Content-Type": logo_mime})
             return URLFetcherResponse(url, body=_font_for(url), headers={"Content-Type": "font/ttf"})
 
     return ClosedFetcher(allowed_protocols=())
 
 
-def to_pdf(html: str, title: str = "") -> bytes:
+def to_pdf(html: str, title: str = "", *, logo: bytes | None = None, logo_mime: str = "image/png") -> bytes:
     try:
         from weasyprint import HTML
     except Exception as exc:  # noqa: BLE001 - کتابخانه‌ی سیستمی (pango) نصب نیست
         raise ReportError("ساخت PDF روی این سرور آماده نیست.") from exc
     try:
-        doc = HTML(string=html, url_fetcher=make_fetcher()).render()
+        doc = HTML(string=html, url_fetcher=make_fetcher(logo, logo_mime)).render()
         if len(doc.pages) > MAX_PAGES:
             raise ReportError(f"گزارش بیش از {MAX_PAGES} صفحه می‌شود؛ فیلتر را محدودتر کنید.")
         return doc.write_pdf()
@@ -296,3 +383,32 @@ def to_pdf(html: str, title: str = "") -> bytes:
         raise
     except Exception as exc:  # noqa: BLE001
         raise ReportError("ساخت PDF انجام نشد.") from exc
+
+
+def pdf_to_png(pdf: bytes, page: int = 1, scale: float = 1.6) -> bytes:
+    """یک صفحه‌ی PDF ← PNG (pypdfium2)؛ ReportError اگر صفحه نیست یا کتابخانه نیست."""
+    try:
+        import pypdfium2 as pdfium
+    except Exception as exc:  # noqa: BLE001
+        raise ReportError("خروجی تصویر روی این سرور آماده نیست.") from exc
+    try:
+        doc = pdfium.PdfDocument(pdf)
+        if not 1 <= page <= len(doc):
+            raise ReportError(f"گزارش {len(doc)} صفحه دارد.")
+        img = doc[page - 1].render(scale=max(0.5, min(scale, 3.0))).to_pil()
+        out = io.BytesIO()
+        img.save(out, "PNG", optimize=True)
+        return out.getvalue()
+    except ReportError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise ReportError("ساخت تصویر انجام نشد.") from exc
+
+
+def page_count(pdf: bytes) -> int:
+    try:
+        import pypdfium2 as pdfium
+
+        return len(pdfium.PdfDocument(pdf))
+    except Exception:  # noqa: BLE001
+        return 1
