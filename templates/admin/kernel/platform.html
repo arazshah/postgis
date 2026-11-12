@@ -1,0 +1,67 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<style>#content-main code{word-break:break-all}#content-main .form-row{overflow:visible;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}#content-main input[dir=ltr]{max-width:100%}</style>
+<div id="content-main">
+  <h2>کلیدهای ناشر بسته‌ی پلاگین</h2>
+  <p>فقط بسته‌ای که با کلید یکی از این ناشران امضا شده باشد پذیرفته می‌شود. <b>کلید خصوصی هرگز به سرور نمی‌رسد:</b> در مرورگر شما ساخته می‌شود و فقط کلید عمومی ذخیره می‌شود.</p>
+  <div style="overflow-x:auto"><table>
+    <thead><tr><th>ناشر</th><th>کلید عمومی</th><th>وضعیت</th><th>افزوده‌شده توسط</th><th></th></tr></thead>
+    <tbody>
+    {% for n in env_keys %}<tr><td dir="ltr">{{ n }}</td><td>از تنظیم استقرار</td><td>فعال</td><td>—</td><td></td></tr>{% endfor %}
+    {% for k in keys %}
+      <tr><td dir="ltr">{{ k.name }}</td><td dir="ltr"><code>{{ k.public_key }}</code></td><td>{% if k.active %}فعال{% else %}غیرفعال{% endif %}</td><td>{{ k.added_by|default:"—" }}</td>
+      <td><form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="pk" value="{{ k.pk }}">
+        <button name="action" value="toggle_key">{% if k.active %}غیرفعال{% else %}فعال{% endif %}</button>
+        <button name="action" value="remove_key" onclick="return confirm('کلید حذف شود؟')">حذف</button></form></td></tr>
+    {% empty %}{% if not env_keys %}<tr><td colspan="5">هنوز ناشری ثبت نشده؛ پایین یک جفت‌کلید بسازید.</td></tr>{% endif %}{% endfor %}
+    </tbody>
+  </table></div>
+
+  <h3>ساخت جفت‌کلید (در مرورگر)</h3>
+  <p class="help">۱) نام ناشر را بنویسید و «ساخت» را بزنید. ۲) فایل کلید خصوصی دانلود می‌شود؛ آن را فقط جایی نگه دارید که بسته را امضا می‌کنید (مثلاً CI) و هرگز در مخزن یا سرور نگذارید. ۳) کلید عمومی خودکار در فرم پر می‌شود؛ «افزودن» را بزنید.</p>
+  <p id="kg-unsupported" class="errornote" style="display:none">این مرورگر ساخت کلید Ed25519 را پشتیبانی نمی‌کند؛ مرورگر تازه‌تر (Chrome/Edge/Firefox/Safari جدید) یا فرمان plugin_keygen را روی رایانه‌ی خودتان استفاده کنید.</p>
+  <form method="post" id="addkey">{% csrf_token %}<input type="hidden" name="action" value="add_key">
+    <fieldset class="module aligned" style="overflow:visible">
+      <div class="form-row"><label for="kname">نام ناشر</label> <input id="kname" name="name" dir="ltr" required pattern="[a-z][a-z0-9_-]{1,39}" placeholder="geopaygah"></div>
+      <div class="form-row"><label for="kpub">کلید عمومی</label> <input id="kpub" name="public_key" dir="ltr" size="60" required></div>
+    </fieldset>
+    <div class="submit-row"><button type="button" id="kgen">ساخت جفت‌کلید و دانلود کلید خصوصی</button> <input type="submit" class="default" value="افزودن کلید عمومی"></div>
+  </form>
+
+  <h2>اجرای کد سطح ۲ (runner)</h2>
+  <p>وضعیت: {% if mode == "remote" %}<b>راه‌دور</b>{% else %}<b>خاموش</b>{% endif %}
+    {% if mode == "remote" %} — {% if health_ok %}<span style="color:green">{{ health }}</span>{% else %}<span style="color:#b00">{{ health }}</span>{% endif %}{% endif %}
+    <br>توکن مشترک: {% if token_ok %}ساخته شده (خودکار){% else %}هنوز نیست — سرویس plugin-runner باید بالا باشد{% endif %}</p>
+  <form method="post">{% csrf_token %}
+    <fieldset class="module aligned" style="overflow:visible">
+      <div class="form-row"><label>حالت</label>
+        <label><input type="radio" name="mode" value="off" {% if mode != "remote" %}checked{% endif %}> خاموش</label>
+        <label><input type="radio" name="mode" value="remote" {% if mode == "remote" %}checked{% endif %}> راه‌دور (کانتینر plugin-runner)</label></div>
+      <div class="form-row"><label for="ru">نشانی runner</label> <input id="ru" name="url" dir="ltr" size="40" value="{{ url }}" placeholder="{{ default_url }}"></div>
+      <div class="form-row"><label for="rc">نشانی داخلی web</label> <input id="rc" name="callback" dir="ltr" size="40" value="{{ callback }}" placeholder="{{ default_callback }}"></div>
+      <div class="form-row"><label for="rt">مهلت (ثانیه)</label> <input id="rt" name="timeout" type="number" min="2" max="60" value="{{ timeout }}"></div>
+    </fieldset>
+    <div class="submit-row"><button name="action" value="save_runner" class="default">ذخیره</button> <button name="action" value="test_runner">آزمون اتصال</button></div>
+  </form>
+</div>
+<script>
+(function () {
+  var b64 = function (buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))); };
+  var btn = document.getElementById("kgen");
+  btn.addEventListener("click", async function () {
+    var name = document.getElementById("kname").value.trim();
+    if (!/^[a-z][a-z0-9_-]{1,39}$/.test(name)) { alert("اول نام ناشر را (حروف کوچک انگلیسی) بنویسید."); return; }
+    try {
+      var kp = await crypto.subtle.generateKey({name: "Ed25519"}, true, ["sign", "verify"]);
+      var pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", kp.privateKey));
+      var seed = pkcs8.slice(pkcs8.length - 32);            // ۳۲ بایت خام؛ همان قالب فایل plugin_keygen
+      var pub = await crypto.subtle.exportKey("raw", kp.publicKey);
+      document.getElementById("kpub").value = b64(pub);
+      var blob = new Blob([b64(seed) + "\n"], {type: "text/plain"});
+      var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name + ".key"; a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) { document.getElementById("kg-unsupported").style.display = "block"; }
+  });
+})();
+</script>
+{% endblock %}

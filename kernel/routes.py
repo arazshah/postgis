@@ -31,7 +31,14 @@ class Route:
     plugin: str
 
 
+EXT_GROUPS = ("ext", "ws_ext")  # گروه‌های مجاز پلاگین سطح ۳؛ مسیر باید با «<id>/» شروع شود
+
+
 def add(group: str, route: str, view: str, name: str, *, plugin: str, order: int = 100) -> None:
+    if group in EXT_GROUPS and not route.startswith(f"{plugin}/"):
+        from .plugins import PluginError
+
+        raise PluginError(f"مسیر {route!r} در گروه {group} باید با «{plugin}/» شروع شود.")
     registry.add(POINT, f"{group}:{name}", Route(group, route, view, name, plugin), plugin=plugin, order=order)
 
 

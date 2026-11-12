@@ -22,7 +22,8 @@ def public(view):
 def owner_plugin(view_func) -> str | None:
     target = getattr(view_func, "view_class", view_func)
     module = getattr(target, "__module__", "") or ""
-    first = module.split(".", 1)[0]
+    parts = module.split(".")
+    first = parts[1] if parts[0] == "ext" and len(parts) > 1 else parts[0]  # ext.<id>.… ← پلاگین سطح ۳
     return first if first in registry.plugins else None
 
 
@@ -40,7 +41,9 @@ class PluginGateMiddleware:
             return None
         st = entitlements.state(pid)
         if st is None:
-            return None
+            if entitlements.is_enabled(pid):
+                return None
+            raise Http404  # سطح ۳ بدون ردیف وضعیت: بسته
         if not st.enabled:
             raise Http404
         if st.access == "open" or getattr(view_func, "gate_public", False):

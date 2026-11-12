@@ -3,13 +3,14 @@
 (کمک‌تابع‌های داشبورد پنل در kernel/dash.py است.)
 """
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 from django.utils.html import format_html, format_html_join
 
-from . import conf, entitlements, pagekit, pkg, stepup, studio, workspace
+from . import conf, entitlements, pagekit, pkg, platform, stepup, studio, workspace
 from .models import (
     Entitlement,
     Organization,
@@ -19,6 +20,7 @@ from .models import (
     PluginState,
     PluginTrip,
     PluginUsage,
+    PublisherKey,
 )
 from .plugins import registry
 
@@ -28,7 +30,9 @@ def sync_states() -> int:
     made = 0
     for p in registry.plugins.values():
         if p.kind != "system":
-            _, new = PluginState.objects.get_or_create(plugin_id=p.id)
+            # سطح ۳ به‌طور پیش‌فرض «محدود و بدون مجوز» است؛ مدیر باید آگاهانه مجوز بدهد (ADR-0007)
+            defaults = {"access": PluginState.Access.RESTRICTED} if p.tier == 3 else {}
+            _, new = PluginState.objects.get_or_create(plugin_id=p.id, defaults=defaults)
             made += new
     return made
 
@@ -589,3 +593,116 @@ class PluginTripAdmin(admin.ModelAdmin):
 
         n = queryset.filter(seen_at__isnull=True).update(seen_at=timezone.now())
         self.message_user(request, f"{n} مورد دیده‌شده شد.", messages.SUCCESS)
+
+
+# ---------------------------------------------------------------------- سکو: کلیدهای ناشر و اجرای کد سطح ۲
+def _clean_url(raw: str) -> str:
+    """نشانی http(s) معتبر یا ValueError. نشانی IP محلی-پیوندی (مثل متادیتای ابر) پذیرفته نمی‌شود."""
+    import ipaddress
+    from urllib.parse import urlparse
+
+    raw = (raw or "").strip().rstrip("/")
+    if not raw:
+        return ""
+    u = urlparse(raw)
+    if u.scheme not in ("http", "https") or not u.hostname:
+        raise ValueError("نشانی باید با http:// یا https:// شروع شود.")
+    try:
+        ip = ipaddress.ip_address(u.hostname)
+    except ValueError:
+        return raw
+    if ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+        raise ValueError("این نشانی پذیرفته نیست.")
+    return raw
+
+
+@admin.register(PublisherKey)
+class PublisherKeyAdmin(admin.ModelAdmin):
+    """صفحه‌ی «سکو»: کلید عمومی ناشران (کلید خصوصی در مرورگر ساخته می‌شود و به سرور نمی‌رسد) و تنظیم اجرای کد سطح ۲."""
+
+    list_display = ("name", "active", "added_by", "created_at")
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser or request.user.has_perm("kernel.change_publisherkey")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        from django.template.response import TemplateResponse
+
+        if not self.has_module_permission(request):
+            raise PermissionDenied
+        mutating = {"add_key", "remove_key", "toggle_key", "save_runner"}
+        action = request.POST.get("action", "") if request.method == "POST" else ""
+        if action in mutating and not stepup.ok(request):
+            return redirect(stepup.url(request))
+        if action:
+            self._handle(request, action)
+            return redirect(request.path)
+        rows = PublisherKey.objects.select_related("added_by")
+        ok, detail = platform.runner_health() if platform.runner_mode() == "remote" else (False, "حالت اجرا «خاموش» است.")
+        return TemplateResponse(request, "admin/kernel/platform.html", {
+            **self.admin_site.each_context(request), "title": "سکو: کلیدهای ناشر و اجرای کد", "opts": self.model._meta,
+            "keys": rows, "env_keys": sorted(_env_key_names()), "mode": platform.runner_mode(),
+            "url": platform.get("runner_url"), "callback": platform.get("runner_callback"),
+            "timeout": platform.get("runner_timeout", "10"), "default_url": platform.DEFAULT_URL,
+            "default_callback": platform.DEFAULT_CALLBACK, "token_ok": bool(platform.runner_token()),
+            "health_ok": ok, "health": detail, "from_panel": platform._from_panel(), **(extra_context or {})})
+
+    def _handle(self, request, action: str) -> None:
+        import logging
+
+        log = logging.getLogger(__name__)
+        post = request.POST
+        if action == "add_key":
+            name, key = post.get("name", "").strip(), post.get("public_key", "").strip()
+            if not platform.NAME_RE.fullmatch(name):
+                return messages.error(request, "نام ناشر: حروف کوچک انگلیسی، عدد، - و _ (۲ تا ۴۰ نویسه).")
+            if not platform.valid_public_key(key):
+                return messages.error(request, "کلید عمومی نامعتبر است (base64 یک کلید Ed25519).")
+            if PublisherKey.objects.filter(name=name).exists() or name in _env_key_names():
+                return messages.error(request, "ناشری با این نام از پیش هست.")
+            PublisherKey.objects.create(name=name, public_key=key, added_by=request.user)
+            log.warning("publisher key added: %s by user %s", name, request.user.pk)
+            messages.success(request, f"کلید ناشر «{name}» افزوده شد. بسته‌های امضاشده با آن پذیرفته می‌شوند.")
+        elif action in ("remove_key", "toggle_key"):
+            k = PublisherKey.objects.filter(pk=post.get("pk")).first()
+            if k is None:
+                return messages.error(request, "کلید پیدا نشد.")
+            if action == "remove_key":
+                k.delete()
+                log.warning("publisher key removed: %s by user %s", k.name, request.user.pk)
+                messages.warning(request, f"کلید «{k.name}» حذف شد؛ بسته‌های فعال از پیش بررسی‌شده می‌مانند.")
+            else:
+                k.active = not k.active
+                k.save(update_fields=["active"])
+                messages.success(request, f"کلید «{k.name}» {'فعال' if k.active else 'غیرفعال'} شد.")
+        elif action == "save_runner":
+            mode = post.get("mode", "off")
+            if mode not in platform.RUNNER_MODES:
+                return messages.error(request, "حالت اجرا نامعتبر است.")
+            try:
+                url, cb = _clean_url(post.get("url")), _clean_url(post.get("callback"))
+                timeout = int(post.get("timeout") or 10)
+                if not 2 <= timeout <= 60:
+                    raise ValueError("مهلت بین ۲ تا ۶۰ ثانیه باشد.")
+            except ValueError as exc:
+                return messages.error(request, str(exc))
+            for k, v in (("runner_mode", mode), ("runner_url", url), ("runner_callback", cb), ("runner_timeout", str(timeout))):
+                platform.set_(k, v)
+            log.warning("runner config changed by user %s: mode=%s", request.user.pk, mode)
+            messages.success(request, "تنظیم اجرای کد ذخیره شد.")
+        elif action == "test_runner":
+            ok, detail = platform.runner_health()
+            (messages.success if ok else messages.error)(request, detail)
+
+
+def _env_key_names() -> set[str]:
+    try:
+        return set(pkg.parse_keys(getattr(settings, "PLUGIN_PUBLISHER_KEYS", "")))
+    except pkg.PackageError:
+        return set()

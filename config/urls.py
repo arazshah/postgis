@@ -4,6 +4,7 @@ from django.urls import include, path
 from accounts.admin_2fa import twofa as admin_2fa
 from accounts.admin_auth import LockoutAdminAuthenticationForm
 from core.admin_search import search as admin_search
+from kernel import routes as kernel_routes
 
 # پنل مدیریت جدا از حساب کاربران: ورود با نام کاربری و رمز عبور
 admin.site.login_form = LockoutAdminAuthenticationForm
@@ -45,5 +46,8 @@ urlpatterns = [
     path("", include("enterprise.urls")),
     path("", include("satellite.urls")),
     path("", include("kernel.urls")),
+    # پلاگین‌های سطح ۳ (ext/): فقط زیر /x/ و dashboard/<pk>/x/ (docs/adr/0007)
+    path("x/", include((kernel_routes.patterns("ext"), "ext"))),
+    path("dashboard/<int:pk>/x/", include((kernel_routes.patterns("ws_ext"), "ws_ext"))),
     path("", include("core.urls")),
 ]
