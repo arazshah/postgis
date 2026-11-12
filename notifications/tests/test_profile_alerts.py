@@ -57,3 +57,16 @@ class ProfileAlertsTests(TestCase):
         with mock.patch("kernel.notify.begin_link", wraps=notify.begin_link):
             self.client.post(self.url, {"action": "notify_link", "channel": "telegram"})
         self.assertFalse(NotifyAddress.objects.exists())
+
+    def test_test_message_goes_to_linked_channel(self):
+        NotifyAddress.objects.create(user=self.user, channel="bale", chat_id="55")
+        with mock.patch.object(notify, "_http", return_value={"ok": True, "result": {}}) as h:
+            r = self.client.post(self.url, {"action": "notify_test"}, follow=True)
+        self.assertContains(r, "پیام آزمایشی به")
+        self.assertEqual(h.call_args.args[1]["chat_id"], "55")
+
+    def test_test_message_falls_back_when_not_linked(self):
+        with mock.patch("kernel.workspace.notify_user") as sms:
+            r = self.client.post(self.url, {"action": "notify_test"}, follow=True)
+        sms.assert_called_once()
+        self.assertContains(r, "پیامک")

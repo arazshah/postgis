@@ -27,6 +27,7 @@ admin.site.index = _index_with_stats
 urlpatterns = [
     path("manage/2fa/", admin_2fa, name="admin_2fa"),
     path("manage/plugins/", kernel_hub.hub, name="plugin_hub"),
+    path("manage/plugins/sample/", kernel_hub.install_sample, name="plugin_sample"),
     path("manage/_search/", admin.site.admin_view(admin_search), name="admin_search"),
     path("manage/", admin.site.urls),
     path("accounts/", include("accounts.urls")),
