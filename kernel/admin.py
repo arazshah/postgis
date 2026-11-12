@@ -400,7 +400,11 @@ class PluginDraftAdmin(admin.ModelAdmin):
         from django.urls import path
 
         wrap = self.admin_site.admin_view
-        return [path("studio/new/", wrap(self.studio_view), name="kernel_plugindraft_new"),
+        from . import wizard_admin
+
+        return [path("wizard/", wrap(wizard_admin.view), name="kernel_plugindraft_wizard_new"),
+                path("<int:pk>/wizard/<int:step>/", wrap(wizard_admin.view), name="kernel_plugindraft_wizard"),
+                path("studio/new/", wrap(self.studio_view), name="kernel_plugindraft_new"),
                 path("<int:pk>/studio/", wrap(self.studio_view), name="kernel_plugindraft_studio"),
                 path("<int:pk>/export/", wrap(self.export_view), name="kernel_plugindraft_export"),
                 *super().get_urls()]

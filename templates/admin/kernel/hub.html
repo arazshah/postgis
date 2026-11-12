@@ -46,8 +46,11 @@
   {% endif %}
 
   {% elif tab == "create" %}
-  <p>ساخت پلاگین تازه: صفحه‌ها (شمارنده، جدول، نقشه، فرم، دریافت داده‌ی دستگاه) را در استودیو بسازید و بررسی کنید. ویزارد مرحله‌به‌مرحله (جدول، کد، قیمت، انتشار) در گام‌های بعدی همین‌جا می‌آید.</p>
-  {% if studio_url %}<p><a class="button default" href="{{ studio_url }}">باز کردن استودیوی پلاگین</a></p>{% endif %}
+  <p>ساخت پلاگین تازه گام‌به‌گام: معرفی، داده (جدول‌ها)، صفحه‌ها با کاشی بلوک و پیش‌نمایش. SQL و جدول را هسته می‌سازد.</p>
+  {% if wizard_url %}<p><a class="button default" href="{{ wizard_url }}">شروع ساخت پلاگین تازه</a></p>{% endif %}
+  {% if drafts %}<h2>پیش‌نویس‌ها</h2>
+  <ul class="ph-list">{% for d in drafts %}<li><a href="{{ d.url }}">{{ d.name }}</a> <span class="help ltr">{{ d.id }}</span> <span class="help">{% if d.wizard %}ویزارد{% else %}استودیو{% endif %}</span></li>{% endfor %}</ul>{% endif %}
+  {% if studio_url %}<p class="help">ویرایش دستی (TOML و کد) و خروجی بسته: <a href="{{ studio_url }}">استودیوی پلاگین</a>.</p>{% endif %}
 
   {% elif tab == "sales" %}
   <ul class="ph-list">{% for l in links %}<li><a href="{{ l.url }}">{{ l.title }}</a><div class="help">{{ l.hint }}</div></li>{% endfor %}</ul>
