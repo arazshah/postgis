@@ -1,4 +1,4 @@
-{% extends "databases/_ws.html" %}{% load fa static ws %}
+{% extends "databases/_ws.html" %}{% load fa pk static ws %}
 {% block title %}یافتن عارضه — {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block head %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
 <link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">
@@ -14,7 +14,7 @@
 <div class="card find-empty">
   {% icon "table" 28 %}
   <p>هنوز جدولی در این پایگاه داده نیست. اول یک فایل وارد کنید یا داده آماده بگیرید؛ بعد اینجا عارضه‌هایش را پیدا کنید.</p>
-  {% if db.can_edit %}<a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a>{% endif %}
+  {% route_on "databases:import" db as imp_on %}{% if db.can_edit and imp_on %}<a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a>{% endif %}
 </div>
 {% else %}
 <div class="find" data-find>

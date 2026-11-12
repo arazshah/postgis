@@ -1,4 +1,4 @@
-{% extends "databases/_explore_base.html" %}{% load fa static ws %}
+{% extends "databases/_explore_base.html" %}{% load fa pk static ws %}
 {% block head %}{% if tab == 'map' %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% if edit_cfg.capable %}<link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">{% endif %}{% endif %}{% if edit_cfg.capable or structure_cfg %}<link rel="stylesheet" href="{% static 'css/table-geom.css' %}">{% endif %}{% endblock %}
 {% block ex %}
 <div class="ex-title">
@@ -25,7 +25,7 @@
         <a role="menuitem" href="{% url 'databases:explore_export' db.pk t.schema t.name 'xlsx' %}">{% icon "table" 18 %}<span>اکسل{% if t.geometry %} (هندسه به WKT){% endif %}</span></a>
       </div>
     </div>
-    {% if db.can_edit and db.status == 'active' and t.kind in 'rp' %}<a class="btn ghost sm" href="{% url 'databases:import' db.pk %}?into={{ t.schema }}.{{ t.name }}">{% icon "upload" 16 %}ورود فایل به این جدول</a>{% endif %}
+    {% route_on "databases:import" db as imp_on %}{% if imp_on and db.can_edit and db.status == 'active' and t.kind in 'rp' %}<a class="btn ghost sm" href="{% url 'databases:import' db.pk %}?into={{ t.schema }}.{{ t.name }}">{% icon "upload" 16 %}ورود فایل به این جدول</a>{% endif %}
     {% if edit_cfg %}<a class="ib" href="{% url 'core:help_page' 'edittable' %}" target="_blank" rel="noopener" title="ویدیوی آموزشی ویرایش جدول" aria-label="آموزش تصویری ویرایش جدول">{% icon "help" 20 %}</a>{% endif %}
   </div>
 </div>

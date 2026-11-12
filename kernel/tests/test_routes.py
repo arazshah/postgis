@@ -1,6 +1,6 @@
 """ثبت مسیر توسط پلاگین (kernel.routes) و جدا بودن بخش‌های databases (ADR-0006)."""
 from django.http import Http404, HttpResponse
-from django.test import RequestFactory, SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase
 from django.urls import reverse
 
 from kernel import gate, routes
@@ -71,3 +71,37 @@ class DatabasesSectionsTests(SimpleTestCase):
 
     def test_no_route_is_unavailable_in_a_healthy_install(self):
         self.assertEqual(routes.broken(), [])
+
+
+class RouteOnTests(TestCase):
+    """پیوند بین‌بخشی نباید به بخش خاموش یا محدودشده برود (ADR-0006)."""
+
+    def setUp(self):
+        from kernel import entitlements
+
+        entitlements.invalidate()
+        self.addCleanup(entitlements.invalidate)
+
+    def test_unregistered_route_is_always_on_and_registered_follows_the_plugin_state(self):
+        from unittest import mock
+
+        from kernel import entitlements
+
+        self.assertTrue(routes.on("databases:dashboard"))  # مسیر میزبان ثبت‌نشده در routes
+        self.assertTrue(routes.on("databases:import"))
+        with mock.patch.object(entitlements, "allowed", return_value=False) as allowed:
+            self.assertFalse(routes.on("databases:import", user="u", ws="w"))
+            allowed.assert_called_once_with("dbimport", user="u", ws="w")
+            self.assertTrue(routes.on("databases:dashboard"))
+
+    def test_template_tag_uses_the_request_user(self):
+        from types import SimpleNamespace
+        from unittest import mock
+
+        from kernel.templatetags.pk import route_on
+
+        ctx = {"request": SimpleNamespace(user="alice")}
+        with mock.patch("kernel.routes.on", return_value=False) as on:
+            self.assertFalse(route_on(ctx, "databases:import", "ws"))
+            on.assert_called_once_with("databases:import", user="alice", ws="ws")
+        self.assertTrue(route_on({}, "nope:none"))

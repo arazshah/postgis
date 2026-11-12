@@ -1,4 +1,4 @@
-{% extends "databases/_ws.html" %}{% load fa ws %}
+{% extends "databases/_ws.html" %}{% load fa pk ws %}
 {% block title %}{{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 {% firstof once_password "YOUR_PASSWORD" as pw %}
@@ -38,10 +38,10 @@
         <span class="dash-ico">{% icon "pin" 20 %}</span>
         <span class="dash-txt"><b>{% if first_steps == 'running' %}پیگیری ورود داده{% else %}داده‌ی آماده‌ی ایران{% endif %}</b><small>استان یا شهرستان را انتخاب کنید؛ جاده، ساختمان و مرز با یک کلیک وارد می‌شود.</small></span>
       </a>
-      <a class="dash-tile" href="{% url 'databases:import' db.pk %}">
+      {% route_on "databases:import" db as imp_on %}{% if imp_on %}<a class="dash-tile" href="{% url 'databases:import' db.pk %}">
         <span class="dash-ico">{% icon "upload" 20 %}</span>
         <span class="dash-txt"><b>فایل خودتان را وارد کنید</b><small>Shapefile (zip)، GeoJSON، GeoPackage، KML یا CSV.</small></span>
-      </a>
+      </a>{% endif %}
       <a class="dash-tile" href="#howto-title">
         <span class="dash-ico">{% icon "link" 20 %}</span>
         <span class="dash-txt"><b>از QGIS وصل شوید</b><small>اطلاعات اتصال همین صفحه را در QGIS بگذارید.</small></span>

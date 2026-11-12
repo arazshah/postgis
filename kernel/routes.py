@@ -67,6 +67,16 @@ def patterns(group: str) -> list:
     return out
 
 
+def on(name: str, *, user=None, ws=None) -> bool:
+    """مسیر «گروه:نام» برای این کاربر و فضای کار روشن و مجاز است؟ مسیر ثبت‌نشده (میزبان یا اپ دیگر) همیشه روشن است.
+
+    پیوندی که به بخش خاموش یا محدودشده می‌رود نباید ساخته شود (وگرنه کاربر به ۴۰۴ می‌رسد)."""
+    from . import entitlements
+
+    r = registry.get(POINT, name)
+    return True if r is None else entitlements.allowed(r.plugin, user=user, ws=ws)
+
+
 def broken() -> list[tuple[str, str, str]]:
     """(پلاگین، نام مسیر، خطا) برای بررسی سیستم."""
     out = []

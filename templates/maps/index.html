@@ -1,4 +1,4 @@
-{% extends "databases/_ws.html" %}{% load fa ws %}
+{% extends "databases/_ws.html" %}{% load fa pk ws %}
 {% block title %}نقشه‌های چندلایه {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block ws %}
 <div class="wrap page">
@@ -75,7 +75,7 @@
   {% else %}
   <div class="empty">{% icon "layers" 28 %}<h2>جدول مکانی ندارید</h2>
     <p class="muted">برای ساخت نقشه دست‌کم یک جدول با ستون geometry و SRID معلوم لازم است.</p>
-    <a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a>
+    {% route_on "databases:import" db as imp_on %}{% if imp_on %}<a class="btn" href="{% url 'databases:import' db.pk %}">{% icon "upload" 18 %}ورود فایل</a>{% endif %}
   </div>
   {% endif %}
 </div>
