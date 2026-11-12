@@ -71,6 +71,91 @@ jobs:
       - name: Tests (unit + PostGIS integration)
         run: python manage.py test -v 2
 
+  # پلاگین‌های سطح ۳ (ext/، docs/adr/0007): فقط وقتی ext/ پلاگینی دارد کار می‌کند؛ بدون آن در چند ثانیه رد می‌شود.
+  # شکست این job جلوی publish را می‌گیرد.
+  ext-preflight:
+    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    needs: test
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      panel-db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: panel
+        ports: ["5434:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DJANGO_TESTING: "1"
+      DATABASE_URL: postgres://postgres:postgres@localhost:5434/panel
+      TEST_PG_HOST: localhost
+      TEST_PG_PORT: "5432"
+      TEST_PG_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: آیا پلاگین سطح ۳ هست؟
+        id: has
+        run: |
+          n=$(ls -d ext/*/apps.py 2>/dev/null | wc -l)
+          echo "count=$n" >> "$GITHUB_OUTPUT"
+          [ "$n" = "0" ] && echo "ext/ پلاگینی ندارد؛ بررسی رد شد."
+          exit 0
+      - uses: actions/setup-python@v5
+        if: steps.has.outputs.count != '0'
+        with:
+          python-version: "3.13"
+          cache: pip
+      - if: steps.has.outputs.count != '0'
+        run: pip install -r requirements-dev.txt
+      - name: ext_check (ساختار، کد ممنوع، مهاجرت افزایشی)
+        if: steps.has.outputs.count != '0'
+        run: python manage.py ext_check
+      - name: manage.py check و مهاجرت روی پایگاه خالی
+        if: steps.has.outputs.count != '0'
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py migrate --noinput
+      - name: مهاجرت از طرح main به جلو (پایگاهی با کد main بساز، بعد با کد این PR مهاجرت بده)
+        if: steps.has.outputs.count != '0' && github.event_name == 'pull_request'
+        run: |
+          python - <<'PY'
+          import psycopg
+          with psycopg.connect("postgresql://postgres:postgres@localhost:5434/postgres", autocommit=True) as c:
+              c.execute("DROP DATABASE IF EXISTS panel_fwd")
+              c.execute("CREATE DATABASE panel_fwd")
+          PY
+          export DATABASE_URL=postgres://postgres:postgres@localhost:5434/panel_fwd
+          git worktree add ../main-src "origin/${{ github.base_ref }}"
+          (cd ../main-src && PLUGINS_SAFE_MODE=1 python manage.py migrate --noinput)
+          python manage.py migrate --noinput
+      - name: آزمون‌های خود پلاگین‌ها (دست‌کم یکی الزامی است؛ ext_check این را می‌سنجد)
+        if: steps.has.outputs.count != '0'
+        run: python manage.py test ext -v 2
+      - name: آزمون دود (بارگذاری مسیرها بی‌خطا، /healthz و صفحه‌ی خانه ۲۰۰)
+        if: steps.has.outputs.count != '0'
+        run: |
+          python manage.py shell -c "
+          from kernel import routes
+          assert not routes.broken(), routes.broken()
+          from django.test import Client
+          c = Client()
+          assert c.get('/healthz').status_code == 200
+          assert c.get('/').status_code == 200
+          print('smoke ok')"
+
   docker:
     runs-on: ubuntu-latest
     needs: test
@@ -219,7 +304,7 @@ jobs:
   # ساخت و انتشار ایمیج‌ها در GHCR (فقط بعد از سبز شدن main)؛ Coolify همین ایمیج‌ها را pull می‌کند
   publish:
     runs-on: ubuntu-latest
-    needs: docker
+    needs: [docker, ext-preflight]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
