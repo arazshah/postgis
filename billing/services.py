@@ -284,3 +284,80 @@ def maintenance() -> dict:
 
 def unused_vouchers(user):
     return PlanVoucher.objects.filter(user=user, used_by__isnull=True).select_related("plan")
+
+
+# ---------------------------------------------------------------------- بازار پلاگین (ADR-0008 مرحله‌ی ۶)
+TRIAL_NOTE = "دوره‌ی آزمایشی"
+
+
+def _subject(addon: PluginAddon, user, database: UserDatabase | None):
+    """(نوع دارنده، شناسه) مجوز این افزونه برای این کاربر/پایگاه؛ BillingError اگر هدف درست نیست."""
+    if addon.scope == PluginAddon.Scope.WORKSPACE:
+        if database is None or database.owner_id != user.pk or database.status == UserDatabase.Status.DELETED:
+            raise BillingError("برای این پلاگین یک پایگاه داده‌ی خودتان را انتخاب کنید.")
+        return "workspace", str(database.pk)
+    return "user", str(user.pk)
+
+
+def addon_status(addon: PluginAddon, user, database: UserDatabase | None = None) -> dict:
+    """وضعیت مجوز این پلاگین برای دارنده: {state: none|trial|active|expired، source، days_left، expires_at}."""
+    from kernel.models import Entitlement
+
+    try:
+        kind, subject = _subject(addon, user, database)
+    except BillingError:
+        return {"state": "none", "source": "", "days_left": None, "expires_at": None}
+    ent = Entitlement.objects.filter(state__plugin_id=addon.plugin_id, kind=kind, subject=subject).first()
+    if ent is None:
+        return {"state": "none", "source": "", "days_left": None, "expires_at": None}
+    now = timezone.now()
+    if ent.expires_at is None:
+        return {"state": "active", "source": ent.source, "days_left": None, "expires_at": None}
+    if ent.expires_at <= now:
+        return {"state": "expired", "source": ent.source, "days_left": 0, "expires_at": ent.expires_at}
+    left = max(1, (ent.expires_at - now).days + (1 if (ent.expires_at - now).seconds else 0))
+    return {"state": "trial" if ent.source == "trial" else "active", "source": ent.source, "days_left": left, "expires_at": ent.expires_at}
+
+
+def start_trial(user, addon: PluginAddon, database: UserDatabase | None = None):
+    """دوره‌ی آزمایشی رایگان: **یک‌بار** برای هر (پلاگین، دارنده)؛ هر ردیف مجوز قبلی (حتی منقضی) مانع است."""
+    from kernel.models import Entitlement
+
+    if addon not in public_addons():
+        raise BillingError("این پلاگین قابل دریافت نیست.")
+    if addon.trial_days <= 0:
+        raise BillingError("این پلاگین دوره‌ی آزمایشی ندارد.")
+    kind, subject = _subject(addon, user, database)
+    if Entitlement.objects.filter(state__plugin_id=addon.plugin_id, kind=kind, subject=subject).exists():
+        raise BillingError("برای این پلاگین پیش‌تر مجوز (آزمایشی یا خرید) داشته‌اید؛ دوره‌ی آزمایشی فقط یک‌بار است.")
+    try:
+        ent = entitlements.grant(addon.plugin_id, kind, subject, source="trial", days=addon.trial_days, limits=addon.limits, note=TRIAL_NOTE)
+    except ValueError as exc:
+        raise BillingError(str(exc)) from exc
+    workspace.log_event("plan", f"دوره‌ی آزمایشی {addon.title} ({addon.trial_days} روز) فعال شد", user=user, database=database)
+    return ent
+
+
+def market_items(user) -> dict:
+    """داده‌ی صفحه‌ی بازار: پلاگین‌های پولی با وضعیت هر دارنده، و پلاگین‌های رایگانِ باز."""
+    from kernel.models import PluginState
+    from kernel.plugins import registry
+
+    dbs = list(user.databases.exclude(status__in=[UserDatabase.Status.DELETED, UserDatabase.Status.ERROR,
+                                                  UserDatabase.Status.PENDING]).select_related("plan"))
+    paid, listed = [], set()
+    for a in public_addons():
+        listed.add(a.plugin_id)
+        p = registry.plugins.get(a.plugin_id)
+        if a.scope == PluginAddon.Scope.WORKSPACE:
+            rows = [{"db": d, **addon_status(a, user, d)} for d in dbs]
+        else:
+            rows = [{"db": None, **addon_status(a, user)}]
+        paid.append({"addon": a, "name": a.title, "summary": a.description or (p.description if p else ""), "rows": rows,
+                     "can_trial": a.trial_days > 0, "workspace": a.scope == PluginAddon.Scope.WORKSPACE})
+    free = []
+    for st in PluginState.objects.filter(enabled=True, access=PluginState.Access.OPEN):
+        p = registry.plugins.get(st.plugin_id)
+        if p and p.kind != "system" and st.plugin_id not in listed:
+            free.append({"id": p.id, "name": p.name, "summary": p.description})
+    return {"paid": paid, "free": sorted(free, key=lambda x: x["name"]), "dbs": dbs}

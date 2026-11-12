@@ -223,6 +223,8 @@ class Entitlement(models.Model):
     limits = models.JSONField("سقف‌ها", default=dict, blank=True,
                               help_text='مثلاً {"devices": 50}؛ پلاگین خودش می‌خواند.')
     note = models.CharField("یادداشت (مثلاً شماره‌ی قرارداد)", max_length=200, blank=True)
+    notified = models.PositiveSmallIntegerField("مرحله‌ی اطلاع‌رسانی انقضا", default=0,
+                                                help_text="۰ = چیزی نگفته‌ایم، ۱ = هشدار نزدیک انقضا داده شد، ۲ = انقضا اعلام شد (تمدید صفرش می‌کند).")
     granted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                    related_name="+", verbose_name="اعطاکننده")
     created_at = models.DateTimeField(auto_now_add=True)

@@ -198,6 +198,7 @@ def grant(plugin_id: str, kind: str, subject: str = "", *, source: str = "purcha
     elif created or ent.expires_at is not None:
         base = max(now, ent.expires_at) if ent.expires_at else now
         ent.expires_at = base + datetime.timedelta(days=days)
+        ent.notified = 0  # تمدید: اطلاع‌رسانی انقضا از نو
     ent.limits = {**(ent.limits or {}), **(limits or {})}
     ent.source = source
     if note:

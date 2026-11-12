@@ -67,6 +67,7 @@
       <div class="msep"></div>
       <a role="menuitem" href="{% url 'databases:dashboard' %}">{% icon "db" 18 %}<span>پایگاه‌های داده من</span></a>
       <a role="menuitem" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}<span>صورتحساب‌ها و پلن</span></a>
+      <a role="menuitem" href="{% url 'billing:market' %}">{% icon "cube" 18 %}<span>بازار پلاگین</span></a>
       <a role="menuitem" href="{% url 'accounts:profile' %}">{% icon "user" 18 %}<span>پروفایل و تنظیمات</span></a>
       <div class="msep"></div>
       <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button role="menuitem" class="danger" type="submit">{% icon "logout" 18 %}<span>خروج</span></button></form>
