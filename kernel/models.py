@@ -332,3 +332,22 @@ class IngestToken(models.Model):
 
     def __str__(self):
         return f"{self.plugin_id}/{self.page}/{self.key} {self.prefix}…"
+
+
+class PluginTable(models.Model):
+    """ردپای جدولی که هسته برای یک پلاگین در پایگاه یک مشتری ساخته است (kernel.tables)؛ `spec_hash` = ساختار اعلام‌شده‌ی اعمال‌شده."""
+
+    plugin_id = models.CharField("پلاگین", max_length=41)
+    table = models.CharField("جدول", max_length=63)
+    workspace_id = models.PositiveBigIntegerField("پایگاه داده", db_index=True)
+    spec_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "جدول پلاگین"
+        verbose_name_plural = "جدول‌های پلاگین"
+        constraints = [models.UniqueConstraint(fields=["plugin_id", "table", "workspace_id"], name="uniq_plugin_table_ws")]
+
+    def __str__(self):
+        return f"{self.plugin_id}.{self.table} @ {self.workspace_id}"

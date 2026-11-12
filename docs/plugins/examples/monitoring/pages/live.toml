@@ -6,35 +6,46 @@ group = "data"
 need = "editor"
 refresh = 15
 
+[[tables]]                       # هسته در پایگاه هر مشتری خودکار می‌سازد (بدون SQL دستی)
+name = "monitoring_points"       # باید با «<id پلاگین>_» شروع شود
+indexes = [["device", "at"]]
+columns = [
+  { name = "device", type = "text", required = true },
+  { name = "lat", type = "double", required = true },
+  { name = "lon", type = "double", required = true },
+  { name = "speed", type = "double" },
+  { name = "at", type = "timestamptz", auto_now = true },
+]
+
 [[blocks]]
 kind = "kpi"
 title = "دستگاه فعال (۵ دقیقه‌ی اخیر)"
 width = "third"
 unit = "دستگاه"
-sql = "select count(distinct device) from monitor_points where at > now() - interval '5 minutes'"
+sql = "select count(distinct device) from monitoring_points where at > now() - interval '5 minutes'"
 
 [[blocks]]
 kind = "kpi"
 title = "رکورد امروز"
 width = "third"
 unit = "رکورد"
-sql = "select count(*) from monitor_points where at::date = current_date"
+sql = "select count(*) from monitoring_points where at::date = current_date"
 
 [[blocks]]
 kind = "map"
 title = "آخرین موقعیت دستگاه‌ها"
-sql = "select distinct on (device) device, speed, at, st_setsrid(st_makepoint(lon, lat), 4326) as geom from monitor_points order by device, at desc"
+sql = "select distinct on (device) device, speed, at, st_setsrid(st_makepoint(lon, lat), 4326) as geom from monitoring_points order by device, at desc"
 
 [[blocks]]
 kind = "table"
 title = "۲۰ رکورد آخر"
-sql = "select device, speed, lat, lon, at from monitor_points order by at desc limit 20"
+sql = "select device, speed, lat, lon, at from monitoring_points order by at desc limit 20"
 columns = [["device", "دستگاه"], ["speed", "سرعت"], ["lat", "عرض"], ["lon", "طول"], ["at", "زمان"]]
 
 [[ingest]]
 key = "feed"
 title = "دریافت داده‌ی دستگاه"
-table = "monitor_points"
+table = "monitoring_points"
 max_rows = 100
 rate = 60
 hint = "دستگاه با توکن، JSON می‌فرستد: device، lat، lon و اختیاری speed."
