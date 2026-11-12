@@ -19,9 +19,32 @@ if [ "${AUTO_UPDATE_SSS:-1}" = "1" ]; then
     || echo "به‌روزرسانی smart-spatial-system ناموفق بود؛ با نسخه فعلی ادامه می‌دهیم"
 fi
 
-# مایگریشن خودکار در هر دیپلوی (قابل غیرفعال‌سازی)
+# مایگریشن خودکار در هر دیپلوی (قابل غیرفعال‌سازی). اپ‌های داخلی بدون هیچ پلاگین ext (PLUGINS_SAFE_MODE)،
+# پلاگین‌های ext بعداً و هرکدام جدا (docs/adr/0007): خطای یکی سایت را نمی‌خواباند.
 if [ "${RUN_MIGRATIONS:-1}" = "1" ]; then
-  python manage.py migrate --noinput
+  PLUGINS_SAFE_MODE=1 python manage.py migrate --noinput
+fi
+
+# پیش‌پرواز پلاگین‌های سطح ۳ (هر پلاگین در زیرپردازه‌ی جدا؛ بدون پلاگین در ext/ هیچ کاری نمی‌کند).
+# خود فرمان در حالت امن اجرا می‌شود تا import پلاگین معیوب آن را نخواباند.
+# معیوب‌ها برای همین بوت کنار می‌روند و اگر ترکیب سالم‌ها هم شکست خورد، حالت امن. خودِ پیش‌پرواز هرگز شروع را نمی‌شکند.
+if [ "${EXT_PREFLIGHT:-1}" = "1" ] && [ "${PLUGINS_SAFE_MODE:-}" != "1" ]; then
+  MIG=""
+  [ "${RUN_MIGRATIONS:-1}" = "1" ] && MIG="--migrate"
+  if PF="$(PLUGINS_SAFE_MODE=1 python manage.py ext_preflight --shell $MIG)"; then
+    eval "$PF"
+    if [ -n "${EXT_DISABLED_NOW:-}" ]; then
+      export PLUGINS_DISABLED="${PLUGINS_DISABLED:+$PLUGINS_DISABLED,}$EXT_DISABLED_NOW"
+      echo "پلاگین‌های سطح ۳ کنار گذاشته شد: $EXT_DISABLED_NOW"
+    fi
+    if [ "${EXT_SAFE_MODE_NOW:-}" = "1" ]; then
+      export PLUGINS_SAFE_MODE=1
+      echo "حالت امن: هیچ پلاگین سطح ۳ بار نمی‌شود"
+    fi
+  else
+    export PLUGINS_SAFE_MODE=1
+    echo "پیش‌پرواز ext شکست خورد؛ حالت امن"
+  fi
 fi
 
 # بعد از تعویض ایمیج panel-db از alpine (musl) به pgvector (Debian/glibc) ترتیب مرتب‌سازی متن‌ها عوض می‌شود و
