@@ -15,7 +15,7 @@
 .pk-bt{display:block;height:10px;border-radius:var(--r-ctl);background:var(--line-2);overflow:hidden}
 .pk-bt i{display:block;height:100%;background:var(--teal);border-radius:var(--r-ctl)}
 .pk-bv{font-variant-numeric:tabular-nums}
-.pk-draw{height:320px;width:100%;border-radius:var(--r-card);border:1px solid var(--line);overflow:hidden}
+.pk-draw{box-sizing:border-box;height:320px;width:100%;border-radius:var(--r-card);border:1px solid var(--line);overflow:hidden}
 .pk-map{height:360px;border-radius:var(--r-card);border:1px solid var(--line);overflow:hidden}
 .pk-grid .stat{min-width:0}
 @media (max-width:720px){

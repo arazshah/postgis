@@ -1,0 +1,16 @@
+{% extends "databases/_ws.html" %}{% load fa static ws %}
+{% block title %}ویرایش ردیف — {{ rc.title }} — {{ SITE_NAME }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/page-kit.css' %}">{% if has_draw %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}"><link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">{% endif %}{% endblock %}
+{% block ws %}
+<div class="wrap page">
+  <div class="page-head"><div><h1>ویرایش ردیف {{ rid|fanum }}</h1><p class="muted page-sub">{{ rc.title }} · {{ page.title }}</p></div></div>
+  <form method="post" class="card pk-form" novalidate>
+    {% csrf_token %}
+    <div class="pk-form-fields">
+      {% for x in fields %}{% include "kernel/_field.html" with fd=x.fd idp="rec" val=x.val %}{% endfor %}
+    </div>
+    <div class="prof-acts"><button class="btn" type="submit">{% icon "check" 18 %}ذخیره</button><a class="btn ghost" href="{{ back_url }}">انصراف</a></div>
+  </form>
+</div>
+{% endblock %}
+{% block ws_scripts %}{% if has_draw %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script><script src="{% static 'vendor/leaflet-geoman/leaflet-geoman.min.js' %}" defer></script>{% endif %}<script src="{% static 'js/page-kit.js' %}" defer></script>{% endblock %}

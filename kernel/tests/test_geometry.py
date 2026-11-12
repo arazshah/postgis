@@ -175,3 +175,123 @@ class RealPostgisTests(SimpleTestCase):
     def test_injection_text_is_not_geometry(self):
         with self.assertRaises(ValueError):
             geomval.validate("'); DROP TABLE demo_fields;--", "polygon")
+
+
+# ---------------------------------------------------------------------- ویرایش و حذف ردیف
+REC = {"key": "farms", "title": "مزرعه‌ها", "table": "demo_farms", "limit": 5,
+       "fields": [{"name": "name", "kind": "text", "label": "نام", "required": True, "max": 40},
+                  {"name": "crop", "kind": "choice", "label": "محصول", "choices": [["wheat", "گندم"], ["corn", "ذرت"]]},
+                  {"name": "area", "kind": "geometry", "label": "محدوده", "geom": "polygon"}]}
+TBL = {"name": "demo_farms", "columns": [{"name": "name", "type": "text"}, {"name": "crop", "type": "text"}, {"name": "area", "type": "polygon"}]}
+PAGE = {"key": "farms", "title": "مزرعه‌ها", "need": "editor", "blocks": [{"kind": "text", "text": "x"}], "tables": [TBL], "records": [REC]}
+
+
+class RecordSpecTests(SimpleTestCase):
+    def test_valid_and_defaults(self):
+        r = pagekit.parse_page("demo", PAGE).records[0]
+        self.assertEqual((r.table, r.columns, r.can_delete, r.limit), ("demo_farms", ("name", "crop"), True, 5))  # هندسه در ستون‌های نمایشی نیست
+
+    def test_rejections(self):
+        bad = [{"table": "demo_other"}, {"table": "public.demo_farms"}, {"fields": []}, {"columns": ["area"]}, {"columns": []},
+               {"columns": ["ghost"]}, {"limit": 0}, {"limit": 500}, {"limit": True}, {"key": "Bad Key"}]
+        for over in bad:
+            with self.subTest(over=over), self.assertRaises(pagekit.SpecError):
+                pagekit.parse_page("demo", {**PAGE, "records": [{**REC, **over}]})
+        with self.assertRaises(pagekit.SpecError):
+            pagekit.parse_page("demo", {**PAGE, "need": "viewer"})
+        with self.assertRaises(pagekit.SpecError):
+            pagekit.parse_page("demo", {**PAGE, "records": [REC, REC]})  # کلید تکراری
+        with self.assertRaises(pagekit.SpecError):
+            pagekit.parse_page("demo", {**PAGE, "tables": []})  # جدول اعلام نشده
+
+
+@unittest.skipUnless(PG_HOST, "به PostgreSQL آزمون نیاز دارد (TEST_PG_HOST)")
+class RecordRealTests(SimpleTestCase):
+    def setUp(self):
+        kw = dict(host=PG_HOST, port=int(os.environ.get("TEST_PG_PORT", "5432")), user=os.environ.get("TEST_PG_USER", "postgres"),
+                  password=os.environ.get("TEST_PG_PASSWORD", "postgres"), autocommit=True)
+        self.kw = kw
+        with psycopg.connect(dbname="postgres", **kw) as c:
+            c.execute("DROP DATABASE IF EXISTS pagekit_rec")
+            c.execute("CREATE DATABASE pagekit_rec")
+        with psycopg.connect(dbname="pagekit_rec", **kw) as c:
+            c.execute("CREATE EXTENSION IF NOT EXISTS postgis")
+            c.execute("CREATE TABLE demo_farms (id bigserial primary key, name text, crop text, area geometry(Polygon,4326), secret text)")
+            c.execute("CREATE TABLE demo_noid (name text)")
+            c.execute("INSERT INTO demo_farms (name, crop, secret) VALUES ('الف','wheat','S1'),('ب','corn','S2')")
+        cat = mock.Mock()
+        cat.tables.return_value = [SimpleNamespace(schema="public", name=n, kind="r", oid=i) for i, n in enumerate(("demo_farms", "demo_noid"))]
+
+        def columns(table):
+            if table.name == "demo_noid":
+                return [{"name": "name", "type": "text", "generated": False, "identity": "", "spatial": False, "pk": False}]
+            return [{"name": n, "type": t, "generated": False, "identity": "", "spatial": sp, "pk": n == "id"} for n, t, sp in (
+                ("id", "bigint", False), ("name", "text", False), ("crop", "text", False), ("area", "geometry(Polygon,4326)", True), ("secret", "text", False))]
+        cat.columns.side_effect = columns
+
+        @contextmanager
+        def connect(ws, **k):
+            conn = psycopg.connect(dbname="pagekit_rec", **kw)
+            conn.autocommit = False
+            try:
+                yield conn
+            finally:
+                conn.close()
+
+        for target, val in (("kernel.tenantdb.catalog", lambda ws: cat), ("kernel.tenantdb.connect", connect)):
+            p = mock.patch(target, val)
+            p.start()
+            self.addCleanup(p.stop)
+        self.rec = pagekit.parse_page("demo", PAGE).records[0]
+
+    def rows(self, q="SELECT id, name, crop, secret, ST_AsText(area) FROM demo_farms ORDER BY id"):
+        with psycopg.connect(dbname="pagekit_rec", **self.kw) as c:
+            return c.execute(q).fetchall()
+
+    def vals(self, **kw):
+        base = {"name": "جدید", "crop": "corn", "area": None}
+        return {**base, **kw}
+
+    def test_list_newest_first_without_secret_columns(self):
+        heads, rows = pagekit.fetch_records(None, self.rec)
+        self.assertEqual(heads, ["id", "name", "crop"])
+        self.assertEqual([r[1] for r in rows], ["ب", "الف"])
+
+    def test_update_changes_only_declared_columns_of_that_row(self):
+        g = geomval.validate(json.dumps(SQUARE), "polygon")
+        pagekit.update_record(None, self.rec, 1, self.vals(name="مزرعه‌ی نو", area=g))
+        r1, r2 = self.rows()
+        self.assertEqual((r1[1], r1[2], r1[3]), ("مزرعه‌ی نو", "corn", "S1"))  # secret دست‌نخورده
+        self.assertTrue(r1[4].startswith("POLYGON"))
+        self.assertEqual((r2[1], r2[3]), ("ب", "S2"))
+
+    def test_fetch_record_returns_geojson_for_editing(self):
+        pagekit.update_record(None, self.rec, 1, self.vals(area=geomval.validate(json.dumps(SQUARE), "polygon")))
+        cur = pagekit.fetch_record(None, self.rec, 1)
+        self.assertEqual(json.loads(cur["area"])["type"], "Polygon")
+        self.assertNotIn("secret", cur)
+        self.assertIsNone(pagekit.fetch_record(None, self.rec, 999))
+
+    def test_invalid_geometry_and_missing_row_change_nothing(self):
+        with self.assertRaises(pagekit.SpecError):
+            pagekit.update_record(None, self.rec, 1, self.vals(area=geomval.validate(json.dumps(BOWTIE), "polygon")))
+        with self.assertRaises(pagekit.SpecError):
+            pagekit.update_record(None, self.rec, 999, self.vals())
+        self.assertEqual([r[1] for r in self.rows()], ["الف", "ب"])
+
+    def test_delete_only_that_row_and_missing_is_error(self):
+        pagekit.delete_record(None, self.rec, 1)
+        self.assertEqual([r[0] for r in self.rows()], [2])
+        with self.assertRaises(pagekit.SpecError):
+            pagekit.delete_record(None, self.rec, 1)
+
+    def test_table_without_id_is_refused(self):
+        bad = pagekit.RecordSpec("k", "t", "demo_noid", (pagekit.Field("name", "text", "n"),), ("name",))
+        for fn in (lambda: pagekit.update_record(None, bad, 1, {"name": "x"}), lambda: pagekit.delete_record(None, bad, 1),
+                   lambda: pagekit.fetch_records(None, bad)):
+            with self.assertRaises(pagekit.SpecError):
+                fn()
+
+    def test_injection_in_values_is_just_data(self):
+        pagekit.update_record(None, self.rec, 1, self.vals(name="x'; DELETE FROM demo_farms;--"))
+        self.assertEqual(len(self.rows()), 2)

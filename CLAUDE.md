@@ -36,7 +36,7 @@
 - قطع‌کن خودکار (`kernel.health`): نتیجه‌ی اجرای کد سطح ۲ را فقط با خطای خود کد (`HandlerFailed`) بشمارید، نه خرابی زیرساخت.
 - کد سطح ۲ فقط در بسته‌ی tier = 2 و فقط اجرا در plugin-runner؛ docs/plugins/tier2.md. حالت local فقط توسعه/آزمون است.
 - استودیوی پلاگین (`kernel.studio`) فقط پیش‌نویس و خروجی بدون امضا می‌سازد؛ امضا همیشه بیرون از سرور است. اجرای آزمایشی handler فقط از `client.run_files` (مدل‌آگاه) و فقط پس از بررسی ایستا و تأیید تازه.
-- نوشتن از صفحه‌ی کیت فقط با `[[forms]]` (INSERT ساخته‌ی هسته)؛ SQL نوشتنی از پلاگین پذیرفته نمی‌شود.
+- نوشتن از صفحه‌ی کیت فقط با `[[forms]]` (INSERT)، `[[ingest]]`، `[[sources]]` و `[[records]]` (UPDATE/DELETE فقط روی `id` و ستون‌های اعلام‌شده، فقط جدول `[[tables]]` همان صفحه، docs/plugins/geometry.md) — همه ساخته‌ی هسته؛ SQL نوشتنی از پلاگین پذیرفته نمی‌شود. فیلد `geometry` را `kernel.geomval` + `ST_IsValid` می‌سنجد.
 - فروش پلاگین: افزونه‌ی billing.PluginAddon و فاکتور نوع addon؛ مجوز فقط با `kernel.entitlements.grant` ساخته می‌شود.
 - مصرف پلاگین را با `kernel.metering.record` بشمارید و سقف مجوز را با `metering.check` بسنجید.
 - تنظیم هر پلاگین با `kernel.conf` (اعلام گزینه در `plugin.py`، خواندن با `conf.get`؛ نه در جدول تنظیمات سایت).
