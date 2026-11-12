@@ -59,7 +59,8 @@ def page(request, pk, plugin, page):
                          "inputs": [{"i": i, "value": vals.get(i.name, i.default)} for i in x.inputs]})
     ctx = {"db": ws, "page": spec, "blocks": blocks, "ingests": ingests, "sources": srcs, "sources_on": platform.sources_enabled(), "can_manage_ingest": workspace.level(request.user, ws) >= 2,
            "ingest_url": request.build_absolute_uri("/ingest/"), "values": values, "layers": layers, "param_errors": errors,
-           "has_map": any(b["kind"] == "map" for b in blocks), "section": "pages"}
+           "has_map": any(b["kind"] == "map" for b in blocks),
+           "has_draw": any(fd.kind == "geometry" for fm in spec.forms for fd in fm.fields), "section": "pages"}
     template = "kernel/_page_body.html" if request.GET.get("fragment") == "1" else "kernel/page.html"
     return render(request, template, ctx)
 

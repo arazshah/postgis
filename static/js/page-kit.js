@@ -2,6 +2,7 @@
 (function () {
   "use strict";
   const body = document.getElementById("pk-body");
+  initDraw();
   if (!body) return;
   const maps = [];
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -29,6 +30,50 @@
       maps.push(map);
     });
   }
+
+  // ترسیم هندسه‌ی فیلد geometry (Leaflet-Geoman): خروجی GeoJSON در ورودی hidden همان فیلد
+  function initDraw() {
+    document.querySelectorAll("[data-pk-draw]").forEach((el) => {
+      if (el.dataset.ready || !window.L || !L.PM) return;
+      el.dataset.ready = "1";
+      const kind = el.dataset.geom;
+      const input = document.getElementById(el.dataset.target);
+      const map = L.map(el).setView([32.4, 53.7], 5);
+      if (el.dataset.tiles) L.tileLayer(el.dataset.tiles, { maxZoom: 19, attribution: el.dataset.attr || "" }).addTo(map);
+      const group = L.featureGroup().addTo(map);
+      const single = kind !== "multipolygon";
+      const opts = { position: "topright", drawCircle: false, drawCircleMarker: false, drawText: false, drawRectangle: kind === "polygon" || kind === "multipolygon",
+        drawMarker: kind === "point", drawPolyline: kind === "line", drawPolygon: kind === "polygon" || kind === "multipolygon",
+        cutPolygon: false, rotateMode: false, dragMode: false, editMode: true, removalMode: true };
+      map.pm.addControls(opts);
+      map.pm.setGlobalOptions({ layerGroup: group, snappable: true });
+      const sync = () => {
+        const parts = group.getLayers().map((l) => l.toGeoJSON().geometry);
+        let geom = null;
+        if (parts.length) geom = kind === "multipolygon" ? { type: "MultiPolygon", coordinates: parts.map((g) => g.coordinates) } : parts[0];
+        input.value = geom ? JSON.stringify(geom) : "";
+        el.dispatchEvent(new CustomEvent("pk-draw-change", { bubbles: true }));
+      };
+      const watch = (layer) => { layer.on("pm:edit", sync); };
+      map.on("pm:create", (e) => {
+        if (single) group.getLayers().filter((l) => l !== e.layer).forEach((l) => group.removeLayer(l));
+        group.addLayer(e.layer);
+        watch(e.layer);
+        sync();
+      });
+      map.on("pm:remove", () => setTimeout(sync, 0));
+      if (input.value) {
+        try {
+          const g = JSON.parse(input.value);
+          const gj = L.geoJSON(g.type === "MultiPolygon" ? g.coordinates.map((c) => ({ type: "Polygon", coordinates: c })) : g);
+          gj.eachLayer((l) => { group.addLayer(l); watch(l); });
+          if (group.getLayers().length) map.fitBounds(group.getBounds(), { padding: [20, 20], maxZoom: 17 });
+        } catch (_) { /* مقدار قبلی نامعتبر: نقشه‌ی خالی */ }
+      }
+      setTimeout(() => map.invalidateSize(), 200);
+    });
+  }
+  window.addEventListener("load", initDraw);
 
   // فیلترها: انتخاب چیپ/لایه فوراً اعمال می‌شود
   document.querySelectorAll("[data-pk-filters]").forEach((form) => {

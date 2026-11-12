@@ -1,6 +1,6 @@
 {% extends "databases/_ws.html" %}{% load fa pk static ws %}
 {% block title %}{{ page.title }} — {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
-{% block head %}<link rel="stylesheet" href="{% static 'css/page-kit.css' %}">{% if has_map %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endif %}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/page-kit.css' %}">{% if has_map or has_draw %}<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">{% endif %}{% if has_draw %}<link rel="stylesheet" href="{% static 'vendor/leaflet-geoman/leaflet-geoman.css' %}">{% endif %}{% endblock %}
 {% block ws %}
 <div class="wrap page">
   <div class="page-head"><div><h1>{{ page.title }}</h1>{% if page.subtitle %}<p class="muted page-sub">{{ page.subtitle }}</p>{% endif %}</div>
@@ -60,6 +60,11 @@
       <div class="field">
         {% if fd.kind == 'bool' %}
         <label class="pick-chip"><input type="checkbox" name="f_{{ fd.name }}" value="1"><span>{{ fd.label }}</span></label>
+        {% elif fd.kind == 'geometry' %}
+        <span class="lbl" id="fl-{{ f.key }}-{{ fd.name }}">{{ fd.label }}{% if fd.required %} *{% endif %}</span>
+        <div class="pk-draw" data-pk-draw data-geom="{{ fd.geom }}" data-target="f-{{ f.key }}-{{ fd.name }}" data-tiles="{{ SITE.map_tile_url }}" data-attr="{{ SITE.map_tile_attribution }}" role="application" aria-labelledby="fl-{{ f.key }}-{{ fd.name }}"></div>
+        <input type="hidden" id="f-{{ f.key }}-{{ fd.name }}" name="f_{{ fd.name }}">
+        <p class="small muted">{% if fd.geom == 'point' %}با ابزار نشانه یک نقطه بگذارید.{% elif fd.geom == 'line' %}با ابزار خط، نقاط مسیر را بزنید و روی آخرین نقطه دوباره بزنید.{% elif fd.geom == 'multipolygon' %}با ابزار چندضلعی یا مستطیل، یک یا چند محدوده بکشید.{% else %}با ابزار چندضلعی یا مستطیل، محدوده را بکشید؛ با ابزار ویرایش اصلاحش کنید.{% endif %}</p>
         {% elif fd.kind == 'choice' %}
         <span class="lbl" id="fl-{{ f.key }}-{{ fd.name }}">{{ fd.label }}{% if fd.required %} *{% endif %}</span>
         <div class="chips" role="radiogroup" aria-labelledby="fl-{{ f.key }}-{{ fd.name }}">{% for val, text in fd.choices %}<label class="pick-chip"><input type="radio" name="f_{{ fd.name }}" value="{{ val }}" {% if fd.required and forloop.first %}checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</div>
@@ -136,4 +141,4 @@
   {% endfor %}
 </div>
 {% endblock %}
-{% block ws_scripts %}{% if has_map or page.refresh %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>{% endif %}<script src="{% static 'js/page-kit.js' %}" defer></script>{% endblock %}
+{% block ws_scripts %}{% if has_map or page.refresh or has_draw %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>{% endif %}{% if has_draw %}<script src="{% static 'vendor/leaflet-geoman/leaflet-geoman.min.js' %}" defer></script>{% endif %}<script src="{% static 'js/page-kit.js' %}" defer></script>{% endblock %}

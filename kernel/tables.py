@@ -18,11 +18,13 @@ from django.db import IntegrityError, transaction
 from psycopg import sql
 
 from . import tenantdb
+from .pagekit import GEOM_KINDS as GEOM_TYPES
 from .pagekit import ColumnSpec, TableSpec
 
 log = logging.getLogger(__name__)
 TYPES = {"text": "text", "integer": "integer", "bigint": "bigint", "double": "double precision", "boolean": "boolean",
-         "date": "date", "timestamptz": "timestamptz", "jsonb": "jsonb", "point": "geometry(Point, 4326)"}
+         "date": "date", "timestamptz": "timestamptz", "jsonb": "jsonb", "point": "geometry(Point, 4326)",
+         "line": "geometry(LineString, 4326)", "polygon": "geometry(Polygon, 4326)", "multipolygon": "geometry(MultiPolygon, 4326)"}
 
 
 class TableError(Exception):
@@ -55,9 +57,9 @@ def index_statements(t: TableSpec) -> list[sql.Composable]:
         name = f"{t.name[:50]}_ix{i}"
         out.append(sql.SQL("CREATE INDEX IF NOT EXISTS {n} ON {rel} ({cols})").format(
             n=sql.Identifier(name), rel=sql.Identifier("public", t.name), cols=sql.SQL(", ").join(sql.Identifier(c) for c in cols)))
-    if any(c.type == "point" for c in t.columns):
+    if any(c.type in GEOM_TYPES for c in t.columns):
         for c in t.columns:
-            if c.type == "point":
+            if c.type in GEOM_TYPES:
                 out.append(sql.SQL("CREATE INDEX IF NOT EXISTS {n} ON {rel} USING gist ({c})").format(
                     n=sql.Identifier(f"{t.name[:48]}_{c.name[:10]}_gx"), rel=sql.Identifier("public", t.name), c=sql.Identifier(c.name)))
     return out

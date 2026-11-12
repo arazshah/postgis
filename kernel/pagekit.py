@@ -19,7 +19,7 @@ from decimal import Decimal
 
 from psycopg import sql
 
-from . import nav, tenantdb
+from . import geomval, nav, tenantdb
 from .plugins import registry
 
 POINT = "page.spec"
@@ -63,7 +63,8 @@ class Block:
     handler: str = ""  # سطح ۲: نام handler کد ایزوله به‌جای sql (پاسخ: {"columns": [...], "rows": [[...]]})
 
 
-FIELD_KINDS = ("text", "int", "number", "bool", "date", "choice")
+FIELD_KINDS = ("text", "int", "number", "bool", "date", "choice", "geometry")
+GEOM_KINDS = ("point", "line", "polygon", "multipolygon")
 MAX_FORMS, MAX_FIELDS, MAX_VALUE = 3, 12, 2000
 TABLE_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}(\.[a-z_][a-z0-9_]{0,62})?")
 
@@ -77,6 +78,7 @@ class Field:
     choices: tuple[tuple[str, str], ...] = ()
     max: float | None = None  # برای متن: حداکثر طول؛ برای عدد: سقف
     min: float | None = None
+    geom: str = ""  # فقط kind = geometry: point | line | polygon | multipolygon
 
 
 @dataclass(frozen=True)
@@ -92,7 +94,7 @@ class Form:
     success: str = "ثبت شد."
 
 
-COLUMN_TYPES = ("text", "integer", "bigint", "double", "boolean", "date", "timestamptz", "jsonb", "point")
+COLUMN_TYPES = ("text", "integer", "bigint", "double", "boolean", "date", "timestamptz", "jsonb", "point", "line", "polygon", "multipolygon")
 MAX_TABLES, MAX_COLUMNS, MAX_INDEXES = 5, 20, 3
 
 
@@ -323,7 +325,12 @@ def parse_field(d: dict) -> Field:
     for v in (lo, hi):
         if v is not None and (not isinstance(v, (int, float)) or isinstance(v, bool)):
             raise SpecError(f"کران فیلد «{name}» باید عدد باشد.")
-    return Field(name, kind, _str(d, "label", required=True, limit=80), bool(d.get("required", False)), choices, hi, lo)
+    geom = ""
+    if kind == "geometry":
+        geom = _str(d, "geom", default="polygon")
+        if geom not in GEOM_KINDS:
+            raise SpecError(f"نوع هندسه‌ی فیلد «{name}» یکی از {'، '.join(GEOM_KINDS)} است.")
+    return Field(name, kind, _str(d, "label", required=True, limit=80), bool(d.get("required", False)), choices, hi, lo, geom)
 
 
 def parse_form(d: dict) -> Form:
@@ -359,7 +366,7 @@ def parse_table(plugin: str, d: dict) -> TableSpec:
         if not isinstance(c, dict):
             raise SpecError("هر ستون یک شیء است.")
         cname = _str(c, "name", required=True, limit=63)
-        if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", cname) or cname in ("id", "geom") and c.get("type") != "point":
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", cname) or cname in ("id", "geom") and c.get("type") not in GEOM_KINDS:
             raise SpecError(f"نام ستون «{cname}» نامعتبر یا رزروشده است (id را هسته می‌سازد).")
         ctype = _str(c, "type", default="text")
         if ctype not in COLUMN_TYPES:
@@ -451,6 +458,8 @@ def parse_source(d: dict) -> SourceSpec:
         raise SpecError(f"منبع ۱ تا {MAX_SOURCE_FIELDS} فیلد لازم دارد.")
     for f in raw_fields:
         fd = parse_field(f)
+        if fd.kind == "geometry":
+            raise SpecError("فیلد هندسه برای منبع بیرونی پشتیبانی نمی‌شود.")
         path = _str(f, "path", default=fd.name, limit=120)
         if not SRC_PATH_RE.fullmatch(path):
             raise SpecError(f"مسیر فیلد «{fd.name}» نامعتبر است.")
@@ -832,6 +841,8 @@ def convert_field(f: Field, raw) -> object:
         if f.required:
             raise ValueError(f"«{f.label}» الزامی است.")
         return None
+    if f.kind == "geometry":
+        return geomval.validate(text, f.geom, f.label)
     if len(text) > MAX_VALUE:
         raise ValueError(f"«{f.label}» بیش از حد بلند است.")
     if f.kind in ("int", "number"):
@@ -912,15 +923,31 @@ def insert_rows(ws, form, rows: list[dict]) -> None:
         c = cols.get(f.name)
         if c is None:
             raise SpecError(f"ستون «{f.name}» در جدول «{form.table}» نیست.")
-        if c["generated"] or c["identity"] == "a" or c["spatial"]:
+        if c["generated"] or c["identity"] == "a":
+            raise SpecError(f"ستون «{f.name}» قابل نوشتن از فرم نیست.")
+        if f.kind == "geometry":
+            want = geomval.PG_TYPES[f.geom].lower()
+            have = str(c["type"]).lower().replace(" ", "")
+            if not c["spatial"] or have not in ("geometry", f"geometry({want},4326)"):
+                raise SpecError(f"ستون «{f.name}» از نوع هندسه‌ی {f.geom} با SRID ۴۳۲۶ نیست.")
+        elif c["spatial"]:
             raise SpecError(f"ستون «{f.name}» قابل نوشتن از فرم نیست.")
     names = [f.name for f in form.fields]
+    geom_cols = {f.name for f in form.fields if f.kind == "geometry"}
+    ph = {n: (sql.SQL("ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)") if n in geom_cols else sql.Placeholder()) for n in names}
     query = sql.SQL("INSERT INTO {rel} ({cols}) VALUES ({vals})").format(
         rel=sql.Identifier(schema, name),
         cols=sql.SQL(", ").join(sql.Identifier(n) for n in names),
-        vals=sql.SQL(", ").join(sql.Placeholder() for _ in names))
+        vals=sql.SQL(", ").join(ph[n] for n in names))
     with tenantdb.connect(ws, write=True, as_owner=True) as conn:
         conn.execute(sql.SQL("SET LOCAL statement_timeout = {}").format(sql.Literal(f"{TIMEOUT_S}s")))
+        for f in form.fields:
+            if f.kind != "geometry":
+                continue
+            for r in rows:
+                if r[f.name] is not None and not conn.execute(
+                        "SELECT ST_IsValid(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))", (str(r[f.name]),)).fetchone()[0]:
+                    raise SpecError(f"«{f.label}»: شکل معتبر نیست (مثلاً ضلع‌ها همدیگر را قطع کرده‌اند).")
         with conn.cursor() as cur:
-            cur.executemany(query, [[r[n] for n in names] for r in rows])
+            cur.executemany(query, [[None if r[n] is None else (str(r[n]) if n in geom_cols else r[n]) for n in names] for r in rows])
         conn.commit()
