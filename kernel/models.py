@@ -304,3 +304,30 @@ class PlatformSetting(models.Model):
     class Meta:
         verbose_name = "تنظیم سکو"
         verbose_name_plural = "تنظیم‌های سکو"
+
+
+class IngestToken(models.Model):
+    """توکن دریافت داده‌ی دستگاه برای یک `[[ingest]]` یک پایگاه (docs/plugins/ingest.md). فقط چکیده‌ی SHA-256 ذخیره می‌شود؛
+    خودِ توکن یک‌بار هنگام ساخت دیده می‌شود. `workspace_id` عددی است تا هسته مدل پایگاه داده را نشناسد."""
+
+    plugin_id = models.CharField("پلاگین", max_length=41)
+    page = models.CharField("صفحه", max_length=31)
+    key = models.CharField("نقطه‌ی دریافت", max_length=31)
+    workspace_id = models.PositiveBigIntegerField("پایگاه داده", db_index=True)
+    prefix = models.CharField("پیشوند توکن", max_length=12)
+    token_hash = models.CharField(max_length=64, unique=True)
+    label = models.CharField("برچسب", max_length=60, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+", verbose_name="ساخته‌شده توسط")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField("آخرین استفاده", null=True, blank=True)
+    revoked_at = models.DateTimeField("ابطال", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "توکن دریافت داده"
+        verbose_name_plural = "توکن‌های دریافت داده"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["workspace_id", "plugin_id", "page", "key"], name="ingest_token_scope")]
+
+    def __str__(self):
+        return f"{self.plugin_id}/{self.page}/{self.key} {self.prefix}…"

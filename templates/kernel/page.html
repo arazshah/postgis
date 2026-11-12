@@ -73,6 +73,38 @@
     <button class="btn" type="submit">{% icon "check" 18 %}{{ f.submit }}</button>
   </form>
   {% endfor %}
+  {% for ig in ingests %}
+  <section class="card pk-form" id="ingest-{{ ig.spec.key }}">
+    <div class="ch"><h2>{{ ig.spec.title }}</h2></div>
+    {% if ig.spec.hint %}<p class="small muted">{{ ig.spec.hint }}</p>{% endif %}
+    <p class="small muted">دستگاه با <span class="ltr">POST</span> به نشانی زیر داده می‌فرستد و توکن را در هدر <span class="ltr">Authorization: Bearer</span> می‌گذارد. بدنه‌ی <span class="ltr">JSON</span>{% if ig.spec.handler %} (یا هر قالبی که برنامه‌ی تبدیل پلاگین می‌شناسد){% endif %}: یک شیء یا فهرستی از اشیاء با فیلدهای
+      {% for fd in ig.spec.fields %}<b class="ltr">{{ fd.name }}</b>{% if not forloop.last %}، {% endif %}{% endfor %}. نتیجه در جدول <b class="ltr">{{ ig.spec.table }}</b> ثبت می‌شود (حداکثر {{ ig.spec.max_rows }} ردیف در هر درخواست و {{ ig.spec.rate }} درخواست در دقیقه برای هر توکن).</p>
+    <p class="ltr small">{{ ingest_url }}</p>
+    {% if ig.new %}
+    <div class="msg warning" role="status">
+      <p><b>توکن تازه را همین حالا کپی کنید؛ دیگر نمایش داده نمی‌شود.</b></p>
+      <p class="ltr" dir="ltr"><code>{{ ig.new.token }}</code></p>
+    </div>
+    {% endif %}
+    {% if ig.tokens %}
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>توکن</th><th>برچسب</th><th>آخرین استفاده</th><th></th></tr></thead>
+      <tbody>{% for t in ig.tokens %}<tr>
+        <td class="ltr">{{ t.prefix }}…</td><td>{{ t.label|default:"—" }}</td><td>{% if t.last_used_at %}{{ t.last_used_at|date:"Y-m-d H:i" }}{% else %}هنوز استفاده نشده{% endif %}</td>
+        <td>{% if can_manage_ingest %}<form method="post" action="{% url 'kernel:ingest_revoke' db.pk page.plugin page.key ig.spec.key t.pk %}">{% csrf_token %}<button class="btn ghost sm" type="submit">باطل کردن</button></form>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="muted small">توکن فعالی نیست؛ دستگاه‌ها تا ساختن توکن نمی‌توانند داده بفرستند.</p>{% endif %}
+    {% if can_manage_ingest %}
+    <form method="post" action="{% url 'kernel:ingest_token' db.pk page.plugin page.key ig.spec.key %}" class="pk-form-fields">
+      {% csrf_token %}
+      <div class="field"><label for="ig-{{ ig.spec.key }}-label">برچسب توکن (اختیاری)</label>
+        <input id="ig-{{ ig.spec.key }}-label" name="label" maxlength="60" autocomplete="off"></div>
+      <button class="btn" type="submit">{% icon "plus" 18 %}ساخت توکن</button>
+    </form>
+    {% else %}<p class="muted small">ساخت و ابطال توکن با مالک پایگاه داده است.</p>{% endif %}
+  </section>
+  {% endfor %}
 </div>
 {% endblock %}
 {% block ws_scripts %}{% if has_map or page.refresh %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>{% endif %}<script src="{% static 'js/page-kit.js' %}" defer></script>{% endblock %}
