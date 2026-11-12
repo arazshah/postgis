@@ -145,7 +145,9 @@ def manifest_text(d) -> str:
     req = [r.strip() for r in (d.requires or "").split(",") if r.strip()]
     pages = ", ".join(q(f"pages/{k}.toml") for k in sorted(d.pages))
     code = sorted(getattr(d, "code", None) or {})
-    out = (f"id = {q(d.plugin_id)}\nname = {q(d.name, ensure_ascii=False)}\nversion = {q(d.version)}\napi = 1\n"
+    summary = str(((getattr(d, "wizard", None) or {}).get("intro") or {}).get("summary", "")).strip()[:240]
+    desc = f"description = {q(summary, ensure_ascii=False)}\n" if summary else ""
+    out = (f"id = {q(d.plugin_id)}\nname = {q(d.name, ensure_ascii=False)}\nversion = {q(d.version)}\napi = 1\n{desc}"
            f"kind = {q(d.kind)}\ntier = {2 if code else 1}\nrequires = [{', '.join(q(r) for r in req)}]\n\n[contributes]\npages = [{pages}]\n")
     if code:
         out += f"handlers = [{', '.join(q(c) for c in code)}]\n"

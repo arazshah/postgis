@@ -1,6 +1,6 @@
 """مانیفست پلاگین «پلن و صورتحساب» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
 from kernel import dash as admin_dash
-from kernel import home, market, nav, plugins
+from kernel import home, jobs, market, nav, plugins
 from kernel import settings as site_settings
 
 plugin = plugins.register("billing", "پلن و صورتحساب", kind="system", requires=("accounts", "databases"))
@@ -19,6 +19,7 @@ site_settings.display("gateway_tools", "ابزار درگاه", "billing.setting
 site_settings.tool("gatewaytest", "gateway-test/", "billing.settings_admin.gateway_test_view", plugin=plugin.id)
 
 market.provider("billing.market.handle", plugin=plugin.id)
+jobs.register_tick("addon_expiry", "billing.market_jobs.tick", plugin=plugin.id, order=60)
 
 admin_dash.attention("billing.admin_cards.attention", plugin=plugin.id, order=10)
 admin_dash.health("billing.admin_cards.health", plugin=plugin.id, order=50)

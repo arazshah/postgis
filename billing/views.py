@@ -54,6 +54,31 @@ def start(request):
 
 
 @site_user_required
+def market(request):
+    """بازار پلاگین: پولی (خرید، آزمایشی، تمدید) و رایگان؛ وضعیت هر پایگاه/حساب."""
+    conf = SiteSettings.get()
+    data = services.market_items(request.user)
+    return render(request, "billing/market.html", {**data, "enabled": conf.pay_enabled and services.methods_available(conf)})
+
+
+@site_user_required
+@require_POST
+def start_trial(request):
+    from .models import PluginAddon
+
+    addon = get_object_or_404(PluginAddon, pk=request.POST.get("addon", "") if request.POST.get("addon", "").isdigit() else 0)
+    target = request.POST.get("target", "")
+    db = UserDatabase.objects.filter(pk=target, owner=request.user).first() if target.isdigit() else None
+    try:
+        services.start_trial(request.user, addon, db)
+    except services.BillingError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f"دوره‌ی آزمایشی «{addon.title}» ({addon.trial_days} روز) فعال شد.")
+    return redirect("billing:market")
+
+
+@site_user_required
 @require_POST
 def start_addon(request):
     from .models import PluginAddon
@@ -65,7 +90,7 @@ def start_addon(request):
         inv = services.create_addon_invoice(request.user, addon, db)
     except services.BillingError as exc:
         messages.error(request, str(exc))
-        return redirect("billing:plans")
+        return redirect("billing:market" if request.POST.get("from") == "market" else "billing:plans")
     return redirect("billing:invoice", number=inv.number)
 
 
