@@ -1,4 +1,6 @@
 """منوی کنار صفحه برای همه بخش‌های یک پایگاه داده (فضای کار): دسته‌بندی ثابت، بخش فعلی مشخص."""
+import logging
+
 from django import template
 from django.urls import reverse
 
@@ -39,8 +41,16 @@ LEVEL = {"viewer": 0, "editor": 1, "owner": 2}
 
 def _visible(item, ws=None) -> bool:
     """بخش دیده شود؟ شرط ثبت‌شده‌ی خودش + روشن بودن پلاگین و مجوز آن برای این فضای کار (kernel.entitlements)."""
-    if item.visible and not kernel_jobs.call(item.visible):
-        return False
+    if item.visible:
+        try:
+            if not kernel_jobs.call(item.visible):
+                return False
+        except Exception:  # noqa: BLE001  شرط معیوب یک پلاگین نباید همه‌ی صفحه‌های فضای کار را بشکند؛ آن بخش پنهان می‌شود
+            logging.getLogger(__name__).exception("visible of %s failed", item.plugin)
+            from kernel import health
+
+            health.contribution_failed(item.plugin)
+            return False
     return entitlements.allowed(item.plugin, ws=ws)
 
 

@@ -21,3 +21,4 @@ class KernelConfig(AppConfig):
         from . import dash
 
         dash.attention("kernel.admin_cards.attention", plugin="kernel", order=5)
+        dash.attention("kernel.admin_cards.ext_state", plugin="kernel", order=6)

@@ -41,6 +41,9 @@ def collect(event: str, **payload) -> list:
             got = load(func)(**payload)
         except Exception:  # noqa: BLE001
             log.exception("event %s listener %s (%s) failed", event, func, c.plugin)
+            from . import health
+
+            health.contribution_failed(c.plugin)
             continue
         out.append(got if got is not None else True)
     return out

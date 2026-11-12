@@ -44,6 +44,9 @@ def collect(point: str, *args) -> list:
             out += list(load(c.value)(*args) or [])
         except Exception:  # noqa: BLE001  سهم معیوب نباید داشبورد را بشکند
             log.exception("admin contribution %s (%s) failed", c.value, c.plugin)
+            from . import health
+
+            health.contribution_failed(c.plugin)
     return out
 
 

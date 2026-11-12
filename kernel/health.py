@@ -27,12 +27,31 @@ def _bucket(now):
     return now.replace(minute=now.minute - now.minute % BUCKET_MIN, second=0, microsecond=0)
 
 
-def record(plugin: str, ok: bool, now=None) -> None:
-    """نتیجه‌ی یک اجرا؛ فقط برای پلاگین‌های بسته‌ی بارگذاری‌شده. هرگز استثنا نمی‌دهد."""
+def is_tier3(plugin: str) -> bool:
+    from .plugins import registry
+
+    p = registry.plugins.get(plugin)
+    return bool(p and p.tier == 3)
+
+
+def tracked(plugin: str) -> bool:
+    """قطع‌کن پلاگین را می‌سنجد؟ بسته‌ی بارگذاری‌شده (سطح ۱/۲) یا پلاگین سطح ۳ (docs/adr/0007)."""
     from . import pkg
+
+    return plugin in pkg._loaded or is_tier3(plugin)
+
+
+def contribution_failed(plugin: str) -> None:
+    """سهم خانه/داشبورد/رویداد/پروفایل/منوی یک پلاگین سطح ۳ استثنا داد: در شمارش خطا می‌آید. هرگز استثنا نمی‌دهد."""
+    if is_tier3(plugin):
+        record(plugin, False)
+
+
+def record(plugin: str, ok: bool, now=None) -> None:
+    """نتیجه‌ی یک اجرا؛ فقط برای پلاگین‌های بسته‌ی بارگذاری‌شده یا سطح ۳. هرگز استثنا نمی‌دهد."""
     from .models import PluginHealthBucket
 
-    if plugin not in pkg._loaded:
+    if not tracked(plugin):
         return
     try:
         with transaction.atomic():
@@ -64,9 +83,32 @@ def _version_key(v: str):
         return (0, 0, 0)
 
 
+def _trip_tier3(plugin: str, runs: int, errors: int):
+    """پلاگین سطح ۳ کدش در ایمیج است و نسخه‌ی قبلی ندارد: فقط خاموشی آنی؛ بازگشت نسخه = استقرار ایمیج قبلی."""
+    from .models import PluginHealthBucket, PluginState, PluginTrip
+    from .plugins import registry
+
+    with transaction.atomic():
+        st, _ = PluginState.objects.select_for_update().get_or_create(
+            plugin_id=plugin, defaults={"access": PluginState.Access.RESTRICTED})
+        if not st.enabled:
+            return None  # پیش‌تر خاموش شده (مثلاً توسط پردازه‌ی دیگر)
+        st.enabled = False
+        st.save(update_fields=["enabled", "updated_at"])
+        record_ = PluginTrip.objects.create(plugin_id=plugin, version=registry.plugins[plugin].version[:20], runs=runs,
+                                            errors=errors, action=PluginTrip.Action.DISABLE)
+        PluginHealthBucket.objects.filter(plugin_id=plugin).delete()
+    entitlements.invalidate()
+    _notify(record_)
+    return record_
+
+
 def trip(plugin: str, runs: int, errors: int):
     """نسخه‌ی فعال را کنار می‌گذارد: بازگشت به نسخه‌ی قبلی یا خاموشی. PluginTrip برمی‌گرداند (یا None اگر نسخه‌ی فعالی نبود)."""
     from . import pkg
+
+    if is_tier3(plugin):
+        return _trip_tier3(plugin, runs, errors)
     from .models import PluginHealthBucket, PluginRelease, PluginTrip
 
     with transaction.atomic():
@@ -112,13 +154,15 @@ def _notify(t) -> None:
 
 
 def tick(now=None) -> dict:
-    """کار دوره‌ای worker: پلاگین‌های بسته‌ی بارگذاری‌شده را می‌سنجد و بازه‌های قدیمی را پاک می‌کند."""
+    """کار دوره‌ای worker: پلاگین‌های بسته‌ی بارگذاری‌شده و سطح ۳ را می‌سنجد و بازه‌های قدیمی را پاک می‌کند."""
     from . import pkg
     from .models import PluginHealthBucket
 
     now = now or timezone.now()
     tripped = []
-    for plugin in list(pkg._loaded):
+    from .plugins import registry
+
+    for plugin in sorted(set(pkg._loaded) | {p.id for p in registry.plugins.values() if p.tier == 3}):
         runs, errors = stats(plugin, now)
         if should_trip(runs, errors) and trip(plugin, runs, errors) is not None:
             tripped.append(plugin)

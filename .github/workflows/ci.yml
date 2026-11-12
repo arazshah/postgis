@@ -86,6 +86,24 @@ jobs:
             -e DJANGO_SECRET_KEY=ci -e DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1 geopaygah:ci
           for i in $(seq 1 30); do curl -fsS http://localhost:8000/healthz && exit 0; sleep 2; done
           docker logs app; exit 1
+      - name: پیش‌پرواز ext (پلاگین معیوب سایت را نمی‌خواباند)
+        run: |
+          docker run -d --name app-ext -p 8001:8000 -e DJANGO_SECRET_KEY=ci -e DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1 \
+            -v "$PWD/docker/ci_ext/bad_import:/app/ext/ci_bad_import:ro" \
+            -v "$PWD/docker/ci_ext/bad_migration:/app/ext/ci_bad_migration:ro" geopaygah:ci
+          ok=""
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8001/healthz; then ok=1; break; fi
+            sleep 2
+          done
+          [ -n "$ok" ] || { docker logs app-ext; echo "سایت با پلاگین معیوب بالا نیامد"; exit 1; }
+          docker exec app-ext cat /tmp/ext-preflight.json | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          assert set(d['disabled']) == {'ci_bad_import', 'ci_bad_migration'}, d
+          assert not d['safe_mode'], d
+          print('ext preflight ok:', d['disabled'])"
+          docker rm -f app-ext
       - name: Coolify compose stack (web + worker + qgis + panel-db)
         env:
           SERVICE_PASSWORD_POSTGRES: ci-panel-pass
