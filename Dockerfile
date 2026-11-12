@@ -29,7 +29,8 @@ COPY . .
 RUN DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput \
  && chmod +x docker/entrypoint.sh \
  && mkdir -p /app/media /app/ows /app/osm /app/backups /app/rasters /app/pylibs \
- && chown -R app:app /app
+ && chown -R app:app /app \
+ && mkdir -p /run/runner-auth && chown 10001:10001 /run/runner-auth  # volume توکن مشترک runner: کاربر runner بنویسد
 
 # کانتینر با root شروع می‌شود تا entrypoint مالکیت volumeها را درست کند، سپس به کاربر app می‌رود
 EXPOSE 8000

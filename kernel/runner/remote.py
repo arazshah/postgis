@@ -10,7 +10,6 @@ import json
 import urllib.error
 import urllib.request
 
-from django.conf import settings
 from django.core import signing
 
 from . import sandbox
@@ -28,13 +27,15 @@ def read_job_token(token: str) -> int:
 
 
 def call(files: dict, handler: str, params: dict, ws_pk: int, *, file: bytes | None = None, io: bool = False, mock_sql: list | None = None, plugin: str = ""):
+    from .. import platform
     from .client import HandlerFailed, RunnerError
 
-    base = getattr(settings, "PLUGIN_RUNNER_URL", "").rstrip("/")
-    callback = getattr(settings, "PLUGIN_RUNNER_CALLBACK", "").rstrip("/")
-    if not base or not callback or not getattr(settings, "PLUGIN_RUNNER_TOKEN", ""):
+    base = platform.runner_url().rstrip("/")
+    callback = platform.runner_callback().rstrip("/")
+    token = platform.runner_token()
+    if not base or not callback or not token:
         raise RunnerError("سرویس اجرای کد پلاگین تنظیم نشده است.")
-    timeout = float(getattr(settings, "PLUGIN_RUNNER_TIMEOUT", 10)) * (3 if io else 1)
+    timeout = platform.runner_timeout() * (3 if io else 1)
     payload = {"files": files, "handler": handler, "params": params, "timeout": timeout, "io": bool(io), "plugin": plugin,
                "callback": {"url": f"{callback}/internal/runner/sql/", "token": job_token(ws_pk)}}
     if file is not None:
@@ -43,7 +44,7 @@ def call(files: dict, handler: str, params: dict, ws_pk: int, *, file: bytes | N
         payload["mock_sql"] = mock_sql
     body = json.dumps(payload).encode()
     req = urllib.request.Request(f"{base}/run", data=body, method="POST", headers={
-        "Content-Type": "application/json", "Authorization": f"Bearer {settings.PLUGIN_RUNNER_TOKEN}"})
+        "Content-Type": "application/json", "Authorization": f"Bearer {token}"})
     try:
         with urllib.request.urlopen(req, timeout=timeout + 5) as resp:  # noqa: S310 - آدرس از تنظیمات مدیر استقرار است
             out = json.loads(resp.read(sandbox.MAX_LINE))

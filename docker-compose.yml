@@ -47,6 +47,7 @@ services:
       - osm-data:/app/osm
       - rasters:/app/rasters
       - pylibs:/app/pylibs
+      - runner-auth:/run/runner-auth:ro
     networks:
       - default
       - coolify
@@ -108,8 +109,7 @@ services:
 
   # اجرای کد سطح ۲ پلاگین‌ها (docs/plugins/tier2.md): بدون راز، بدون شبکه‌ی بیرون، غیر root، فایل‌سیستم فقط‌خواندنی.
   # فقط روی شبکه‌ی internal «runner» است (بدون خروج به اینترنت)؛ web همان شبکه را دارد تا کد را بفرستد و پرس‌وجوهای SQL را برگیرد.
-  # برای فعال‌سازی: در web مقدارهای PLUGIN_RUNNER_MODE=remote، PLUGIN_RUNNER_URL=http://plugin-runner:8090،
-  # PLUGIN_RUNNER_CALLBACK=http://web:8000 و PLUGIN_RUNNER_TOKEN (همان RUNNER_TOKEN) را بگذارید و "web" را به DJANGO_ALLOWED_HOSTS بیفزایید.
+  # فعال‌سازی از پنل مدیریت: «پلاگین‌ها ← سکو» حالت اجرا را «راه‌دور» کنید؛ نشانی‌ها پیش‌فرض دارند و توکن خودکار است.
   plugin-runner:
     image: ${APP_IMAGE:-ghcr.io/arazshah/postgis:latest}
     restart: unless-stopped
@@ -129,6 +129,8 @@ services:
       - RUNNER_TOKEN=${PLUGIN_RUNNER_TOKEN:-}
       - RUNNER_PARALLEL=${RUNNER_PARALLEL:-4}
       - RUNNER_PER_PLUGIN=${RUNNER_PER_PLUGIN:-2}
+    volumes:
+      - runner-auth:/run/runner-auth  # توکن مشترک با web؛ خودکار ساخته می‌شود (نیازی به متغیر محیطی نیست)
     networks:
       - runner
     mem_limit: ${RUNNER_MEM_LIMIT:-768m}
@@ -204,6 +206,8 @@ volumes:
   rasters:
   # نسخه‌های به‌روزشده smart-spatial-system (بدون بیلد دوباره)
   pylibs:
+  # توکن مشترک web و plugin-runner (runner می‌نویسد، web فقط می‌خواند)
+  runner-auth:
 
 networks:
   coolify:

@@ -54,7 +54,13 @@ def parse_keys(raw: str) -> dict[str, Ed25519PublicKey]:
 
 
 def publisher_keys() -> dict[str, Ed25519PublicKey]:
-    return parse_keys(getattr(settings, "PLUGIN_PUBLISHER_KEYS", ""))
+    """کلیدهای ناشر: متغیر استقرار + کلیدهای فعال ثبت‌شده در پنل (هر دو؛ نام تکراری با کلید پنل بازنویسی نمی‌شود)."""
+    from . import platform
+
+    keys = parse_keys(getattr(settings, "PLUGIN_PUBLISHER_KEYS", ""))
+    for name, k in parse_keys(platform.db_publisher_keys()).items():
+        keys.setdefault(name, k)
+    return keys
 
 
 def digest(files: dict[str, bytes]) -> bytes:

@@ -31,6 +31,8 @@ if not SECRET_KEY:
 CREDENTIALS_ENCRYPTION_KEY = os.environ.get("CREDENTIALS_ENCRYPTION_KEY", "")
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+if "*" not in ALLOWED_HOSTS and "web" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("web")  # نشانی داخلی web برای فراخوانی SQL توسط plugin-runner (فقط با توکن کار امضاشده)
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 
 

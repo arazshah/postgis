@@ -17,6 +17,33 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import sandbox
 
 MAX_BODY = 8 * 1024 * 1024
+TOKEN_FILE = os.environ.get("RUNNER_TOKEN_FILE", "/run/runner-auth/token")
+
+
+def _token() -> str:
+    """توکن مشترک: متغیر RUNNER_TOKEN (سازگاری) وگرنه فایل volume مشترک که اگر نبود، همین‌جا یک‌بار ساخته می‌شود."""
+    env = os.environ.get("RUNNER_TOKEN", "")
+    if env:
+        return env
+    try:
+        return open(TOKEN_FILE).read().strip()
+    except OSError:
+        return ""
+
+
+def ensure_token() -> None:
+    if _token():
+        return
+    import secrets
+
+    try:
+        fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except OSError:
+        return  # volume نیست یا همزمان ساخته شد؛ بدون توکن همه‌ی درخواست‌ها ۴۰۳ می‌شوند
+    with os.fdopen(fd, "w") as fh:
+        fh.write(secrets.token_urlsafe(48) + "\n")
+
+
 MAX_PARALLEL = int(os.environ.get("RUNNER_PARALLEL", "4"))
 PER_PLUGIN = int(os.environ.get("RUNNER_PER_PLUGIN", "2"))  # سقف هم‌زمانی هر پلاگین؛ پلاگین پرمصرف بقیه را گرسنه نکند
 WAIT_S = 2.0
@@ -69,7 +96,7 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200 if self.path == "/healthz" else 404, {"ok": self.path == "/healthz"})
 
     def do_POST(self):  # noqa: N802
-        token = os.environ.get("RUNNER_TOKEN", "")
+        token = _token()
         auth = self.headers.get("Authorization", "")
         if self.path != "/run" or not token or not hmac.compare_digest(auth, f"Bearer {token}"):
             return self._json(403, {"ok": False, "error": "forbidden"})
@@ -109,4 +136,5 @@ def serve(host: str = "0.0.0.0", port: int = 8090) -> ThreadingHTTPServer:  # no
 
 
 if __name__ == "__main__":
+    ensure_token()
     serve(port=int(os.environ.get("RUNNER_PORT", "8090"))).serve_forever()

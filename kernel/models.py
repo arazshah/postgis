@@ -272,3 +272,35 @@ class PluginRelease(models.Model):
 
     def __str__(self):
         return f"{self.plugin_id} {self.version}"
+
+
+class PublisherKey(models.Model):
+    """کلید عمومی ناشر بسته‌های پلاگین (Ed25519). فقط کلید عمومی اینجا می‌ماند؛ کلید خصوصی هرگز به سرور نمی‌رسد
+    (در مرورگر مدیر ساخته می‌شود). افزودن/حذف با تأیید تازه (stepup)."""
+
+    name = models.CharField("نام ناشر", max_length=40, unique=True)
+    public_key = models.CharField("کلید عمومی (base64)", max_length=64)
+    active = models.BooleanField("فعال", default=True)
+    added_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                 related_name="+", verbose_name="افزوده‌شده توسط")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "کلید ناشر"
+        verbose_name_plural = "کلیدهای ناشر"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class PlatformSetting(models.Model):
+    """تنظیم سکو که مدیر در پنل می‌دهد (جلوتر از متغیر محیطی؛ فقط مقدار غیرحساس)."""
+
+    key = models.CharField(max_length=40, unique=True)
+    value = models.CharField(max_length=300, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "تنظیم سکو"
+        verbose_name_plural = "تنظیم‌های سکو"
