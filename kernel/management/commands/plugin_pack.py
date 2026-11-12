@@ -36,7 +36,7 @@ class Command(BaseCommand):
         Path(out).write_bytes(data)
         self.stdout.write(f"{out}: {len(data):,} بایت، {len(files)} فایل")
         pub = priv.public_key()
-        ins = pkg.inspect(data, keys={publisher: pub}, run_tests=tests)
+        ins = pkg.inspect(data, keys={publisher: pub}, run_tests=tests, new_release=False)  # نسخه با پایگاه داده‌ی سرور سنجیده می‌شود، نه این‌جا
         for s in ins.steps:
             self.stdout.write(f"  {'✓' if s.ok else '✗'} {s.stage}{': ' + s.detail if s.detail else ''}")
         if not ins.ok:

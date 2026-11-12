@@ -1,0 +1,10 @@
+id = "monitoring"
+name = "مانیتورینگ آنلاین"
+version = "1.0.0"
+api = 1
+kind = "custom"
+tier = 1
+requires = ["databases"]
+
+[contributes]
+pages = ["pages/live.toml"]

@@ -14,7 +14,7 @@ class Command(BaseCommand):
                             help="آزمون‌های بسته‌ی سطح ۲ را هم اجرا کن (نیازمند PLUGIN_RUNNER_MODE=local در توسعه/CI یا remote)")
 
     def handle(self, package, **options):
-        ins = pkg.inspect(Path(package).read_bytes(), run_tests=options.get("tests", False))
+        ins = pkg.inspect(Path(package).read_bytes(), run_tests=options.get("tests", False), new_release=False)  # بدون پایگاه داده‌ی سرور
         for s in ins.steps:
             self.stdout.write(f"{'✓' if s.ok else '✗'} {s.stage}{': ' + s.detail if s.detail else ''}")
         if not ins.ok:

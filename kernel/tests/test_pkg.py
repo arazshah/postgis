@@ -471,3 +471,27 @@ class StrictNameTests(SimpleTestCase):
 
         with self.assertRaises(PluginError):
             registry.register("fleet\n", "x", kind="custom")
+
+
+class ExamplePackageTests(TestCase):
+    """نمونه‌ی مستند «مانیتورینگ آنلاین» (docs/plugins/examples/monitoring) واقعاً امضا و بررسی می‌شود."""
+
+    def test_monitoring_example_packs_and_passes(self):
+        from pathlib import Path
+
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        root = Path(__file__).resolve().parents[2] / "docs" / "plugins" / "examples" / "monitoring"
+        files = {str(p.relative_to(root)).replace("\\", "/"): p.read_bytes() for p in root.rglob("*") if p.is_file() and p.suffix in (".toml",)}
+        key = Ed25519PrivateKey.generate()
+        files[pkg.SIG_NAME] = pkg.sign(files, key, "tester")
+        import io
+        import zipfile
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            for name, data in files.items():
+                z.writestr(name, data)
+        ins = pkg.inspect(buf.getvalue(), keys={"tester": key.public_key()}, new_release=False)
+        self.assertTrue(ins.ok, [(s.name, s.detail) for s in ins.steps if not s.ok])
+        self.assertEqual(ins.pages[0].ingests[0].table, "monitor_points")
