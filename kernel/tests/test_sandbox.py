@@ -14,7 +14,8 @@ class ScanTests(SimpleTestCase):
     def test_dangerous_constructs_are_flagged(self):
         bad = ["import os", "import subprocess", "from os import path", "import socket", "from . import x", "import math.foo",
                "eval('1')", "exec('1')", "open('/etc/passwd')", "x = ().__class__", "__import__('os')", "getattr(1, 'a')",
-               "global q", "x = [].__class__.__bases__", "async def f(): pass", "def f(:"]
+               "global q", "x = [].__class__.__bases__", "async def f(): pass", "def f(:",
+               "from math import __builtins__", "from json import __dict__ as d", "from math import *"]
         for src in bad:
             with self.subTest(src=src):
                 self.assertTrue(scan.scan(src), src)
