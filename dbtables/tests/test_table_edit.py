@@ -9,11 +9,12 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from accounts.models import User
-from databases import editor, services
-from databases.editor import EditError, Editor, normalize
+from databases import services
 from databases.explorer import Explorer
 from databases.models import ActivityLog, DatabaseServer, EditBatch, Member
 from databases.provisioner import Provisioner
+from dbtables import editor
+from dbtables.editor import EditError, Editor, normalize
 
 PG_HOST = os.environ.get("TEST_PG_HOST", "")
 

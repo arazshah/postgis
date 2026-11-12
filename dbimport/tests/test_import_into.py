@@ -13,11 +13,11 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import User
-from databases import importinto
 from databases import services as db_services
 from databases.explorer import TableRef
 from databases.models import DatabaseServer
 from databases.provisioner import Provisioner
+from dbimport import importinto
 from jobs import services as jobs
 from jobs.models import Job
 

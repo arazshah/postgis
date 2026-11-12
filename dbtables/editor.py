@@ -17,7 +17,8 @@ import re
 import psycopg
 from psycopg import sql
 
-from .explorer import Explorer, ExplorerError, TableRef
+from databases.explorer import Explorer, ExplorerError, TableRef
+from kernel.tenantdb import WRITABLE_KINDS
 
 MAX_CHANGES = 500
 MAX_VALUE_CHARS = 100_000
@@ -28,7 +29,7 @@ GEOJSON_TYPES = {"Point", "MultiPoint", "LineString", "MultiLineString", "Polygo
 EWKB_RE = re.compile(r"^[0-9a-fA-F]{10,}$")
 WKT_RE = re.compile(r"^[A-Za-z0-9 .,()+\-\r\n\t]+$")  # فقط نویسه‌های WKT؛ نه SRID=... و نه چیز دیگر
 WKT_MAX = 1_000_000
-EDITABLE_KINDS = {"r", "p"}
+EDITABLE_KINDS = set(WRITABLE_KINDS)
 
 
 class EditError(ExplorerError):

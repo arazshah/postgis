@@ -12,6 +12,7 @@ ignore = ["E501", "B904"]
 [tool.importlinter]
 root_packages = [
     "kernel", "accounts", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases",
+    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
     "enterprise", "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate",
     "support", "survey", "tools",
 ]
@@ -24,7 +25,7 @@ source_modules = ["kernel"]
 forbidden_modules = [
     "accounts", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases", "enterprise",
     "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate", "support",
-    "survey", "tools",
+    "survey", "tools", "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
 ]
 ignore_imports = ["kernel.tests.** -> **"]
 unmatched_ignore_imports_alerting = "none"
@@ -36,6 +37,7 @@ type = "forbidden"
 source_modules = ["jobs"]
 forbidden_modules = [
     "analysis", "classroom", "enterprise", "iranmap", "satellite", "tools", "maps", "publish", "survey", "restapi",
+    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
 ]
 ignore_imports = ["jobs.tests.** -> **"]
 unmatched_ignore_imports_alerting = "none"
@@ -47,6 +49,7 @@ type = "forbidden"
 source_modules = ["notifications"]
 forbidden_modules = [
     "analysis", "classroom", "enterprise", "iranmap", "satellite", "tools", "maps", "publish", "survey", "restapi",
+    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
 ]
 ignore_imports = ["notifications.tests.** -> **"]
 unmatched_ignore_imports_alerting = "none"
@@ -69,6 +72,7 @@ source_modules = ["core"]
 forbidden_modules = [
     "analysis", "analytics", "assistant", "billing", "classroom", "enterprise", "iranmap", "jobs", "maps",
     "notifications", "publish", "restapi", "satellite", "satgate", "support", "survey", "tools",
+    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
 ]
 ignore_imports = ["core.tests.** -> **"]
 unmatched_ignore_imports_alerting = "none"
@@ -82,10 +86,11 @@ source_modules = [
     "billing", "core", "kb", "support", "accounts", "analytics",
 ]
 forbidden_modules = [
-    "databases.explorer", "databases.team", "databases.crypto", "databases.gdal", "databases.importinto",
-    "databases.provisioner", "databases.services", "databases.views", "databases.defaults", "databases.editor",
-    "databases.find", "databases.find_save", "databases.tablealter", "databases.tablebuilder", "databases.csvgeo",
-    "databases.usage", "databases.gateway", "databases.jobs", "databases.forms", "databases.urls",
+    "databases.explorer", "databases.team", "databases.crypto", "databases.gdal", "databases.provisioner",
+    "databases.services", "databases.views", "databases.defaults", "databases.csvgeo", "databases.gateway",
+    "databases.forms", "databases.urls",
+    # بخش‌های داده پلاگین جدا هستند و هیچ پلاگین دیگری درونشان را نمی‌شناسد
+    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
 ]
 ignore_imports = [
     "analysis.tests.** -> **", "tools.tests.** -> **", "maps.tests.** -> **", "publish.tests.** -> **",
@@ -103,6 +108,7 @@ type = "forbidden"
 source_modules = [
     "accounts", "billing", "classroom", "core", "enterprise", "iranmap", "jobs", "kb", "maps", "notifications",
     "publish", "restapi", "satellite", "support", "survey", "tools", "analytics", "assistant",
+    "dbtables", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
 ]
 forbidden_modules = ["databases.nl2sql"]
 ignore_imports = [
@@ -123,6 +129,7 @@ source_modules = [
 ]
 forbidden_modules = [
     "analysis", "tools", "maps", "publish", "restapi", "survey", "iranmap", "classroom", "enterprise", "satellite",
+    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
 ]
 ignore_imports = [
     "accounts.tests.** -> **", "core.tests.** -> **", "databases.tests.** -> **", "jobs.tests.** -> **",
@@ -130,3 +137,29 @@ ignore_imports = [
     "assistant.tests.** -> **", "analytics.tests.** -> **",
 ]
 unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+name = "بخش‌های داده از هم مستقل‌اند (هیچ‌کدام دیگری را نمی‌شناسد)"
+type = "independence"
+modules = ["dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam"]
+ignore_imports = [
+    "dbtables.tests.** -> **", "dbsql.tests.** -> **", "dbfind.tests.** -> **", "dbimport.tests.** -> **",
+    "dbhealth.tests.** -> **", "dbbackup.tests.** -> **", "dbusage.tests.** -> **", "dbteam.tests.** -> **",
+]
+unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+name = "بخش‌های داده نما، مسیر، مانیفست و پنل میزبانی را نمی‌شناسند و پلاگین قابلیت دیگری را هم نه"
+type = "forbidden"
+source_modules = ["dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam"]
+forbidden_modules = [
+    "databases.views", "databases.urls", "databases.plugin", "databases.gateway", "databases.admin", "databases.admin_cards",
+    "databases.home", "databases.defaults",
+    "analysis", "tools", "maps", "publish", "restapi", "survey", "iranmap", "classroom", "enterprise", "satellite",
+]
+ignore_imports = [
+    "dbtables.tests.** -> **", "dbsql.tests.** -> **", "dbfind.tests.** -> **", "dbimport.tests.** -> **",
+    "dbhealth.tests.** -> **", "dbbackup.tests.** -> **", "dbusage.tests.** -> **", "dbteam.tests.** -> **",
+]
+unmatched_ignore_imports_alerting = "none"
+allow_indirect_imports = true

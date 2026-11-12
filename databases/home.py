@@ -2,6 +2,7 @@
 from django.urls import reverse
 
 from jobs.models import Job
+from kernel import routes
 
 
 def feed(user, dbs):
@@ -27,4 +28,5 @@ def step_create(user, dbs, target):
 def step_import(user, dbs, target):
     has_data = bool(dbs) and Job.objects.filter(database__in=dbs, kind=Job.Kind.IMPORT, status=Job.Status.DONE).exists()
     return {"label": "اولین داده را وارد کنید", "hint": "فایل مکانی آپلود کنید", "done": has_data,
-            "url": reverse("databases:import", args=[target.pk]) if target else "", "icon": "upload"}
+            "url": reverse("databases:import", args=[target.pk]) if target and routes.on("databases:import", user=user, ws=target) else "",
+            "icon": "upload"}

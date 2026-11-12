@@ -13,7 +13,7 @@ import re
 import psycopg
 from psycopg import sql
 
-from .explorer import ExplorerError
+from databases.explorer import ExplorerError
 
 STAGING_FID = "_gp_fid"
 STAGING_GEOM = "_gp_geom"

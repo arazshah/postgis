@@ -20,9 +20,10 @@ import psycopg
 from psycopg import errors as pgerr
 from psycopg import sql
 
-from .explorer import Explorer, ExplorerError
+from databases.explorer import Explorer, ExplorerError
+from databases.gdal import TABLE_RE
+
 from .find import OPS, Finder, FindError, _to4326
-from .gdal import TABLE_RE
 
 MAX_IDS = 5000
 MAX_JOIN_COLS = 20
@@ -261,7 +262,7 @@ def check_name(ex: Explorer, plan: Plan) -> None:
 
 def create(db, ex: Explorer, plan: Plan, step=lambda pct, text: None) -> dict:
     """ساخت جدول/نما. نتیجه: {"table", "rows", "kind"}."""
-    from .provisioner import Provisioner
+    from databases.provisioner import Provisioner
 
     target = sql.Identifier(SCHEMA, plan.name)
     try:

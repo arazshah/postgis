@@ -187,3 +187,38 @@ class AppShellTests(BaseCase):
         self.assertContains(ws_page, "ws-tabs")
         self.assertContains(ws_page, f'href="{reverse("databases:explore", args=[db.pk])}"')
         self.assertContains(ws_page, "app-dbchip")
+
+
+@override_settings(STORAGES=STORAGES)
+class DisabledSectionLinksTests(BaseCase):
+    """وقتی مدیر بخش «ورود فایل» را خاموش کند، هیچ صفحه‌ای پیوند مرده به آن نمی‌دهد (ADR-0006)."""
+
+    def setUp(self):
+        super().setUp()
+        from kernel import entitlements
+        from kernel.models import PluginState
+
+        self.db = services.create_database(self.user, "alpha", "Abcdefgh123", ["postgis"])
+        self.client.force_login(self.user)
+        self.url = reverse("databases:import", args=[self.db.pk])
+        self.addCleanup(entitlements.invalidate)
+        self.PluginState, self.entitlements = PluginState, entitlements
+
+    def off(self):
+        self.PluginState.objects.update_or_create(plugin_id="dbimport", defaults={"enabled": False})
+        self.entitlements.invalidate()
+
+    def test_overview_shows_the_import_tile_only_while_the_section_is_on(self):
+        self.assertContains(self.client.get(reverse("databases:detail", args=[self.db.pk])), self.url)
+        self.off()
+        r = self.client.get(reverse("databases:detail", args=[self.db.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, f'href="{self.url}"')
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_home_step_has_no_dead_link_when_off(self):
+        from databases import home
+
+        self.assertEqual(home.step_import(self.user, [self.db], self.db)["url"], self.url)
+        self.off()
+        self.assertEqual(home.step_import(self.user, [self.db], self.db)["url"], "")

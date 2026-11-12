@@ -19,9 +19,10 @@ from django.utils import timezone
 
 from accounts.models import User
 from databases import services as db_services
-from databases import team, usage
+from databases import team
 from databases.models import DatabaseServer, Plan, SizeSample
 from databases.provisioner import Provisioner
+from dbusage import usage
 
 PG_HOST = os.environ.get("TEST_PG_HOST", "")
 PGBOUNCER = shutil.which("pgbouncer") or ("/usr/sbin/pgbouncer" if Path("/usr/sbin/pgbouncer").exists() else None)
