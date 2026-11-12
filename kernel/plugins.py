@@ -18,6 +18,7 @@ log = logging.getLogger(__name__)
 API_VERSION = 1
 ID_RE = re.compile(r"^[a-z][a-z0-9_]{1,40}$")
 KINDS = ("system", "feature", "custom")
+TIERS = (1, 2, 3)  # ۳ = کد درون‌پردازه در ext/ (docs/adr/0007)
 
 
 class PluginError(Exception):
@@ -31,6 +32,7 @@ class Plugin:
     name: str
     kind: str = "feature"
     version: str = "1.0.0"
+    tier: int = 1
     api: int = API_VERSION
     requires: tuple[str, ...] = ()
     description: str = ""
@@ -59,6 +61,10 @@ class Registry:
             raise PluginError(f"شناسه‌ی پلاگین نامعتبر است: {p.id!r}")
         if p.kind not in KINDS:
             raise PluginError(f"نوع پلاگین {p.id} نامعتبر است: {p.kind!r}")
+        if p.tier not in TIERS:
+            raise PluginError(f"سطح پلاگین {p.id} نامعتبر است: {p.tier!r}")
+        if p.tier == 3 and p.kind == "system":
+            raise PluginError(f"پلاگین سیستمی {p.id} نمی‌تواند سطح ۳ باشد.")
         if p.api > API_VERSION:
             raise PluginError(f"پلاگین {p.id} نسخه‌ی قرارداد {p.api} می‌خواهد؛ هسته {API_VERSION} است.")
         old = self.plugins.get(p.id)

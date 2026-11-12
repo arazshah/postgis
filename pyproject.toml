@@ -12,7 +12,7 @@ ignore = ["E501", "B904"]
 [tool.importlinter]
 root_packages = [
     "kernel", "accounts", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases",
-    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
+    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam", "ext",
     "enterprise", "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate",
     "support", "survey", "tools",
 ]
@@ -25,7 +25,7 @@ source_modules = ["kernel"]
 forbidden_modules = [
     "accounts", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases", "enterprise",
     "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate", "support",
-    "survey", "tools", "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
+    "survey", "tools", "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam", "ext",
 ]
 ignore_imports = ["kernel.tests.** -> **"]
 unmatched_ignore_imports_alerting = "none"
@@ -129,7 +129,7 @@ source_modules = [
 ]
 forbidden_modules = [
     "analysis", "tools", "maps", "publish", "restapi", "survey", "iranmap", "classroom", "enterprise", "satellite",
-    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
+    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam", "ext",
 ]
 ignore_imports = [
     "accounts.tests.** -> **", "core.tests.** -> **", "databases.tests.** -> **", "jobs.tests.** -> **",
@@ -163,3 +163,25 @@ ignore_imports = [
 ]
 unmatched_ignore_imports_alerting = "none"
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "پلاگین سطح ۳ (ext) فقط SDK هسته و مدل‌های مجاز را می‌شناسد (docs/adr/0007)"
+type = "forbidden"
+source_modules = ["ext"]
+forbidden_modules = [
+    "accounts.views", "accounts.admin", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases.views",
+    "databases.urls", "databases.plugin", "databases.gateway", "databases.admin", "databases.explorer", "databases.team",
+    "enterprise", "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate", "support",
+    "survey", "tools", "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
+    "kernel.crypto", "kernel.pkg", "kernel.runner", "kernel.admin", "kernel.studio", "kernel.pluginio", "kernel.pkgtest",
+    "kernel.health", "kernel.alerts", "kernel.admin_cards", "kernel.stepup",
+]
+ignore_imports = ["ext.**.tests.** -> **"]
+unmatched_ignore_imports_alerting = "none"
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "پلاگین‌های سطح ۳ از هم مستقل‌اند"
+type = "independence"
+modules = ["ext.*"]
+unmatched_ignore_imports_alerting = "none"

@@ -111,6 +111,13 @@ INSTALLED_APPS = [
     "assistant",
 ]
 
+# پلاگین‌های سطح ۳ (ext/<id>/، فقط محتوای ایمیج؛ docs/adr/0007). PLUGINS_SAFE_MODE=1 = راه نجات: هیچ‌کدام بار نمی‌شود.
+PLUGINS_SAFE_MODE = os.environ.get("PLUGINS_SAFE_MODE", "") == "1"
+PLUGINS_DISABLED = os.environ.get("PLUGINS_DISABLED", "")
+from ext import discover as _discover_ext  # noqa: E402
+
+INSTALLED_APPS += _discover_ext(PLUGINS_SAFE_MODE, PLUGINS_DISABLED)
+
 MIDDLEWARE = [
     "core.middleware.HealthCheckMiddleware",
     "core.middleware.CanonicalHostMiddleware",

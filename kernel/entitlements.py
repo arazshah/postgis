@@ -97,11 +97,17 @@ def _kind(plugin_id: str) -> str | None:
     return p.kind if p else None
 
 
+def _default_open(plugin_id: str) -> bool:
+    """بدون ردیف وضعیت: پلاگین سطح ۳ بسته است (باید مدیر فعالش کند)؛ بقیه باز."""
+    p = registry.plugins.get(plugin_id)
+    return not (p and p.tier == 3)
+
+
 def is_enabled(plugin_id: str) -> bool:
     if _kind(plugin_id) == "system":
         return True
     st = state(plugin_id)
-    return True if st is None else st.enabled
+    return _default_open(plugin_id) if st is None else st.enabled
 
 
 def _subjects(user, ws) -> set[tuple[str, str]]:
@@ -142,7 +148,7 @@ def allowed(plugin_id: str, *, user=None, ws=None, now=None) -> bool:
         return True
     st = state(plugin_id)
     if st is None:
-        return True
+        return _default_open(plugin_id)
     if not st.enabled:
         return False
     if st.access == "open":

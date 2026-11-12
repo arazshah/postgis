@@ -28,7 +28,9 @@ def sync_states() -> int:
     made = 0
     for p in registry.plugins.values():
         if p.kind != "system":
-            _, new = PluginState.objects.get_or_create(plugin_id=p.id)
+            # سطح ۳ به‌طور پیش‌فرض «محدود و بدون مجوز» است؛ مدیر باید آگاهانه مجوز بدهد (ADR-0007)
+            defaults = {"access": PluginState.Access.RESTRICTED} if p.tier == 3 else {}
+            _, new = PluginState.objects.get_or_create(plugin_id=p.id, defaults=defaults)
             made += new
     return made
 
