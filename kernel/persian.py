@@ -9,7 +9,7 @@ import re
 _CHARS = str.maketrans({"ي": "ی", "ى": "ی", "ئ": "ی", "ك": "ک", "ة": "ه", "ۀ": "ه", "ە": "ه", "أ": "ا", "إ": "ا", "آ": "ا", "ؤ": "و",
                         "‌": " ", "ـ": "", "‍": "", "‎": "", "‏": "", "\xa0": " "})
 _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
-_MARKS = re.compile("[ً-ٰٟ]")  # اعراب و همزه‌ی بالا
+_MARKS = re.compile("[\u064B-\u065F\u0670]")  # اعراب و همزه‌ی بالا
 _PUNCT = re.compile(r"[^\w\s]|_", re.UNICODE)
 _SPACES = re.compile(r"\s+")
 _ABBR = [(re.compile(r"(?<!\S)خ\s*\."), "خیابان "), (re.compile(r"(?<!\S)ک\s*\."), "کوچه "), (re.compile(r"(?<!\S)م\s*\."), "میدان "),
@@ -25,7 +25,7 @@ TITLES = {"دکتر", "شهید", "شهدا", "امام", "استاد", "سرد�
           "جاده", "فلکه", "کوی", "شهرک", "محله", "پل", "بن", "بست", "چهارراه", "تقاطع", "گذر", "بازارچه", "فرعی", "اصلی", "اول", "دوم"}
 NOISE = {"ایران", "استان", "شهر", "شهرستان", "تهران ایران", "کدپستی", "کد", "پستی", "طبقه", "واحد", "ساختمان", "نبش", "روبروی", "جنب", "ضلع"}
 _NUMBER = re.compile(r"(?:پلاک|پ)\s*[:.\-]?\s*(\d{1,5})", re.U)
-_SPLIT = re.compile(r"[،,;\n\r\t|/\\]+|\s-\s")
+_SPLIT = re.compile(r"[،,;\n\r\t|/\\]+|\s-\s|(?<!\S)(?:نبش|روبرو[یي]|روبرو|جنب|ضلع|بعد از|قبل از)(?!\S)")
 
 
 def normalize(text: str) -> str:
@@ -62,7 +62,7 @@ def parse_address(text: str) -> dict:
     parts: بخش‌های جداشده با ویرگول/خط (نرمال‌شده، بدون نویز)؛ street: بخشی که نوع معبر دارد؛ number: پلاک.
     """
     raw = text or ""
-    m = _NUMBER.search(normalize(raw).replace("پلاک", " پلاک ") if False else normalize(raw))
+    m = _NUMBER.search(normalize(raw))
     number = m.group(1) if m else ""
     parts = []
     for p in _SPLIT.split(raw):
