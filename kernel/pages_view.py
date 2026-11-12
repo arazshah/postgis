@@ -7,7 +7,20 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from . import entitlements, gate, ingest, metering, pagekit, platform, pluginio, sources, tables, tenantdb, workspace
+from . import (
+    entitlements,
+    gate,
+    ingest,
+    metering,
+    pagekit,
+    platform,
+    pluginio,
+    reports,
+    sources,
+    tables,
+    tenantdb,
+    workspace,
+)
 
 
 @login_required
@@ -397,3 +410,73 @@ def record_delete(request, pk, plugin, page, key, rid):
     workspace.log_event("plugin_record", f"{plugin}/{page}/{key}: ردیف {rid} از {rc.table} حذف شد", user=request.user, database=ws)
     messages.success(request, "ردیف حذف شد.")
     return back
+
+
+# ---------------------------------------------------------------------- گزارش PDF (`[[reports]]`)
+REPORT_PER_MIN = 6
+
+
+@login_required
+def report_pdf(request, pk, plugin, page, key):
+    """PDF صفحه با فیلترهای فعلی (GET؛ فقط‌خواندنی). سقف نرخ هر کاربر، سقف ماهانه‌ی مجوز و ثبت مصرف."""
+    from django.core.cache import cache
+
+    spec = pagekit.get(plugin, page)
+    rp = pagekit.get_report(spec, key) if spec else None
+    if rp is None:
+        raise Http404
+    ws = workspace.get(request, pk, spec.need)
+    if not entitlements.allowed(plugin, user=request.user, ws=ws):
+        raise Http404
+    back = redirect("kernel:page", pk=ws.pk, plugin=plugin, page=page)
+    if not ws.is_live:
+        messages.error(request, "گزارش فقط برای پایگاه داده‌ی فعال ساخته می‌شود.")
+        return back
+    ck = f"report-rate:{request.user.pk}"
+    cache.add(ck, 0, 60)
+    try:
+        n = cache.incr(ck)
+    except ValueError:
+        n = 1
+    if n > REPORT_PER_MIN:
+        messages.error(request, "درخواست گزارش زیاد بود؛ یک دقیقه بعد دوباره تلاش کنید.")
+        return back
+    within, _now, cap = metering.check(plugin, "report_pdfs", user=request.user, ws=ws)
+    if not within:
+        messages.error(request, f"سقف ماهانه‌ی گزارش ({cap}) پر شده است.")
+        return back
+    layers = {}
+    if any(p.kind == "layer" for p in spec.params):
+        try:
+            layers = {f"{t.schema}.{t.name}": t.name for t in tenantdb.catalog(ws).tables()}
+        except tenantdb.TenantError:
+            layers = {}
+    values, errors = pagekit.read_values(spec, request.GET, layers)
+    if errors:
+        messages.error(request, errors[0])
+        return back
+    chosen = [spec.blocks[i - 1] for i in rp.blocks] if rp.blocks else list(spec.blocks)
+    rendered = [pagekit.render_block(ws, spec, b, values) for b in chosen]
+    filters = [f"{p.label}: {values.get(p.name)}" for p in spec.params if values.get(p.name) not in (None, "")]
+    from django.utils import timezone
+
+    try:
+        html = reports.build_html(report=rp, page_title=spec.title, blocks=rendered, site_name=workspace_site_name(),
+                                  db_label=getattr(ws, "db_name", "") or str(ws.pk), filters=filters, now=timezone.now())
+        pdf = reports.to_pdf(html, rp.title)
+    except reports.ReportError as exc:
+        messages.error(request, str(exc))
+        return back
+    metering.record(plugin, "report_pdfs", user=request.user, ws=ws)
+    workspace.log_event("plugin_report", f"{plugin}/{page}/{key}: گزارش PDF ساخته شد", user=request.user, database=ws)
+    resp = HttpResponse(pdf, content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="report-{key}-{timezone.localdate():%Y%m%d}.pdf"'
+    resp["Cache-Control"] = "no-store"
+    resp["X-Content-Type-Options"] = "nosniff"
+    return resp
+
+
+def workspace_site_name() -> str:
+    from django.conf import settings
+
+    return getattr(settings, "SITE_NAME", "") or "ژئوپایگاه"

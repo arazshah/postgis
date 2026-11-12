@@ -9,6 +9,7 @@ urlpatterns = [
     path("dashboard/<int:pk>/p/<slug:plugin>/<slug:page>/x/<slug:key>/", pages_view.export_file, name="export"),
     path("dashboard/<int:pk>/p/<slug:plugin>/<slug:page>/r/<slug:key>/<int:rid>/", pages_view.record_edit, name="record_edit"),
     path("dashboard/<int:pk>/p/<slug:plugin>/<slug:page>/r/<slug:key>/<int:rid>/delete/", pages_view.record_delete, name="record_delete"),
+    path("dashboard/<int:pk>/p/<slug:plugin>/<slug:page>/report/<slug:key>.pdf", pages_view.report_pdf, name="report"),
     path("ingest/", pages_view.ingest_receive, name="ingest"),
     path("dashboard/<int:pk>/p/<slug:plugin>/<slug:page>/s/<slug:key>/", pages_view.source_save, name="source_save"),
     path("dashboard/<int:pk>/p/<slug:plugin>/<slug:page>/s/<slug:key>/run/", pages_view.source_run, name="source_run"),
