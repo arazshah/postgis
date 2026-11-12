@@ -86,7 +86,7 @@
       box.appendChild(d);
     }
     document.getElementById("wz-addcol").addEventListener("click",function(){row("","text");});
-    row("device","text"); row("lat","double"); row("lon","double"); row("at","timestamptz");
+    row("device","text"); row("lat","lat"); row("lon","lon"); row("at","timestamptz");
   })();
   </script>
 
@@ -184,8 +184,9 @@
     function row(t){
       var d=document.createElement("div"); d.className="wz-row";
       d.innerHTML='<div class="wz-field"><label>نوع</label><select name="t_kind">'+kinds.map(function(k){return '<option value="'+k[0]+'"'+(t.kind===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join("")+'</select></div>'+
-        '<div class="wz-field"><label>شناسه</label><input name="t_subject" dir="ltr" value="'+(t.subject||"")+'"></div>'+
-        '<div class="wz-field"><label>مدت (روز)</label><input name="t_days" type="number" min="1" value="'+(t.days||"")+'"></div>';
+        '<div class="wz-field"><label>شناسه</label><input name="t_subject" dir="ltr"></div>'+
+        '<div class="wz-field"><label>مدت (روز)</label><input name="t_days" type="number" min="1"></div>';
+      d.querySelector("[name=t_subject]").value=t.subject||""; d.querySelector("[name=t_days]").value=t.days||"";
       box.appendChild(d);
     }
     document.getElementById("wz-addt").addEventListener("click",function(){row({kind:"org"});});

@@ -203,6 +203,9 @@ def _field_for(c: dict) -> dict:
     if kind is None:
         raise WizardError(f"ستون «{c['name']}» از نوع {c['type']} در فرم/دریافت داده پشتیبانی نمی‌شود.")
     f = {"name": c["name"], "kind": kind, "label": c.get("label") or c["name"], "required": bool(c.get("required"))}
+    for k in ("min", "max"):  # کران ستون (مثلاً عرض/طول جغرافیایی) در فرم و دریافت داده اعمال می‌شود
+        if isinstance(c.get(k), (int, float)) and not isinstance(c.get(k), bool):
+            f[k] = c[k]
     if kind == "text":
         f["max"] = 200
     return f

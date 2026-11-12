@@ -28,7 +28,8 @@ KIND_TILES = (("kpi", "شمارنده", "یک عدد درشت (تعداد، می
               ("bars", "نمودار میله‌ای", "مقایسه‌ی گروه‌ها"), ("map", "نقشه", "نقطه‌ها روی نقشه"), ("text", "متن", "راهنما یا توضیح"),
               ("form", "فرم ثبت", "کاربر ردیف تازه ثبت می‌کند"), ("ingest", "دریافت از دستگاه", "دستگاه با توکن داده می‌فرستد"),
               ("sql", "SQL پیشرفته", "پرس‌وجوی فقط‌خواندنی دلخواه"))
-COL_TYPES = (("text", "متن"), ("integer", "عدد صحیح"), ("bigint", "عدد صحیح بزرگ"), ("double", "عدد اعشاری"), ("boolean", "بله/خیر"),
+GEO_TYPES = {"lat": (-90, 90), "lon": (-180, 180)}  # نوع معنایی ← کران؛ در پایگاه double است
+COL_TYPES = (("lat", "عرض جغرافیایی (−۹۰ تا ۹۰)"), ("lon", "طول جغرافیایی (−۱۸۰ تا ۱۸۰)"), ("text", "متن"), ("integer", "عدد صحیح"), ("bigint", "عدد صحیح بزرگ"), ("double", "عدد اعشاری"), ("boolean", "بله/خیر"),
              ("date", "تاریخ"), ("timestamptz", "زمان"), ("jsonb", "JSON"), ("point", "نقطه‌ی مکانی"))
 AGG_CHOICES = (("count", "تعداد"), ("sum", "جمع"), ("avg", "میانگین"), ("min", "کمینه"), ("max", "بیشینه"))
 
@@ -73,8 +74,11 @@ def _columns_from_post(post) -> list[dict]:
         n = n.strip()
         if not n:
             continue
-        cols.append({"name": n, "type": types[i] if i < len(types) else "text", "required": post.get(f"c_req_{i}") == "1",
-                     "auto_now": post.get(f"c_auto_{i}") == "1"})
+        t = types[i] if i < len(types) else "text"
+        col = {"name": n, "type": "double" if t in GEO_TYPES else t, "required": post.get(f"c_req_{i}") == "1", "auto_now": post.get(f"c_auto_{i}") == "1"}
+        if t in GEO_TYPES:
+            col["min"], col["max"] = GEO_TYPES[t]
+        cols.append(col)
     return cols
 
 
@@ -508,6 +512,8 @@ def _step5(request, draft, spec):
         return redirect(_url(draft, 6))
     if not stepup.ok(request):
         return redirect(stepup.url(request))
+    if not pkg.second_approval_required() and not request.user.has_perm("kernel.activate_pluginrelease"):
+        raise publish.PublishError("انتشار مستقیم مجوز «تأیید و فعال‌سازی نسخه‌ی پلاگین» می‌خواهد؛ از مدیر کل بخواهید یا «تأیید مدیر دیگر» را روشن کنید.")
     out = publish.publish(draft, request.user, spec.get("access") or {})
     (messages.success if out["active"] else messages.warning)(request, f"{out['message']} (نسخه‌ی {out['release'].version})")
     ws_mod.log_event("plugin_publish", f"{draft.plugin_id} {out['release'].version}: {out['message']}", user=request.user)

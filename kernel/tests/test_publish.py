@@ -200,9 +200,25 @@ class PublishFlowTests(TestCase):
         self.assertIn("SIGNATURE", z.namelist())
         self.assertIn("plugin.toml", z.namelist())
 
+    def test_upload_only_staff_cannot_publish_directly(self):
+        from django.contrib.auth.models import Permission
+
+        staff = get_user_model().objects.create_admin("pubstaff", "Str0ng-Admin-Pass", superuser=False)
+        staff.user_permissions.add(*Permission.objects.filter(codename__in=["upload_pluginrelease", "view_pluginstate", "change_plugindraft", "view_plugindraft"]))
+        self.client.force_login(staff)
+        self.client.post(self.step(5), {"mode": "public_free"})
+        r = self.client.post(self.step(6), {"op": "publish"})
+        self.assertEqual(r.status_code, 302)
+        self.assertFalse(PluginRelease.objects.exists())
+        platform.set_("require_second_approval", "1")  # با تأیید نفر دوم همان نویسنده فقط ثبت می‌کند
+        self.client.post(self.step(6), {"op": "publish"})
+        rel = PluginRelease.objects.get()
+        self.assertEqual(rel.status, "checked")
+
     def test_market_without_provider_is_a_clear_error(self):
         saved = registry._points.get(market.POINT)
         registry._points.pop(market.POINT, None)
         self.addCleanup(lambda: registry._points.__setitem__(market.POINT, saved) if saved is not None else None)
         with self.assertRaises(market.MarketError):
             market.upsert("billing", market.Listing(title="x", price_toman=5))
+
