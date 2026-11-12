@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.http import Http404
 
 from . import entitlements, workspace
@@ -33,7 +34,24 @@ class PluginGateMiddleware:
 
     def __call__(self, request):
         entitlements.refresh()  # بسته‌ی تازه‌فعال‌شده پیش از ساخت منو در رجیستری باشد
-        return self.get_response(request)
+        response = self.get_response(request)
+        pid = getattr(request, "_ext_plugin", None)
+        if pid and not getattr(request, "_ext_counted", False):
+            from . import health
+
+            # ۴xx (۴۰۴ و ۴۰۳ و …) تقصیر پلاگین نیست؛ فقط ۵xx خطا شمرده می‌شود
+            health.record(pid, response.status_code < 500)
+        return response
+
+    def process_exception(self, request, exception):
+        """استثنای نمای پلاگین سطح ۳ در قطع‌کن شمرده می‌شود (فقط همان درخواست ۵۰۰ می‌گیرد؛ پاسخ را جنگو می‌سازد)."""
+        pid = getattr(request, "_ext_plugin", None)
+        if pid and not isinstance(exception, (Http404, PermissionDenied, SuspiciousOperation)):
+            from . import health
+
+            request._ext_counted = True
+            health.record(pid, False)
+        return None
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         pid = owner_plugin(view_func)
@@ -47,6 +65,7 @@ class PluginGateMiddleware:
         if not st.enabled:
             raise Http404
         if st.access == "open" or getattr(view_func, "gate_public", False):
+            self._track(request, pid)
             return None
         user = getattr(request, "user", None)
         ws = None
@@ -54,5 +73,11 @@ class PluginGateMiddleware:
         if match is not None and match.route.startswith("dashboard/") and "pk" in view_kwargs:
             ws = workspace.peek(view_kwargs["pk"])
         if not entitlements.allowed(pid, user=user, ws=ws):
-            raise Http404
+            raise Http404  # درخواست غیرمجاز در قطع‌کن شمرده نمی‌شود (کسی با کاوش موفقیت جعلی نسازد)
+        self._track(request, pid)
         return None
+
+    @staticmethod
+    def _track(request, pid: str) -> None:
+        if registry.plugins[pid].tier == 3:
+            request._ext_plugin = pid  # از اینجا نتیجه‌ی درخواست در قطع‌کن شمرده می‌شود

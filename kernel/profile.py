@@ -14,6 +14,7 @@ POINT = "profile.section"
 
 
 @dataclass(frozen=True)
+
 class Section:
     key: str  # شناسه‌ی زبانه و hash آدرس
     title: str
@@ -55,6 +56,9 @@ def build(request) -> list[dict]:
             badge = bool(load(s.badge)(request)) if s.badge else False
         except Exception:  # noqa: BLE001
             logging.getLogger(__name__).exception("profile section %s failed", s.key)
+            from . import health
+
+            health.contribution_failed(s.plugin)
             continue
         out.append({"key": s.key, "title": s.title, "template": s.template, "ctx": ctx, "badge": badge, "badge_title": s.badge_title})
     return out

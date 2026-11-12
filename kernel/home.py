@@ -31,6 +31,9 @@ def _run(point: str, *args) -> list:
             got = load(c.value)(*args)
         except Exception:  # noqa: BLE001
             log.exception("home contribution %s (%s) failed", c.value, c.plugin)
+            from . import health
+
+            health.contribution_failed(c.plugin)
             continue
         if got is not None:
             out.append(got)
