@@ -13,7 +13,7 @@ from django.core.exceptions import PermissionDenied
 from django.template.response import TemplateResponse
 from django.urls import NoReverseMatch, reverse
 
-from . import conf, pkg
+from . import conf, pkg, stepup
 from .models import Entitlement, PluginDraft, PluginState, PluginTrip
 from .plugins import registry
 
@@ -118,3 +118,28 @@ def hub(request):
     else:
         ctx["links"] = advanced_links()
     return TemplateResponse(request, "admin/kernel/hub.html", ctx)
+
+
+def install_sample(request):
+    """ساخت و انتشار پلاگین نمونه‌ی «آزمایشگاه» (docs/plugins/testing-guide.md): فقط POST، تأیید تازه و مجوز فعال‌سازی نسخه."""
+    from django.contrib import messages
+    from django.shortcuts import redirect
+
+    from . import publish, samples
+
+    if not allowed(request):
+        raise PermissionDenied
+    if request.method != "POST":
+        return redirect("plugin_hub")
+    if not request.user.has_perm("kernel.activate_pluginrelease"):
+        raise PermissionDenied
+    if not stepup.ok(request):
+        return redirect(stepup.url(request))
+    try:
+        out = samples.install(request.user)
+        (messages.success if out["active"] else messages.warning)(
+            request, "پلاگین «آزمایشگاه ژئوپایگاه»: " + out["message"]
+            + " حالا با حساب مشتری یک پایگاه PostGIS فعال را باز کنید؛ در ریل کناری پایگاه، زیر «داده»، گزینه‌ی «آزمایشگاه ژئوپایگاه» پیدا می‌شود (تا ۳۰ ثانیه ممکن است دیر بیاید).")
+    except publish.PublishError as exc:
+        messages.error(request, f"ساخت نمونه انجام نشد: {exc}")
+    return redirect(reverse("plugin_hub") + "?tab=create")

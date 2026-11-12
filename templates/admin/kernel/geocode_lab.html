@@ -1,0 +1,26 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="content-main">
+  <p class="help">نشانی‌ها را روی «داده آماده ایران» یک پایگاه می‌آزماید (جدول‌های osm_roads، osm_pois و osm_places همان پایگاه). OSM پلاک و کدپستی ندارد؛ دقت در حد «معبر یا مکان» است. هر سطر یک نشانی (حداکثر ۳۰۰).</p>
+  <form method="post">{% csrf_token %}
+    <fieldset class="module aligned">
+      <div class="form-row"><label for="g-ws">شناسه‌ی پایگاه</label> <input id="g-ws" name="ws" dir="ltr" value="{{ form.ws }}" required inputmode="numeric"></div>
+      <div class="form-row"><label for="g-city">شهر</label> <input id="g-city" name="city" value="{{ form.city }}" required placeholder="مثلاً تهران"></div>
+      <div class="form-row"><label for="g-r">شعاع (کیلومتر)</label> <input id="g-r" name="radius" dir="ltr" value="{{ form.radius }}" size="5"></div>
+      <div class="form-row"><label for="g-t">نشانی‌ها</label> <textarea id="g-t" name="text" rows="10" cols="70" required>{{ form.text }}</textarea></div>
+    </fieldset>
+    <div class="submit-row"><input type="submit" class="default" value="اجرای آزمایش"></div>
+  </form>
+  {% if stats %}
+  <h2>نتیجه — {{ city }}</h2>
+  <p><b>نرخ تطبیق: {{ stats.rate }}٪</b> ({{ stats.matched }} از {{ stats.total }}؛ اطمینان بالا {{ stats.high }}، متوسط {{ stats.mid }}، پایین {{ stats.low }}، بی‌نتیجه {{ stats.none }}) — مبهم: {{ stats.ambiguous }}.
+    <span class="help">معبر {{ stats.levels.street }}، مکان {{ stats.levels.poi }}، محله {{ stats.levels.neighbourhood }}، فقط شهر {{ stats.levels.city }}. داده‌ی بارگذاری‌شده: {{ n_streets }} معبر، {{ n_pois }} مکان، {{ n_hoods }} محله.</span></p>
+  <p><a class="button" href="?dl={{ token }}">دانلود CSV</a></p>
+  <div style="overflow-x:auto"><table>
+    <thead><tr><th>نشانی</th><th>سطح</th><th>اطمینان</th><th>مختصات</th><th>نام تطبیق‌خورده</th><th>توضیح</th></tr></thead>
+    <tbody>{% for r in results %}<tr><td>{{ r.text }}</td><td>{{ r.level }}</td><td>{{ r.label }} <span class="help">({{ r.score }})</span></td>
+      <td dir="ltr">{% if r.lon %}{{ r.lat|floatformat:5 }}, {{ r.lon|floatformat:5 }}{% else %}—{% endif %}</td><td>{{ r.matched }}</td><td class="help">{{ r.note }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+</div>
+{% endblock %}

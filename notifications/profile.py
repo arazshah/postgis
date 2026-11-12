@@ -32,6 +32,14 @@ def handle(request, action: str, next_url: str):
     elif action == "notify_unlink":
         notify.unlink(request.user, post.get("channel", ""))
         messages.success(request, "اتصال حذف شد.")
+    elif action == "notify_test":
+        out = notify.deliver(request.user, "پیام آزمایشی ژئوپایگاه", "اگر این پیام را می‌بینید، کانال هشدار شما درست کار می‌کند.", severity="critical")
+        if out["sent"]:
+            messages.success(request, "پیام آزمایشی به " + "، ".join(notify.CHANNELS[k]["label"] for k in out["sent"]) + " فرستاده شد.")
+        elif out["fallback"]:
+            messages.warning(request, "کانال پیام‌رسانی متصل نیست یا نرسید؛ پیام با پیامک/ایمیل فرستاده شد.")
+        else:
+            messages.error(request, "پیامی فرستاده نشد؛ کانال یا پیامک/ایمیل را بررسی کنید.")
     elif action == "notify_pref":
         def hour(name):
             v = post.get(name, "")

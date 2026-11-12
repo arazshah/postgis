@@ -21,6 +21,7 @@
     <p class="muted">بعد از ارسال، تا یک دقیقه صبر کنید و صفحه را تازه کنید.</p>
   </div>
   {% endif %}
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="notify_test"><button class="btn ghost sm" type="submit">{% icon "bell" 16 %}ارسال پیام آزمایشی</button></form>
   <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="notify_pref">
     <div class="field"><label for="q-from">ساعت سکوت (هشدار عادی بی‌صدا می‌رسد؛ بحرانی همیشه)</label>
       <div class="row">
