@@ -58,7 +58,7 @@ def execute(plugin: str, handler: str, params: dict, sql_fn, ws_pk: int = 0, *, 
     try:
         out = run_files(files, handler, params, sql_fn, ws_pk, file=file, io=io, plugin=plugin)
     except HandlerFailed:
-        health.record(plugin, False)
+        health.record(plugin, False, ws=ws_pk)
         raise
-    health.record(plugin, True)
+    health.record(plugin, True, ws=ws_pk)
     return out

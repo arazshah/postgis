@@ -156,13 +156,14 @@ class PluginHealthBucket(models.Model):
 
     plugin_id = models.CharField("پلاگین", max_length=41)
     bucket = models.DateTimeField("بازه")
+    workspace_id = models.PositiveBigIntegerField("پایگاه داده (۰ = نامشخص)", default=0)
     runs = models.PositiveIntegerField("اجرا", default=0)
     errors = models.PositiveIntegerField("خطا", default=0)
 
     class Meta:
         verbose_name = "سلامت پلاگین"
         verbose_name_plural = "سلامت پلاگین‌ها"
-        constraints = [models.UniqueConstraint(fields=["plugin_id", "bucket"], name="uniq_plugin_health_bucket")]
+        constraints = [models.UniqueConstraint(fields=["plugin_id", "bucket", "workspace_id"], name="uniq_plugin_health_bucket_ws")]
         indexes = [models.Index(fields=["plugin_id", "bucket"], name="plugin_health_lookup")]
 
     def __str__(self):
