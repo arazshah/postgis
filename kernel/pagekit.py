@@ -92,6 +92,27 @@ class Form:
     success: str = "ثبت شد."
 
 
+COLUMN_TYPES = ("text", "integer", "bigint", "double", "boolean", "date", "timestamptz", "jsonb", "point")
+MAX_TABLES, MAX_COLUMNS, MAX_INDEXES = 5, 20, 3
+
+
+@dataclass(frozen=True)
+class ColumnSpec:
+    name: str
+    type: str  # از COLUMN_TYPES؛ «point» = geometry(Point, 4326)
+    required: bool = False  # NOT NULL (فقط هنگام ساخت جدول)
+    auto_now: bool = False  # فقط timestamptz: DEFAULT now()
+
+
+@dataclass(frozen=True)
+class TableSpec:
+    """جدولی که پلاگین لازم دارد (docs/adr/0008): هسته هنگام نخستین استفاده در پایگاه همان مشتری می‌سازد؛ فقط افزایشی."""
+
+    name: str  # باید با «<id پلاگین>_» شروع شود؛ همیشه در public
+    columns: tuple[ColumnSpec, ...]
+    indexes: tuple[tuple[str, ...], ...] = ()
+
+
 @dataclass(frozen=True)
 class IngestSpec:
     """نقطه‌ی دریافت داده‌ی دستگاه (docs/plugins/ingest.md): نشانی عمومی با توکن هر پایگاه؛ **فقط INSERT** در جدول مشخص با
@@ -149,6 +170,7 @@ class Page:
     imports: tuple[ImportSpec, ...] = ()
     exports: tuple[ExportSpec, ...] = ()
     ingests: tuple[IngestSpec, ...] = ()
+    tables: tuple[TableSpec, ...] = ()
 
 
 _icon_known = lambda name: True  # noqa: E731  هسته فهرست آیکون‌ها را نمی‌شناسد؛ پلاگین هسته‌ی سایت آن را ثبت می‌کند
@@ -282,6 +304,42 @@ def parse_form(d: dict) -> Form:
                 _str(d, "success", default="ثبت شد.", limit=120))
 
 
+def parse_table(plugin: str, d: dict) -> TableSpec:
+    name = _str(d, "name", required=True, limit=63)
+    if not re.fullmatch(r"[a-z][a-z0-9_]{1,62}", name) or not name.startswith(f"{plugin}_") or name == f"{plugin}_":
+        raise SpecError(f"نام جدول «{name}» باید با «{plugin}_» شروع شود (حروف کوچک لاتین، رقم و _).")
+    raw = d.get("columns") or []
+    if not raw or not isinstance(raw, list):
+        raise SpecError(f"جدول «{name}» دست‌کم یک ستون لازم دارد.")
+    if len(raw) > MAX_COLUMNS:
+        raise SpecError(f"حداکثر {MAX_COLUMNS} ستون در هر جدول.")
+    cols = []
+    for c in raw:
+        if not isinstance(c, dict):
+            raise SpecError("هر ستون یک شیء است.")
+        cname = _str(c, "name", required=True, limit=63)
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", cname) or cname in ("id", "geom") and c.get("type") != "point":
+            raise SpecError(f"نام ستون «{cname}» نامعتبر یا رزروشده است (id را هسته می‌سازد).")
+        ctype = _str(c, "type", default="text")
+        if ctype not in COLUMN_TYPES:
+            raise SpecError(f"نوع ستون «{ctype}» مجاز نیست (مجاز: {'، '.join(COLUMN_TYPES)}).")
+        auto = bool(c.get("auto_now", False))
+        if auto and ctype != "timestamptz":
+            raise SpecError("auto_now فقط برای timestamptz است.")
+        cols.append(ColumnSpec(cname, ctype, bool(c.get("required", False)), auto))
+    if len({c.name for c in cols}) != len(cols):
+        raise SpecError(f"ستون‌های جدول «{name}» باید یکتا باشند.")
+    idx = d.get("indexes") or []
+    if not isinstance(idx, list) or len(idx) > MAX_INDEXES:
+        raise SpecError(f"حداکثر {MAX_INDEXES} شاخص.")
+    indexes = []
+    for i in idx:
+        if not isinstance(i, list) or not i or len(i) > 3 or not all(isinstance(x, str) and x in {c.name for c in cols} for x in i):
+            raise SpecError("هر شاخص فهرستی از ۱ تا ۳ نام ستونِ همین جدول است.")
+        indexes.append(tuple(i))
+    return TableSpec(name, tuple(cols), tuple(indexes))
+
+
 def parse_ingest(d: dict) -> IngestSpec:
     key = _str(d, "key", required=True, limit=31)
     if not KEY_RE.fullmatch(key):
@@ -381,6 +439,11 @@ def parse_page(plugin: str, d: dict) -> Page:
         raise SpecError("کلید ورودها و خروجی‌ها باید یکتا باشد.")
     if imports and need == "viewer":
         raise SpecError("صفحه‌ی دارای ورود فایل (نوشتن) دست‌کم سطح «editor» می‌خواهد.")
+    tables = [parse_table(plugin, t) for t in d.get("tables") or []]
+    if len(tables) > MAX_TABLES:
+        raise SpecError(f"حداکثر {MAX_TABLES} جدول در یک صفحه.")
+    if len({t.name for t in tables}) != len(tables):
+        raise SpecError("نام جدول‌ها باید یکتا باشد.")
     ingests = [parse_ingest(i) for i in d.get("ingest") or []]
     if len(ingests) > 2:
         raise SpecError("حداکثر ۲ نقطه‌ی دریافت داده در یک صفحه.")
@@ -393,7 +456,7 @@ def parse_page(plugin: str, d: dict) -> Page:
     if len(blocks) > 24:
         raise SpecError("حداکثر ۲۴ بلوک در یک صفحه.")
     return Page(plugin, key, _str(d, "title", required=True, limit=80), _str(d, "subtitle", limit=240), icon, group, need,
-                order, refresh, tuple(params), tuple(blocks), tuple(forms), tuple(imports), tuple(exports), tuple(ingests))
+                order, refresh, tuple(params), tuple(blocks), tuple(forms), tuple(imports), tuple(exports), tuple(ingests), tuple(tables))
 
 
 # ---------------------------------------------------------------------- ثبت

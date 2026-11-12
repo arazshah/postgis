@@ -494,4 +494,5 @@ class ExamplePackageTests(TestCase):
                 z.writestr(name, data)
         ins = pkg.inspect(buf.getvalue(), keys={"tester": key.public_key()}, new_release=False)
         self.assertTrue(ins.ok, [(s.name, s.detail) for s in ins.steps if not s.ok])
-        self.assertEqual(ins.pages[0].ingests[0].table, "monitor_points")
+        self.assertEqual(ins.pages[0].ingests[0].table, "monitoring_points")
+        self.assertEqual(ins.pages[0].tables[0].name, "monitoring_points")

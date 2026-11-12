@@ -6,7 +6,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from . import entitlements, gate, ingest, metering, pagekit, pluginio, tenantdb, workspace
+from . import entitlements, gate, ingest, metering, pagekit, pluginio, tables, tenantdb, workspace
 
 
 @login_required
@@ -25,6 +25,11 @@ def page(request, pk, plugin, page):
     if not ws.is_live:
         messages.error(request, "این صفحه فقط برای پایگاه داده‌ی فعال در دسترس است.")
         return redirect("databases:detail", pk=ws.pk)
+    if spec.tables:
+        try:
+            tables.ensure(ws, plugin, spec.tables)  # جدول‌های اعلام‌شده‌ی پلاگین (نخستین استفاده در این پایگاه)
+        except tables.TableError as exc:
+            messages.error(request, str(exc))
     layers: dict[str, str] = {}
     if any(p.kind == "layer" for p in spec.params):
         try:
@@ -67,6 +72,12 @@ def submit(request, pk, plugin, page, form):
     if not within:
         messages.error(request, f"سقف ماهانه‌ی ثبت ({cap}) پر شده است؛ برای افزایش با پشتیبانی تماس بگیرید.")
         return back
+    if spec.tables:
+        try:
+            tables.ensure(ws, plugin, spec.tables)
+        except tables.TableError as exc:
+            messages.error(request, str(exc))
+            return back
     values, errors = pagekit.read_form(fm, request.POST)
     if errors:
         for e in errors:

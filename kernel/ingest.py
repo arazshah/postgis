@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from django.core.cache import cache
 from django.utils import timezone
 
-from . import entitlements, metering, pagekit, workspace
+from . import entitlements, metering, pagekit, tables, workspace
 
 PREFIX = "gpi_"
 MAX_BODY = 256 * 1024
@@ -176,7 +176,12 @@ def receive(request) -> dict:
     if errors:
         raise IngestError(422, "؛ ".join(errors))
     try:
+        if ctx.page.tables:
+            tables.ensure(ws, tok.plugin_id, ctx.page.tables)
         pagekit.insert_rows(ws, spec, values)
+    except tables.TableError as exc:
+        workspace.log_event("plugin_ingest", f"{tok.plugin_id}/{tok.page}/{tok.key}: {exc}", database=ws, success=False)
+        raise IngestError(503, "نقطه‌ی دریافت آماده نیست.") from exc
     except pagekit.SpecError as exc:
         workspace.log_event("plugin_ingest", f"{tok.plugin_id}/{tok.page}/{tok.key}: {exc}", database=ws, success=False)
         raise IngestError(503, "نقطه‌ی دریافت درست پیکربندی نشده است.") from exc

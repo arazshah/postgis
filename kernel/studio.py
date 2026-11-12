@@ -202,7 +202,8 @@ def check(d) -> list[dict]:
     if pages:
         writes = sorted({f"{pg.key}→{fm.table}" for pg in pages for fm in pg.forms} |
                         {f"{pg.key}→جدول تازه ({im.handler})" for pg in pages for im in pg.imports} |
-                        {f"{pg.key}→{ig.table} (دریافت عمومی با توکن)" for pg in pages for ig in pg.ingests})
+                        {f"{pg.key}→{ig.table} (دریافت عمومی با توکن)" for pg in pages for ig in pg.ingests} |
+                        {f"{pg.key}→ساخت جدول {t.name}" for pg in pages for t in pg.tables})
         steps.append({"stage": "دسترسی نوشتن", "ok": True,
                       "detail": ("فقط INSERT در: " + "، ".join(writes)) if writes else "بدون نوشتن (فقط خواندنی)"})
     return steps
