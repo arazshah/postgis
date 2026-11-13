@@ -185,7 +185,7 @@ def dash_menu(db):
     """منوی «⋯» ردیف فشرده‌ی داشبورد: همه‌ی بخش‌ها با همان دسته‌بندی منوی کنار صفحه (فقط پایگاه‌های خود کاربر)."""
     out = []
     for g, items in nav.ws_groups():
-        rows = [{"label": s.label, "url": reverse(s.url, args=[db.pk])} for s in items if _visible(s, db)]
+        rows = [{"label": s.label, "url": reverse(s.url, args=[db.pk, *s.extra])} for s in items if _visible(s, db)]
         if rows:
             out.append({"title": g.title, "items": rows})
     return {"groups": out}
