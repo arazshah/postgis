@@ -15,7 +15,7 @@ from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET, require_POST
 
-from . import ai, blueprint, pagekit, pkgtest, sampledata, stepup, studio_ai, wizard, wizard_admin, wizard_code
+from . import ai, blueprint, pagekit, pkgtest, quality, sampledata, stepup, studio_ai, wizard, wizard_admin, wizard_code
 from . import workspace as ws_mod
 from .models import PluginDraft, PluginDraftRevision
 
@@ -35,7 +35,7 @@ def _spec(draft: PluginDraft) -> dict:
 
 def _state(draft: PluginDraft, spec: dict, save_error: str = "") -> dict:
     return {"spec": spec, "plugin_id": draft.plugin_id, "name": draft.name, "version": draft.version,
-            "analysis": blueprint.analyze(spec, draft.plugin_id), "save_error": save_error,
+            "analysis": blueprint.analyze(spec, draft.plugin_id), "quality": quality.evaluate(spec, draft.plugin_id), "save_error": save_error,
             "revision": PluginDraftRevision.objects.filter(draft=draft).values_list("id", flat=True).first()}
 
 

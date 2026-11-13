@@ -111,6 +111,7 @@
         <div class="pd-seg vp" role="group" aria-label="اندازه‌ی نمایش">
           <button type="button" data-vp="desktop" aria-pressed="true">${ic("desktop")}<span>دسکتاپ</span></button>
           <button type="button" data-vp="narrow" aria-pressed="false">${ic("phone")}<span>۴۰۰</span></button></div>
+        <button class="pd-qchip" type="button" id="pd-q" aria-label="کیفیت پلاگین"></button>
         <button class="btn ghost sm" type="button" id="pd-ai" aria-label="دستیار هوش مصنوعی" aria-pressed="false">${ic("spark")}<span>دستیار</span></button>
         <button class="btn ghost sm" type="button" id="pd-more" aria-label="بیشتر">${ic("more")}<span>بیشتر</span></button>
         <a class="btn sm" id="pd-publish" href="${esc(LINKS.publish)}">${ic("share")}<span>دسترسی و انتشار</span></a>
@@ -118,6 +119,7 @@
       <nav class="pd-nav" role="tablist" id="pd-nav"></nav>
       <div class="pd-main" id="pd-main"></div>`);
     root.querySelector("#pd-ai").addEventListener("click", () => toggleAi());
+    root.querySelector("#pd-q").addEventListener("click", () => { tab = "quality"; selId = ""; draw(); });
     root.querySelector("#pd-undo").addEventListener("click", undo);
     root.querySelector("#pd-redo").addEventListener("click", redo);
     root.querySelectorAll("[data-vp]").forEach((b) => b.addEventListener("click", () => {
@@ -142,8 +144,14 @@
     root.querySelector("#pd-redo").disabled = hist.i >= hist.ids.length - 1;
     const all = S.analysis.issues || [], nc = all.filter((i) => i.scope === "code").length, n = all.length - nc;
     const nav = root.querySelector("#pd-nav");
-    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["code", "کد", "code"], ["auto", "خودکارسازی", "bolt"]];
+    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["code", "کد", "code"], ["auto", "خودکارسازی", "bolt"], ["quality", "کیفیت", "check"]];
     const bad = { pages: n, code: nc };
+    const q = S.quality, qb = root.querySelector("#pd-q");
+    if (q && qb) {
+      qb.className = "pd-qchip " + (!q.publishable ? "bad" : q.score >= 90 ? "ok" : "mid");
+      qb.innerHTML = `${ic(q.publishable ? "check" : "warn")}<span>کیفیت ${FA(q.score)}</span>`;
+      qb.title = q.grade;
+    }
     nav.innerHTML = tabs.map(([k, l, i]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${tab === k}">${ic(i)}<span>${l}</span>${bad[k] ? `<span class="badge-n" title="ایراد">${FA(bad[k])}</span>` : ""}</button>`).join("");
     nav.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; selId = ""; draw(); }));
   }
@@ -170,6 +178,7 @@
     if (tab === "data") { main.innerHTML = ""; drawData(main); return; }
     if (tab === "auto") { main.innerHTML = ""; drawAuto(main); return; }
     if (tab === "code") { main.innerHTML = ""; drawCode(main); return; }
+    if (tab === "quality") { main.innerHTML = ""; drawQuality(main); return; }
     main.innerHTML = `
       <aside class="pd-pal" id="pd-pal" aria-label="اجزا"></aside>
       <section class="pd-center"><div class="pd-pages" id="pd-pages"></div><div class="pd-scroll" id="pd-scroll"></div></section>
@@ -1012,6 +1021,95 @@
         : { kind: "ingest", handler: name, table: (h.tables || [])[0] || (tables()[0] || {}).name, title: name };
       try { await run({ op: "block.add", page: curPage().key, block: blk }); tab = "pages"; selId = ""; await draw(); } catch (_) { /* */ }
     });
+  }
+
+
+  // ---------------------------------------------------------------- بخش کیفیت (امتیاز، فهرست، بررسی ۴۰۰ پیکسل، آزمون‌ها)
+  let qOut = {};
+  const SEV = { block: ["warn", "مانع انتشار"], warn: ["warn", "هشدار"], info: ["info", "نکته"] };
+
+  function goTo(w) {
+    if (w.tab === "publish") { location.href = LINKS.publish; return; }
+    tab = w.tab || "pages";
+    if (w.page) pageKey = w.page;
+    selId = w.block || "";
+    if (w.handler) { codeSel = w.handler; codeTab = "source"; codeOut = {}; }
+    draw();
+  }
+
+  function drawQuality(main) {
+    const q = S.quality;
+    main.innerHTML = `<div class="pd-data" id="pd-qual"></div>`;
+    const box = main.querySelector("#pd-qual");
+    const cls = !q.publishable ? "bad" : q.score >= 90 ? "ok" : "mid";
+    box.innerHTML = `<section class="pd-card pd-qhero ${cls}"><div class="pd-qnum">${FA(q.score)}</div>
+        <div class="pd-qinfo"><h2 class="pd-h" style="margin:0">${esc(q.grade)}</h2>
+          <div class="pd-qbar"><i style="width:${q.score}%"></i></div>
+          <p class="pd-hint" style="margin:6px 0 0">${q.publishable ? "هیچ مانعی برای انتشار نیست." : "تا مانع‌ها رفع نشوند انتشار ممکن نیست."} · مانع ${FA(q.counts.block)} · هشدار ${FA(q.counts.warn)} · نکته ${FA(q.counts.info)}</p></div>
+        <div class="pd-row"><button class="btn ghost sm" type="button" id="pd-q400">${ic("phone")}<span>بررسی ۴۰۰ پیکسل</span></button>
+          <button class="btn ghost sm" type="button" id="pd-qtests"${Object.keys(code()).length ? "" : " disabled"}>${ic("play")}<span>اجرای آزمون‌های کد</span></button>
+          <a class="btn sm" href="${esc(LINKS.publish)}">${ic("share")}<span>دسترسی و انتشار</span></a></div></section>
+      <div id="pd-qextra"></div>` +
+      q.groups.filter((g) => g.total).map((g) => `<section class="pd-card"><div class="pd-row"><h3>${esc(g.label)}</h3><span class="pd-spacer"></span><span class="pd-hint">${FA(g.ok)} از ${FA(g.total)}</span></div>
+        <ul class="pd-checks">${q.checks.filter((c) => c.group === g.key).map((c) => `<li class="${c.ok ? "ok" : "fail"}" data-cid="${c.id}">
+          ${ic(c.ok ? "check" : "warn")}<div><b>${esc(c.title)}</b>${c.ok ? "" : `<p>${esc(c.message)}</p>`}</div>
+          ${c.ok ? "" : `<span class="pd-sev ${c.severity}">${SEV[c.severity][1]}</span><div class="pd-row">
+            ${c.fix_ops.length ? `<button class="btn sm" type="button" data-qfix="${c.id}">${ic("check")}<span>اعمال راه‌حل</span></button>` : ""}
+            <button class="btn ghost sm" type="button" data-qgo="${c.id}">${ic("target")}<span>برو به آن</span></button>
+            <button class="btn ghost sm" type="button" data-qai="${c.id}">${ic("spark")}<span>دستیار</span></button></div>`}</li>`).join("")}</ul></section>`).join("");
+    box.querySelector("#pd-qextra").innerHTML = qExtraHtml();
+    box.querySelector("#pd-q400").addEventListener("click", check400);
+    box.querySelector("#pd-qtests").addEventListener("click", runAllTests);
+    const find = (id) => q.checks.find((c) => c.id === id);
+    box.querySelectorAll("[data-qgo]").forEach((b) => b.addEventListener("click", () => goTo(find(b.dataset.qgo).where)));
+    box.querySelectorAll("[data-qai]").forEach((b) => b.addEventListener("click", () => { const c = find(b.dataset.qai); sendAi("fix", "این مورد کیفیت را درست کن: " + c.title + " — " + c.message); }));
+    box.querySelectorAll("[data-qfix]").forEach((b) => b.addEventListener("click", async () => {
+      try { await run({ ops: find(b.dataset.qfix).fix_ops }); ensurePage(); await draw(); } catch (_) { /* پیام نمایش داده شد */ }
+    }));
+  }
+
+  function qExtraHtml() {
+    let h = "";
+    if (qOut.m400) h += `<section class="pd-card"><h3>بررسی ۴۰۰ پیکسل</h3><ul class="pd-checks">${qOut.m400.map((r) => `<li class="${r.ok ? "ok" : "fail"}">${ic(r.ok ? "check" : "warn")}<div><b>${esc(r.title)}</b>${r.ok ? "" : `<p>${esc(r.message)}</p>`}</div></li>`).join("")}</ul></section>`;
+    if (qOut.tests) h += `<section class="pd-card"><h3>آزمون‌های کد</h3>${qOut.tests.map((t) => `<div class="pd-row"><b class="ltr" dir="ltr">${esc(t.name)}</b></div>${resultsHtml(t.out)}`).join("")}</section>`;
+    return h;
+  }
+
+  // هر صفحه در عرض ۴۰۰ پیکسل بیرون از صفحه‌ی دیده‌شده رسم و لبریزی افقی سنجیده می‌شود
+  async function check400() {
+    const btn = root.querySelector("#pd-q400");
+    btn.disabled = true;
+    const host = document.createElement("div");
+    host.className = "pd-m400 pd-frame narrow";
+    root.append(host);
+    const res = [];
+    try {
+      for (const pg of pages()) {
+        let pv = [];
+        try { pv = (await call(API.preview.replace("__PAGE__", encodeURIComponent(pg.key)))).blocks; } catch (_) { /* بدون پیش‌نمایش */ }
+        const byId = Object.fromEntries(pv.map((p) => [p.id, p]));
+        host.innerHTML = `<div class="pd-canvas"></div>`;
+        const cv = host.firstChild;
+        (pg.blocks || []).forEach((b) => cv.append(blockEl(b, byId[b.id])));
+        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 60)));
+        const hostW = host.getBoundingClientRect().width;
+        const wide = [...cv.querySelectorAll(".pd-blk")].filter((el) => el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().width > hostW + 1);
+        const issues = (S.analysis.issues || []).filter((i) => i.page === pg.key && i.scope === "block").length;
+        res.push({ title: pg.title, ok: !wide.length && !issues, message: wide.length ? `${FA(wide.length)} بلوک از عرض ۴۰۰ پیکسل بیرون می‌زند.` : `${FA(issues)} بلوک ایراد دارد.` });
+      }
+    } finally { host.remove(); btn.disabled = false; }
+    qOut.m400 = res.length ? res : [{ title: "صفحه‌ای نیست", ok: false, message: "اول صفحه بسازید." }];
+    root.querySelector("#pd-qextra").innerHTML = qExtraHtml();
+  }
+
+  async function runAllTests() {
+    const btn = root.querySelector("#pd-qtests");
+    btn.disabled = true;
+    const out = [];
+    for (const name of Object.keys(code())) out.push({ name, out: await runCall({ action: "tests", name }) });
+    qOut.tests = out;
+    btn.disabled = false;
+    root.querySelector("#pd-qextra").innerHTML = qExtraHtml();
   }
 
   // ---------------------------------------------------------------- بخش خودکارسازی (نمای کلی همه‌ی اجزای غیرنمایشی)
