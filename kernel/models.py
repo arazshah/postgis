@@ -133,6 +133,26 @@ class PluginDraft(models.Model):
         return f"{self.name} ({self.plugin_id})"
 
 
+class PluginDraftRevision(models.Model):
+    """تاریخچه‌ی نقشه‌ی پلاگین در استودیوی دیداری (docs/adr/0010): هر عملیات یک نسخه؛ برای بازگشت. حداکثر ۶۰ نسخه‌ی اخیر هر پیش‌نویس."""
+
+    KEEP = 60
+
+    draft = models.ForeignKey(PluginDraft, on_delete=models.CASCADE, related_name="revisions")
+    spec = models.JSONField("نقشه")
+    label = models.CharField("عملیات", max_length=120, blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "نسخه‌ی پیش‌نویس"
+        verbose_name_plural = "نسخه‌های پیش‌نویس"
+        ordering = ["-id"]
+
+    def __str__(self):
+        return f"{self.draft.plugin_id} #{self.pk}"
+
+
 class PluginAlertState(models.Model):
     """وضعیت اجرای هشدار دوره‌ای handler سطح ۲ برای یک پایگاه داده (kernel.alerts): زمان آخرین اجرا و جلوگیری از تکرار پیام."""
 
