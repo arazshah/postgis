@@ -5,22 +5,39 @@
 <div class="wrap page">
   <div class="page-head"><div><h1>ژئوکدر فارسی</h1><p class="muted page-sub">نشانی متنی را به مختصات تبدیل کنید؛ هر نتیجه درجه‌ی اطمینان دارد.</p></div></div>
   <section class="card pk-form">
-    <p class="small muted">روی «داده آماده ایران» (OpenStreetMap) همین پایگاه کار می‌کند. دقت در حد <b>معبر، مکان یا محله</b> است؛ OSM پلاک و کدپستی ندارد، پس پلاک فقط در توضیح می‌آید و نقطه روی معبر است.</p>
+    <p class="gt-note">{% icon "info" 16 %}<span>روی «داده آماده ایران» (OpenStreetMap) همین پایگاه کار می‌کند. دقت در حد <b>معبر، مکان یا محله</b> است؛ OSM پلاک و کدپستی ندارد، پس پلاک فقط در توضیح می‌آید و نقطه روی معبر است.</span></p>
     {% if setup_error %}
     <div class="empty">{% icon "pin" 28 %}<p>{{ setup_error }}</p></div>
     {% else %}
-    <form method="post" enctype="multipart/form-data" class="pk-form-fields" id="gt-form">
+    <form method="post" enctype="multipart/form-data" class="gt-form" id="gt-form">
       {% csrf_token %}
-      <div class="field"><label for="gt-city">شهر</label>
-        <input id="gt-city" name="city" list="gt-cities" value="{{ form.city }}" placeholder="مثلاً تهران" required autocomplete="off">
-        <datalist id="gt-cities">{% for c in cities %}<option value="{{ c }}">{% endfor %}</datalist></div>
-      <div class="field"><span class="lbl" id="gt-rl">شعاع جست‌وجو (کیلومتر)</span>
-        <div class="chips" role="radiogroup" aria-labelledby="gt-rl">{% for r in radii %}<label class="pick-chip"><input type="radio" name="radius" value="{{ r }}" {% if form.radius == r|stringformat:"s" %}checked{% endif %}><span>{{ r|fanum }}</span></label>{% endfor %}</div></div>
-      <div class="field"><label for="gt-text">نشانی‌ها (هر سطر یکی؛ حداکثر {{ max_lines|fanum }})</label>
-        <textarea id="gt-text" name="text" rows="8" placeholder="تهران، خیابان ولیعصر، پلاک ۱۲">{{ form.text }}</textarea></div>
-      <div class="field"><label for="gt-file">یا فایل CSV (UTF-8، حداکثر ۱ مگابایت)</label><input id="gt-file" type="file" name="file" accept=".csv,.txt,text/csv,text/plain"></div>
-      <div class="field"><label for="gt-col">نام ستون نشانی در CSV (اختیاری)</label><input id="gt-col" name="column" value="{{ form.column }}" maxlength="60" placeholder="address"></div>
-      <button class="btn" type="submit">{% icon "search" 18 %}تبدیل به مختصات</button>
+      <div class="gt-step">
+        <h3><span class="gt-num">۱</span>شهر و محدوده‌ی جست‌وجو</h3>
+        <div class="gt-row">
+          <div class="field"><label for="gt-city">شهر</label>
+            <input id="gt-city" name="city" list="gt-cities" value="{{ form.city }}" placeholder="مثلاً تهران" required autocomplete="off">
+            <datalist id="gt-cities">{% for c in cities %}<option value="{{ c }}">{% endfor %}</datalist></div>
+          <div class="field"><span class="lbl" id="gt-rl">شعاع جست‌وجو (کیلومتر)</span>
+            <div class="chips" role="radiogroup" aria-labelledby="gt-rl">{% for r in radii %}<label class="pick-chip"><input type="radio" name="radius" value="{{ r }}" {% if form.radius == r|stringformat:"s" %}checked{% endif %}><span>{{ r|fanum }}</span></label>{% endfor %}</div></div>
+        </div>
+      </div>
+      <div class="gt-step">
+        <h3><span class="gt-num">۲</span>نشانی‌ها</h3>
+        <div class="gt-src">
+          <div class="field"><label for="gt-text">بنویسید؛ هر سطر یک نشانی (حداکثر {{ max_lines|fanum }})</label>
+            <textarea id="gt-text" name="text" rows="8" placeholder="تهران، خیابان ولیعصر، پلاک ۱۲">{{ form.text }}</textarea></div>
+          <div class="gt-or">
+            <span class="ttl">{% icon "upload" 18 %}یا فایل CSV بارگذاری کنید</span>
+            <div class="field"><label class="sr-only" for="gt-file">فایل CSV</label><input id="gt-file" type="file" name="file" accept=".csv,.txt,text/csv,text/plain"></div>
+            <span class="hint">UTF-8، حداکثر ۱ مگابایت</span>
+            <div class="field"><label for="gt-col">نام ستون نشانی (اختیاری)</label><input id="gt-col" name="column" value="{{ form.column }}" maxlength="60" placeholder="address" dir="ltr"></div>
+          </div>
+        </div>
+      </div>
+      <div class="gt-foot">
+        <span class="small muted">هر نتیجه با درجه‌ی اطمینان و قابل دانلود به‌صورت CSV است.</span>
+        <button class="btn" type="submit">{% icon "search" 18 %}تبدیل به مختصات</button>
+      </div>
     </form>
     {% endif %}
   </section>

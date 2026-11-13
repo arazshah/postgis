@@ -87,28 +87,34 @@
   <section class="card pk-form" id="ingest-{{ ig.spec.key }}">
     <div class="ch"><h2>{{ ig.spec.title }}</h2></div>
     {% if ig.spec.hint %}<p class="small muted">{{ ig.spec.hint }}</p>{% endif %}
-    <p class="small muted">دستگاه با <span class="ltr">POST</span> به نشانی زیر داده می‌فرستد و توکن را در هدر <span class="ltr">Authorization: Bearer</span> می‌گذارد. بدنه‌ی <span class="ltr">JSON</span>{% if ig.spec.handler %} (یا هر قالبی که برنامه‌ی تبدیل پلاگین می‌شناسد){% endif %}: یک شیء یا فهرستی از اشیاء با فیلدهای
-      {% for fd in ig.spec.fields %}<b class="ltr">{{ fd.name }}</b>{% if not forloop.last %}، {% endif %}{% endfor %}. نتیجه در جدول <b class="ltr">{{ ig.spec.table }}</b> ثبت می‌شود (حداکثر {{ ig.spec.max_rows }} ردیف در هر درخواست و {{ ig.spec.rate }} درخواست در دقیقه برای هر توکن).</p>
-    <p class="ltr small">{{ ingest_url }}</p>
+    <div class="pk-ep"><span class="pk-method">POST</span><code class="pk-url" id="ep-{{ ig.spec.key }}">{{ ingest_url }}</code>
+      <button class="copy" type="button" data-copy-target="#ep-{{ ig.spec.key }}">{% icon "copy" 14 %}کپی</button></div>
+    <dl class="pk-spec">
+      <div><dt>احراز هویت</dt><dd><code class="ltr">Authorization: Bearer &lt;token&gt;</code></dd></div>
+      <div><dt>بدنه‌ی JSON{% if ig.spec.handler %} (یا قالب پلاگین){% endif %}</dt><dd>یک شیء یا فهرست: {% for fd in ig.spec.fields %}<code>{{ fd.name }}</code>{% endfor %}</dd></div>
+      <div><dt>جدول مقصد</dt><dd><code>{{ ig.spec.table }}</code></dd></div>
+      <div><dt>سقف</dt><dd>{{ ig.spec.max_rows }} ردیف در هر درخواست · {{ ig.spec.rate }} درخواست در دقیقه برای هر توکن</dd></div>
+    </dl>
     {% if ig.new %}
     <div class="msg warning" role="status">
       <p><b>توکن تازه را همین حالا کپی کنید؛ دیگر نمایش داده نمی‌شود.</b></p>
-      <p class="ltr" dir="ltr"><code>{{ ig.new.token }}</code></p>
+      <div class="pk-newtok"><code id="nt-{{ ig.spec.key }}">{{ ig.new.token }}</code><button class="copy" type="button" data-copy-target="#nt-{{ ig.spec.key }}">{% icon "copy" 14 %}کپی</button></div>
     </div>
     {% endif %}
+    <h3 class="pk-sub">توکن‌ها</h3>
     {% if ig.tokens %}
     <ul class="pk-tokens">{% for t in ig.tokens %}<li>
-      <span class="ltr">{{ t.prefix }}…</span>
-      <span>{{ t.label|default:"بدون برچسب" }}</span>
-      <span class="small muted">{% if t.last_used_at %}آخرین استفاده: {{ t.last_used_at|date:"Y-m-d H:i" }}{% else %}هنوز استفاده نشده{% endif %}</span>
-      {% if can_manage_ingest %}<form method="post" action="{% url 'kernel:ingest_revoke' db.pk page.plugin page.key ig.spec.key t.pk %}">{% csrf_token %}<button class="btn ghost sm" type="submit">باطل کردن</button></form>{% endif %}
+      <span class="pk-pre">{{ t.prefix }}…</span>
+      <span class="pk-tk"><b>{{ t.label|default:"بدون برچسب" }}</b>
+        <span class="small muted">{% if t.last_used_at %}آخرین استفاده: {{ t.last_used_at|date:"Y-m-d H:i" }}{% else %}هنوز استفاده نشده{% endif %}</span></span>
+      {% if can_manage_ingest %}<form method="post" action="{% url 'kernel:ingest_revoke' db.pk page.plugin page.key ig.spec.key t.pk %}" data-confirm="این توکن باطل شود؟ دستگاه‌هایی که از آن استفاده می‌کنند دیگر نمی‌توانند داده بفرستند." data-confirm-title="ابطال توکن" data-confirm-text="باطل کن">{% csrf_token %}<button class="btn ghost sm" type="submit">باطل کردن</button></form>{% endif %}
     </li>{% endfor %}</ul>
-    {% else %}<p class="muted small">توکن فعالی نیست؛ دستگاه‌ها تا ساختن توکن نمی‌توانند داده بفرستند.</p>{% endif %}
+    {% else %}<div class="empty">{% icon "lock" 28 %}<p>توکن فعالی نیست؛ دستگاه‌ها تا ساختن توکن نمی‌توانند داده بفرستند.</p></div>{% endif %}
     {% if can_manage_ingest %}
-    <form method="post" action="{% url 'kernel:ingest_token' db.pk page.plugin page.key ig.spec.key %}" class="pk-form-fields">
+    <form method="post" action="{% url 'kernel:ingest_token' db.pk page.plugin page.key ig.spec.key %}" class="pk-inline">
       {% csrf_token %}
       <div class="field"><label for="ig-{{ ig.spec.key }}-label">برچسب توکن (اختیاری)</label>
-        <input id="ig-{{ ig.spec.key }}-label" name="label" maxlength="60" autocomplete="off"></div>
+        <input id="ig-{{ ig.spec.key }}-label" name="label" maxlength="60" autocomplete="off" placeholder="مثلاً ناوگان شماره ۱"></div>
       <button class="btn" type="submit">{% icon "plus" 18 %}ساخت توکن</button>
     </form>
     {% else %}<p class="muted small">ساخت و ابطال توکن با مالک پایگاه داده است.</p>{% endif %}
