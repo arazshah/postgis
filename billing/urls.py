@@ -9,6 +9,7 @@ urlpatterns = [
     path("start/", views.start, name="start"),
     path("market/", views.market, name="market"),
     path("market/trial/", views.start_trial, name="start_trial"),
+    path("market/<slug:plugin_id>/", views.market_detail, name="market_detail"),
     path("start-addon/", views.start_addon, name="start_addon"),
     path("invoices/", views.invoices, name="invoices"),
     path("invoice/<str:number>/", views.invoice, name="invoice"),

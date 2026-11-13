@@ -49,7 +49,7 @@ class ParamsTests(SimpleTestCase):
         bad = {**RANGE, "choices": [["x", "بد"]]}
         s2 = add(blueprint.apply(spec(), PID, {"op": "page.set", "key": "p1", "params": [bad]}), {"kind": "kpi", "table": "farm_plots", "since_col": "at", "since_param": "hours"})
         self.assertFalse(blueprint.analyze(s2, PID)["ok"])
-        for params in ([RANGE, RANGE], [{"name": "n", "kind": "int", "label": "ن"}], [{"name": "BAD", "kind": "text", "label": "ب"}], [CROP] * 7):
+        for params in ([RANGE, RANGE], [{"name": "BAD", "kind": "text", "label": "ب"}], [{"name": "z", "kind": "weird", "label": "ز"}], [CROP] * 7):
             with self.assertRaises(blueprint.BlueprintError):
                 blueprint.apply(spec(), PID, {"op": "page.set", "key": "p1", "params": params})
 

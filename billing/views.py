@@ -53,12 +53,29 @@ def start(request):
     return redirect("billing:invoice", number=inv.number)
 
 
+def _market_back(request, default="billing:market"):
+    """بازگشت پس از خرید/آزمایشی: اگر از صفحه‌ی جزئیات آمده بود به همان صفحه."""
+    src = request.POST.get("from", "")
+    if src.startswith("detail:"):
+        return redirect("billing:market_detail", plugin_id=src[7:])
+    return redirect(default)
+
+
 @site_user_required
 def market(request):
-    """بازار پلاگین: پولی (خرید، آزمایشی، تمدید) و رایگان؛ وضعیت هر پایگاه/حساب."""
+    """بازار پلاگین: کاتالوگ جست‌وجوپذیر با دسته و فیلتر؛ خرید و آزمایشی در صفحه‌ی جزئیات."""
+    data = services.market_catalog(request.user)
+    return render(request, "billing/market.html", data)
+
+
+@site_user_required
+def market_detail(request, plugin_id):
+    """جزئیات یک پلاگین: تصویر، ویژگی‌ها، توضیح، تغییرات نسخه‌ها و جعبه‌ی خرید/آزمایشی برای هر پایگاه."""
     conf = SiteSettings.get()
-    data = services.market_items(request.user)
-    return render(request, "billing/market.html", {**data, "enabled": conf.pay_enabled and services.methods_available(conf)})
+    data = services.market_detail(request.user, plugin_id)
+    if data is None:
+        raise Http404
+    return render(request, "billing/market_detail.html", {**data, "enabled": conf.pay_enabled and services.methods_available(conf)})
 
 
 @site_user_required
@@ -75,7 +92,7 @@ def start_trial(request):
         messages.error(request, str(exc))
     else:
         messages.success(request, f"دوره‌ی آزمایشی «{addon.title}» ({addon.trial_days} روز) فعال شد.")
-    return redirect("billing:market")
+    return _market_back(request)
 
 
 @site_user_required
@@ -90,7 +107,9 @@ def start_addon(request):
         inv = services.create_addon_invoice(request.user, addon, db)
     except services.BillingError as exc:
         messages.error(request, str(exc))
-        return redirect("billing:market" if request.POST.get("from") == "market" else "billing:plans")
+        if request.POST.get("from") == "market" or request.POST.get("from", "").startswith("detail:"):
+            return _market_back(request)
+        return redirect("billing:plans")
     return redirect("billing:invoice", number=inv.number)
 
 

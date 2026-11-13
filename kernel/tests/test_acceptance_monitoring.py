@@ -1,8 +1,9 @@
-"""پذیرش ADR-0008 (مرحله‌ی ۷): «مانیتورینگ آنلاین» کاملاً با ویزارد ساخته، منتشر، از بازار آزمایشی‌گرفته و با داده‌ی دستگاه زنده می‌شود.
+"""پذیرش ADR-0008 (مرحله‌ی ۷): «مانیتورینگ آنلاین» کاملاً در استودیوی دیداری ساخته، منتشر، از بازار آزمایشی‌گرفته و با داده‌ی دستگاه زنده می‌شود.
 
 کل زنجیره روی PostgreSQL/PostGIS واقعی: ساخت در پنل ← انتشار ← بازار ← آزمایشی ← ساخت خودکار جدول ← توکن ← دریافت داده ← صفحه ← انقضا.
 """
 import datetime
+import json
 import os
 import unittest
 from contextlib import contextmanager
@@ -96,38 +97,38 @@ class MonitoringAcceptanceTests(BaseCase):
         with psycopg.connect(dbname="pagekit_acc", **self.kw) as c:
             return c.execute(sql_text).fetchall()
 
-    def wiz(self, step, data, files=None):
+    def api(self, name, body):
         pk = PluginDraft.objects.get(plugin_id="monitoring").pk
-        return self.admin_client.post(reverse("admin:kernel_plugindraft_wizard", args=[pk, step]), data)
+        url = reverse(f"admin:kernel_plugindraft_api_{name}", args=[pk])
+        return self.admin_client.post(url, json.dumps(body), content_type="application/json")
 
-    def build_with_wizard(self):
+    def build_in_studio(self):
         a = self.admin_client
-        r = a.post(reverse("admin:kernel_plugindraft_wizard_new"), {
-            "name": "مانیتورینگ آنلاین", "plugin_id": "monitoring", "summary": "وضعیت زنده‌ی دستگاه‌ها روی نقشه", "description": "", "icon": "pulse"})
+        r = a.post(reverse("admin:kernel_plugindraft_new"), {
+            "name": "مانیتورینگ آنلاین", "plugin_id": "monitoring", "summary": "وضعیت زنده‌ی دستگاه‌ها روی نقشه", "description": "", "icon": "pulse", "recipe": "blank"})
         self.assertEqual(r.status_code, 302)
-        # ۲) داده
-        self.wiz(2, {"op": "addtable", "suffix": "points", "indexes": "device,at", "c_name": ["device", "lat", "lon", "speed", "at"],
-                     "c_type": ["text", "lat", "lon", "double", "timestamptz"], "c_req_0": "1", "c_req_1": "1", "c_req_2": "1", "c_auto_4": "1"})
-        # ۳) کد: آمار سرعت
-        self.wiz(3, {"op": "addhandler", "template": "block_stats", "name": "speedstats", "table": "monitoring_points", "num": "speed"})
-        # ۴) صفحه
-        self.wiz(4, {"op": "addpage", "title": "مانیتورینگ آنلاین", "group": "data", "need": "viewer", "refresh": "15", "icon": "pulse"})
-        for b in ({"kind": "kpi", "title": "دستگاه فعال", "table": "monitoring_points", "agg": "count", "distinct": "device", "since_col": "at", "since_minutes": "5", "width": "third"},
+        cols = [{"name": "device", "type": "text", "required": True}, {"name": "lat", "type": "double", "min": -90, "max": 90, "required": True},
+                {"name": "lon", "type": "double", "min": -180, "max": 180, "required": True}, {"name": "speed", "type": "double"},
+                {"name": "at", "type": "timestamptz", "auto_now": True}]
+        self.assertEqual(self.api("op", {"op": "table.add", "table": {"name": "monitoring_points", "columns": cols, "indexes": [["device", "at"]]}}).status_code, 200)
+        self.assertEqual(self.api("op", {"op": "code.add", "template": "block_stats", "name": "speedstats",
+                                        "params": {"table": "monitoring_points", "num": "speed"}}).status_code, 200)
+        blocks = [{"kind": "kpi", "title": "دستگاه فعال", "table": "monitoring_points", "agg": "count", "distinct": "device", "since_col": "at", "since_minutes": 5, "width": "third"},
                   {"kind": "kpi", "title": "میانگین سرعت", "table": "monitoring_points", "agg": "avg", "column": "speed", "width": "third"},
                   {"kind": "map", "title": "آخرین موقعیت", "table": "monitoring_points", "lat": "lat", "lon": "lon", "props": ["device", "speed"], "latest_by": "device", "time_col": "at"},
-                  {"kind": "table", "title": "رکوردهای اخیر", "table": "monitoring_points", "columns": ["device", "speed", "at"], "order_by": "at", "limit": "20"},
+                  {"kind": "table", "title": "رکوردهای اخیر", "table": "monitoring_points", "columns": ["device", "speed", "at"], "order_by": "at", "limit": 20},
                   {"kind": "handler", "title": "آمار سرعت", "handler": "speedstats", "display": "table"},
-                  {"kind": "ingest", "title": "دریافت از دستگاه", "table": "monitoring_points", "fields": ["device", "lat", "lon", "speed"]}):
-            self.wiz(4, {"op": "addblock:p1", **b})
-        # ۵) دسترسی: عمومی پولی با ۷ روز آزمایشی
-        self.wiz(5, {"mode": "public_paid", "price_toman": "90000", "duration_days": "30", "scope": "workspace", "trial_days": "7"})
-        # ۶) انتشار
-        r = self.wiz(6, {"op": "publish"})
-        self.assertEqual(r.status_code, 302)
+                  {"kind": "ingest", "title": "دریافت از دستگاه", "table": "monitoring_points", "fields": ["device", "lat", "lon", "speed"]}]
+        r = self.api("op", {"op": "page.add", "title": "مانیتورینگ آنلاین", "group": "data", "need": "viewer", "refresh": 15, "icon": "pulse", "blocks": blocks})
+        self.assertEqual(r.status_code, 200, r.content)
+        r = self.api("access", {"access": {"mode": "public_paid", "price_toman": 90000, "duration_days": 30, "scope": "workspace", "trial_days": 7}})
+        self.assertEqual(r.status_code, 200, r.content)
+        r = self.api("publish", {})
+        self.assertEqual(r.status_code, 200, r.content)
 
     def test_whole_chain(self):
-        # --- مدیر: ساخت و انتشار با ویزارد، بدون امضای بیرونی
-        self.build_with_wizard()
+        # --- مدیر: ساخت و انتشار در استودیوی دیداری، بدون امضای بیرونی
+        self.build_in_studio()
         rel = PluginRelease.objects.get(plugin_id="monitoring")
         self.assertEqual((rel.status, rel.publisher, rel.version), ("active", "panel", "1.0.0"))
         self.assertEqual(rel.manifest["tier"], 2)
@@ -166,8 +167,6 @@ class MonitoringAcceptanceTests(BaseCase):
         self.assertEqual(self.customer.post(ingest_url, {"label": "ردیاب ۱"}).status_code, 302)
         token = self.customer.session["ingest_new"]["token"]
         self.assertTrue(token.startswith("gpi_"))
-        import json
-
         def send(rows, tok=token):
             return self.customer.post(reverse("kernel:ingest"), data=json.dumps(rows), content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {tok}")
 

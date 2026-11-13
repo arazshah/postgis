@@ -19,8 +19,8 @@
     ["کد و پیشرفته", [["handler", "خروجی کد", "bolt", "نتیجه‌ی handler"], ["import", "ورود فایل", "upload", "فایل ← جدول تازه"],
       ["export", "خروجی فایل", "download", "دکمه‌ی دانلود"], ["sql", "SQL پیشرفته", "code", "پرس‌وجوی فقط‌خواندنی"]]],
   ];
-  const ACT_ICON = { form: "edit", ingest: "satellite", records: "table", source: "cloud", report: "print", import: "upload", export: "download" };
-  const KIND_LABEL = {};
+  const ACT_ICON = { raw: "code", form: "edit", ingest: "satellite", records: "table", source: "cloud", report: "print", import: "upload", export: "download" };
+  const KIND_LABEL = { raw: "بلوک خام" };
   KINDS.forEach(([, items]) => items.forEach(([k, l]) => { KIND_LABEL[k] = l; }));
   const AGGS = [["count", "تعداد"], ["sum", "جمع"], ["avg", "میانگین"], ["min", "کمینه"], ["max", "بیشینه"]];
   const NUM = ["integer", "bigint", "double"], TIME = ["timestamptz", "date"];
@@ -31,6 +31,7 @@
   let S = null;            // وضعیت سرور {spec, analysis, revision, ...}
   let pageKey = "", selId = "", tab = "pages", narrow = false;
   let preview = [];        // [{id, kind, html, error, ...}] صفحه‌ی جاری
+  let live = null;         // پیش‌نمایش زنده‌ی فقط‌خواندنی {page, blocks, database} تا اولین تغییر نقشه
   let hist = { ids: [], i: -1 };
   let chain = Promise.resolve(), pending = 0, dragId = "";
   const maps = [];
@@ -60,6 +61,7 @@
       try {
         const st = await call(API.op, body);
         S = st;
+        live = null;
         if (push) { hist.ids = hist.ids.slice(0, hist.i + 1).concat(st.revision); hist.i = hist.ids.length - 1; }
         return st;
       } catch (e) {
@@ -111,13 +113,16 @@
         <div class="pd-seg vp" role="group" aria-label="اندازه‌ی نمایش">
           <button type="button" data-vp="desktop" aria-pressed="true">${ic("desktop")}<span>دسکتاپ</span></button>
           <button type="button" data-vp="narrow" aria-pressed="false">${ic("phone")}<span>۴۰۰</span></button></div>
+        <button class="pd-qchip" type="button" id="pd-q" aria-label="کیفیت پلاگین"></button>
         <button class="btn ghost sm" type="button" id="pd-ai" aria-label="دستیار هوش مصنوعی" aria-pressed="false">${ic("spark")}<span>دستیار</span></button>
         <button class="btn ghost sm" type="button" id="pd-more" aria-label="بیشتر">${ic("more")}<span>بیشتر</span></button>
-        <a class="btn sm" id="pd-publish" href="${esc(LINKS.publish)}">${ic("share")}<span>دسترسی و انتشار</span></a>
+        <button class="btn sm" type="button" id="pd-publish">${ic("share")}<span>انتشار</span></button>
       </header>
       <nav class="pd-nav" role="tablist" id="pd-nav"></nav>
       <div class="pd-main" id="pd-main"></div>`);
     root.querySelector("#pd-ai").addEventListener("click", () => toggleAi());
+    root.querySelector("#pd-q").addEventListener("click", () => { tab = "quality"; selId = ""; draw(); });
+    root.querySelector("#pd-publish").addEventListener("click", () => { tab = "publish"; selId = ""; draw(); });
     root.querySelector("#pd-undo").addEventListener("click", undo);
     root.querySelector("#pd-redo").addEventListener("click", redo);
     root.querySelectorAll("[data-vp]").forEach((b) => b.addEventListener("click", () => {
@@ -127,12 +132,29 @@
       if (f) { f.classList.toggle("narrow", narrow); setTimeout(() => maps.forEach((m) => m.invalidateSize()), 200); }
     }));
     root.querySelector("#pd-more").addEventListener("click", (e) => StudioUI.menu(e.currentTarget, [
-      { icon: "code", label: "ویرایش TOML (پیشرفته)", act: "toml" }, { icon: "bolt", label: "مرحله‌ی کد (ویزارد)", act: "code" }], (a) => { location.href = LINKS[a]; }));
+      { icon: "code", label: "نمای فایل‌ها (TOML و کد)", act: "files" }, { icon: "download", label: "خروجی بدون امضا (zip)", act: "export" }], async (a) => {
+      try {
+        const r = await call(API.files);
+        if (a === "export") { location.href = r.export; return; }
+        showFiles(r.files);
+      } catch (err) { toast(err.message, "danger"); }
+    }));
     document.addEventListener("keydown", (e) => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
       e.preventDefault();
       (e.shiftKey ? redo : undo)();
     });
+  }
+
+  // نمای فقط‌خواندنیِ فایل‌های بسته (مانیفست، صفحه‌های TOML، کد، آزمون) که هسته از نقشه ساخته است
+  function showFiles(files) {
+    const body = document.createElement("div");
+    body.className = "pd-files";
+    body.innerHTML = `<div class="pd-chips" role="tablist" style="margin-bottom:12px">${files.map((f, i) => `<button type="button" class="pd-chip mono" data-fi="${i}" aria-pressed="${i === 0}">${esc(f.name)}</button>`).join("")}</div><pre class="pd-pre-block" dir="ltr" id="pd-fview" style="max-height:60vh"></pre>`;
+    const show = (i) => { body.querySelector("#pd-fview").textContent = files[i].text; body.querySelectorAll("[data-fi]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.fi) === i))); };
+    StudioUI.modal({ title: "فایل‌های بسته (فقط‌خواندنی)", icon: "code", size: "lg", body });
+    body.addEventListener("click", (e) => { const b = e.target.closest("[data-fi]"); if (b) show(Number(b.dataset.fi)); });
+    show(0);
   }
 
   function syncBar() {
@@ -142,8 +164,14 @@
     root.querySelector("#pd-redo").disabled = hist.i >= hist.ids.length - 1;
     const all = S.analysis.issues || [], nc = all.filter((i) => i.scope === "code").length, n = all.length - nc;
     const nav = root.querySelector("#pd-nav");
-    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["code", "کد", "code"], ["auto", "خودکارسازی", "bolt"]];
+    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["code", "کد", "code"], ["auto", "خودکارسازی", "bolt"], ["quality", "کیفیت", "check"], ["market", "بازار و قیمت", "card"], ["publish", "انتشار و نسخه‌ها", "share"], ["stats", "پس از انتشار", "chart"]];
     const bad = { pages: n, code: nc };
+    const q = S.quality, qb = root.querySelector("#pd-q");
+    if (q && qb) {
+      qb.className = "pd-qchip " + (!q.publishable ? "bad" : q.score >= 90 ? "ok" : "mid");
+      qb.innerHTML = `${ic(q.publishable ? "check" : "warn")}<span>کیفیت ${FA(q.score)}</span>`;
+      qb.title = q.grade;
+    }
     nav.innerHTML = tabs.map(([k, l, i]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${tab === k}">${ic(i)}<span>${l}</span>${bad[k] ? `<span class="badge-n" title="ایراد">${FA(bad[k])}</span>` : ""}</button>`).join("");
     nav.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; selId = ""; draw(); }));
   }
@@ -170,6 +198,10 @@
     if (tab === "data") { main.innerHTML = ""; drawData(main); return; }
     if (tab === "auto") { main.innerHTML = ""; drawAuto(main); return; }
     if (tab === "code") { main.innerHTML = ""; drawCode(main); return; }
+    if (tab === "quality") { main.innerHTML = ""; drawQuality(main); return; }
+    if (tab === "market") { main.innerHTML = ""; drawMarket(main); return; }
+    if (tab === "publish") { main.innerHTML = ""; drawPublish(main); return; }
+    if (tab === "stats") { main.innerHTML = ""; drawStats(main); return; }
     main.innerHTML = `
       <aside class="pd-pal" id="pd-pal" aria-label="اجزا"></aside>
       <section class="pd-center"><div class="pd-pages" id="pd-pages"></div><div class="pd-scroll" id="pd-scroll"></div></section>
@@ -207,17 +239,33 @@
       sc.querySelector("#pd-first").addEventListener("click", addPage);
       return;
     }
-    try { preview = (await call(API.preview.replace("__PAGE__", encodeURIComponent(pg.key)))).blocks; } catch (_) { preview = []; }
+    if (live && live.page === pg.key) preview = live.blocks;
+    else { live = null; try { preview = (await call(API.preview.replace("__PAGE__", encodeURIComponent(pg.key)))).blocks; } catch (_) { preview = []; } }
     const byId = Object.fromEntries(preview.map((p) => [p.id, p]));
     sc.innerHTML = `<div class="pd-frame${narrow ? " narrow" : ""}">
-      <div class="pd-ph"><h1>${esc(pg.title)}</h1>${pg.subtitle ? `<p>${esc(pg.subtitle)}</p>` : ""}</div>
+      <div class="pd-ph"><div class="pd-row"><h1>${esc(pg.title)}</h1><span class="pd-spacer"></span>${live ? `<button class="btn ghost sm" type="button" id="pd-unlive">${ic("back")}<span>برگشت به داده‌ی نمونه</span></button>` : `<button class="btn ghost sm" type="button" id="pd-golive">${ic("db")}<span>پیش‌نمایش روی پایگاه واقعی</span></button>`}</div>${pg.subtitle ? `<p>${esc(pg.subtitle)}</p>` : ""}
+        ${live ? `<div class="pd-issue" style="margin-top:8px;border-color:var(--teal);background:var(--teal-soft)">${ic("eye")}<span>نمای زنده روی پایگاه «${esc(live.database)}» (فقط‌خواندنی). با اولین تغییر به داده‌ی نمونه برمی‌گردد.</span></div>` : ""}</div>
       <div class="pd-canvas" id="pd-canvas"></div>
       <p class="pd-hint" style="margin-top:12px">نمای تقریبی با داده‌ی نمونه است؛ اجرای واقعی روی پایگاه مشتری انجام می‌شود.</p></div>`;
     const cv = sc.querySelector("#pd-canvas");
+    const gl = sc.querySelector("#pd-golive"), ul = sc.querySelector("#pd-unlive");
+    if (gl) gl.addEventListener("click", goLive);
+    if (ul) ul.addEventListener("click", () => { live = null; drawCanvas(); });
     if (!blocks().length) cv.innerHTML = `<div class="pd-empty">${ic("plus")}<b>صفحه خالی است</b><span>یک جزء را از ستون کناری بکشید و اینجا رها کنید، یا روی آن بزنید.</span></div>`;
     blocks().forEach((b) => cv.append(blockEl(b, byId[b.id])));
     initMaps(cv);
     wireCanvas(cv);
+  }
+
+  async function goLive() {
+    const pg = curPage();
+    const dbid = await Ui.prompt({ title: "پیش‌نمایش روی پایگاه واقعی", label: "شناسه‌ی عددی پایگاه داده‌ی آزمایشی", placeholder: "مثلاً ۱۲", message: "فقط‌خواندنی با نقش محدود؛ نیازمند تأیید تازه‌ی ورود دومرحله.", validate: (v) => (/^\d+$/.test(v.trim()) ? "" : "شناسه عدد است.") });
+    if (!dbid) return;
+    const create = (pg && (spec().tables || []).length) ? await Ui.confirm({ title: "ساخت جدول‌ها؟", message: "جدول‌های این صفحه در آن پایگاه ساخته شوند تا داده‌ی واقعی دیده شود؟ (فقط افزایشی؛ حذف نمی‌شود.)", confirmText: "بله، بساز", cancelText: "نه، فقط بخوان", kind: "info" }) : false;
+    const r = await fetch(API.preview_live, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF }, body: JSON.stringify({ page: pg.key, database: dbid.trim(), create_tables: !!create }) }).then((x) => x.json().then((j) => ({ ok: x.ok, j }))).catch(() => ({ ok: false, j: { error: "ارتباط برقرار نشد." } }));
+    if (!r.ok) { if (r.j.stepup) { toast("تأیید تازه‌ی ورود دومرحله لازم است.", "danger"); location.href = r.j.stepup; return; } return toast(r.j.error || "پیش‌نمایش ممکن نشد.", "danger"); }
+    live = { page: pg.key, blocks: r.j.blocks, database: r.j.database };
+    drawCanvas();
   }
 
   function blockEl(b, pv) {
@@ -228,7 +276,7 @@
     el.dataset.id = b.id;
     el.draggable = true;
     let body = "";
-    if (pv && pv.action) body = `<div class="pd-act">${ic(ACT_ICON[b.kind] || "edit")}<b>${esc(b.title || KIND_LABEL[b.kind])}</b><span class="pd-hint">${KIND_LABEL[b.kind]}</span></div>`;
+    if ((pv && pv.action) || (!pv && ["form", "ingest", "records", "source", "report", "import", "export", "raw"].includes(b.kind))) body = `<div class="pd-act">${ic(ACT_ICON[b.kind] || "edit")}<b>${esc(b.title || KIND_LABEL[b.kind])}</b><span class="pd-hint">${KIND_LABEL[b.kind]}</span></div>`;
     else if (pv) body = pv.html;
     else body = `<div class="pd-act">${ic("warn")}<span>پیش‌نمایش در دسترس نیست.</span></div>`;
     if (["import", "export"].includes(b.kind)) body = `<div class="pd-act">${ic(b.kind === "import" ? "upload" : "download")}<b>${esc(b.title || KIND_LABEL[b.kind])}</b><span class="pd-hint">${KIND_LABEL[b.kind]}</span></div>`;
@@ -370,7 +418,7 @@
     const i = blocks().findIndex((b) => b.id === id), others = pages().filter((p) => p.key !== pageKey);
     StudioUI.menu(btn, [
       { icon: "up", label: "یک جا بالاتر", act: "up", disabled: i === 0 }, { icon: "down", label: "یک جا پایین‌تر", act: "down", disabled: i === blocks().length - 1 },
-      { icon: "copy", label: "تکثیر", act: "dup" },
+      { icon: "copy", label: "تکثیر", act: "dup", disabled: blocks()[i] && blocks()[i].kind === "raw" },
       ...others.map((p) => ({ icon: "next", label: "انتقال به «" + p.title + "»", act: "pg:" + p.key })),
       { sep: true }, { icon: "trash", label: "حذف", act: "del", danger: true }], async (act) => {
       try {
@@ -415,7 +463,7 @@
 
   // ویرایشگر فهرست سطرها: cols = [[کلید، برچسب، ltr، گزینه‌ها?]]؛ سطر آرایه (کلید عددی) یا شیء
   function listEditor(name, rows, cols) {
-    const val = (r, k) => (Array.isArray(r) ? r[Number(k)] : r[k]) ?? "";
+    const val = (r, k) => { const v = (Array.isArray(r) ? r[Number(k)] : r[k]) ?? ""; return v === true ? "بله" : v; };
     return `<div class="pd-list" data-list="${name}">` + rows.map((r, i) => `<div class="pd-lrow" data-i="${i}">` + cols.map(([k, l, ltr, opts]) => opts
       ? `<select data-k="${k}" aria-label="${l}"><option value=""></option>${opts.map((o) => `<option value="${esc(o)}"${val(r, k) === o ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`
       : `<input type="text" data-k="${k}" value="${esc(val(r, k))}" placeholder="${l}" aria-label="${l}"${ltr ? ' class="ltr" dir="ltr"' : ""}>`).join("") +
@@ -482,9 +530,10 @@
       h += fld("قالب پاسخ", chips("layout", [["rows", "آرایه‌ی ردیف‌ها"], ["columns", "ستون‌ها (مثل Open-Meteo)"]], b.layout || "rows"));
       h += fld("مسیر داده در پاسخ (اختیاری)", text("rows_path", b.rows_path, true, "daily"));
       h += fld("پارامترهای درخواست (می‌تواند {ورودی}، {since}، {today} بیاورد)", listEditor("query", b.query || [], [["0", "نام", true], ["1", "مقدار", true]]));
-      h += fld("نگاشت پاسخ ← ستون جدول", listEditor("map", b.map || [], [["column", "ستون", true, colsOf(t).filter((c) => !["point", "line", "polygon", "multipolygon"].includes(c.type)).map((c) => c.name)], ["path", "مسیر در پاسخ", true]]));
+      h += fld("نگاشت پاسخ ← ستون جدول", listEditor("map", b.map || [], [["column", "ستون", true, colsOf(t).filter((c) => !["point", "line", "polygon", "multipolygon"].includes(c.type)).map((c) => c.name)], ["path", "مسیر در پاسخ", true], ["input", "یا از ورودی", true], ["optional", "اختیاری", false, ["بله"]]]));
       h += fld("ورودی‌های قابل‌تنظیم هر پایگاه (مثل عرض و طول)", listEditor("inputs", b.inputs || [], [["name", "نام", true], ["label", "برچسب"], ["kind", "نوع", false, ["number", "int", "text"]], ["min", "کمینه", true], ["max", "بیشینه", true]]));
       h += fld("ستون نشانگر «فقط تازه‌ها» (اختیاری)", chips("cursor", colOpts(t, null, true), b.cursor || "", true));
+      h += fld("حالت نوشتن", chips("mode", [["append", "فقط تازه‌ها را بیفزا"], ["replace", "پنجره‌ی هم‌پوشان را جایگزین کن"]], b.mode || "append"));
       h += fld("هر چند دقیقه (۱۵ تا ۱۴۴۰)", num("every_minutes", b.every_minutes || 180, 15, 1440)) + fld("بازه‌ی روزهای گذشته (۱ تا ۳۰)", num("since_days", b.since_days || 2, 1, 30));
       h += fld("کلید API (اختیاری؛ مقدارش را مدیر در پنل می‌گذارد)", chips("secret_kind", [["", "ندارد"], ["header", "هدر"], ["param", "پارامتر"]], b.secret_header ? "header" : b.secret_param ? "param" : "") + (b.secret_header || b.secret_param ? text("secret_name", b.secret_header || b.secret_param, true, "X-Api-Key") : ""));
       h += `<p class="pd-hint">میزبان باید در فهرست سفید «منابع بیرونی» پنل تأیید شود و سوئیچ آن روشن باشد؛ وگرنه واکشی انجام نمی‌شود.</p>`;
@@ -515,6 +564,14 @@
     const b = selBlock(), pg = curPage();
     if (!pg) { el.innerHTML = `<p class="pd-hint">برای شروع یک صفحه بسازید.</p>`; return; }
     if (!b) return drawPageProps(el, pg);
+    if (b.kind === "raw") {
+      el.innerHTML = `<h3 class="pd-h">${ic("code")}بلوک خام</h3><div id="pd-issues"></div>
+        <div class="pd-issue">${ic("info")}<span>این بلوک از پلاگین قبلی آمده و در بلوک‌های دیداری نمی‌گنجد؛ همان‌طور که بود کار می‌کند (با همان بررسی کیت) ولی در استودیو فقط‌خواندنی است. می‌توانید جابه‌جا یا حذفش کنید.</span></div>
+        <div class="pd-f"><span class="lbl">بخش</span><b>${esc(b.part)}${b.key ? ` — <span class="ltr" dir="ltr">${esc(b.key)}</span>` : ""}</b></div>
+        <div class="pd-f"><span class="lbl">مشخصات (فقط‌خواندنی)</span><pre class="pd-pre-block" dir="ltr">${esc(JSON.stringify(b.item, null, 2))}</pre></div>`;
+      refreshIssue();
+      return;
+    }
     el.innerHTML = `<h3 class="pd-h">${ic("edit")}${esc(KIND_LABEL[b.kind] || b.kind)}</h3><div id="pd-issues"></div>${blockForm(b)}`;
     refreshIssue();
     el.querySelectorAll("[data-single]").forEach((box) => box.addEventListener("click", (e) => {
@@ -555,29 +612,35 @@
     wireLists(el, b);
   }
 
-  function collectList(box) {
+  function collectList(box, existing) {
     const name = box.dataset.list;
-    return [...box.querySelectorAll(".pd-lrow")].map((r) => {
+    return [...box.querySelectorAll(".pd-lrow")].map((r, i) => {
       const g = (k) => (r.querySelector(`[data-k="${k}"]`) || {}).value || "";
       if (name === "query") return [g("0"), g("1")];
-      const o = { };
-      r.querySelectorAll("[data-k]").forEach((x) => { const v = x.value; if (v !== "") o[x.dataset.k] = ["min", "max"].includes(x.dataset.k) ? Number(v) : v; });
+      // کلیدهای نادیده‌ی سطر (مثل choices ورودی منبع واردشده) با ویرایش از بین نروند
+      const o = existing && existing[i] && typeof existing[i] === "object" && !Array.isArray(existing[i]) ? { ...existing[i] } : {};
+      r.querySelectorAll("[data-k]").forEach((x) => {
+        const k = x.dataset.k, v = x.value;
+        if (k === "optional") { if (v === "بله") o.optional = true; else delete o.optional; return; }
+        if (v === "") delete o[k]; else o[k] = ["min", "max"].includes(k) ? Number(v) : v;
+      });
       return o;
     });
   }
   function wireLists(el, b) {
     el.querySelectorAll("[data-list]").forEach((box) => {
       const name = box.dataset.list;
-      box.addEventListener("input", () => setField(b.id, { [name]: collectList(box) }, false, 500));
-      box.addEventListener("change", () => setField(b.id, { [name]: collectList(box) }, false, 200));
+      const cur = () => selBlock()[name] || [];
+      box.addEventListener("input", () => setField(b.id, { [name]: collectList(box, cur()) }, false, 500));
+      box.addEventListener("change", () => setField(b.id, { [name]: collectList(box, cur()) }, false, 200));
       box.addEventListener("click", (e) => {
         if (e.target.closest("[data-addrow]")) {
-          const rows = collectList(box);
+          const rows = collectList(box, cur());
           rows.push(name === "query" ? ["", ""] : {});
           return setField(b.id, { [name]: rows }, true);
         }
         const d = e.target.closest("[data-delrow]");
-        if (d) { const rows = collectList(box); rows.splice(Number(d.dataset.delrow.split(":")[1]), 1); setField(b.id, { [name]: rows }, true); }
+        if (d) { const rows = collectList(box, cur()); rows.splice(Number(d.dataset.delrow.split(":")[1]), 1); setField(b.id, { [name]: rows }, true); }
       });
     });
   }
@@ -1014,8 +1077,337 @@
     });
   }
 
+
+  // ---------------------------------------------------------------- بخش کیفیت (امتیاز، فهرست، بررسی ۴۰۰ پیکسل، آزمون‌ها)
+  let qOut = {};
+  const SEV = { block: ["warn", "مانع انتشار"], warn: ["warn", "هشدار"], info: ["info", "نکته"] };
+
+  function goTo(w) {
+    if (w.tab === "publish") w = { ...w, tab: "market" };  // دسترسی و آگهی در «بازار و قیمت» است
+    tab = w.tab || "pages";
+    if (w.page) pageKey = w.page;
+    selId = w.block || "";
+    if (w.handler) { codeSel = w.handler; codeTab = "source"; codeOut = {}; }
+    draw();
+  }
+
+  function drawQuality(main) {
+    const q = S.quality;
+    main.innerHTML = `<div class="pd-data" id="pd-qual"></div>`;
+    const box = main.querySelector("#pd-qual");
+    const cls = !q.publishable ? "bad" : q.score >= 90 ? "ok" : "mid";
+    box.innerHTML = `<section class="pd-card pd-qhero ${cls}"><div class="pd-qnum">${FA(q.score)}</div>
+        <div class="pd-qinfo"><h2 class="pd-h" style="margin:0">${esc(q.grade)}</h2>
+          <div class="pd-qbar"><i style="width:${q.score}%"></i></div>
+          <p class="pd-hint" style="margin:6px 0 0">${q.publishable ? "هیچ مانعی برای انتشار نیست." : "تا مانع‌ها رفع نشوند انتشار ممکن نیست."} · مانع ${FA(q.counts.block)} · هشدار ${FA(q.counts.warn)} · نکته ${FA(q.counts.info)}</p></div>
+        <div class="pd-row"><button class="btn ghost sm" type="button" id="pd-q400">${ic("phone")}<span>بررسی ۴۰۰ پیکسل</span></button>
+          <button class="btn ghost sm" type="button" id="pd-qtests"${Object.keys(code()).length ? "" : " disabled"}>${ic("play")}<span>اجرای آزمون‌های کد</span></button>
+          <button class="btn sm" type="button" id="pd-qpub">${ic("share")}<span>انتشار</span></button></div></section>
+      <div id="pd-qextra"></div>` +
+      q.groups.filter((g) => g.total).map((g) => `<section class="pd-card"><div class="pd-row"><h3>${esc(g.label)}</h3><span class="pd-spacer"></span><span class="pd-hint">${FA(g.ok)} از ${FA(g.total)}</span></div>
+        <ul class="pd-checks">${q.checks.filter((c) => c.group === g.key).map((c) => `<li class="${c.ok ? "ok" : "fail"}" data-cid="${c.id}">
+          ${ic(c.ok ? "check" : "warn")}<div><b>${esc(c.title)}</b>${c.ok ? "" : `<p>${esc(c.message)}</p>`}</div>
+          ${c.ok ? "" : `<span class="pd-sev ${c.severity}">${SEV[c.severity][1]}</span><div class="pd-row">
+            ${c.fix_ops.length ? `<button class="btn sm" type="button" data-qfix="${c.id}">${ic("check")}<span>اعمال راه‌حل</span></button>` : ""}
+            <button class="btn ghost sm" type="button" data-qgo="${c.id}">${ic("target")}<span>برو به آن</span></button>
+            <button class="btn ghost sm" type="button" data-qai="${c.id}">${ic("spark")}<span>دستیار</span></button></div>`}</li>`).join("")}</ul></section>`).join("");
+    box.querySelector("#pd-qextra").innerHTML = qExtraHtml();
+    box.querySelector("#pd-q400").addEventListener("click", check400);
+    box.querySelector("#pd-qpub").addEventListener("click", () => { tab = "publish"; draw(); });
+    box.querySelector("#pd-qtests").addEventListener("click", runAllTests);
+    const find = (id) => q.checks.find((c) => c.id === id);
+    box.querySelectorAll("[data-qgo]").forEach((b) => b.addEventListener("click", () => goTo(find(b.dataset.qgo).where)));
+    box.querySelectorAll("[data-qai]").forEach((b) => b.addEventListener("click", () => { const c = find(b.dataset.qai); sendAi("fix", "این مورد کیفیت را درست کن: " + c.title + " — " + c.message); }));
+    box.querySelectorAll("[data-qfix]").forEach((b) => b.addEventListener("click", async () => {
+      try { await run({ ops: find(b.dataset.qfix).fix_ops }); ensurePage(); await draw(); } catch (_) { /* پیام نمایش داده شد */ }
+    }));
+  }
+
+  function qExtraHtml() {
+    let h = "";
+    if (qOut.m400) h += `<section class="pd-card"><h3>بررسی ۴۰۰ پیکسل</h3><ul class="pd-checks">${qOut.m400.map((r) => `<li class="${r.ok ? "ok" : "fail"}">${ic(r.ok ? "check" : "warn")}<div><b>${esc(r.title)}</b>${r.ok ? "" : `<p>${esc(r.message)}</p>`}</div></li>`).join("")}</ul></section>`;
+    if (qOut.tests) h += `<section class="pd-card"><h3>آزمون‌های کد</h3>${qOut.tests.map((t) => `<div class="pd-row"><b class="ltr" dir="ltr">${esc(t.name)}</b></div>${resultsHtml(t.out)}`).join("")}</section>`;
+    return h;
+  }
+
+  // هر صفحه در عرض ۴۰۰ پیکسل بیرون از صفحه‌ی دیده‌شده رسم و لبریزی افقی سنجیده می‌شود
+  async function check400() {
+    const btn = root.querySelector("#pd-q400");
+    btn.disabled = true;
+    const host = document.createElement("div");
+    host.className = "pd-m400 pd-frame narrow";
+    root.append(host);
+    const res = [];
+    try {
+      for (const pg of pages()) {
+        let pv = [];
+        try { pv = (await call(API.preview.replace("__PAGE__", encodeURIComponent(pg.key)))).blocks; } catch (_) { /* بدون پیش‌نمایش */ }
+        const byId = Object.fromEntries(pv.map((p) => [p.id, p]));
+        host.innerHTML = `<div class="pd-canvas"></div>`;
+        const cv = host.firstChild;
+        (pg.blocks || []).forEach((b) => cv.append(blockEl(b, byId[b.id])));
+        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 60)));
+        const hostW = host.getBoundingClientRect().width;
+        const wide = [...cv.querySelectorAll(".pd-blk")].filter((el) => el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().width > hostW + 1);
+        const issues = (S.analysis.issues || []).filter((i) => i.page === pg.key && i.scope === "block").length;
+        res.push({ title: pg.title, ok: !wide.length && !issues, message: wide.length ? `${FA(wide.length)} بلوک از عرض ۴۰۰ پیکسل بیرون می‌زند.` : `${FA(issues)} بلوک ایراد دارد.` });
+      }
+    } finally { host.remove(); btn.disabled = false; }
+    qOut.m400 = res.length ? res : [{ title: "صفحه‌ای نیست", ok: false, message: "اول صفحه بسازید." }];
+    root.querySelector("#pd-qextra").innerHTML = qExtraHtml();
+  }
+
+  async function runAllTests() {
+    const btn = root.querySelector("#pd-qtests");
+    btn.disabled = true;
+    const out = [];
+    for (const name of Object.keys(code())) out.push({ name, out: await runCall({ action: "tests", name }) });
+    qOut.tests = out;
+    btn.disabled = false;
+    root.querySelector("#pd-qextra").innerHTML = qExtraHtml();
+  }
+
+
+  // ---------------------------------------------------------------- بازار و قیمت (آگهی، دسترسی، تصویر، پیش‌نمایش کارت)
+  const CATS = [["monitoring", "پایش و ردیابی"], ["agri", "کشاورزی و منابع طبیعی"], ["urban", "شهری و املاک"], ["water", "آب و محیط زیست"], ["survey", "نقشه‌برداری و میدانی"], ["analysis", "تحلیل و گزارش"], ["other", "سایر"]];
+  const MODES = [["public_free", "عمومی رایگان", "همه‌ی مشتری‌ها می‌بینند.", "globe"], ["public_paid", "عمومی پولی", "در بازار با قیمت و مدت؛ بعد از خرید فعال می‌شود.", "card"], ["private", "اختصاصی", "فقط سازمان، کاربر، پایگاه یا پلن مشخص.", "lock"]];
+  const DURATIONS = [["30", "۳۰ روز"], ["90", "۹۰ روز"], ["180", "۱۸۰ روز"], ["365", "۳۶۵ روز"]];
+  const LIMITS = [["page_views_per_month", "بازدید صفحه در ماه"], ["ingest_rows_per_month", "ردیف دریافتی در ماه"], ["form_submits_per_month", "ثبت فرم در ماه"]];
+  const MONEY = (n) => FA(Number(n || 0).toLocaleString("en-US"));
+  const KINDS_T = [["org", "سازمان"], ["user", "کاربر"], ["workspace", "پایگاه داده"], ["plan", "پلن (slug)"]];
+
+  function cardHtml() {
+    const a = spec().access || {}, l = spec().listing || {}, intro = spec().intro || {};
+    const cat = (CATS.find((c) => c[0] === l.category) || [])[1] || "";
+    const img = (S.media || [])[0];
+    const price = a.mode === "public_paid" ? `<span class="price">${MONEY(a.price_toman)} <small>تومان</small></span>` : a.mode === "public_free" ? `<span class="chip">رایگان</span>` : `<span class="chip">اختصاصی</span>`;
+    return `<section class="legend buy-card pd-mkcard">${img ? `<img src="${esc(img.url)}" alt="" style="width:100%;max-height:170px;object-fit:cover;border-radius:var(--r-card);margin-bottom:var(--s3)">` : `<div class="pd-mkph">${ic("image")}<span>بدون تصویر</span></div>`}
+      <div class="legend-title"><h3>${esc(S.name)}</h3>${price}</div>${cat ? `<span class="chip">${esc(cat)}</span>` : ""}
+      ${intro.summary ? `<p class="small muted">${esc(intro.summary)}</p>` : `<p class="small muted" style="color:var(--red)">توضیح کوتاه خالی است (در «نمای کلی/معرفی»).</p>`}
+      ${(l.features || []).length ? `<ul class="small" style="margin:6px 0;padding-inline-start:18px">${l.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
+      ${l.details ? `<details class="small muted"><summary>توضیح کامل</summary><p style="white-space:pre-wrap">${esc(l.details)}</p></details>` : ""}
+      ${a.mode === "public_paid" ? `<p class="small muted">مدت هر خرید: ${FA(a.duration_days)} روز، ${a.scope === "user" ? "برای کل حساب" : "برای هر پایگاه داده"}${a.trial_days ? `؛ آزمایشی ${FA(a.trial_days)} روز` : ""}.</p><button class="btn sm" type="button" disabled>${a.trial_days ? "شروع آزمایشی" : "خرید"}</button>` : ""}
+    </section>`;
+  }
+
+  function drawMarket(main) {
+    const a = spec().access || {}, l = spec().listing || {};
+    main.innerHTML = `<div class="pd-mk"><div class="pd-mkform" id="pd-mkform"></div><aside class="pd-mkside"><h3 class="pd-h">${ic("eye")}پیش‌نمایش کارت بازار</h3><div id="pd-mkcard"></div><p class="pd-hint">مشتری آگهی را همین‌طور می‌بیند.</p></aside></div>`;
+    const f = main.querySelector("#pd-mkform");
+    f.innerHTML = `<section class="pd-card"><h3 class="pd-h">${ic("lock")}دسترسی و قیمت</h3>
+      <div class="pd-tiles" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${MODES.map(([k, t, d, i]) => `<button type="button" class="pd-tile" data-mode="${k}" aria-pressed="${a.mode === k}" style="${a.mode === k ? "border-color:var(--teal);background:var(--teal-soft)" : ""}"><b>${ic(i)}${t}</b><small>${d}</small></button>`).join("")}</div>
+      <div id="pd-mkacc"></div><p class="pd-hint" id="pd-mkerr" style="color:var(--red)"></p></section>
+      <section class="pd-card"><h3 class="pd-h">${ic("info")}آگهی بازار</h3>
+        ${fld("دسته", chips("category", [["", "بدون دسته"]].concat(CATS), l.category || ""))}
+        ${fld("ویژگی‌ها (تا ۶ مورد؛ هر کدام یک جمله‌ی کوتاه)", listEditor("features", (l.features || []).map((x) => [x]), [["0", "ویژگی"]]))}
+        ${fld("توضیح کامل (اختیاری)", `<textarea id="pd-details" rows="5">${esc(l.details || "")}</textarea>`)}</section>
+      <section class="pd-card"><h3 class="pd-h">${ic("image")}تصویر آگهی</h3><p class="pd-hint">تا ۳ تصویر PNG، JPEG یا WebP (حداکثر ۱ مگابایت). تصویر بازرمزگذاری و کوچک می‌شود.</p>
+        <div class="pd-thumbs" id="pd-thumbs"></div><label class="btn ghost sm" style="cursor:pointer;display:inline-flex">${ic("upload")}<span>افزودن تصویر</span><input type="file" id="pd-file" accept="image/png,image/jpeg,image/webp" hidden></label></section>`;
+    paintAcc(f.querySelector("#pd-mkacc"));
+    paintThumbs(f.querySelector("#pd-thumbs"));
+    const cardEl = main.querySelector("#pd-mkcard");
+    const repaintCard = () => { cardEl.innerHTML = cardHtml(); };
+    repaintCard();
+    f.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => {
+      const m = b.dataset.mode;
+      if (m === "public_free") return saveAccess({ mode: m }, () => drawMarket(main));
+      // پولی و اختصاصی تا پر شدن مقدارها معتبر نیستند: اول محلی نشان داده می‌شود و با معتبر شدن ذخیره می‌شود
+      S.spec.access = m === "public_paid" ? { mode: m, price_toman: "", duration_days: 30, scope: "workspace", trial_days: 0 } : { mode: m, targets: [{ kind: "org", subject: "", days: "" }] };
+      drawMarket(main);
+    }));
+    f.querySelector("[data-single=category]").addEventListener("click", async (e) => {
+      const c = e.target.closest(".pd-chip");
+      if (c) { try { await run({ op: "listing.set", category: c.dataset.v }); drawMarket(main); } catch (_) { /* */ } }
+    });
+    const feat = f.querySelector("[data-list=features]");
+    const featOp = () => run({ op: "listing.set", features: collectList(feat).map((o) => (Array.isArray(o) ? o[0] : o["0"] || "")).filter(Boolean) }).then(repaintCard).catch(() => {});
+    let t;
+    feat.addEventListener("input", () => { clearTimeout(t); t = setTimeout(featOp, 600); });
+    feat.addEventListener("click", async (e) => {
+      if (e.target.closest("[data-addrow]")) { const cur = (spec().listing || {}).features || []; if (cur.length >= 6) return toast("حداکثر ۶ ویژگی.", "danger"); await run({ op: "listing.set", features: cur.concat("ویژگی تازه") }).catch(() => {}); drawMarket(main); }
+      const d = e.target.closest("[data-delrow]");
+      if (d) { const cur = ((spec().listing || {}).features || []).slice(); cur.splice(Number(d.dataset.delrow.split(":")[1]), 1); await run({ op: "listing.set", features: cur }).catch(() => {}); drawMarket(main); }
+    });
+    f.querySelector("#pd-details").addEventListener("input", (e) => { clearTimeout(t); t = setTimeout(() => run({ op: "listing.set", details: e.target.value }).then(repaintCard).catch(() => {}), 600); });
+    f.querySelector("#pd-file").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        const r = await fetch(API.media, { method: "POST", credentials: "same-origin", headers: { "X-CSRFToken": CSRF }, body: fd });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || "آپلود نشد.");
+        S.media = j.media;
+        drawMarket(main);
+      } catch (err) { toast(err.message, "danger"); }
+    });
+    f.querySelector("#pd-thumbs").addEventListener("click", async (e) => {
+      const d = e.target.closest("[data-delmedia]");
+      if (!d) return;
+      try { S.media = (await call(API.media, { delete: Number(d.dataset.delmedia) })).media; drawMarket(main); } catch (err) { toast(err.message, "danger"); }
+    });
+  }
+
+  function paintThumbs(el) {
+    el.innerHTML = (S.media || []).map((m) => `<div class="pd-thumb"><img src="${esc(m.url)}" alt=""><button type="button" class="pd-ib" data-delmedia="${m.id}" aria-label="حذف تصویر">${ic("trash")}</button></div>`).join("") || `<p class="pd-hint">هنوز تصویری نیست.</p>`;
+  }
+
+  async function saveAccess(acc, done) {
+    const err = root.querySelector("#pd-mkerr");
+    try {
+      const st = await call(API.access, { access: acc });
+      S = st;
+      if (done) done();
+    } catch (e) { if (err) err.textContent = e.message; }
+  }
+
+  function paintAcc(el) {
+    const a = spec().access || {};
+    let h = "";
+    if (a.mode === "public_paid") {
+      h += `<div class="pd-row" style="margin-top:12px">${fld("قیمت (تومان)", `<input type="number" id="pd-price" min="1" dir="ltr" value="${esc(a.price_toman || "")}">`)}
+        ${fld("مدت هر خرید", chips("duration_days", DURATIONS, String(a.duration_days || 30)))}</div>
+        ${fld("واحد خرید", chips("scope", [["workspace", "هر پایگاه داده"], ["user", "حساب کاربر"]], a.scope || "workspace"))}
+        ${fld("دوره‌ی آزمایشی رایگان (روز؛ ۰ = ندارد)", `<input type="number" id="pd-trial" min="0" max="90" dir="ltr" value="${esc(a.trial_days || 0)}" style="max-width:140px">`)}
+        <div class="pd-grp">سقف مصرف ماهانه (خالی = نامحدود)</div><div class="pd-row">${LIMITS.map(([k, l]) => fld(l, `<input type="number" data-lim="${k}" min="1" dir="ltr" value="${esc((a.limits || {})[k] || "")}">`)).join("")}</div>`;
+    } else if (a.mode === "private") {
+      h += `<p class="pd-hint" style="margin-top:12px">هر ردیف یک هدف است (شناسه‌ی عددی یا slug پلن). مدت خالی = بدون انقضا.</p>` +
+        `<div class="pd-list" data-list="targets">${(a.targets || [{ kind: "org" }]).map((t, i) => `<div class="pd-lrow" data-i="${i}"><select data-k="kind">${KINDS_T.map(([v, l]) => `<option value="${v}"${t.kind === v ? " selected" : ""}>${l}</option>`).join("")}</select>
+          <input type="text" class="ltr" dir="ltr" data-k="subject" value="${esc(t.subject || "")}" placeholder="شناسه"><input type="text" class="ltr" dir="ltr" data-k="days" value="${esc(t.days || "")}" placeholder="روز"><button type="button" class="pd-ib" data-delrow="targets:${i}" aria-label="حذف">${ic("trash")}</button></div>`).join("")}
+        <button type="button" class="btn ghost sm" data-addrow="targets">${ic("plus")}<span>هدف</span></button></div>`;
+    } else if (a.mode === "public_free") h += `<p class="pd-hint" style="margin-top:12px">همه‌ی مشتری‌ها این پلاگین را در بخش رایگان بازار می‌بینند.</p>`;
+    el.innerHTML = h;
+    const collect = () => {
+      const cur = { ...(spec().access || {}) };
+      if (cur.mode === "public_paid") {
+        const g = (id) => (el.querySelector(id) || {}).value;
+        cur.price_toman = Number(g("#pd-price") || 0); cur.trial_days = Number(g("#pd-trial") || 0);
+        cur.limits = Object.fromEntries([...el.querySelectorAll("[data-lim]")].filter((i) => i.value).map((i) => [i.dataset.lim, Number(i.value)]));
+      } else if (cur.mode === "private") {
+        cur.targets = [...el.querySelectorAll(".pd-lrow")].map((r) => ({ kind: r.querySelector("[data-k=kind]").value, subject: r.querySelector("[data-k=subject]").value.trim(), days: r.querySelector("[data-k=days]").value.trim() })).filter((x) => x.subject);
+      }
+      return cur;
+    };
+    let t;
+    const later = () => { clearTimeout(t); t = setTimeout(() => saveAccess(collect(), () => { const c = root.querySelector("#pd-mkcard"); if (c) c.innerHTML = cardHtml(); const e = root.querySelector("#pd-mkerr"); if (e) e.textContent = ""; }), 600); };
+    el.addEventListener("input", later);
+    el.addEventListener("change", later);
+    el.querySelectorAll("[data-single]").forEach((box) => box.addEventListener("click", (e) => {
+      const c = e.target.closest(".pd-chip");
+      if (c) saveAccess({ ...collect(), [box.dataset.single]: box.dataset.single === "duration_days" ? Number(c.dataset.v) : c.dataset.v }, () => { paintAcc(el); const cd = root.querySelector("#pd-mkcard"); if (cd) cd.innerHTML = cardHtml(); });
+    }));
+    const tl = el.querySelector("[data-list=targets]");
+    if (tl) tl.addEventListener("click", (e) => {
+      const rows = () => [...tl.querySelectorAll(".pd-lrow")].map((r) => ({ kind: r.querySelector("[data-k=kind]").value, subject: r.querySelector("[data-k=subject]").value.trim(), days: r.querySelector("[data-k=days]").value.trim() }));
+      if (e.target.closest("[data-addrow]")) { spec().access.targets = rows().concat({ kind: "org", subject: "", days: "" }); paintAcc(el); return; }
+      const d = e.target.closest("[data-delrow]");
+      if (d) { const r = rows(); r.splice(Number(d.dataset.delrow.split(":")[1]), 1); spec().access.targets = r; paintAcc(el); later(); }
+    });
+  }
+
+
+  // ---------------------------------------------------------------- پس از انتشار (فقط شمارنده؛ kernel.postpub)
+  const METRIC_FA = { page_views: "بازدید صفحه", form_submits: "ثبت فرم", ingest_rows: "ردیف دریافتی", handler_runs: "اجرای کد", report_pdfs: "گزارش PDF" };
+  const monthFa = (m) => new Date(m + "-15").toLocaleDateString("fa-IR", { year: "numeric", month: "long" });
+
+  async function drawStats(main) {
+    main.innerHTML = `<div class="pd-data" id="pd-stats"><p class="pd-hint">در حال بارگذاری…</p></div>`;
+    const box = main.querySelector("#pd-stats");
+    let d;
+    try { d = await call(API.stats); } catch (e) { box.innerHTML = `<div class="pd-issue">${ic("warn")}<span>${esc(e.message)}</span></div>`; return; }
+    if (!d.published) {
+      box.innerHTML = `<div class="pd-empty">${ic("chart")}<b>هنوز منتشر نشده</b><span>بعد از انتشار نخستین نسخه، مشترک‌ها، فروش، مصرف و سلامت پلاگین اینجا دیده می‌شود.</span><button class="btn" type="button" id="pd-gopub">${ic("share")}<span>رفتن به انتشار</span></button></div>`;
+      box.querySelector("#pd-gopub").addEventListener("click", () => { tab = "publish"; draw(); });
+      return;
+    }
+    const c = d.customers, sl = d.sales || {}, h = d.health;
+    const alerts = [];
+    if (h.unseen) alerts.push(["warn", `${FA(h.unseen)} قطع خودکار دیده‌نشده (آخرین: ${h.last ? h.last.version : ""})؛ نسخه‌ی تازه یا بازگشت لازم است.`]);
+    if (d.near_limit) alerts.push(["warn", `${FA(d.near_limit)} دارنده به ۸۰٪ سقف ماهانه‌ی خود رسیده‌اند؛ فرصت ارتقا یا سقف بالاتر.`]);
+    if (c.expiring_7d) alerts.push(["info", `${FA(c.expiring_7d)} مجوز تا ۷ روز دیگر منقضی می‌شود.`]);
+    if (c.trial && !c.purchase) alerts.push(["info", `${FA(c.trial)} آزمایشی فعال هست و هنوز خریدی نشده؛ قیمت، آگهی یا طول دوره‌ی آزمایشی را بازبینی کنید.`]);
+    const tile = (n, l, hint) => `<div class="pd-kpi"><b>${n}</b><span>${l}</span>${hint ? `<small>${hint}</small>` : ""}</div>`;
+    const maxM = Math.max(1, ...(sl.months || []).map((m) => m.amount));
+    box.innerHTML = `<div class="pd-row"><h2 class="pd-h" style="margin:0">${ic("chart")}پس از انتشار</h2><span class="pd-hint ltr" dir="ltr">v${esc(d.active_version)}</span><span class="pd-spacer"></span>
+        <button class="btn ghost sm" type="button" id="pd-statai"${CODE.ai_ready ? "" : " disabled"}>${ic("spark")}<span>جمع‌بندی با دستیار</span></button></div>
+      <p class="pd-hint">فقط شمارنده و مبلغ؛ نام یا نشانی هیچ مشتری و پایگاهی دیده نمی‌شود.</p>
+      ${alerts.map(([k, t]) => `<div class="pd-issue" ${k === "info" ? 'style="border-color:var(--ochre);background:var(--ochre-soft)"' : ""}>${ic(k === "warn" ? "warn" : "info")}<span>${esc(t)}</span></div>`).join("")}
+      <div class="pd-kpis">${tile(FA(c.active), "مجوز فعال", c.everyone ? "برای همه باز است" : "")}${tile(FA(c.trial), "آزمایشی فعال")}${tile(FA(c.purchase), "خریداری‌شده")}
+        ${sl.listed ? tile(FA(Number(sl.revenue_30d || 0).toLocaleString("en-US")), "درآمد ۳۰ روز (تومان)", `${FA(sl.invoices_30d)} فاکتور`) : ""}${tile(FA(Math.max(0, ...Object.values(d.usage).map((u) => u.workspaces), 0)), "پایگاه فعال", "بر پایه‌ی بیشترین معیار")}${tile(FA(h.trips_30d), "قطع خودکار ۳۰ روز", h.last ? "آخرین: " + h.last.version : "")}</div>
+      ${sl.listed ? `<section class="pd-card"><h3 class="pd-h">${ic("card")}فروش</h3><p class="pd-hint">کل درآمد ${FA(Number(sl.revenue_total || 0).toLocaleString("en-US"))} تومان از ${FA(sl.invoices_paid)} فاکتور پرداخت‌شده${sl.invoices_open ? ` · ${FA(sl.invoices_open)} فاکتور باز` : ""}.</p>
+        ${(sl.months || []).length ? `<ul class="pd-bars">${sl.months.map((m) => `<li><span>${esc(monthFa(m.month))}</span><i style="--w:${Math.round(m.amount * 100 / maxM)}%"></i><b>${FA(Number(m.amount).toLocaleString("en-US"))}</b></li>`).join("")}</ul>` : `<p class="pd-hint">هنوز فروشی ثبت نشده است.</p>`}</section>` : ""}
+      <section class="pd-card"><h3 class="pd-h">${ic("chart")}مصرف ۳۰ روز اخیر</h3>
+        ${Object.keys(d.usage).length ? Object.entries(d.usage).map(([k, u]) => { const mx = Math.max(1, ...u.series); return `<div class="pd-spark"><div class="pd-row"><b>${esc(METRIC_FA[k] || k)}</b><span class="pd-spacer"></span><span class="pd-hint">${FA(Number(u.total_30d).toLocaleString("en-US"))} · ${FA(u.workspaces)} پایگاه</span></div>
+          <div class="pd-sbars" role="img" aria-label="${esc(METRIC_FA[k] || k)}: روند ۱۴ روز اخیر">${u.series.map((v) => `<i style="height:${Math.max(4, Math.round(v * 100 / mx))}%" title="${FA(v)}"></i>`).join("")}</div></div>`; }).join("") : `<p class="pd-hint">هنوز مصرفی ثبت نشده است.</p>`}</section>
+      <section class="pd-card"><h3 class="pd-h">${ic("clock")}نسخه‌ها</h3><ul class="pd-rels">${d.versions.map((v) => `<li class="${v.status}"><div class="pd-row"><b class="ltr" dir="ltr">${esc(v.version)}</b><span class="pd-sev ${v.status === "active" ? "ok" : ""}">${esc(RSTATUS[v.status] || v.status)}</span><span class="pd-hint">${new Date(v.at).toLocaleDateString("fa-IR")}</span></div>${v.notes ? `<p style="margin:6px 0 0">${esc(v.notes)}</p>` : ""}</li>`).join("")}</ul></section>`;
+    box.querySelector("#pd-statai").addEventListener("click", () => sendAi("postpub", "آمار پس از انتشار را جمع‌بندی کن و برای نسخه‌ی بعد پیشنهاد بده."));
+  }
+
+  // ---------------------------------------------------------------- انتشار و نسخه‌ها
+  const RSTATUS = { active: "فعال", retired: "جایگزین‌شده", checked: "منتظر تأیید", rejected: "ردشده" };
+  let pubOut = {};
+
+  async function drawPublish(main) {
+    main.innerHTML = `<div class="pd-data" id="pd-pub"></div>`;
+    const box = main.querySelector("#pd-pub");
+    box.innerHTML = `<p class="pd-hint">در حال بارگذاری…</p>`;
+    let rel = { releases: [], next_version: "" };
+    try { rel = await call(API.releases); } catch (e) { box.innerHTML = `<div class="pd-issue">${ic("warn")}<span>${esc(e.message)}</span></div>`; return; }
+    const q = S.quality, a = spec().access || {};
+    box.innerHTML = `<section class="pd-card"><h2 class="pd-h">${ic("share")}انتشار نسخه‌ی ${esc(FA(rel.next_version))}</h2>
+        <div class="pd-row"><span class="pd-qchip ${!q.publishable ? "bad" : q.score >= 90 ? "ok" : "mid"}" style="cursor:default">${ic(q.publishable ? "check" : "warn")}<span>کیفیت ${FA(q.score)} — ${esc(q.grade)}</span></span>
+          <span class="pd-hint">دسترسی: ${esc((MODES.find((m) => m[0] === a.mode) || [, "تنظیم نشده"])[1])}</span><span class="pd-spacer"></span><button class="btn ghost sm" type="button" id="pd-toq">${ic("check")}<span>فهرست کیفیت</span></button></div>
+        ${q.publishable ? "" : `<div class="pd-issue">${ic("warn")}<span>مانع‌هایی هست؛ تا رفع نشوند انتشار ممکن نیست (بخش «کیفیت»).</span></div>`}
+        ${a.mode ? "" : `<div class="pd-issue">${ic("info")}<span>دسترسی و قیمت را در «بازار و قیمت» انتخاب کنید.</span></div>`}
+        ${fld("یادداشت انتشار (چه چیزی در این نسخه تغییر کرد؟)", `<textarea id="pd-notes" rows="3" placeholder="مثلاً: نقشه‌ی آخرین موقعیت و هشدار توقف اضافه شد.">${esc(pubOut.notes || "")}</textarea>`)}
+        <div class="pd-row"><button class="btn ghost sm" type="button" id="pd-notesai"${CODE.ai_ready ? "" : " disabled"}>${ic("spark")}<span>پیش‌نویس یادداشت با دستیار</span></button><span class="pd-spacer"></span>
+          <button class="btn" type="button" id="pd-dopub"${q.publishable && a.mode ? "" : " disabled"}>${ic("share")}<span>انتشار</span></button></div>
+        <div id="pd-pubmsg"></div></section>
+      <section class="pd-card"><h2 class="pd-h">${ic("clock")}نسخه‌ها</h2>
+        ${rel.releases.length ? `<ul class="pd-rels">${rel.releases.map((r) => `<li class="${r.status}"><div class="pd-row"><b class="ltr" dir="ltr">${esc(r.version)}</b><span class="pd-sev ${r.status === "active" ? "ok" : ""}">${RSTATUS[r.status] || r.status}</span>
+          <span class="pd-hint">${new Date(r.at).toLocaleString("fa-IR")} · ${esc(r.publisher || "—")}</span><span class="pd-spacer"></span>
+          <button type="button" class="btn ghost sm" data-cmp="${r.id}:draft">با پیش‌نویس</button>
+          ${r.status !== "active" && r.status !== "rejected" ? `<button type="button" class="btn ghost sm" data-rb="${r.id}">${ic("undo")}<span>بازگشت (فعال‌سازی)</span></button>` : ""}
+          ${r.has_spec ? `<button type="button" class="btn ghost sm" data-rs="${r.id}">${ic("copy")}<span>پیش‌نویس به این نسخه</span></button>` : ""}</div>
+          ${r.notes ? `<p style="margin:6px 0 0">${esc(r.notes)}</p>` : ""}</li>`).join("")}</ul>` : `<div class="pd-empty">${ic("clock")}<b>هنوز نسخه‌ای منتشر نشده</b><span>اولین انتشار نسخه‌ی ${esc(FA(rel.next_version))} را می‌سازد.</span></div>`}
+        <div id="pd-cmpout"></div></section>`;
+    box.querySelector("#pd-toq").addEventListener("click", () => { tab = "quality"; draw(); });
+    const notes = box.querySelector("#pd-notes");
+    notes.addEventListener("input", () => { pubOut.notes = notes.value; });
+    box.querySelector("#pd-notesai").addEventListener("click", async () => {
+      const last = rel.releases[0];
+      sendAi("chat", "یادداشت انتشار کوتاه فارسی (۲ تا ۴ خط) برای نسخه‌ی تازه بنویس" + (last ? "؛ نسخه‌ی قبلی " + last.version + " بود." : ".") + " فقط در reply بنویس و ops را خالی بگذار.");
+    });
+    const msg = box.querySelector("#pd-pubmsg");
+    box.querySelector("#pd-dopub").addEventListener("click", async (e) => {
+      e.currentTarget.disabled = true;
+      msg.innerHTML = `<p class="pd-hint">در حال انتشار…</p>`;
+      const r = await fetch(API.publish, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF }, body: JSON.stringify({ notes: notes.value }) }).then((x) => x.json().then((j) => ({ ok: x.ok, j }))).catch(() => ({ ok: false, j: { error: "ارتباط برقرار نشد." } }));
+      if (r.ok) { pubOut = {}; msg.innerHTML = `<div class="pd-issue" style="border-color:var(--green);background:var(--green-soft)">${ic("check")}<span>${esc(r.j.message)} (نسخه‌ی ${esc(FA(r.j.version))})</span></div>`; setTimeout(() => drawPublish(main), 900); }
+      else { msg.innerHTML = `<div class="pd-issue">${ic("warn")}<span>${esc(r.j.error || "انتشار انجام نشد.")}${r.j.stepup ? ` <a href="${esc(r.j.stepup)}">تأیید تازه</a>` : ""}</span></div>`; e.currentTarget.disabled = false; }
+    });
+    const out = box.querySelector("#pd-cmpout");
+    const compare = async (a_, b_) => {
+      try {
+        const r = await call(API.compare + "?a=" + a_ + "&b=" + b_);
+        out.innerHTML = `<h3 class="pd-h" style="margin-top:16px">تفاوت ${esc(r.from)} ← ${esc(r.to)}</h3>` + (r.lines.length ? `<ul class="pd-diff">${r.lines.map((l) => `<li class="${l.kind}">${esc(l.text)}</li>`).join("")}</ul>` : `<p class="pd-hint">بدون تغییر در صفحه‌ها، جدول‌ها و کد.</p>`);
+      } catch (e) { out.innerHTML = `<div class="pd-issue">${ic("warn")}<span>${esc(e.message)}</span></div>`; }
+    };
+    box.querySelectorAll("[data-cmp]").forEach((b) => b.addEventListener("click", () => { const [x, y] = b.dataset.cmp.split(":"); compare(x, y); }));
+    box.querySelectorAll("[data-rb]").forEach((b) => b.addEventListener("click", async () => {
+      if (!await Ui.confirm({ title: "بازگشت به نسخه‌ی قبلی", message: "این نسخه فعال می‌شود و نسخه‌ی فعلی «جایگزین‌شده» می‌ماند. آگهی و دسترسی همان نسخه دوباره اعمال می‌شود. داده‌ی مشتری حذف نمی‌شود.", confirmText: "فعال‌سازی" })) return;
+      const r = await fetch(API.rollback, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF }, body: JSON.stringify({ release: Number(b.dataset.rb) }) }).then((x) => x.json().then((j) => ({ ok: x.ok, j }))).catch(() => ({ ok: false, j: { error: "ارتباط برقرار نشد." } }));
+      if (r.ok) { toast(r.j.message, "success"); drawPublish(main); } else out.innerHTML = `<div class="pd-issue">${ic("warn")}<span>${esc(r.j.error)}${r.j.stepup ? ` <a href="${esc(r.j.stepup)}">تأیید تازه</a>` : ""}</span></div>`;
+    }));
+    box.querySelectorAll("[data-rs]").forEach((b) => b.addEventListener("click", async () => {
+      if (!await Ui.confirm({ title: "بازگرداندن پیش‌نویس", message: "پیش‌نویس فعلی با نقشه‌ی آن نسخه جایگزین می‌شود. با واگرد برمی‌گردد.", confirmText: "بازگردان" })) return;
+      try { S = await call(API.restore_release, { release: Number(b.dataset.rs) }); hist.ids = hist.ids.slice(0, hist.i + 1).concat(S.revision); hist.i = hist.ids.length - 1; ensurePage(); toast("پیش‌نویس به آن نسخه برگشت.", "success"); draw(); } catch (e) { toast(e.message, "danger"); }
+    }));
+  }
+
   // ---------------------------------------------------------------- بخش خودکارسازی (نمای کلی همه‌ی اجزای غیرنمایشی)
-  const AUTO_KINDS = ["source", "ingest", "report", "records", "form", "import", "export"];
+  const AUTO_KINDS = ["source", "ingest", "report", "records", "form", "import", "export", "raw"];
   function drawAuto(main) {
     const items = [];
     pages().forEach((p) => (p.blocks || []).forEach((b) => { if (AUTO_KINDS.includes(b.kind)) items.push({ p, b }); }));

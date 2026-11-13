@@ -39,6 +39,7 @@
   {% block app_search %}<form class="app-search" role="search" action="{% url 'kb:search' %}" method="get">{% icon "search" 16 %}<input type="search" name="q" placeholder="جستجو در راهنما و پایگاه دانش…" aria-label="جستجو در پایگاه دانش" autocomplete="off"></form>{% endblock %}
   <span class="app-gap"></span>
   <span class="app-top-gpa" data-gpa-slot="top"></span>
+  <a class="ib" href="{% url 'billing:market' %}" aria-label="بازار پلاگین" title="بازار پلاگین">{% icon "cube" 20 %}</a>
   <div class="pop-wrap">
     <button class="ib ntf-bell" id="ntf-bell" type="button" data-pop="pop-ntf" aria-haspopup="menu" aria-expanded="false" aria-label="اعلان‌ها" title="اعلان‌ها"
       data-poll="{% url 'notifications:poll' %}" data-read="{% url 'notifications:read' %}" data-log="{% url 'notifications:log' %}">{% icon "bell" 20 %}<span class="ntf-badge" id="ntf-badge" hidden>۰</span></button>

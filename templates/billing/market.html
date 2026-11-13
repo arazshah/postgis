@@ -1,59 +1,70 @@
-{% extends "base.html" %}{% load fa humanize ws %}
+{% extends "base.html" %}{% load fa humanize static ws %}
 {% block title %}بازار پلاگین — {{ SITE_NAME }}{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/market.css' %}">{% endblock %}
 {% block content %}
-<div class="wrap page">
-  <div class="page-head"><div><h1>بازار پلاگین</h1><p class="muted page-sub">قابلیت‌های اضافه برای پایگاه داده یا حساب شما. خرید برای مدت مشخص است؛ پس از پایان، پلاگین بسته می‌شود ولی داده‌هایتان حذف نمی‌شود و با تمدید برمی‌گردد.</p></div>
-    <div class="page-acts"><a class="btn ghost" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}صورتحساب‌های من</a></div></div>
-
-  {% if paid %}
-  <div class="plans">
-    {% for it in paid %}
-    <section class="legend buy-card">
-      <div class="legend-title"><h3>{{ it.name }}</h3><span class="price">{{ it.addon.price_toman|money }} <small>تومان</small></span></div>
-      {% if it.summary %}<p class="small muted">{{ it.summary }}</p>{% endif %}
-      <p class="small muted">مدت هر خرید: {{ it.addon.duration_days|fanum }} روز، {% if it.workspace %}برای هر پایگاه داده{% else %}برای کل حساب شما{% endif %}{% if it.can_trial %}، <b>{{ it.addon.trial_days|fanum }} روز آزمایشی رایگان</b>{% endif %}</p>
-      {% for r in it.rows %}
-      <div class="mk-row" style="border-top:1px solid var(--line-2);padding:10px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-        <div style="flex:1;min-width:150px">
-          {% if r.db %}<b class="ltr" dir="ltr">{{ r.db.db_name }}</b>{% else %}<b>حساب شما</b>{% endif %}
-          <div class="small muted" style="{% if r.state == 'expired' %}color:var(--red){% endif %}">
-            {% if r.state == "active" and r.days_left is None %}فعال، بدون انقضا
-            {% elif r.state == "active" %}فعال؛ {{ r.days_left|fanum }} روز مانده
-            {% elif r.state == "trial" %}آزمایشی؛ {{ r.days_left|fanum }} روز مانده
-            {% elif r.state == "expired" %}منقضی شد؛ داده‌ها محفوظ است
-            {% else %}فعال نیست{% endif %}
-          </div>
-        </div>
-        {% if it.can_trial and r.state == "none" %}
-        <form method="post" action="{% url 'billing:start_trial' %}">{% csrf_token %}<input type="hidden" name="addon" value="{{ it.addon.pk }}">{% if r.db %}<input type="hidden" name="target" value="{{ r.db.pk }}">{% endif %}
-          <button class="btn ghost sm" type="submit">شروع آزمایشی</button></form>
-        {% endif %}
-        {% if enabled %}
-        <form method="post" action="{% url 'billing:start_addon' %}">{% csrf_token %}<input type="hidden" name="addon" value="{{ it.addon.pk }}"><input type="hidden" name="from" value="market">{% if r.db %}<input type="hidden" name="target" value="{{ r.db.pk }}">{% endif %}
-          <button class="btn sm" type="submit">{% if r.state == "none" %}خرید{% else %}تمدید{% endif %}</button></form>
-        {% endif %}
+<div class="wrap page mk" data-lf data-lf-url>
+  <header class="mk-hero">
+    <div>
+      <p class="mk-eyebrow">{% icon "cube" 16 %}بازار پلاگین</p>
+      <h1>قابلیت تازه برای پایگاه داده‌ی مکانی‌تان</h1>
+      <p class="mk-lead">پایش آنلاین، ثبت میدانی، گزارش، هواشناسی و بیشتر؛ با دوره‌ی آزمایشی. خرید برای مدت مشخص است و پس از پایان، داده‌هایتان حذف نمی‌شود و با تمدید برمی‌گردد.</p>
+      <div class="mk-search" role="search">
+        <label for="mk-q" class="sr-only">جست‌وجو در پلاگین‌ها</label>
+        <span aria-hidden="true">{% icon "search" 20 %}</span>
+        <input id="mk-q" type="search" data-lf-q placeholder="جست‌وجو: مثلاً هواشناسی، نقشه، گزارش…" autocomplete="off" enterkeyhint="search">
+        <kbd aria-hidden="true">/</kbd>
       </div>
-      {% empty %}<p class="small muted">برای این پلاگین ابتدا باید یک پایگاه داده بسازید.</p>{% endfor %}
-      {% if it.workspace and not it.rows %}<p class="small muted">پایگاه دادهٔ فعالی ندارید.</p>{% endif %}
-    </section>
-    {% endfor %}
+    </div>
+    <dl class="mk-stats" aria-label="خلاصه‌ی بازار">
+      <div><dd>{{ items|length|fanum }}</dd><dt>پلاگین</dt></div>
+      <div><dd>{{ n_free|fanum }}</dd><dt>رایگان</dt></div>
+      <div><dd>{{ n_trial|fanum }}</dd><dt>دارای آزمایشی</dt></div>
+    </dl>
+  </header>
+
+  {% if n_owned %}
+  <section class="mk-owned card" aria-labelledby="mk-own-h">
+    <h2 id="mk-own-h">{% icon "check" 18 %}پلاگین‌های فعال شما</h2>
+    <ul>{% for it in items %}{% if it.owned %}<li><a href="{% url 'billing:market_detail' it.id %}"><b>{{ it.name }}</b><span class="small muted">{{ it.status_text }}</span></a></li>{% endif %}{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  <div class="mk-bar" data-lf-bar>
+    <div class="mk-chips" role="group" aria-label="فیلتر نوع">
+      <button type="button" class="mk-chip" data-lf-chip="all" aria-pressed="true">همه <b>{{ items|length|fanum }}</b></button>
+      <button type="button" class="mk-chip" data-lf-chip="free" aria-pressed="false">رایگان <b>{{ n_free|fanum }}</b></button>
+      <button type="button" class="mk-chip" data-lf-chip="paid" aria-pressed="false">پولی <b>{{ n_paid|fanum }}</b></button>
+      <button type="button" class="mk-chip" data-lf-chip="trial" aria-pressed="false">دارای آزمایشی <b>{{ n_trial|fanum }}</b></button>
+      {% if n_owned %}<button type="button" class="mk-chip" data-lf-chip="owned" aria-pressed="false">فعال من <b>{{ n_owned|fanum }}</b></button>{% endif %}
+    </div>
+    {% if categories %}<div class="mk-chips" role="group" aria-label="فیلتر دسته">
+      {% for key, label, n in categories %}<button type="button" class="mk-chip" data-lf-chip="cat-{{ key }}" aria-pressed="false">{{ label }} <b>{{ n|fanum }}</b></button>{% endfor %}
+    </div>{% endif %}
+    <div class="mk-tools">
+      <div class="mk-sort" role="group" aria-label="مرتب‌سازی">
+        <button type="button" data-lf-sort="new" data-lf-first="desc" aria-pressed="false">جدیدترین</button>
+        <button type="button" data-lf-sort="price" aria-pressed="false">ارزان‌ترین</button>
+        <button type="button" data-lf-sort="name" aria-pressed="false">نام</button>
+      </div>
+      <p class="mk-count small muted" data-lf-count aria-live="polite" role="status"></p>
+    </div>
   </div>
-  {% if not enabled %}<p class="small muted" style="margin-top:12px">پرداخت فعلاً فعال نیست؛ دوره‌ی آزمایشی (اگر هست) قابل استفاده است.</p>{% endif %}
-  {% elif not free %}
+
+  {% if items %}
+  <ul class="mk-grid" aria-label="فهرست پلاگین‌ها">
+    {% for it in items %}{% include "billing/_market_card.html" %}{% endfor %}
+  </ul>
+  <div class="empty" data-lf-none hidden>{% icon "search" 28 %}<h2>پلاگینی پیدا نشد</h2><p class="muted">عبارت دیگری بنویسید یا فیلتر را بردارید.</p><button type="button" class="btn ghost" data-lf-clear>پاک‌کردن فیلتر</button></div>
+  {% else %}
   <div class="empty">{% icon "cube" 28 %}<h2>هنوز پلاگینی در بازار نیست</h2><p class="muted">به‌زودی قابلیت‌های تازه اضافه می‌شود.</p></div>
   {% endif %}
 
-  {% if free %}
-  <div class="page-head" style="margin-top:32px"><div><h2>رایگان و فعال برای همه</h2><p class="muted page-sub">این قابلیت‌ها نیاز به خرید ندارند.</p></div></div>
-  <div class="plans">
-    {% for f in free %}<section class="legend"><div class="legend-title"><h3>{{ f.name }}</h3><span class="chip">رایگان</span></div>{% if f.summary %}<p class="small muted">{{ f.summary }}</p>{% endif %}</section>{% endfor %}
-  </div>
-  {% endif %}
-
-  <section class="legend" style="margin-top:32px">
-    <div class="legend-title"><h3>پلاگین اختصاصی برای تخصص یا سازمان شما</h3></div>
-    <p class="small muted">پلاگینی که در بازار نیست را برایتان می‌سازیم: گزارش و شناسنامه، منبع داده‌ی آنلاین، ابزار تحلیل مکانی، ثبت میدانی. می‌تواند فقط برای شما یا سازمانتان باشد، یا در بازار عرضه شود.</p>
+  <section class="mk-custom card">
+    <div><h2>پلاگین اختصاصی برای تخصص یا سازمان شما</h2>
+      <p class="muted">پلاگینی که در بازار نیست را برایتان می‌سازیم: گزارش و شناسنامه، منبع داده‌ی آنلاین، ابزار تحلیل مکانی، ثبت میدانی و داشبورد.</p></div>
     <a class="btn" href="{% url 'core:contact' %}?topic=plugin">{% icon "plus" 18 %}ثبت سفارش پلاگین اختصاصی</a>
   </section>
 </div>
 {% endblock %}
+{% block scripts %}<script src="{% static 'js/list-filter.js' %}" defer></script><script src="{% static 'js/market.js' %}" defer></script>{% endblock %}

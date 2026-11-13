@@ -2,8 +2,7 @@ import io
 import zipfile
 from unittest import mock
 
-from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from kernel import pkg, studio
 from kernel.models import PluginDraft
@@ -55,60 +54,9 @@ class StudioCoreTests(TestCase):
         self.assertNotIn(pkg.SIG_NAME, z.namelist())
 
 
-@override_settings(ADMIN_2FA_REQUIRED=False)
-class StudioAdminTests(TestCase):
-    def setUp(self):
-        self.admin = get_user_model().objects.create_admin("root", PASS)
-        self.client.force_login(self.admin)
-        self.meta = {"plugin_id": "fleet", "name": "پایش", "version": "1.0.0", "kind": "custom", "requires": "", "readme": ""}
-
-    def test_create_add_page_check_export(self):
-        r = self.client.post("/manage/kernel/plugindraft/studio/new/", {**self.meta, "op": "save"})
-        d = PluginDraft.objects.get(plugin_id="fleet")
-        self.assertRedirects(r, f"/manage/kernel/plugindraft/{d.pk}/studio/", fetch_redirect_response=False)
-        url = f"/manage/kernel/plugindraft/{d.pk}/studio/"
-        self.client.post(url, {**self.meta, "op": "addpage", "newkey": "live", "template": "monitor"})
-        d.refresh_from_db()
-        self.assertIn("live", d.pages)
-        self.assertEqual(d.updated_by, self.admin)
-        r = self.client.post(url, {**self.meta, "op": "check", "page_live": d.pages["live"]})
-        self.assertContains(r, "گزارش بررسی")
-        self.assertEqual(self.client.get(f"/manage/kernel/plugindraft/{d.pk}/export/")["Content-Type"], "application/zip")
-        self.client.post(url, {**self.meta, "op": "delpage:live", "page_live": d.pages["live"]})
-        d.refresh_from_db()
-        self.assertEqual(d.pages, {})
-        self.assertEqual(self.client.get(f"/manage/kernel/plugindraft/{d.pk}/export/").status_code, 302)  # بررسی رد می‌شود
-
-    def test_bad_page_key_and_duplicate_id_rejected(self):
-        d = PluginDraft.objects.create(plugin_id="fleet", name="x", pages={})
-        url = f"/manage/kernel/plugindraft/{d.pk}/studio/"
-        self.client.post(url, {**self.meta, "op": "addpage", "newkey": "Bad Key", "template": "monitor"})
-        d.refresh_from_db()
-        self.assertEqual(d.pages, {})
-        self.client.post("/manage/kernel/plugindraft/studio/new/", {**self.meta, "op": "save"})
-        self.assertEqual(PluginDraft.objects.filter(plugin_id="fleet").count(), 1)
-
-    def test_requires_upload_permission(self):
-        staff = get_user_model().objects.create_admin("limited", PASS, superuser=False)
-        self.client.force_login(staff)
-        self.assertEqual(self.client.get("/manage/kernel/plugindraft/studio/new/").status_code, 403)
-
-    def test_preview_needs_live_workspace_and_logs(self):
-        d = PluginDraft.objects.create(plugin_id="fleet", name="x", pages={"live": PAGE})
-        url = f"/manage/kernel/plugindraft/{d.pk}/studio/"
-        r = self.client.post(url, {**self.meta, "op": "preview", "preview_db": "999", "preview_page": "live", "page_live": PAGE})
-        self.assertContains(r, "پایگاه داده‌ی فعال")
-        ws = mock.Mock(pk=5, is_live=True)
-        ctx = {"page": studio.parse_pages(d)[0], "blocks": [], "values": {}, "layers": {}, "param_errors": [], "has_map": False}
-        with mock.patch("kernel.workspace.peek", return_value=ws), mock.patch("kernel.studio.preview_page", return_value=ctx), \
-                mock.patch("kernel.workspace.log_event") as log:
-            r = self.client.post(url, {**self.meta, "op": "preview", "preview_db": "5", "preview_page": "live", "page_live": PAGE})
-        self.assertContains(r, "نتیجه‌ی پیش‌نمایش")
-        log.assert_called_once()
 
 
 # ---------------------------------------------------------------------- سطح ۲ در استودیو
-from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: E402
 from django.test import override_settings as _override  # noqa: E402
 
 BLOCK = studio.HANDLER_TEMPLATES["block"][0]
@@ -218,81 +166,3 @@ class StudioTrialTests(TestCase):
         self.assertIn("ZeroDivisionError", out["error"])
         d = draft2(code={"parse": "def handle(c, p):\n    c.log('hello')\n    return {'columns': [{'name': 'a', 'type': 'text'}], 'rows': [['x']]}", "report": EXPORTER})
         self.assertEqual(studio.trial(d, "parse", {}, b"x")["logs"], ["hello"])
-
-
-@_override(ADMIN_2FA_REQUIRED=False)
-class StudioTier2AdminTests(TestCase):
-    def setUp(self):
-        self.admin = get_user_model().objects.create_admin("root", PASS)
-        self.client.force_login(self.admin)
-        self.d = PluginDraft.objects.create(plugin_id="fleet", name="پایش", pages={"live": IO_PAGE}, code={"parse": IMPORTER, "report": EXPORTER})
-        self.url = f"/manage/kernel/plugindraft/{self.d.pk}/studio/"
-        self.meta = {"plugin_id": "fleet", "name": "پایش", "version": "1.0.0", "kind": "custom", "requires": "", "readme": ""}
-
-    def post(self, op, **extra):
-        data = {**self.meta, "op": op, "page_live": IO_PAGE, "code_parse": IMPORTER, "code_report": EXPORTER, **extra}
-        return self.client.post(self.url, data)
-
-    def test_add_and_delete_handler_and_alert_minutes_saved(self):
-        self.post("addhandler", newhandler="calc", htemplate="block")
-        self.d.refresh_from_db()
-        self.assertEqual(sorted(self.d.code), ["calc", "parse", "report"])
-        self.client.post(self.url, {**self.meta, "op": "save", "page_live": IO_PAGE, "code_parse": IMPORTER, "code_report": EXPORTER,
-                                    "code_calc": BLOCK, "alert_calc": "30"})
-        self.d.refresh_from_db()
-        self.assertEqual(self.d.alerts, {"calc": 30})
-        self.client.post(self.url, {**self.meta, "op": "delhandler:calc", "page_live": IO_PAGE, "code_parse": IMPORTER, "code_report": EXPORTER,
-                                    "code_calc": BLOCK, "alert_calc": "30"})
-        self.d.refresh_from_db()
-        self.assertEqual((sorted(self.d.code), self.d.alerts), (["parse", "report"], {}))
-
-    def test_new_handler_gets_a_default_test_and_run_tests_button_works(self):
-        self.post("addhandler", newhandler="calc", htemplate="alert")
-        self.d.refresh_from_db()
-        self.assertIn("alerts_count", self.d.tests["calc"])
-        self.d.tests.update({"parse": studio.HANDLER_TESTS["importer"], "report": studio.HANDLER_TESTS["exporter"]})
-        self.d.save()
-        r = self.client.post(self.url, {**self.meta, "op": "runtests", "page_live": IO_PAGE, "code_parse": IMPORTER, "code_report": EXPORTER,
-                                        "code_calc": ALERT, "test_parse": self.d.tests["parse"], "test_report": self.d.tests["report"],
-                                        "test_calc": self.d.tests["calc"]})
-        self.assertContains(r, "نتیجه‌ی آزمون‌ها")
-        self.assertContains(r, "calc / زیاد: هشدار")
-        self.client.post(self.url, {**self.meta, "op": "delhandler:calc", "page_live": IO_PAGE, "code_parse": IMPORTER, "code_report": EXPORTER,
-                                    "code_calc": ALERT, "test_calc": self.d.tests["calc"]})
-        self.d.refresh_from_db()
-        self.assertNotIn("calc", self.d.tests)
-
-    def test_run_tests_needs_fresh_confirmation(self):
-        with _override(ADMIN_2FA_REQUIRED=True):
-            r = self.post("runtests")
-        self.assertEqual(r.status_code, 302)
-
-    def test_bad_handler_name_rejected(self):
-        self.post("addhandler", newhandler="Bad Name", htemplate="block")
-        self.d.refresh_from_db()
-        self.assertEqual(sorted(self.d.code), ["parse", "report"])
-
-    def test_trial_runs_through_client_and_shows_verdict(self):
-        r = self.post("trial:parse", trial_params="{}", trial_file=SimpleUploadedFile("a.csv", b"a,1\nb,2\n"))
-        self.assertContains(r, "ورود معتبر است")
-
-    def test_trial_input_validation_and_stepup(self):
-        self.assertContains(self.post("trial:parse", trial_params="[1]"), "شیء JSON")
-        self.assertContains(self.post("trial:parse", trial_params="{}", trial_db="999"), "پایگاه داده‌ی فعال")
-        with _override(ADMIN_2FA_REQUIRED=True):
-            r = self.post("trial:parse", trial_params="{}")
-            self.assertEqual(r.status_code, 302)  # بدون تأیید تازه اجرا نمی‌شود
-
-    def test_trial_with_database_logs_activity(self):
-        ws = mock.Mock(pk=5, is_live=True)
-        with mock.patch("kernel.workspace.peek", return_value=ws), mock.patch("kernel.workspace.log_event") as log, \
-                mock.patch("kernel.pagekit.read_select", return_value={"columns": ["n"], "rows": [[3]]}):
-            r = self.post("trial:report", trial_params="{}", trial_db="5")
-        self.assertContains(r, "خروجی معتبر است")
-        log.assert_called_once()
-
-    def test_page_renders_code_sections(self):
-        r = self.client.get(self.url)
-        self.assertContains(r, "code_parse")
-        self.assertContains(r, "اجرای آزمایشی")
-        self.assertContains(r, "ورود فایل")

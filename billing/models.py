@@ -26,6 +26,9 @@ class PluginAddon(models.Model):
     scope = models.CharField("دارنده", max_length=10, choices=Scope.choices, default=Scope.WORKSPACE)
     limits = models.JSONField("سقف‌ها", default=dict, blank=True, help_text='مثلاً {"page_views_per_month": 5000}')
     trial_days = models.PositiveSmallIntegerField("دوره‌ی آزمایشی رایگان (روز؛ ۰ = ندارد)", default=0)
+    category = models.CharField("دسته", max_length=30, blank=True)
+    features = models.JSONField("ویژگی‌ها", default=list, blank=True)
+    details = models.TextField("توضیح کامل", blank=True)
     is_public = models.BooleanField("در فروشگاه نمایش داده شود", default=True)
     order = models.PositiveIntegerField("ترتیب", default=100)
 

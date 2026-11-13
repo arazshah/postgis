@@ -1,0 +1,39 @@
+{% extends "admin/base_site.html" %}
+{% block extrastyle %}<style>
+.pi-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s4,16px);margin-bottom:var(--s4,16px)}
+.pi-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.pi-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:12px 0}
+.pi-stats div{border:1px solid var(--line);border-radius:var(--r-ctl);padding:10px;text-align:center;background:var(--paper)}
+.pi-stats b{display:block;font-size:22px}
+.pi-ok{color:var(--green);font-weight:700}.pi-warn{color:var(--ink);background:var(--ochre-soft);border-radius:var(--r-ctl);padding:8px 12px}
+.pi-list{margin:8px 0;padding-inline-start:20px}
+</style>{% endblock %}
+{% block content %}
+<div id="content-main" class="ap-flat" style="max-width:860px">
+  <section class="pi-card">
+    <h2 style="margin-top:0">{{ imp.name }} <span class="help ltr" dir="ltr">{{ imp.plugin_id }} · v{{ imp.version }}</span></h2>
+    <p class="help">{% if kind == "draft" %}پیش‌نویس استودیوی TOML قدیمی{% else %}نسخه‌ی {{ source.version }} ({{ source.get_status_display }}){% endif %} به استودیوی دیداری آورده می‌شود. چیزی منتشر یا اجرا نمی‌شود؛ انتشار نسخه‌ی تازه از خود استودیو و با تأیید تازه است.</p>
+    <div class="pi-stats">
+      <div><b>{{ report.stats.pages }}</b>صفحه</div><div><b>{{ report.stats.blocks }}</b>بلوک</div>
+      <div><b>{{ report.stats.tables }}</b>جدول</div><div><b>{{ report.stats.handlers }}</b>کد</div><div><b>{{ report.raw|length }}</b>بلوک خام</div>
+    </div>
+    {% if report.lossless %}<p class="pi-ok">راستی‌آزمایی: نقشه‌ی ساخته‌شده دقیقاً همان صفحه‌های اصلی را بازمی‌سازد (بدون تفاوت).</p>
+    {% else %}<div class="pi-warn"><b>تفاوت یا خطا دارد؛ پیش از ادامه بخوانید:</b>
+      <ul class="pi-list">{% for n in report.notes %}<li>{{ n }}</li>{% endfor %}{% for e in report.errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+    {% if report.raw %}<h3>بلوک‌های خام</h3>
+    <p class="help">این‌ها در بلوک‌های دیداری نمی‌گنجند و همان‌طور که بودند (مشخصات TOML بی‌تغییر، با همان بررسی کیت) نگه داشته می‌شوند؛ در استودیو فقط‌خواندنی‌اند.</p>
+    <ul class="pi-list">{% for r in report.raw %}<li>{{ r.page }} — {{ r.part }}{% if r.key %} <span class="ltr" dir="ltr">({{ r.key }})</span>{% endif %}{% if r.title %}: {{ r.title }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+  </section>
+  {% if blocked %}<p class="errornote">{{ blocked }}</p>
+  {% elif visual %}<p class="help">این پلاگین پیش‌نویس استودیوی دیداری دارد و همان‌جا ویرایش می‌شود.</p>
+    <p><a class="button default" href="{{ designer }}">باز کردن در استودیوی دیداری</a></p>
+  {% else %}
+  <form method="post">{% csrf_token %}
+    <input type="hidden" name="{{ kind }}" value="{{ source.pk }}">
+    {% if needs_confirm %}<p><label><input type="checkbox" name="confirm" value="1"> با تفاوت‌های بالا ادامه بده</label></p>{% endif %}
+    <button class="button default" type="submit">وارد کن و در استودیوی دیداری باز کن</button>
+    <a class="button" href="{% url 'plugin_hub' %}?tab=create">انصراف</a>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

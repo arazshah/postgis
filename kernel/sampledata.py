@@ -134,6 +134,8 @@ def _base(b: dict, default_width: str = "full") -> dict:
 def render_block(spec: dict, b: dict, data: dict[str, list[dict]], page: dict | None = None) -> dict:
     """بلوک نقشه ← مدل نمایش (همان کلیدهای pagekit.render_block). ایراد بلوک = پیام خطا در همان بلوک، نه استثنا."""
     kind = b.get("kind")
+    if kind == "raw":  # ساخت واردشده‌ی بی‌تغییر؛ پیش‌نمایش ندارد
+        return {**_base({**b, "kind": "text"}), "kind": "action", "action": "raw", "error": ""}
     if kind == "text":
         out = _base(b)
         out["paras"] = [p.strip() for p in str(b.get("text", "")).split("\n\n") if p.strip()]

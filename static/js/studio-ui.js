@@ -33,6 +33,7 @@ const ICONS={
   undo:P("M9 7 4 12l5 5|M4 12h9a6 6 0 0 1 0 6h-3"), redo:P("M15 7l5 5-5 5|M20 12h-9a6 6 0 0 0 0 6h3"),
   desktop:P("M3 4h18v12H3z|M8 21h8|M12 16v5"), upload:P("M12 16V4|M7 9l5-5 5 5|M4 20h16"), download:P("M12 4v12|M7 11l5 5 5-5|M4 20h16"),
   bolt:P("M13 3 5 13h6l-1 8 8-10h-6z"), clock:'<circle cx="12" cy="12" r="9"/>'+P("M12 7v5l3 2"),
+  card:P("M3 6h18v12H3z|M3 10h18|M7 15h3"),
   phone:P("M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"), mail:P("M3 6h18v12H3z|M3 7l9 6 9-6"),
   moon:P("M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"), db:'<ellipse cx="12" cy="6" rx="7" ry="3"/>'+P("M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6|M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"),
   // نوع نمودار

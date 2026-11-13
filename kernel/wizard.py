@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import copy
 import json
 import re
 import tomllib
@@ -23,11 +24,15 @@ ACTIONS = ("form", "ingest", "records")
 FILE_ACTIONS = ("import", "export")
 EXTRA = ("report", "source")  # گزارش PDF و واکشی دوره‌ای از API بیرونی (ADR-0009)
 KINDS = DISPLAY + ACTIONS + FILE_ACTIONS + EXTRA
+RAW = "raw"  # بلوک خام: فقط درون‌ریز (kernel.importer) می‌سازد، هرگز از مرورگر؛ مشخصات TOML بی‌تغییر با همان بررسی کیت
+RAW_PARTS = {"blocks": "parse_block", "forms": "parse_form", "ingest": "parse_ingest", "records": "parse_record", "sources": "parse_source",
+             "reports": "parse_report", "imports": "parse_import", "exports": "parse_export"}
+KEYED = ("form", "ingest", "records", "source", "report", "import", "export")
 HANDLER_DISPLAY = ("table", "kpi", "bars", "map")
 EXPORT_FORMATS = ("csv", "json", "txt", "geojson")
 AGGS = {"count": "count(*)", "sum": "sum({c})", "avg": "avg({c})", "min": "min({c})", "max": "max({c})"}
 NUMERIC = ("integer", "bigint", "double")
-MAX_PAGES, MAX_BLOCKS = 6, 12
+MAX_PAGES, MAX_BLOCKS = 6, 24
 FIELD_KIND = {"text": "text", "integer": "int", "bigint": "int", "double": "number", "boolean": "bool", "date": "date"}
 GEOM_TYPES = ("point", "line", "polygon", "multipolygon")
 MAX_PARAMS = 6
@@ -162,7 +167,15 @@ def block_sql(spec: dict, b: dict, page: dict | None = None) -> tuple[str, dict]
     """بلوک نمایشی ← (SQL فقط‌خواندنی، فیلدهای اضافه‌ی بلوک مثل unit/columns). WizardError با پیام فارسی."""
     kind = b["kind"]
     if kind == "sql":
-        return str(b.get("sql", "")).strip(), {}
+        extra: dict = {}
+        if str(b.get("unit") or "").strip():
+            extra["unit"] = str(b["unit"]).strip()[:20]
+        if str(b.get("hint") or "").strip():
+            extra["hint"] = str(b["hint"]).strip()[:200]
+        cols = [[str(c[0]), str(c[1])] for c in b.get("columns") or [] if isinstance(c, (list, tuple)) and len(c) == 2]
+        if cols:
+            extra["columns"] = cols
+        return str(b.get("sql", "")).strip(), extra
     t = _need_table(spec, b)
     rel = q(t["name"])
     if kind == "kpi":
@@ -252,6 +265,17 @@ def _field_for(c: dict) -> dict:
     return f
 
 
+OVERRIDE_KEYS = ("label", "required", "max", "min", "choices", "kind", "geom")
+
+
+def _with_override(f: dict, b: dict) -> dict:
+    """فیلد ساخته‌شده از ستون + تغییرهای فیلد در `overrides` بلوک (برچسب، کران، گزینه…؛ از درون‌ریز پلاگین‌های قبلی)."""
+    ov = (b.get("overrides") or {}).get(f["name"])
+    if isinstance(ov, dict):
+        f = {**f, **{k: v for k, v in ov.items() if k in OVERRIDE_KEYS}}
+    return f
+
+
 def _action_columns(t: dict, b: dict) -> list[dict]:
     geom_ok = b.get("kind") in ("form", "records")
     names = b.get("fields") or [c["name"] for c in t["columns"] if not c.get("auto_now") and (c["type"] in FIELD_KIND or geom_ok and c["type"] in GEOM_TYPES)]
@@ -262,7 +286,7 @@ def _action_columns(t: dict, b: dict) -> list[dict]:
         c = _need_col(t, n, what=n)
         if c.get("auto_now"):
             raise WizardError(f"ستون «{n}» را پایگاه خودکار پر می‌کند.")
-        out.append(_field_for(c))
+        out.append(_with_override(_field_for(c), b))
     return out
 
 
@@ -289,6 +313,7 @@ def _exts(raw) -> list[str]:
 
 
 def _records_item(spec: dict, b: dict, key: str) -> dict:
+    key = b.get("key") or key
     t = _need_table(spec, b)
     flds = _action_columns(t, b)
     plain = [f["name"] for f in flds if f["kind"] != "geometry"]
@@ -300,17 +325,24 @@ def _records_item(spec: dict, b: dict, key: str) -> dict:
 
 
 def _source_item(spec: dict, b: dict, key: str) -> dict:
+    key = b.get("key") or key
     t = _need_table(spec, b)
     flds = []
     for m in b.get("map") or []:
         if not (m or {}).get("column"):
             continue  # سطر خالی (تازه‌افزوده) نادیده گرفته می‌شود
         c = _need_col(t, (m or {}).get("column", ""), what="ستون مقصد")
-        f = _field_for(c)
+        f = _with_override(_field_for(c), b)
         if f["kind"] == "geometry":
             raise WizardError("ستون مکانی برای منبع بیرونی پشتیبانی نمی‌شود.")
-        path = str((m or {}).get("path") or c["name"]).strip()
-        flds.append({**f, "path": path})
+        row: dict = dict(f)
+        if str((m or {}).get("input") or "").strip():
+            row["input"] = str(m["input"]).strip()  # مقدار ستون از ورودی پایگاه می‌آید نه پاسخ
+        else:
+            row["path"] = str((m or {}).get("path") or c["name"]).strip()
+        if (m or {}).get("optional"):
+            row["optional"] = True
+        flds.append(row)
     if not flds:
         raise WizardError("دست‌کم یک نگاشت «مسیر در پاسخ ← ستون» لازم است.")
     q = b.get("query") or []
@@ -320,6 +352,8 @@ def _source_item(spec: dict, b: dict, key: str) -> dict:
     for k in ("rows_path", "cursor", "hint", "secret_header", "secret_param"):
         if str(b.get(k) or "").strip():
             item[k] = str(b[k]).strip()
+    if b.get("mode") in ("append", "replace") and b["mode"] != "append":
+        item["mode"] = b["mode"]
     if qd:
         item["query"] = qd
     inputs = [i for i in b.get("inputs") or [] if isinstance(i, dict) and str(i.get("name", "")).strip()]
@@ -329,6 +363,7 @@ def _source_item(spec: dict, b: dict, key: str) -> dict:
 
 
 def _report_item(page: dict | None, b: dict, key: str) -> dict:
+    key = b.get("key") or key
     ids = [i for i in b.get("blocks") or [] if isinstance(i, str)]
     out = {"key": key, "title": b.get("title") or "گزارش", "orientation": "landscape" if b.get("landscape") else "portrait",
            "button": str(b.get("button") or "گزارش PDF")[:30]}
@@ -358,9 +393,32 @@ def _check_params(page: dict | None) -> None:
             raise WizardError(f"فیلتر «{p.get('label') or p['name']}»: {exc}") from exc
 
 
+def _check_raw(b: dict, page: dict | None = None) -> None:
+    """بلوک خام: بخش و مشخصات باید از همان بررسی کیت بگذرند (مرز اعتماد: فقط درون‌ریز آن را می‌سازد، اینجا دوباره سنجیده می‌شود)."""
+    part, item = b.get("part"), b.get("item")
+    if part not in RAW_PARTS or not isinstance(item, dict):
+        raise WizardError("بلوک خام نامعتبر است.")
+    try:
+        fn = getattr(pagekit, RAW_PARTS[part])
+        if part == "blocks":
+            fn(item, {p["name"]: pagekit.parse_param(p) for p in (page or {}).get("params") or []})
+        else:
+            fn(item)
+    except pagekit.SpecError as exc:
+        raise WizardError(f"بلوک خام: {exc}") from exc
+
+
 def check_block(spec: dict, b: dict, page: dict | None = None) -> None:
     """یک بلوک را تنها (بدون نیاز به کامل‌بودن صفحه) می‌سنجد؛ WizardError با پیام فارسی."""
     kind = b.get("kind")
+    if kind == RAW:
+        _check_raw(b, page)
+        return
+    if b.get("key") is not None:
+        if kind not in KEYED:
+            raise WizardError("«key» فقط برای فرم، دریافت، ویرایش ردیف، منبع، گزارش و ورود/خروج فایل است.")
+        if not pagekit.KEY_RE.fullmatch(str(b["key"])):
+            raise WizardError("«key» نامعتبر است (حروف کوچک لاتین، رقم و _).")
     if kind == "text":
         return
     _check_params(page)
@@ -417,8 +475,15 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
         out["params"] = [{k: v for k, v in p.items() if v not in (None, "")} for p in page["params"]]
     blocks, forms, ingests, imports, exports, used = [], [], [], [], [], []
     records, sources, reports, emitted = [], [], [], []
+    raw: dict[str, list] = {part: [] for part in RAW_PARTS}
     for b in page.get("blocks") or []:
         kind = b["kind"]
+        if kind == RAW:
+            _check_raw(b, page)
+            raw[b["part"]].append(copy.deepcopy(b["item"]))
+            if b["part"] == "blocks":
+                emitted.append(b.get("id"))
+            continue
         if kind == "records":
             item = _records_item(spec, b, f"rec{len(records) + 1}")
             used.append(item["table"])
@@ -433,18 +498,22 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
             reports.append((b, f"rep{len(reports) + 1}"))
             continue
         if kind == "import":
-            imports.append({"key": f"imp{len(imports) + 1}", "title": b.get("title") or "ورود فایل", "handler": handler_for(spec, b.get("handler", ""), "importer"),
-                            "extensions": _exts(b.get("extensions"))})
+            item = {"key": b.get("key") or f"imp{len(imports) + 1}", "title": b.get("title") or "ورود فایل", "handler": handler_for(spec, b.get("handler", ""), "importer"),
+                    "extensions": _exts(b.get("extensions"))}
+            item.update({k: str(b[k]).strip() for k in ("hint", "submit", "success") if str(b.get(k) or "").strip()})
+            imports.append(item)
             continue
         if kind == "export":
-            exports.append({"key": f"exp{len(exports) + 1}", "title": b.get("title") or "دریافت خروجی", "handler": handler_for(spec, b.get("handler", ""), "exporter"),
-                            "format": b.get("format") if b.get("format") in EXPORT_FORMATS else "csv"})
+            item = {"key": b.get("key") or f"exp{len(exports) + 1}", "title": b.get("title") or "دریافت خروجی", "handler": handler_for(spec, b.get("handler", ""), "exporter"),
+                    "format": b.get("format") if b.get("format") in EXPORT_FORMATS else "csv"}
+            item.update({k: str(b[k]).strip() for k in ("hint", "submit") if str(b.get(k) or "").strip()})
+            exports.append(item)
             continue
         if kind in ACTIONS:
             t = _need_table(spec, b)
             used.append(t["name"])
             flds = _action_columns(t, b)
-            key = f"{kind}{len(forms) + len(ingests) + 1}"
+            key = b.get("key") or f"{kind}{len(forms) + len(ingests) + 1}"
             if kind == "form":
                 form = {"key": key, "title": b.get("title") or "ثبت", "table": t["name"], "fields": flds}
                 for k, lim in (("submit", 30), ("hint", 240), ("success", 120)):
@@ -454,6 +523,8 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
             else:
                 ing = {"key": key, "title": b.get("title") or "دریافت داده‌ی دستگاه", "table": t["name"], "fields": flds,
                        "max_rows": int(b.get("max_rows") or 100), "rate": int(b.get("rate") or 60)}
+                if str(b.get("hint") or "").strip():
+                    ing["hint"] = str(b["hint"]).strip()[:240]
                 if b.get("handler"):
                     ing["handler"] = handler_for(spec, b["handler"], "ingest")
                 ingests.append(ing)
@@ -487,6 +558,10 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
             item["width"] = b["width"]
         blocks.append(item)
         emitted.append(b.get("id"))
+    blocks = _merge_raw(blocks, raw["blocks"], page)
+    forms, ingests, records, sources = forms + raw["forms"], ingests + raw["ingest"], records + raw["records"], sources + raw["sources"]
+    imports, exports = imports + raw["imports"], exports + raw["exports"]
+    used += [n for n in page.get("tables") or [] if n in tmap]  # جدول‌هایی که صفحه باید همیشه اعلام کند (از درون‌ریز)
     if not blocks:
         raise WizardError(f"صفحه‌ی «{page['title']}» دست‌کم یک بلوک نمایشی (شمارنده، جدول، نمودار، نقشه یا متن) لازم دارد.")
     out["blocks"] = blocks
@@ -502,14 +577,26 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
         out["records"] = records
     if sources:
         out["sources"] = sources
-    if reports:
+    if reports or raw["reports"]:
         shown = {"blocks": [{"id": i, "kind": "kpi"} for i in emitted if i]}
-        out["reports"] = [_report_item(shown, b, key) for b, key in reports]
+        out["reports"] = [_report_item(shown, b, key) for b, key in reports] + raw["reports"]
     if used:
         out["tables"] = [tmap[n] for n in dict.fromkeys(used)]
     if (forms or ingests or imports or records or sources) and out["need"] == "viewer":
         out["need"] = "editor"
     return out
+
+
+def _merge_raw(blocks: list, raw_blocks: list, page: dict) -> list:
+    """بلوک‌های نمایشیِ خام در همان جایگاه نسبی (به ترتیب بلوک‌های صفحه) می‌نشینند."""
+    if not raw_blocks:
+        return blocks
+    out, ri, bi = [], iter(raw_blocks), iter(blocks)
+    order = [("raw" if b["kind"] == RAW else "std") for b in page.get("blocks") or []
+             if (b["kind"] == RAW and b.get("part") == "blocks") or (b["kind"] != RAW and b["kind"] in DISPLAY)]
+    for tag in order:
+        out.append(next(ri if tag == "raw" else bi))
+    return out + list(ri) + list(bi)
 
 
 def compile_pages(plugin_id: str, spec: dict) -> dict[str, str]:

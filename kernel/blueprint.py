@@ -12,14 +12,14 @@ import re
 import secrets
 from typing import Any
 
-from . import wizard, wizard_code
+from . import market, wizard, wizard_code
 
 MAX_PAGES = wizard.MAX_PAGES
 MAX_BLOCKS = 24  # سقف کیت صفحه (pagekit.parse_page)
 WIDTHS = ("full", "half", "third")
 GROUPS = ("data", "share", "manage")
 NEEDS = ("viewer", "editor", "owner")
-PAGE_FIELDS = ("title", "subtitle", "icon", "group", "need", "refresh", "params")
+PAGE_FIELDS = ("title", "subtitle", "icon", "group", "need", "refresh", "params", "order", "tables")
 BLOCK_STR_LIMIT = 4000
 ID_RE = re.compile(r"^[a-z][a-z0-9]{3,11}$")
 
@@ -112,8 +112,12 @@ def _page_fields(raw: dict) -> dict:
                     wizard.pagekit.parse_param(x)
                 except wizard.pagekit.SpecError as exc:
                     raise BlueprintError(f"فیلتر «{x.get('label') or x.get('name')}»: {exc}") from exc
-                if x["kind"] not in wizard.PARAM_BIND_KINDS:
-                    raise BlueprintError("نوع فیلتر «انتخابی» یا «متن» است.")
+        elif k == "order":
+            if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 10000:
+                raise BlueprintError("ترتیب عددی بین ۰ و ۱۰۰۰۰ است.")
+        elif k == "tables":
+            if not isinstance(v, list) or len(v) > 5 or not all(isinstance(x, str) for x in v):
+                raise BlueprintError("جدول‌های صفحه فهرست نام (حداکثر ۵) است.")
         elif k == "refresh":
             if isinstance(v, bool) or not isinstance(v, int) or not (v == 0 or 5 <= v <= 3600):
                 raise BlueprintError("تازه‌سازی صفر یا بین ۵ تا ۳۶۰۰ ثانیه است.")
@@ -395,7 +399,31 @@ def _code_del(s, pid, op):
     del s["code"][name]
 
 
+def _listing_set(s, pid, op):
+    """آگهی بازار: دسته، ویژگی‌ها (تا ۶ مورد) و توضیح کامل؛ عنوان و خلاصه از نام و توضیح کوتاه پلاگین می‌آید."""
+    lst = s.setdefault("listing", {})
+    if "category" in op:
+        c = str(op["category"] or "")
+        if c and c not in {x[0] for x in market.CATEGORIES}:
+            raise BlueprintError("دسته‌ی آگهی نامعتبر است.")
+        lst["category"] = c
+    if "features" in op:
+        f = op["features"]
+        if not isinstance(f, list):
+            raise BlueprintError("ویژگی‌ها فهرست متن است.")
+        f = [str(x).strip() for x in f if str(x).strip()]
+        if len(f) > market.MAX_FEATURES or any(len(x) > 80 for x in f):
+            raise BlueprintError(f"حداکثر {market.MAX_FEATURES} ویژگی، هرکدام تا ۸۰ نویسه.")
+        lst["features"] = f
+    if "details" in op:
+        d = str(op["details"] or "").strip()
+        if len(d) > market.MAX_DETAILS:
+            raise BlueprintError(f"توضیح کامل حداکثر {market.MAX_DETAILS} نویسه است.")
+        lst["details"] = d
+
+
 _OPS = {
+    "listing.set": _listing_set,
     "code.add": _code_add, "code.new": _code_new, "code.set": _code_set, "code.del": _code_del,
     "meta.set": _meta_set, "table.add": _table_add, "table.set": _table_set, "table.del": _table_del,
     "page.add": _page_add, "page.set": _page_set, "page.del": _page_del, "page.move": _page_move,

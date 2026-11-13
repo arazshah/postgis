@@ -1,7 +1,7 @@
 """API JSON استودیوی دیداری پلاگین (docs/adr/0010): وضعیت نقشه، عملیات، پیش‌نمایش نمونه، تاریخچه و بازگشت.
 
 مرورگر فقط عملیات ساخت‌یافته می‌فرستد (kernel.blueprint)؛ هسته نقشه را می‌سنجد، ذخیره و صفحه‌های TOML را از رویش می‌سازد
-(همان `wizard_admin._save` و `wizard.compile_pages`). پیش‌نمایش نمونه (kernel.sampledata) هیچ پایگاه داده‌ای را نمی‌خواند.
+(همان `studio_common.save` و `wizard.compile_pages`). پیش‌نمایش نمونه (kernel.sampledata) هیچ پایگاه داده‌ای را نمی‌خواند.
 دسترسی همان مجوز ویزارد است (`kernel.upload_pluginrelease`).
 """
 from __future__ import annotations
@@ -15,15 +15,34 @@ from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET, require_POST
 
-from . import ai, blueprint, pagekit, pkgtest, sampledata, stepup, studio_ai, wizard, wizard_admin, wizard_code
+from . import (
+    ai,
+    blueprint,
+    media_view,
+    pagekit,
+    pkg,
+    pkgtest,
+    postpub,
+    publish,
+    quality,
+    release_diff,
+    sampledata,
+    stepup,
+    studio,
+    studio_ai,
+    studio_common,
+    tables,
+    wizard,
+    wizard_code,
+)
 from . import workspace as ws_mod
-from .models import PluginDraft, PluginDraftRevision
+from .models import PluginDraft, PluginDraftRevision, PluginMedia, PluginRelease
 
 MAX_BODY = 200_000
 
 
 def _draft(request, pk) -> PluginDraft:
-    if not wizard_admin._allowed(request):
+    if not studio_common.allowed(request):
         raise PermissionDenied
     return get_object_or_404(PluginDraft, pk=pk)
 
@@ -35,8 +54,14 @@ def _spec(draft: PluginDraft) -> dict:
 
 def _state(draft: PluginDraft, spec: dict, save_error: str = "") -> dict:
     return {"spec": spec, "plugin_id": draft.plugin_id, "name": draft.name, "version": draft.version,
-            "analysis": blueprint.analyze(spec, draft.plugin_id), "save_error": save_error,
+            "analysis": blueprint.analyze(spec, draft.plugin_id), "quality": quality.evaluate(spec, draft.plugin_id), "save_error": save_error, "media": _media(draft),
             "revision": PluginDraftRevision.objects.filter(draft=draft).values_list("id", flat=True).first()}
+
+
+def _media(draft: PluginDraft) -> list[dict]:
+    from django.urls import reverse
+
+    return [{"id": m.pk, "url": reverse("kernel:media", args=[m.token]), "w": m.width, "h": m.height} for m in PluginMedia.objects.filter(plugin_id=draft.plugin_id)]
 
 
 def _record(draft: PluginDraft, spec: dict, label: str, user) -> None:
@@ -46,7 +71,7 @@ def _record(draft: PluginDraft, spec: dict, label: str, user) -> None:
 
 
 def _commit(request, draft: PluginDraft, spec: dict, label: str) -> dict:
-    err = wizard_admin._save(draft, spec, request.user)
+    err = studio_common.save(draft, spec, request.user)
     _record(draft, spec, label, request.user)
     return _state(draft, spec, err)
 
@@ -124,11 +149,153 @@ def assistant(request, pk):
     try:
         out = studio_ai.ask(request.user, _spec(draft), draft.plugin_id, str(data.get("message", "")), history=data.get("history"),
                             mode=str(data.get("mode") or "chat"), page=str(data.get("page") or "")[:40], selected=str(data.get("selected") or "")[:20],
-                            focus=str(data.get("focus") or "")[:40], failures=str(data.get("failures") or "")[:studio_ai.MAX_FAILURES])
+                            focus=str(data.get("focus") or "")[:40], failures=str(data.get("failures") or "")[:studio_ai.MAX_FAILURES],
+                            stats=postpub.collect(draft.plugin_id) if data.get("mode") == "postpub" else None)
     except ai.AiError as exc:
         return JsonResponse({"error": str(exc)}, status=429 if "سقف" in str(exc) else 400)
     ws_mod.log_event("plugin_studio_ai", f"{draft.plugin_id}: {data.get('mode') or 'chat'}، {len(out['ops'])} پیشنهاد" + ("" if out["valid"] else " (نامعتبر)"), user=request.user)
     return JsonResponse(out)
+
+
+# ---------------------------------------------------------------------- بازار و نسخه‌ها (مرحله‌ی ۸)
+@require_POST
+def access(request, pk):
+    """دسترسی و قیمت: {access: {mode, price_toman, ...}} ← نقشه‌ی تازه (اعتبارسنجی همان انتشار)."""
+    draft = _draft(request, pk)
+    try:
+        data = _body(request)
+        acc = publish.normalize_access(data.get("access") or {})
+        bad = publish.check_targets(acc)
+        if bad:
+            raise publish.PublishError("هدف‌های پیدا‌نشده: " + "، ".join(bad))
+    except (blueprint.BlueprintError, publish.PublishError) as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    spec = _spec(draft)
+    spec["access"] = acc
+    return JsonResponse(_commit(request, draft, spec, "دسترسی و قیمت"))
+
+
+@require_POST
+def media(request, pk):
+    """آپلود تصویر آگهی (multipart: file) یا حذف ({delete: id})."""
+    draft = _draft(request, pk)
+    if request.content_type == "application/json":
+        try:
+            rid = int(_body(request).get("delete"))
+        except (TypeError, ValueError, blueprint.BlueprintError):
+            return JsonResponse({"error": "شناسه‌ی تصویر نامعتبر است."}, status=400)
+        PluginMedia.objects.filter(plugin_id=draft.plugin_id, pk=rid).delete()
+        return JsonResponse({"media": _media(draft)})
+    up = request.FILES.get("file")
+    if up is None:
+        return JsonResponse({"error": "فایل تصویر را بفرستید."}, status=400)
+    try:
+        media_view.store(draft.plugin_id, up.read(media_view.MAX_BYTES + 1))
+    except media_view.MediaError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    ws_mod.log_event("plugin_studio_media", f"{draft.plugin_id}: تصویر آگهی افزوده شد", user=request.user)
+    return JsonResponse({"media": _media(draft)})
+
+
+STATUS_FA = dict(PluginRelease.Status.choices)
+
+
+@require_GET
+def stats(request, pk):
+    """آمار پس از انتشار (فقط شمارنده؛ kernel.postpub)."""
+    draft = _draft(request, pk)
+    return JsonResponse(postpub.collect(draft.plugin_id))
+
+
+@require_GET
+def releases(request, pk):
+    draft = _draft(request, pk)
+    rows = PluginRelease.objects.filter(plugin_id=draft.plugin_id).order_by("-id")[:30]
+    return JsonResponse({"releases": [{"id": r.pk, "version": r.version, "status": r.status, "status_label": STATUS_FA.get(r.status, r.status),
+                                       "at": r.uploaded_at.isoformat(), "publisher": r.publisher, "notes": r.notes, "size": r.size,
+                                       "has_spec": bool(r.spec), "mode": (r.access or {}).get("mode", "")} for r in rows],
+                         "draft_version": draft.version, "next_version": publish.next_version(draft.plugin_id, draft.version)})
+
+
+@require_GET
+def compare(request, pk):
+    """تفاوت نسخه‌ی `a` با نسخه‌ی `b` یا (b=draft) با پیش‌نویس فعلی."""
+    draft = _draft(request, pk)
+    try:
+        a = get_object_or_404(PluginRelease, pk=int(request.GET.get("a", "")), plugin_id=draft.plugin_id)
+        old = release_diff.summarize(release_diff.files_of(a))
+        if request.GET.get("b") == "draft":
+            new, b_label = release_diff.summarize(studio.files_of(draft)), "پیش‌نویس فعلی"
+        else:
+            b = get_object_or_404(PluginRelease, pk=int(request.GET.get("b", "")), plugin_id=draft.plugin_id)
+            new, b_label = release_diff.summarize(release_diff.files_of(b)), f"نسخه‌ی {b.version}"
+    except (ValueError, pkg.PackageError):
+        return JsonResponse({"error": "نسخه‌ها نامعتبرند."}, status=400)
+    return JsonResponse({"from": f"نسخه‌ی {a.version}", "to": b_label, "lines": release_diff.diff(old, new)})
+
+
+@require_POST
+def rollback(request, pk):
+    """فعال‌کردن یک نسخه‌ی قبلی (بازگشت). نیازمند مجوز فعال‌سازی و تأیید تازه؛ آگهی و دسترسی همان نسخه دوباره اعمال می‌شود."""
+    draft = _draft(request, pk)
+    try:
+        rid = int(_body(request).get("release"))
+    except (TypeError, ValueError, blueprint.BlueprintError):
+        return JsonResponse({"error": "شناسه‌ی نسخه نامعتبر است."}, status=400)
+    rel = get_object_or_404(PluginRelease, pk=rid, plugin_id=draft.plugin_id)
+    if not stepup.ok(request):
+        return JsonResponse({"error": "برای بازگشت تأیید تازه‌ی ورود دومرحله لازم است.", "stepup": stepup.url(request)}, status=403)
+    if not request.user.has_perm("kernel.activate_pluginrelease"):
+        return JsonResponse({"error": "مجوز «تأیید و فعال‌سازی نسخه‌ی پلاگین» لازم است."}, status=403)
+    try:
+        pkg.activate(rel, request.user)
+        pkg.sync()
+    except pkg.PackageError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    ws_mod.log_event("plugin_rollback", f"{draft.plugin_id}: بازگشت به نسخه‌ی {rel.version}", user=request.user)
+    return JsonResponse({"ok": True, "message": f"نسخه‌ی {rel.version} فعال شد."})
+
+
+@require_POST
+def restore_release(request, pk):
+    """پیش‌نویس را به نقشه‌ی یک نسخه‌ی منتشرشده برمی‌گرداند (فقط نسخه‌های استودیو؛ برگشت‌پذیر با واگرد)."""
+    draft = _draft(request, pk)
+    try:
+        rid = int(_body(request).get("release"))
+    except (TypeError, ValueError, blueprint.BlueprintError):
+        return JsonResponse({"error": "شناسه‌ی نسخه نامعتبر است."}, status=400)
+    rel = get_object_or_404(PluginRelease, pk=rid, plugin_id=draft.plugin_id)
+    if not rel.spec:
+        return JsonResponse({"error": "این نسخه نقشه‌ی استودیو ندارد (بسته‌ی بیرونی یا قدیمی)."}, status=400)
+    return JsonResponse(_commit(request, draft, blueprint.ensure_ids(copy.deepcopy(rel.spec)), f"بازگرداندن پیش‌نویس به نسخه‌ی {rel.version}"))
+
+
+@require_POST
+def publish_view(request, pk):
+    """انتشار از استودیو: {notes}. مانع‌ها: ایراد نقشه، مانع کیفیت، تأیید تازه، مجوز."""
+    draft = _draft(request, pk)
+    try:
+        data = _body(request)
+    except blueprint.BlueprintError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    spec = _spec(draft)
+    q = quality.evaluate(spec, draft.plugin_id)
+    if not q["publishable"]:
+        first = next((c for c in q["checks"] if not c["ok"] and c["severity"] == "block"), None)
+        return JsonResponse({"error": "پلاگین هنوز مانع انتشار دارد: " + (first["message"] if first else "")}, status=400)
+    if not stepup.ok(request):
+        return JsonResponse({"error": "برای انتشار تأیید تازه‌ی ورود دومرحله لازم است.", "stepup": stepup.url(request)}, status=403)
+    if not pkg.second_approval_required() and not request.user.has_perm("kernel.activate_pluginrelease"):
+        return JsonResponse({"error": "انتشار مستقیم مجوز «تأیید و فعال‌سازی نسخه‌ی پلاگین» می‌خواهد؛ یا «تأیید مدیر دیگر» را روشن کنید."}, status=403)
+    err = studio_common.save(draft, spec, request.user)  # صفحه‌ها و کد از روی نقشه‌ی جاری دوباره ساخته شود
+    if err:
+        return JsonResponse({"error": err}, status=400)
+    try:
+        out = publish.publish(draft, request.user, spec.get("access") or {}, str(data.get("notes", ""))[:2000])
+    except publish.PublishError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    ws_mod.log_event("plugin_publish", f"{draft.plugin_id} {out['release'].version}: {out['message']}", user=request.user)
+    return JsonResponse({"active": out["active"], "message": out["message"], "version": out["release"].version})
 
 
 def _runner_error() -> str:
@@ -158,7 +325,7 @@ def run(request, pk):
     name = data["name"]
     if data.get("action") == "tests":
         try:
-            results = wizard_admin._test_results(name, h)
+            results = studio_common.test_results(name, h)
         except (pkgtest.TestSpecError, wizard.WizardError) as exc:
             return JsonResponse({"error": f"آزمون: {exc}"}, status=400)
         except Exception as exc:  # noqa: BLE001 - خطای runner
@@ -182,7 +349,7 @@ def _trial(request, draft, name, h, data):
     ws = ws_mod.peek(int(pkv)) if str(pkv or "").isdigit() else None
     if pkv not in (None, "") and (ws is None or not getattr(ws, "is_live", False)):
         return JsonResponse({"error": "پایگاه داده‌ی فعال با این شناسه نیست."}, status=400)
-    role = wizard_admin.ROLE_RUN.get(h.get("role", "block"), "block")
+    role = studio_common.ROLE_RUN.get(h.get("role", "block"), "block")
     logs: list[str] = []
     sql_fn = (lambda q, a: pagekit.read_select(ws, q, a)) if ws is not None else None  # noqa: E731
     try:
@@ -207,21 +374,74 @@ def _trial(request, draft, name, h, data):
     return JsonResponse({"ok": True, "verdict": verdict, "result": shown if len(shown) <= 6000 else shown[:6000] + "\n… (کوتاه‌شده)", "logs": logs})
 
 
+@require_POST
+def preview_live(request, pk):
+    """پیش‌نمایش یک صفحه روی یک پایگاه داده‌ی واقعی (فقط‌خواندنی، نقش محدود) با تأیید تازه؛ {page, database, create_tables?}.
+    ساخت جدول‌های پلاگین در آن پایگاه فقط با `create_tables` صریح است (همان `kernel.tables`: فقط افزایشی)."""
+    draft = _draft(request, pk)
+    try:
+        data = _body(request)
+    except blueprint.BlueprintError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    if not stepup.ok(request):
+        return JsonResponse({"error": "برای پیش‌نمایش روی پایگاه واقعی تأیید تازه‌ی ورود دومرحله لازم است.", "stepup": stepup.url(request)}, status=403)
+    dbid = str(data.get("database", "")).strip()
+    ws = ws_mod.peek(int(dbid)) if dbid.isdigit() else None
+    if ws is None or not getattr(ws, "is_live", False):
+        return JsonResponse({"error": "پایگاه داده‌ی فعال با این شناسه نیست."}, status=400)
+    spec = _spec(draft)
+    if err := studio_common.save(draft, spec, request.user):
+        return JsonResponse({"error": err}, status=400)
+    key = str(data.get("page", ""))
+    try:
+        page = next(p for p in studio.parse_pages(draft) if p.key == key)
+    except (StopIteration, pagekit.SpecError):
+        return JsonResponse({"error": "صفحه پیدا نشد یا ساخته نمی‌شود."}, status=404)
+    made = 0
+    if data.get("create_tables") and page.tables:
+        try:
+            made = tables.ensure(ws, draft.plugin_id, page.tables)
+        except tables.TableError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+    try:
+        with studio.temp_handlers(draft):
+            ctx = studio.preview_page(draft, key, ws, {})
+    except Exception as exc:  # noqa: BLE001 - خطای مشخصات یا اتصال: پیام کوتاه
+        return JsonResponse({"error": f"پیش‌نمایش ممکن نشد: {str(exc)[:200]}"}, status=400)
+    sp = next((p for p in spec.get("pages") or [] if p.get("key") == key), {})
+    ids = [b["id"] for b in sp.get("blocks") or [] if b.get("kind") in wizard.DISPLAY or (b.get("kind") == "raw" and b.get("part") == "blocks")]
+    items = []
+    for i, b in enumerate(ctx["blocks"]):
+        html = render_to_string("kernel/_page_body.html", {"blocks": [b], "param_errors": []}, request=request)
+        items.append({"id": ids[i] if i < len(ids) else "", "kind": b["kind"], "action": False, "title": b.get("title", ""), "width": b.get("width", "full"), "html": html, "error": b.get("error", "")})
+    ws_mod.log_event("plugin_studio", f"پیش‌نمایش زنده‌ی {draft.plugin_id}/{key} روی پایگاه داده {ws.pk}", user=request.user, database=ws)
+    return JsonResponse({"blocks": items, "database": getattr(ws, "db_name", str(ws.pk)), "created_tables": made})
+
+
+@require_GET
+def files(request, pk):
+    """فایل‌های بسته‌ی ساخته‌شده از نقشه (فقط‌خواندنی): مانیفست، صفحه‌های TOML، کد و آزمون؛ برای بازبین و خروجی بدون امضا."""
+    draft = _draft(request, pk)
+    from django.urls import reverse
+
+    return JsonResponse({"files": [{"name": n, "text": b.decode("utf-8", "replace")} for n, b in sorted(studio.files_of(draft).items())],
+                         "export": reverse("admin:kernel_plugindraft_export", args=[draft.pk])})
+
+
 def designer(request, pk):
     """صفحه‌ی استودیوی دیداری؛ همه‌ی کار با API همین ماژول انجام می‌شود."""
     from django.shortcuts import render
     from django.urls import reverse
 
     draft = _draft(request, pk)
-    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore", "run", "assistant")}
+    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore", "run", "assistant", "access", "media", "releases", "compare", "rollback", "restore_release", "publish", "stats", "preview_live", "files")}
     tpl = [{"key": k, "role": t["role"], "title": t["title"], "hint": t["hint"], "needs": t["needs"], "nums": t.get("nums", [])} for k, t in wizard_code.TEMPLATES.items()]
     codeinfo = {"templates": tpl, "roles": wizard_code.ROLE_LABEL, "cols": {k: [v[0], list(v[1])] for k, v in wizard_code.COLS.items()},
                 "nums": {k: v[0] for k, v in wizard_code.NUMS.items()}, "runner_ready": not _runner_error(), "ai_ready": ai.available()}
     api["preview"] = reverse("admin:kernel_plugindraft_api_preview", args=[draft.pk, "__PAGE__"])
     return render(request, "admin/kernel/designer.html", {
-        "draft": draft, "api": api, "codeinfo": codeinfo, "icons": wizard_admin.ICON_CHOICES, "col_types": wizard_admin.COL_TYPES,
-        "links": {"hub": reverse("admin:kernel_plugindraft_changelist"), "publish": reverse("admin:kernel_plugindraft_wizard", args=[draft.pk, 5]),
-                  "toml": reverse("admin:kernel_plugindraft_studio", args=[draft.pk]), "code": reverse("admin:kernel_plugindraft_wizard", args=[draft.pk, 3])}})
+        "draft": draft, "api": api, "codeinfo": codeinfo, "icons": studio_common.ICON_CHOICES, "col_types": studio_common.COL_TYPES,
+        "links": {"hub": reverse("plugin_hub") + "?tab=create"}})
 
 
 @require_GET
