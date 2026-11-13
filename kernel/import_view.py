@@ -12,7 +12,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
 
-from . import importer, pkg, wizard_admin
+from . import importer, pkg, studio_common
 from .models import PluginDraft, PluginRelease, PluginState
 
 
@@ -48,7 +48,7 @@ def _record(draft, spec, label, user):
 
 @admin.site.admin_view
 def view(request):
-    if not wizard_admin._allowed(request):
+    if not studio_common.allowed(request):
         raise PermissionDenied
     ctx = {**admin.site.each_context(request), "title": "ورود به استودیوی دیداری"}
     try:
@@ -75,7 +75,7 @@ def view(request):
                 d.wizard = spec
                 d.updated_by = request.user
                 d.save()
-            err = wizard_admin._save(d, spec, request.user)
+            err = studio_common.save(d, spec, request.user)
             _record(d, spec, "ورود از " + ("TOML" if kind == "draft" else f"نسخه‌ی {src.version}"), request.user)
             messages.success(request, f"«{imp.name}» به استودیوی دیداری آمد" + (f" (توجه: {err})" if err else "") + ". نسخه‌ی تازه از همین‌جا منتشر می‌شود.")
             return redirect(reverse("admin:kernel_plugindraft_designer", args=[d.pk]))

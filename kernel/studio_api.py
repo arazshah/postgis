@@ -1,7 +1,7 @@
 """API JSON استودیوی دیداری پلاگین (docs/adr/0010): وضعیت نقشه، عملیات، پیش‌نمایش نمونه، تاریخچه و بازگشت.
 
 مرورگر فقط عملیات ساخت‌یافته می‌فرستد (kernel.blueprint)؛ هسته نقشه را می‌سنجد، ذخیره و صفحه‌های TOML را از رویش می‌سازد
-(همان `wizard_admin._save` و `wizard.compile_pages`). پیش‌نمایش نمونه (kernel.sampledata) هیچ پایگاه داده‌ای را نمی‌خواند.
+(همان `studio_common.save` و `wizard.compile_pages`). پیش‌نمایش نمونه (kernel.sampledata) هیچ پایگاه داده‌ای را نمی‌خواند.
 دسترسی همان مجوز ویزارد است (`kernel.upload_pluginrelease`).
 """
 from __future__ import annotations
@@ -30,8 +30,9 @@ from . import (
     stepup,
     studio,
     studio_ai,
+    studio_common,
+    tables,
     wizard,
-    wizard_admin,
     wizard_code,
 )
 from . import workspace as ws_mod
@@ -41,7 +42,7 @@ MAX_BODY = 200_000
 
 
 def _draft(request, pk) -> PluginDraft:
-    if not wizard_admin._allowed(request):
+    if not studio_common.allowed(request):
         raise PermissionDenied
     return get_object_or_404(PluginDraft, pk=pk)
 
@@ -70,7 +71,7 @@ def _record(draft: PluginDraft, spec: dict, label: str, user) -> None:
 
 
 def _commit(request, draft: PluginDraft, spec: dict, label: str) -> dict:
-    err = wizard_admin._save(draft, spec, request.user)
+    err = studio_common.save(draft, spec, request.user)
     _record(draft, spec, label, request.user)
     return _state(draft, spec, err)
 
@@ -286,7 +287,7 @@ def publish_view(request, pk):
         return JsonResponse({"error": "برای انتشار تأیید تازه‌ی ورود دومرحله لازم است.", "stepup": stepup.url(request)}, status=403)
     if not pkg.second_approval_required() and not request.user.has_perm("kernel.activate_pluginrelease"):
         return JsonResponse({"error": "انتشار مستقیم مجوز «تأیید و فعال‌سازی نسخه‌ی پلاگین» می‌خواهد؛ یا «تأیید مدیر دیگر» را روشن کنید."}, status=403)
-    err = wizard_admin._save(draft, spec, request.user)  # صفحه‌ها و کد از روی نقشه‌ی جاری دوباره ساخته شود
+    err = studio_common.save(draft, spec, request.user)  # صفحه‌ها و کد از روی نقشه‌ی جاری دوباره ساخته شود
     if err:
         return JsonResponse({"error": err}, status=400)
     try:
@@ -324,7 +325,7 @@ def run(request, pk):
     name = data["name"]
     if data.get("action") == "tests":
         try:
-            results = wizard_admin._test_results(name, h)
+            results = studio_common.test_results(name, h)
         except (pkgtest.TestSpecError, wizard.WizardError) as exc:
             return JsonResponse({"error": f"آزمون: {exc}"}, status=400)
         except Exception as exc:  # noqa: BLE001 - خطای runner
@@ -348,7 +349,7 @@ def _trial(request, draft, name, h, data):
     ws = ws_mod.peek(int(pkv)) if str(pkv or "").isdigit() else None
     if pkv not in (None, "") and (ws is None or not getattr(ws, "is_live", False)):
         return JsonResponse({"error": "پایگاه داده‌ی فعال با این شناسه نیست."}, status=400)
-    role = wizard_admin.ROLE_RUN.get(h.get("role", "block"), "block")
+    role = studio_common.ROLE_RUN.get(h.get("role", "block"), "block")
     logs: list[str] = []
     sql_fn = (lambda q, a: pagekit.read_select(ws, q, a)) if ws is not None else None  # noqa: E731
     try:
@@ -373,21 +374,74 @@ def _trial(request, draft, name, h, data):
     return JsonResponse({"ok": True, "verdict": verdict, "result": shown if len(shown) <= 6000 else shown[:6000] + "\n… (کوتاه‌شده)", "logs": logs})
 
 
+@require_POST
+def preview_live(request, pk):
+    """پیش‌نمایش یک صفحه روی یک پایگاه داده‌ی واقعی (فقط‌خواندنی، نقش محدود) با تأیید تازه؛ {page, database, create_tables?}.
+    ساخت جدول‌های پلاگین در آن پایگاه فقط با `create_tables` صریح است (همان `kernel.tables`: فقط افزایشی)."""
+    draft = _draft(request, pk)
+    try:
+        data = _body(request)
+    except blueprint.BlueprintError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    if not stepup.ok(request):
+        return JsonResponse({"error": "برای پیش‌نمایش روی پایگاه واقعی تأیید تازه‌ی ورود دومرحله لازم است.", "stepup": stepup.url(request)}, status=403)
+    dbid = str(data.get("database", "")).strip()
+    ws = ws_mod.peek(int(dbid)) if dbid.isdigit() else None
+    if ws is None or not getattr(ws, "is_live", False):
+        return JsonResponse({"error": "پایگاه داده‌ی فعال با این شناسه نیست."}, status=400)
+    spec = _spec(draft)
+    if err := studio_common.save(draft, spec, request.user):
+        return JsonResponse({"error": err}, status=400)
+    key = str(data.get("page", ""))
+    try:
+        page = next(p for p in studio.parse_pages(draft) if p.key == key)
+    except (StopIteration, pagekit.SpecError):
+        return JsonResponse({"error": "صفحه پیدا نشد یا ساخته نمی‌شود."}, status=404)
+    made = 0
+    if data.get("create_tables") and page.tables:
+        try:
+            made = tables.ensure(ws, draft.plugin_id, page.tables)
+        except tables.TableError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+    try:
+        with studio.temp_handlers(draft):
+            ctx = studio.preview_page(draft, key, ws, {})
+    except Exception as exc:  # noqa: BLE001 - خطای مشخصات یا اتصال: پیام کوتاه
+        return JsonResponse({"error": f"پیش‌نمایش ممکن نشد: {str(exc)[:200]}"}, status=400)
+    sp = next((p for p in spec.get("pages") or [] if p.get("key") == key), {})
+    ids = [b["id"] for b in sp.get("blocks") or [] if b.get("kind") in wizard.DISPLAY or (b.get("kind") == "raw" and b.get("part") == "blocks")]
+    items = []
+    for i, b in enumerate(ctx["blocks"]):
+        html = render_to_string("kernel/_page_body.html", {"blocks": [b], "param_errors": []}, request=request)
+        items.append({"id": ids[i] if i < len(ids) else "", "kind": b["kind"], "action": False, "title": b.get("title", ""), "width": b.get("width", "full"), "html": html, "error": b.get("error", "")})
+    ws_mod.log_event("plugin_studio", f"پیش‌نمایش زنده‌ی {draft.plugin_id}/{key} روی پایگاه داده {ws.pk}", user=request.user, database=ws)
+    return JsonResponse({"blocks": items, "database": getattr(ws, "db_name", str(ws.pk)), "created_tables": made})
+
+
+@require_GET
+def files(request, pk):
+    """فایل‌های بسته‌ی ساخته‌شده از نقشه (فقط‌خواندنی): مانیفست، صفحه‌های TOML، کد و آزمون؛ برای بازبین و خروجی بدون امضا."""
+    draft = _draft(request, pk)
+    from django.urls import reverse
+
+    return JsonResponse({"files": [{"name": n, "text": b.decode("utf-8", "replace")} for n, b in sorted(studio.files_of(draft).items())],
+                         "export": reverse("admin:kernel_plugindraft_export", args=[draft.pk])})
+
+
 def designer(request, pk):
     """صفحه‌ی استودیوی دیداری؛ همه‌ی کار با API همین ماژول انجام می‌شود."""
     from django.shortcuts import render
     from django.urls import reverse
 
     draft = _draft(request, pk)
-    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore", "run", "assistant", "access", "media", "releases", "compare", "rollback", "restore_release", "publish", "stats")}
+    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore", "run", "assistant", "access", "media", "releases", "compare", "rollback", "restore_release", "publish", "stats", "preview_live", "files")}
     tpl = [{"key": k, "role": t["role"], "title": t["title"], "hint": t["hint"], "needs": t["needs"], "nums": t.get("nums", [])} for k, t in wizard_code.TEMPLATES.items()]
     codeinfo = {"templates": tpl, "roles": wizard_code.ROLE_LABEL, "cols": {k: [v[0], list(v[1])] for k, v in wizard_code.COLS.items()},
                 "nums": {k: v[0] for k, v in wizard_code.NUMS.items()}, "runner_ready": not _runner_error(), "ai_ready": ai.available()}
     api["preview"] = reverse("admin:kernel_plugindraft_api_preview", args=[draft.pk, "__PAGE__"])
     return render(request, "admin/kernel/designer.html", {
-        "draft": draft, "api": api, "codeinfo": codeinfo, "icons": wizard_admin.ICON_CHOICES, "col_types": wizard_admin.COL_TYPES,
-        "links": {"hub": reverse("admin:kernel_plugindraft_changelist"), "publish": reverse("admin:kernel_plugindraft_wizard", args=[draft.pk, 5]),
-                  "toml": reverse("admin:kernel_plugindraft_studio", args=[draft.pk]), "code": reverse("admin:kernel_plugindraft_wizard", args=[draft.pk, 3])}})
+        "draft": draft, "api": api, "codeinfo": codeinfo, "icons": studio_common.ICON_CHOICES, "col_types": studio_common.COL_TYPES,
+        "links": {"hub": reverse("plugin_hub") + "?tab=create"}})
 
 
 @require_GET

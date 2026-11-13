@@ -1,17 +1,16 @@
 """کد سطح ۲ در ویزارد (ADR-0008 مرحله‌ی ۴): قالب‌های GIS، ساخت امن، آزمون در جعبه، انتشار با کد."""
+import json
 import tomllib
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
-from kernel import entitlements, handlers, pagekit, pkgtest, studio, wizard, wizard_admin, wizard_code
+from kernel import entitlements, handlers, pagekit, pkgtest, studio, studio_common, wizard, wizard_code
 from kernel.models import PluginDraft, PluginRelease
 from kernel.plugins import registry
-from kernel.tests.test_publish import cleanup_loaded
-from kernel.tests.test_wizard_admin import TBL
+from kernel.tests.test_publish import POINTS, cleanup_loaded
 
 TABLE = {"name": "agro_pixels", "columns": [
     {"name": "nir", "type": "double"}, {"name": "red", "type": "double"}, {"name": "lat", "type": "double", "required": True},
@@ -34,7 +33,7 @@ class TemplateTests(SimpleTestCase):
                 wizard_code.check_source(h["source"], key)
                 cases = pkgtest.parse(h["test"], key)
                 self.assertTrue(cases)
-                results = wizard_admin._test_results(key, h)
+                results = studio_common.test_results(key, h)
                 self.assertTrue(all(r["ok"] for r in results), results)
 
     def test_roles_and_alert_defaults(self):
@@ -107,121 +106,119 @@ class CompileWithCodeTests(SimpleTestCase):
 
 
 @override_settings(ADMIN_2FA_REQUIRED=False)
-class CodeStepTests(TestCase):
+class CodeApiTests(TestCase):
+    """handler در استودیوی دیداری: ساخت از قالب، ویرایش، آزمون و اجرای آزمایشی در جعبه، انتشار (ADR-0010 مرحله‌ی ۴ و ۱۱)."""
+
     def setUp(self):
         self.addCleanup(entitlements.invalidate)
         self.addCleanup(cleanup_loaded)
         self.su = get_user_model().objects.create_superuser("codroot", "Str0ng-Admin-Pass")
         self.client.force_login(self.su)
-        self.client.post(reverse("admin:kernel_plugindraft_wizard_new"), {
-            "name": "مانیتورینگ آنلاین", "plugin_id": "monitoring", "summary": "پایش", "description": "", "icon": "pulse"})
+        self.client.post(reverse("admin:kernel_plugindraft_new"), {"name": "مانیتورینگ آنلاین", "plugin_id": "monitoring", "summary": "پایش", "icon": "pulse", "recipe": "blank"})
         self.draft = PluginDraft.objects.get(plugin_id="monitoring")
-        self.step = lambda n: reverse("admin:kernel_plugindraft_wizard", args=[self.draft.pk, n])
-        self.client.post(self.step(2), TBL)
+        self.api("op", {"op": "table.add", "table": POINTS})
+
+    def api(self, name, body=None):
+        url = reverse(f"admin:kernel_plugindraft_api_{name}", args=[self.draft.pk])
+        return self.client.get(url) if body is None else self.client.post(url, json.dumps(body), content_type="application/json")
 
     def d(self):
         return PluginDraft.objects.get(pk=self.draft.pk)
 
     def add(self, template="block_stats", name="stats", **p):
-        return self.client.post(self.step(3), {"op": "addhandler", "template": template, "name": name, "table": "monitoring_points", "num": "speed",
-                                               "lat": "lat", "lon": "lon", **p})
+        return self.api("op", {"op": "code.add", "template": template, "name": name, "params": {"table": "monitoring_points", "num": "speed", "lat": "lat", "lon": "lon", **p}})
+
+    def page(self, *blocks):
+        return self.api("op", {"op": "page.add", "title": "پایش", "icon": "pulse", "blocks": list(blocks) or [{"kind": "text", "text": "x"}]})
 
     def test_add_handler_syncs_code_tests_and_manifest_tier(self):
-        self.add()
+        self.assertEqual(self.add().status_code, 200)
         d = self.d()
         self.assertIn("def handle", d.code["stats"])
         self.assertIn("rows_count", d.tests["stats"])
         self.assertIn("tier = 2", studio.manifest_text(d))
-        self.assertContains(self.client.get(self.step(3)), "stats")
-        self.assertEqual(self.client.get(self.step(3)).status_code, 200)
 
     def test_invalid_name_duplicate_and_bad_params_rejected(self):
-        self.add(name="Bad Name")
-        self.add(template="block_stats", name="x", num="device")  # عددی نیست
+        self.assertEqual(self.add(name="Bad Name").status_code, 400)
+        self.assertEqual(self.add(template="block_stats", name="xx", num="device").status_code, 400)  # عددی نیست
         self.assertEqual(self.d().wizard.get("code", {}), {})
-        self.add()
-        self.add()
+        self.assertEqual(self.add().status_code, 200)
+        self.assertEqual(self.add().status_code, 400)
         self.assertEqual(list(self.d().wizard["code"]), ["stats"])
 
-    def test_save_rejects_unsafe_code_and_bad_tests_and_keeps_old(self):
+    def test_bad_tests_are_rejected_and_unsafe_code_blocks_publish(self):
         self.add()
         good = self.d().wizard["code"]["stats"]
-        self.client.post(self.step(3), {"op": "savehandler:stats", "source": "import os\ndef handle(c, p):\n    return {}\n", "test": good["test"]})
-        self.client.post(self.step(3), {"op": "savehandler:stats", "source": good["source"], "test": "[[cases]]\nname = 'x'\n"})  # expect خالی
+        r = self.api("op", {"op": "code.set", "name": "stats", "cases": [{"name": "x", "expect": {}}]})
+        self.assertEqual(r.status_code, 400)
         self.assertEqual(self.d().wizard["code"]["stats"]["source"], good["source"])
-        new_src = good["source"].replace("آمار", "آمار")  # تغییر بی‌اثر ولی معتبر
-        self.client.post(self.step(3), {"op": "savehandler:stats", "source": new_src + "\n# edited\n", "test": good["test"]})
+        r = self.api("op", {"op": "code.set", "name": "stats", "source": "import os\ndef handle(c, p):\n    return {}\n"}).json()
+        self.assertTrue(any(i["scope"] == "code" and "بررسی ایستا" in i["message"] for i in r["analysis"]["issues"]))
+        self.assertFalse(r["quality"]["publishable"])
+        new_src = good["source"] + "\n# edited\n"
+        self.api("op", {"op": "code.set", "name": "stats", "source": new_src})
         self.assertIn("# edited", self.d().code["stats"])
 
     def test_alert_interval(self):
         self.add(template="alert_threshold", name="lowwater", threshold="50")
         self.assertEqual(self.d().alerts, {"lowwater": 60})
-        h = self.d().wizard["code"]["lowwater"]
-        self.client.post(self.step(3), {"op": "savehandler:lowwater", "source": h["source"], "test": h["test"], "every": "15"})
+        self.assertEqual(self.api("op", {"op": "code.set", "name": "lowwater", "every": 15}).status_code, 200)
         self.assertEqual(self.d().alerts, {"lowwater": 15})
-        self.client.post(self.step(3), {"op": "savehandler:lowwater", "source": h["source"], "test": h["test"], "every": "1"})
-        self.assertEqual(self.d().alerts, {"lowwater": 15})  # ۱ مجاز نیست
+        self.assertEqual(self.api("op", {"op": "code.set", "name": "lowwater", "every": 1}).status_code, 400)  # ۱ مجاز نیست
+        self.assertEqual(self.d().alerts, {"lowwater": 15})
 
     def test_tests_and_trial_run_in_the_sandbox(self):
         self.add()
-        r = self.client.post(self.step(3), {"op": "tests:stats"})
-        self.assertContains(r, "آزمون‌های «stats»")
-        self.assertContains(r, "✓")
+        r = self.api("run", {"action": "tests", "name": "stats"}).json()
+        self.assertTrue(r["ok"] and all(x["ok"] for x in r["results"]), r)
         self.add(template="importer_csv_points", name="csvpts")
-        up = SimpleUploadedFile("a.csv", b"name,lat,lon\nA,35.7,51.4\nB,36,52\n")
-        r = self.client.post(self.step(3), {"op": "trial:csvpts", "params": "{}", "file": up})
-        self.assertContains(r, "ورود معتبر است: 2 ردیف")
-        r = self.client.post(self.step(3), {"op": "trial:csvpts", "params": "[1]"})
-        self.assertEqual(r.status_code, 302)
-        bad = SimpleUploadedFile("b.csv", b"h\nA,x,1\n")
-        r = self.client.post(self.step(3), {"op": "trial:csvpts", "params": "{}", "file": bad})
-        self.assertContains(r, "ناموفق")
+        r = self.api("run", {"action": "trial", "name": "csvpts", "params": {}, "file_text": "name,lat,lon\nA,35.7,51.4\nB,36,52\n"}).json()
+        self.assertTrue(r["ok"] and "ورود معتبر است: 2 ردیف" in r["verdict"], r)
+        self.assertEqual(self.api("run", {"action": "trial", "name": "csvpts", "params": [1]}).status_code, 400)
+        r = self.api("run", {"action": "trial", "name": "csvpts", "params": {}, "file_text": "h\nA,x,1\n"}).json()
+        self.assertFalse(r["ok"])
+        self.assertTrue(r["error"])
 
     def test_runner_off_blocks_tests_trial_and_publish(self):
         self.add()
+        self.page({"kind": "handler", "title": "آمار", "handler": "stats", "display": "table"})
+        self.api("access", {"access": {"mode": "public_free"}})
         with mock.patch("kernel.runner.client.mode", return_value="off"):
-            r = self.client.post(self.step(3), {"op": "tests:stats"})
-            self.assertEqual(r.status_code, 302)
-            self.assertContains(self.client.get(self.step(3)), "خاموش است")
-            self.client.post(self.step(4), {"op": "addpage", "title": "پایش", "icon": "pulse"})
-            self.client.post(self.step(4), {"op": "addblock:p1", "kind": "handler", "title": "آمار", "handler": "stats", "display": "table"})
-            self.client.post(self.step(5), {"mode": "public_free"})
-            self.assertContains(self.client.get(self.step(6)), "اجرای کد در این استقرار خاموش است")
-            self.client.post(self.step(6), {"op": "publish"})
+            r = self.api("run", {"action": "tests", "name": "stats"})
+            self.assertEqual((r.status_code, "خاموش" in r.json()["error"]), (400, True))
+            r = self.api("publish", {})
+            self.assertEqual(r.status_code, 400)
+            self.assertIn("خاموش است", r.json()["error"])
         self.assertFalse(PluginRelease.objects.exists())
 
-    def test_delete_handler_removes_dependent_blocks_and_ingest_handler(self):
+    def test_delete_handler_keeps_dependent_blocks_as_issues(self):
         self.add()
         self.add(template="ingest_csv_lines", name="lines")
-        self.client.post(self.step(4), {"op": "addpage", "title": "پایش", "icon": "pulse"})
-        self.client.post(self.step(4), {"op": "addblock:p1", "kind": "handler", "handler": "stats", "display": "table"})
-        self.client.post(self.step(4), {"op": "addblock:p1", "kind": "text", "text": "x"})
-        self.client.post(self.step(4), {"op": "addblock:p1", "kind": "ingest", "table": "monitoring_points", "fields": ["device", "lat", "lon"], "ingest_handler": "lines"})
+        self.page({"kind": "handler", "handler": "stats", "display": "table"}, {"kind": "text", "text": "x"},
+                  {"kind": "ingest", "table": "monitoring_points", "fields": ["device", "lat", "lon"], "handler": "lines"})
         self.assertEqual(len(self.d().wizard["pages"][0]["blocks"]), 3)
-        self.client.post(self.step(3), {"op": "delhandler:stats"})
-        self.client.post(self.step(3), {"op": "delhandler:lines"})
-        blocks = self.d().wizard["pages"][0]["blocks"]
-        self.assertEqual([b["kind"] for b in blocks], ["text", "ingest"])
-        self.assertNotIn("handler", blocks[1])
+        self.api("op", {"op": "code.del", "name": "stats"})
+        r = self.api("op", {"op": "code.del", "name": "lines"}).json()
+        self.assertEqual(len(r["spec"]["pages"][0]["blocks"]), 3)  # حذف نمی‌شوند
+        self.assertEqual(sum(1 for i in r["analysis"]["issues"] if i["scope"] == "block"), 2)  # ایراد می‌گیرند
         self.assertEqual(self.d().code, {})
 
     def test_page_blocks_need_existing_handlers_of_the_right_role(self):
         self.add()
-        self.client.post(self.step(4), {"op": "addpage", "title": "پایش", "icon": "pulse"})
-        for bad in ({"kind": "handler", "handler": "missing", "display": "table"}, {"kind": "import", "import_handler": "stats"},
-                    {"kind": "export", "export_handler": "stats"}, {"kind": "handler", "handler": "stats", "display": "xxx"}):
-            self.client.post(self.step(4), {"op": "addblock:p1", **bad})
-        self.assertEqual(self.d().wizard["pages"][0]["blocks"], [])
-        r = self.client.get(self.step(4))
-        self.assertContains(r, "stats")  # فهرست handler در فرم بلوک
+        self.page({"kind": "text", "text": "x"})
+        for bad in ({"kind": "handler", "handler": "missing", "display": "table"}, {"kind": "import", "handler": "stats"},
+                    {"kind": "export", "handler": "stats"}, {"kind": "handler", "handler": "stats", "display": "xxx"}):
+            r = self.api("op", {"op": "block.add", "page": "p1", "block": bad}).json()
+            bid = r["spec"]["pages"][0]["blocks"][-1]["id"]
+            self.assertTrue(any(i["block"] == bid for i in r["analysis"]["issues"]), bad)
+            self.api("op", {"op": "block.del", "id": bid})
 
     def test_publish_with_code_end_to_end_and_handler_runs(self):
         self.add(template="block_ndvi_classes", name="ndvi", nir="speed", red="lat")
-        self.client.post(self.step(4), {"op": "addpage", "title": "پایش", "icon": "pulse"})
-        self.client.post(self.step(4), {"op": "addblock:p1", "kind": "handler", "title": "NDVI", "handler": "ndvi", "display": "bars"})
-        self.client.post(self.step(5), {"mode": "public_free"})
-        r = self.client.post(self.step(6), {"op": "publish"})
-        self.assertEqual(r.status_code, 302)
+        self.page({"kind": "handler", "title": "NDVI", "handler": "ndvi", "display": "bars"})
+        self.api("access", {"access": {"mode": "public_free"}})
+        r = self.api("publish", {}).json()
+        self.assertTrue(r["active"], r)
         rel = PluginRelease.objects.get(plugin_id="monitoring")
         self.assertEqual(rel.status, "active")
         self.assertEqual(rel.manifest["tier"], 2)
@@ -233,19 +230,19 @@ class CodeStepTests(TestCase):
                                mock_sql=[{"match": "select", "columns": ["a", "b"], "rows": [[0.5, 0.1]]}], plugin="t")
         self.assertEqual(dict(out["rows"])["پوشش انبوه"], 1)
 
-    def test_preview_of_handler_block_uses_temporary_handlers_and_cleans_up(self):
+    def test_live_preview_of_handler_block_uses_temporary_handlers_and_cleans_up(self):
         self.add()
-        self.client.post(self.step(4), {"op": "addpage", "title": "پایش", "icon": "pulse"})
-        self.client.post(self.step(4), {"op": "addblock:p1", "kind": "handler", "title": "آمار", "handler": "stats", "display": "table"})
+        self.page({"kind": "handler", "title": "آمار", "handler": "stats", "display": "table"})
         seen = {}
 
         def fake_preview(d, key, ws, q):
             seen["src"] = handlers.get(d.plugin_id, "stats")
             return {"page": None, "blocks": [], "values": {}, "layers": {}, "param_errors": [], "has_map": False}
 
-        with mock.patch("kernel.workspace.peek", return_value=mock.Mock(is_live=True, pk=9)), mock.patch("kernel.studio.preview_page", fake_preview), \
+        with mock.patch("kernel.workspace.peek", return_value=mock.Mock(is_live=True, pk=9, db_name="gp_x")), mock.patch("kernel.studio.preview_page", fake_preview), \
                 mock.patch("kernel.workspace.log_event"):
-            self.client.post(self.step(4), {"op": "preview:p1", "preview_db": "9"})
+            r = self.api("preview_live", {"page": "p1", "database": "9"})
+        self.assertEqual(r.status_code, 200, r.content)
         self.assertIn("def handle", seen["src"])
         self.assertIsNone(handlers.get("monitoring", "stats"))  # بعد از پیش‌نمایش پاک شد
         self.assertNotIn("monitoring", registry.plugins)

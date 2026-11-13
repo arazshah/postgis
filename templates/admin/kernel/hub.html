@@ -46,15 +46,14 @@
   {% endif %}
 
   {% elif tab == "create" %}
-  <p>ساخت پلاگین تازه گام‌به‌گام: معرفی، داده (جدول‌ها)، صفحه‌ها با کاشی بلوک و پیش‌نمایش. SQL و جدول را هسته می‌سازد.</p>
-  {% if wizard_url %}<p><a class="button default" href="{{ wizard_url }}">شروع ساخت پلاگین تازه</a></p>{% endif %}
+  <p>پلاگین را در استودیوی دیداری بسازید: از یک دستور آماده (پایش ناوگان، ثبت میدانی، گزارش دوره‌ای، هواشناسی) یا از صفر؛ بوم، پیش‌نمایش زنده، کد با آزمون دیداری، دستیار و انتشار همه در همان‌جاست. SQL و جدول را هسته می‌سازد.</p>
+  {% if new_url %}<p><a class="button default" href="{{ new_url }}">ساخت پلاگین تازه</a></p>{% endif %}
   {% if drafts %}<h2>پیش‌نویس‌ها</h2>
   <ul class="ph-list">{% for d in drafts %}<li><a href="{{ d.url }}">{{ d.name }}</a> <span class="help ltr">{{ d.id }}</span> <span class="help">{% if d.wizard %}استودیوی دیداری{% else %}TOML — ورود به استودیوی دیداری{% endif %}</span></li>{% endfor %}</ul>{% endif %}
   <h2>پلاگین‌های نمونه‌ی رایگان</h2>
   <form method="post" action="{% url 'plugin_sample' %}">{% csrf_token %}
     <p class="help">دو پلاگین آماده را می‌سازد و عمومی-رایگان منتشر می‌کند (در بخش رایگان بازار): <b>هواشناسی آنلاین</b> (Open-Meteo؛ ۲۰ متغیر، ۳۰ مدل، پیش‌بینی و تاریخچه) و <b>شناسنامه باغات</b> (محدوده‌ی باغ روی نقشه، ویرایش و حذف، گزارش PDF). هر دو نمونه‌ی ساخت پلاگین‌اند. راهنمای تست: <span class="ltr">docs/plugins/testing-guide.md</span>.</p>
     <button class="button" type="submit">نصب نمونه‌ها</button></form>
-  {% if studio_url %}<p class="help">ویرایش دستی (TOML و کد) و خروجی بسته: <a href="{{ studio_url }}">استودیوی پلاگین</a>.</p>{% endif %}
 
   {% elif tab == "sales" %}
   <ul class="ph-list">{% for l in links %}<li><a href="{{ l.url }}">{{ l.title }}</a><div class="help">{{ l.hint }}</div></li>{% endfor %}</ul>

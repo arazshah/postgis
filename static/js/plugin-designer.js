@@ -31,6 +31,7 @@
   let S = null;            // وضعیت سرور {spec, analysis, revision, ...}
   let pageKey = "", selId = "", tab = "pages", narrow = false;
   let preview = [];        // [{id, kind, html, error, ...}] صفحه‌ی جاری
+  let live = null;         // پیش‌نمایش زنده‌ی فقط‌خواندنی {page, blocks, database} تا اولین تغییر نقشه
   let hist = { ids: [], i: -1 };
   let chain = Promise.resolve(), pending = 0, dragId = "";
   const maps = [];
@@ -60,6 +61,7 @@
       try {
         const st = await call(API.op, body);
         S = st;
+        live = null;
         if (push) { hist.ids = hist.ids.slice(0, hist.i + 1).concat(st.revision); hist.i = hist.ids.length - 1; }
         return st;
       } catch (e) {
@@ -130,12 +132,29 @@
       if (f) { f.classList.toggle("narrow", narrow); setTimeout(() => maps.forEach((m) => m.invalidateSize()), 200); }
     }));
     root.querySelector("#pd-more").addEventListener("click", (e) => StudioUI.menu(e.currentTarget, [
-      { icon: "code", label: "ویرایش TOML (پیشرفته)", act: "toml" }, { icon: "bolt", label: "مرحله‌ی کد (ویزارد)", act: "code" }], (a) => { location.href = LINKS[a]; }));
+      { icon: "code", label: "نمای فایل‌ها (TOML و کد)", act: "files" }, { icon: "download", label: "خروجی بدون امضا (zip)", act: "export" }], async (a) => {
+      try {
+        const r = await call(API.files);
+        if (a === "export") { location.href = r.export; return; }
+        showFiles(r.files);
+      } catch (err) { toast(err.message, "danger"); }
+    }));
     document.addEventListener("keydown", (e) => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
       e.preventDefault();
       (e.shiftKey ? redo : undo)();
     });
+  }
+
+  // نمای فقط‌خواندنیِ فایل‌های بسته (مانیفست، صفحه‌های TOML، کد، آزمون) که هسته از نقشه ساخته است
+  function showFiles(files) {
+    const body = document.createElement("div");
+    body.className = "pd-files";
+    body.innerHTML = `<div class="pd-chips" role="tablist" style="margin-bottom:12px">${files.map((f, i) => `<button type="button" class="pd-chip mono" data-fi="${i}" aria-pressed="${i === 0}">${esc(f.name)}</button>`).join("")}</div><pre class="pd-pre-block" dir="ltr" id="pd-fview" style="max-height:60vh"></pre>`;
+    const show = (i) => { body.querySelector("#pd-fview").textContent = files[i].text; body.querySelectorAll("[data-fi]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.fi) === i))); };
+    StudioUI.modal({ title: "فایل‌های بسته (فقط‌خواندنی)", icon: "code", size: "lg", body });
+    body.addEventListener("click", (e) => { const b = e.target.closest("[data-fi]"); if (b) show(Number(b.dataset.fi)); });
+    show(0);
   }
 
   function syncBar() {
@@ -220,17 +239,33 @@
       sc.querySelector("#pd-first").addEventListener("click", addPage);
       return;
     }
-    try { preview = (await call(API.preview.replace("__PAGE__", encodeURIComponent(pg.key)))).blocks; } catch (_) { preview = []; }
+    if (live && live.page === pg.key) preview = live.blocks;
+    else { live = null; try { preview = (await call(API.preview.replace("__PAGE__", encodeURIComponent(pg.key)))).blocks; } catch (_) { preview = []; } }
     const byId = Object.fromEntries(preview.map((p) => [p.id, p]));
     sc.innerHTML = `<div class="pd-frame${narrow ? " narrow" : ""}">
-      <div class="pd-ph"><h1>${esc(pg.title)}</h1>${pg.subtitle ? `<p>${esc(pg.subtitle)}</p>` : ""}</div>
+      <div class="pd-ph"><div class="pd-row"><h1>${esc(pg.title)}</h1><span class="pd-spacer"></span>${live ? `<button class="btn ghost sm" type="button" id="pd-unlive">${ic("back")}<span>برگشت به داده‌ی نمونه</span></button>` : `<button class="btn ghost sm" type="button" id="pd-golive">${ic("db")}<span>پیش‌نمایش روی پایگاه واقعی</span></button>`}</div>${pg.subtitle ? `<p>${esc(pg.subtitle)}</p>` : ""}
+        ${live ? `<div class="pd-issue" style="margin-top:8px;border-color:var(--teal);background:var(--teal-soft)">${ic("eye")}<span>نمای زنده روی پایگاه «${esc(live.database)}» (فقط‌خواندنی). با اولین تغییر به داده‌ی نمونه برمی‌گردد.</span></div>` : ""}</div>
       <div class="pd-canvas" id="pd-canvas"></div>
       <p class="pd-hint" style="margin-top:12px">نمای تقریبی با داده‌ی نمونه است؛ اجرای واقعی روی پایگاه مشتری انجام می‌شود.</p></div>`;
     const cv = sc.querySelector("#pd-canvas");
+    const gl = sc.querySelector("#pd-golive"), ul = sc.querySelector("#pd-unlive");
+    if (gl) gl.addEventListener("click", goLive);
+    if (ul) ul.addEventListener("click", () => { live = null; drawCanvas(); });
     if (!blocks().length) cv.innerHTML = `<div class="pd-empty">${ic("plus")}<b>صفحه خالی است</b><span>یک جزء را از ستون کناری بکشید و اینجا رها کنید، یا روی آن بزنید.</span></div>`;
     blocks().forEach((b) => cv.append(blockEl(b, byId[b.id])));
     initMaps(cv);
     wireCanvas(cv);
+  }
+
+  async function goLive() {
+    const pg = curPage();
+    const dbid = await Ui.prompt({ title: "پیش‌نمایش روی پایگاه واقعی", label: "شناسه‌ی عددی پایگاه داده‌ی آزمایشی", placeholder: "مثلاً ۱۲", message: "فقط‌خواندنی با نقش محدود؛ نیازمند تأیید تازه‌ی ورود دومرحله.", validate: (v) => (/^\d+$/.test(v.trim()) ? "" : "شناسه عدد است.") });
+    if (!dbid) return;
+    const create = (pg && (spec().tables || []).length) ? await Ui.confirm({ title: "ساخت جدول‌ها؟", message: "جدول‌های این صفحه در آن پایگاه ساخته شوند تا داده‌ی واقعی دیده شود؟ (فقط افزایشی؛ حذف نمی‌شود.)", confirmText: "بله، بساز", cancelText: "نه، فقط بخوان", kind: "info" }) : false;
+    const r = await fetch(API.preview_live, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF }, body: JSON.stringify({ page: pg.key, database: dbid.trim(), create_tables: !!create }) }).then((x) => x.json().then((j) => ({ ok: x.ok, j }))).catch(() => ({ ok: false, j: { error: "ارتباط برقرار نشد." } }));
+    if (!r.ok) { if (r.j.stepup) { toast("تأیید تازه‌ی ورود دومرحله لازم است.", "danger"); location.href = r.j.stepup; return; } return toast(r.j.error || "پیش‌نمایش ممکن نشد.", "danger"); }
+    live = { page: pg.key, blocks: r.j.blocks, database: r.j.database };
+    drawCanvas();
   }
 
   function blockEl(b, pv) {
@@ -241,7 +276,7 @@
     el.dataset.id = b.id;
     el.draggable = true;
     let body = "";
-    if (pv && pv.action) body = `<div class="pd-act">${ic(ACT_ICON[b.kind] || "edit")}<b>${esc(b.title || KIND_LABEL[b.kind])}</b><span class="pd-hint">${KIND_LABEL[b.kind]}</span></div>`;
+    if ((pv && pv.action) || (!pv && ["form", "ingest", "records", "source", "report", "import", "export", "raw"].includes(b.kind))) body = `<div class="pd-act">${ic(ACT_ICON[b.kind] || "edit")}<b>${esc(b.title || KIND_LABEL[b.kind])}</b><span class="pd-hint">${KIND_LABEL[b.kind]}</span></div>`;
     else if (pv) body = pv.html;
     else body = `<div class="pd-act">${ic("warn")}<span>پیش‌نمایش در دسترس نیست.</span></div>`;
     if (["import", "export"].includes(b.kind)) body = `<div class="pd-act">${ic(b.kind === "import" ? "upload" : "download")}<b>${esc(b.title || KIND_LABEL[b.kind])}</b><span class="pd-hint">${KIND_LABEL[b.kind]}</span></div>`;

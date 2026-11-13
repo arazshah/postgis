@@ -368,21 +368,12 @@ class PluginUsageAdmin(admin.ModelAdmin):
 
 
 # ---------------------------------------------------------------------- استودیوی ساخت پلاگین
-class DraftMetaForm(forms.ModelForm):
-    class Meta:
-        model = PluginDraft
-        fields = ("plugin_id", "name", "version", "kind", "requires", "readme")
-        widgets = {"kind": forms.Select(choices=[("custom", "اختصاصی"), ("feature", "قابلیت")]),
-                   "readme": forms.Textarea(attrs={"rows": 3})}
-
-
 @admin.register(PluginDraft)
 class PluginDraftAdmin(admin.ModelAdmin):
     """استودیو: ویرایش پیش‌نویس، بررسی زنده، پیش‌نمایش روی یک پایگاه داده و خروجی بدون امضا برای plugin_pack."""
 
     list_display = ("plugin_id", "name", "version", "page_count", "updated_by", "updated_at")
     search_fields = ("plugin_id", "name")
-    change_form_template = "admin/kernel/plugindraft/studio_redirect.html"
 
     def _allowed(self, request):
         return request.user.has_perm("kernel.upload_pluginrelease")
@@ -403,7 +394,7 @@ class PluginDraftAdmin(admin.ModelAdmin):
         from django.urls import path
 
         wrap = self.admin_site.admin_view
-        from . import import_view, studio_api, wizard_admin
+        from . import import_view, new_view, studio_api
 
         return [path("import/", import_view.view, name="kernel_plugindraft_import"),
                 path("<int:pk>/designer/", wrap(studio_api.designer), name="kernel_plugindraft_designer"),
@@ -415,6 +406,8 @@ class PluginDraftAdmin(admin.ModelAdmin):
                 path("<int:pk>/designer/api/access/", wrap(studio_api.access), name="kernel_plugindraft_api_access"),
                 path("<int:pk>/designer/api/media/", wrap(studio_api.media), name="kernel_plugindraft_api_media"),
                 path("<int:pk>/designer/api/stats/", wrap(studio_api.stats), name="kernel_plugindraft_api_stats"),
+                path("<int:pk>/designer/api/preview-live/", wrap(studio_api.preview_live), name="kernel_plugindraft_api_preview_live"),
+                path("<int:pk>/designer/api/files/", wrap(studio_api.files), name="kernel_plugindraft_api_files"),
                 path("<int:pk>/designer/api/releases/", wrap(studio_api.releases), name="kernel_plugindraft_api_releases"),
                 path("<int:pk>/designer/api/compare/", wrap(studio_api.compare), name="kernel_plugindraft_api_compare"),
                 path("<int:pk>/designer/api/rollback/", wrap(studio_api.rollback), name="kernel_plugindraft_api_rollback"),
@@ -422,10 +415,11 @@ class PluginDraftAdmin(admin.ModelAdmin):
                 path("<int:pk>/designer/api/publish/", wrap(studio_api.publish_view), name="kernel_plugindraft_api_publish"),
                 path("<int:pk>/designer/api/run/", wrap(studio_api.run), name="kernel_plugindraft_api_run"),
                 path("<int:pk>/designer/api/restore/", wrap(studio_api.restore), name="kernel_plugindraft_api_restore"),
-                path("wizard/", wrap(wizard_admin.view), name="kernel_plugindraft_wizard_new"),
-                path("<int:pk>/wizard/<int:step>/", wrap(wizard_admin.view), name="kernel_plugindraft_wizard"),
-                path("studio/new/", wrap(self.studio_view), name="kernel_plugindraft_new"),
-                path("<int:pk>/studio/", wrap(self.studio_view), name="kernel_plugindraft_studio"),
+                path("new/", new_view.view, name="kernel_plugindraft_new"),
+                path("wizard/", wrap(self.to_new), name="kernel_plugindraft_wizard_new"),  # نشانی‌های ویزارد و استودیوی قدیمی به استودیوی دیداری می‌رسند
+                path("studio/new/", wrap(self.to_new)),
+                path("<int:pk>/wizard/<int:step>/", wrap(self.to_designer), name="kernel_plugindraft_wizard"),
+                path("<int:pk>/studio/", wrap(self.to_designer), name="kernel_plugindraft_studio"),
                 path("<int:pk>/export/", wrap(self.export_view), name="kernel_plugindraft_export"),
                 *super().get_urls()]
 
@@ -434,10 +428,22 @@ class PluginDraftAdmin(admin.ModelAdmin):
 
         return redirect(reverse("admin:kernel_plugindraft_new"))
 
-    def change_view(self, request, object_id, form_url="", extra_context=None):
+    def to_new(self, request):
         from django.urls import reverse
 
-        return redirect(reverse("admin:kernel_plugindraft_studio", args=[object_id]))
+        return redirect(reverse("admin:kernel_plugindraft_new"))
+
+    def to_designer(self, request, pk, step=None):
+        """پیش‌نویس استودیوی دیداری ← خودش؛ پیش‌نویس TOML قدیمی ← صفحه‌ی ورود (تبدیل بی‌اتلاف)."""
+        from django.urls import reverse
+
+        d = PluginDraft.objects.filter(pk=pk).first()
+        if d is not None and not d.wizard:
+            return redirect(reverse("admin:kernel_plugindraft_import") + f"?draft={d.pk}")
+        return redirect(reverse("admin:kernel_plugindraft_designer", args=[pk]))
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        return self.to_designer(request, object_id)
 
     def export_view(self, request, pk):
         from django.http import HttpResponse
@@ -448,141 +454,11 @@ class PluginDraftAdmin(admin.ModelAdmin):
         d = get_object_or_404(PluginDraft, pk=pk)
         steps = studio.check(d)
         if not studio.ok(steps):
-            messages.error(request, "پیش‌نویس هنوز بررسی را نمی‌گذراند؛ خروجی ساخته نمی‌شود.")
-            return redirect("admin:kernel_plugindraft_studio", pk=d.pk)
+            messages.error(request, "پیش‌نویس هنوز بررسی را نمی‌گذراند؛ خروجی ساخته نمی‌شود (در استودیو «کیفیت» را ببینید).")
+            return self.to_designer(request, d.pk)
         r = HttpResponse(studio.export_zip(d), content_type="application/zip")
         r["Content-Disposition"] = f'attachment; filename="{d.plugin_id}-{d.version}-draft.zip"'
         return r
-
-    def studio_view(self, request, pk=None):
-
-        from django.shortcuts import get_object_or_404
-        from django.template.response import TemplateResponse
-        from django.urls import reverse
-
-        if not self._allowed(request):
-            raise PermissionDenied
-        draft = get_object_or_404(PluginDraft, pk=pk) if pk else None
-        meta = DraftMetaForm(request.POST if request.method == "POST" else None, instance=draft)
-        steps, preview_html, texts = [], "", dict(draft.pages) if draft else {}
-        codes, alert_mins, trial_out, trial_name = (dict(draft.code) if draft else {}), (dict(draft.alerts) if draft else {}), None, ""
-        tests, tests_out = (dict(draft.tests) if draft else {}), None
-        if request.method == "POST":
-            op = request.POST.get("op", "save")
-            texts = {k[5:]: v for k, v in request.POST.items() if k.startswith("page_") and pagekit_key(k[5:])}
-            codes = {k[5:]: v for k, v in request.POST.items() if k.startswith("code_") and pagekit_key(k[5:])}
-            tests = {k[5:]: v for k, v in request.POST.items() if k.startswith("test_") and pagekit_key(k[5:])}
-            alert_mins = {}
-            for k, v in request.POST.items():
-                if k.startswith("alert_") and pagekit_key(k[6:]) and v.strip().isdigit():
-                    alert_mins[k[6:]] = int(v.strip())
-            if op == "addpage":
-                key = request.POST.get("newkey", "").strip()
-                tpl = studio.TEMPLATES.get(request.POST.get("template", "monitor"), studio.TEMPLATES["monitor"])[0]
-                if not pagekit_key(key) or key in texts:
-                    messages.error(request, "کلید صفحه نامعتبر یا تکراری است (حروف کوچک لاتین، رقم و _).")
-                else:
-                    texts[key] = tpl.format(key=key)
-            if op == "addhandler":
-                name = request.POST.get("newhandler", "").strip()
-                tpl = studio.HANDLER_TEMPLATES.get(request.POST.get("htemplate", "block"), studio.HANDLER_TEMPLATES["block"])[0]
-                if not pagekit_key(name) or name in codes:
-                    messages.error(request, "نام handler نامعتبر یا تکراری است (حروف کوچک لاتین، رقم و _؛ دست‌کم ۲ نویسه).")
-                else:
-                    codes[name] = tpl
-                    tests[name] = studio.HANDLER_TESTS.get(request.POST.get("htemplate", "block"), studio.HANDLER_TESTS["block"])
-            if op.startswith("delpage:"):
-                texts.pop(op.split(":", 1)[1], None)
-            if op.startswith("delhandler:"):
-                gone = op.split(":", 1)[1]
-                codes.pop(gone, None)
-                alert_mins.pop(gone, None)
-                tests.pop(gone, None)
-            if meta.is_valid():
-                d = meta.save(commit=False)
-                d.pages, d.code, d.alerts, d.updated_by = texts, codes, {k: v for k, v in alert_mins.items() if k in codes}, request.user
-                d.tests = {k: v for k, v in tests.items() if k in codes}
-                if draft is None and PluginDraft.objects.filter(plugin_id=d.plugin_id).exists():
-                    messages.error(request, "پیش‌نویسی با این شناسه هست.")
-                else:
-                    d.save()
-                    draft = d
-                    if op in ("save", "addpage", "addhandler") or op.startswith(("delpage:", "delhandler:")):
-                        messages.success(request, "پیش‌نویس ذخیره شد.")
-                        return redirect(reverse("admin:kernel_plugindraft_studio", args=[d.pk]))
-                    steps = studio.check(d)
-                    if op == "preview":
-                        if not stepup.ok(request):
-                            return redirect(stepup.url(request))
-                        preview_html = self._preview(request, d)
-                    if op == "runtests":
-                        if not stepup.ok(request):
-                            return redirect(stepup.url(request))
-                        tests_out = studio.run_tests(d)
-                    if op.startswith("trial:"):
-                        if not stepup.ok(request):
-                            return redirect(stepup.url(request))
-                        trial_name = op.split(":", 1)[1]
-                        trial_out = self._trial(request, d, trial_name)
-        if draft and not steps and request.method == "GET":
-            steps = studio.check(draft)
-        return TemplateResponse(request, "admin/kernel/plugindraft/studio.html", {
-            **self.admin_site.each_context(request), "title": "استودیوی پلاگین", "draft": draft, "meta": meta,
-            "texts": sorted(texts.items()), "steps": steps, "valid": studio.ok(steps), "preview_html": preview_html,
-            "templates": [(k, v[1]) for k, v in studio.TEMPLATES.items()], "opts": self.model._meta,
-            "codes": sorted(codes.items()), "alert_mins": alert_mins, "handler_templates": [(k, v[1]) for k, v in studio.HANDLER_TEMPLATES.items()],
-            "roles": {k: v[0] for k, v in (studio.roles(draft).items() if draft else [])}, "trial": trial_out, "trial_name": trial_name, "tests": dict(sorted(tests.items())), "tests_out": tests_out,
-            "installed": bool(draft and studio.installed(draft.plugin_id))})
-
-    def _trial(self, request, d, name):
-        """اجرای آزمایشی یک handler با ورودی نمونه؛ پایگاه داده‌ی اختیاری فقط‌خواندنی و با ثبت فعالیت."""
-        import json as _json
-
-        from . import workspace as ws_mod
-        from .runner import sandbox
-
-        try:
-            params = _json.loads(request.POST.get("trial_params", "").strip() or "{}")
-            if not isinstance(params, dict):
-                raise ValueError
-        except ValueError:
-            return {"ok": False, "error": "ورودی نمونه باید یک شیء JSON باشد.", "result": "", "verdict": [], "logs": []}
-        up = request.FILES.get("trial_file")
-        if up is not None and up.size > sandbox.MAX_FILE:
-            return {"ok": False, "error": "فایل نمونه بیش از ۳ مگابایت است.", "result": "", "verdict": [], "logs": []}
-        ws = None
-        db = request.POST.get("trial_db", "").strip()
-        if db:
-            ws = ws_mod.peek(int(db)) if db.isdigit() else None
-            if ws is None or not getattr(ws, "is_live", False):
-                return {"ok": False, "error": "پایگاه داده‌ی فعال با این شناسه نیست.", "result": "", "verdict": [], "logs": []}
-        out = studio.trial(d, name, params, up.read(sandbox.MAX_FILE + 1) if up is not None else None, ws)
-        if ws is not None:
-            ws_mod.log_event("plugin_studio", f"اجرای آزمایشی {d.plugin_id}/{name} روی پایگاه داده {ws.pk}", user=request.user, database=ws)
-        return out
-
-    def _preview(self, request, d):
-        from django.template.loader import render_to_string
-
-        from . import workspace as ws_mod
-
-        pk = request.POST.get("preview_db", "")
-        key = request.POST.get("preview_page", "")
-        ws = ws_mod.peek(int(pk)) if pk.isdigit() else None
-        if ws is None or not getattr(ws, "is_live", False):
-            messages.error(request, "پایگاه داده‌ی فعال با این شناسه نیست.")
-            return ""
-        try:
-            ctx = studio.preview_page(d, key, ws, {})
-        except Exception as exc:  # noqa: BLE001 - خطای مشخصات یا اتصال: پیام کوتاه
-            messages.error(request, f"پیش‌نمایش ممکن نشد: {str(exc)[:200]}")
-            return ""
-        ws_mod.log_event("plugin_studio", f"پیش‌نمایش {d.plugin_id}/{key} روی پایگاه داده {ws.pk}", user=request.user, database=ws)
-        return render_to_string("kernel/_page_body.html", {**ctx, "SITE": {}}, request=request)
-
-
-def pagekit_key(k: str) -> bool:
-    return bool(pagekit.KEY_RE.fullmatch(k))
 
 
 class SeenFilter(admin.SimpleListFilter):

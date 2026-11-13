@@ -1,0 +1,43 @@
+{% extends "admin/base_site.html" %}
+{% block extrastyle %}<style>
+.pn{max-width:900px}
+.pn-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s4,16px);margin-bottom:var(--s4,16px)}
+.pn-row{display:flex;flex-wrap:wrap;gap:12px}
+.pn-f{display:flex;flex-direction:column;gap:4px;flex:1;min-width:220px}
+.pn-f label,.pn-lbl{font-size:12.5px;color:var(--ink-3)}
+.pn-f input{min-height:var(--ctl-h);border:1px solid var(--line);border-radius:var(--r-ctl);padding:0 12px;background:var(--card);color:var(--ink);font:inherit;box-sizing:border-box;width:100%}
+.pn-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.pn-tiles label{position:relative;border:1px solid var(--line);border-radius:var(--r-card);padding:12px;background:var(--paper);cursor:pointer;display:flex;flex-direction:column;gap:6px}
+.pn-tiles input{position:absolute;opacity:0;inset:0}
+.pn-tiles label:has(input:checked){border-color:var(--teal);box-shadow:0 0 0 2px var(--teal) inset;background:var(--teal-soft)}
+.pn-tiles label:has(input:focus-visible){outline:3px solid var(--ochre);outline-offset:2px}
+.pn-tiles b{font-size:14.5px}.pn-tiles small{color:var(--ink-3);line-height:1.7}
+.pn-parts{display:flex;flex-wrap:wrap;gap:4px}.pn-parts span{font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:0 8px;background:var(--card)}
+.pn-chips{display:flex;flex-wrap:wrap;gap:8px}
+.pn-chips label{position:relative;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;background:var(--paper)}
+.pn-chips input{position:absolute;opacity:0;inset:0}
+.pn-chips label:has(input:checked){border-color:var(--teal);background:var(--teal-soft);font-weight:700;color:var(--teal-dark)}
+</style>{% endblock %}
+{% block content %}
+<div id="content-main" class="ap-flat pn">
+  <p class="help">یک دستور آماده انتخاب کنید یا از صفر شروع کنید. همه‌چیز را بعداً در استودیوی دیداری عوض می‌کنید؛ نیازی به نوشتن کد نیست.</p>
+  <form method="post">{% csrf_token %}
+    <section class="pn-card"><h2 style="margin-top:0">۱. چه چیزی می‌سازید؟</h2>
+      <div class="pn-tiles" role="radiogroup" aria-label="دستور آماده">{% for r in recipes %}
+        <label><input type="radio" name="recipe" value="{{ r.key }}"{% if values.recipe == r.key %} checked{% endif %}><b>{{ r.title }}</b><small>{{ r.hint }}</small>
+          {% if r.parts %}<span class="pn-parts">{% for p in r.parts %}<span>{{ p }}</span>{% endfor %}</span>{% endif %}</label>{% endfor %}
+      </div></section>
+    <section class="pn-card"><h2 style="margin-top:0">۲. معرفی</h2>
+      <div class="pn-row">
+        <div class="pn-f"><label for="pn-name">نام پلاگین (مشتری می‌بیند)</label><input id="pn-name" name="name" required maxlength="120" value="{{ values.name }}" placeholder="مانیتورینگ آنلاین"></div>
+        <div class="pn-f"><label for="pn-id">شناسه‌ی لاتین (بعداً عوض نمی‌شود؛ پیشوند جدول‌ها)</label><input id="pn-id" name="plugin_id" dir="ltr" required pattern="[a-z][a-z0-9_]{1,40}" value="{{ values.plugin_id }}" placeholder="fleet"></div>
+      </div>
+      <div class="pn-f" style="margin-top:10px"><label for="pn-sum">توضیح کوتاه (کارت بازار؛ خالی = از دستور آماده)</label><input id="pn-sum" name="summary" maxlength="240" value="{{ values.summary }}"></div>
+      <div style="margin-top:10px"><span class="pn-lbl">آیکون</span>
+        <div class="pn-chips">{% for i in icons %}<label><input type="radio" name="icon" value="{{ i }}"{% if values.icon == i %} checked{% endif %}><span>{{ i }}</span></label>{% endfor %}</div></div>
+    </section>
+    <p><button class="default" type="submit" style="padding:10px 24px">ساخت و باز کردن در استودیو ←</button>
+      <a class="button" href="{% url 'plugin_hub' %}?tab=create">انصراف</a></p>
+  </form>
+</div>
+{% endblock %}
