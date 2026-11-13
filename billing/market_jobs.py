@@ -1,4 +1,4 @@
-"""کار دوره‌ای بازار پلاگین: هشدار نزدیک انقضا و اعلام انقضای مجوز خرید/آزمایشی (هر مرحله یک‌بار؛ تمدید از نو)."""
+"""کار دوره‌ای بازارچه پلاگین: هشدار نزدیک انقضا و اعلام انقضای مجوز خرید/آزمایشی (هر مرحله یک‌بار؛ تمدید از نو)."""
 import datetime
 import logging
 
@@ -31,7 +31,7 @@ def _notify(ent, subject: str, body: str) -> bool:
     if user is None:
         return False
     try:
-        workspace.notify_user(user, subject, f"{body}\n{settings.CANONICAL_URL.rstrip('/')}/billing/market/")
+        workspace.notify_user(user, subject, f"{body}\n{settings.CANONICAL_URL.rstrip('/')}/plugins/")
         return True
     except Exception:  # noqa: BLE001  خطای پیامک/ایمیل نباید کار دوره‌ای را بشکند
         log.exception("expiry notice failed for entitlement %s", ent.pk)

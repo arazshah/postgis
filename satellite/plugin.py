@@ -1,6 +1,8 @@
 """مانیفست پلاگین «تصویر ماهواره‌ای» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
 from kernel import jobs, nav, plugins
 from kernel import settings as site_settings
+from kernel.showcase import Showcase
+from kernel.showcase import add as _showcase
 
 plugin = plugins.register("satellite", "تصویر ماهواره‌ای", kind="feature", requires=("databases", "enterprise", "jobs"))
 
@@ -21,3 +23,39 @@ site_settings.display("satgate_status", "وضعیت دروازه", "satellite.se
 site_settings.display("satgate_tools", "ابزار دروازه", "satellite.settings_admin.satgate_tools", plugin=plugin.id)
 site_settings.tool("satgatetest", "satgate-test/", "satellite.settings_admin.satgate_test_view", plugin=plugin.id)
 site_settings.on_save("satellite.settings_admin.after_save", plugin=plugin.id)
+
+# ویترین بازارچه پلاگین (docs/adr/0011)
+_showcase(plugin.id, Showcase(
+    tagline='تصویر ماهواره\u200cای رایگان و پایش سبزی (NDVI) برای محدوده\u200cی شما',
+    category='agri',
+    video='satellite',
+    featured=7,
+    rail='ریل پایگاه ← داده ← تصویر ماهواره\u200cای',
+    features=(
+        'Sentinel-2 و Landsat برای هر محدوده',
+        'میانگین NDVI هر قطعه در طول زمان',
+        'پایش خودکار و اعلان افت سبزی',
+        'تحلیل آماری روی چندضلعی\u200cها',
+        'باز کردن نتیجه در QGIS',
+    ),
+    details='تصویر ماهواره\u200cای بدون جست\u200cوجوی دستی در پایگاه\u200cهای بین\u200cالمللی: محدوده را مشخص می\u200cکنید، تصویر دریافت و در پایگاه شما نگهداری می\u200cشود. برای مزرعه یا قطعه\u200cهای کشاورزی، میانگین NDVI در گذر زمان نشان\u200cدهنده\u200cی سلامت پوشش گیاهی است.\n\nپایش خودکار اگر سبزی افت کند خبرتان می\u200cکند تا پیش از رسیدن به مرحله\u200cی بحران واکنش نشان دهید.',
+    audiences=(
+        'agri',
+        'student',
+        'org',
+        'city',
+    ),
+    steps=(
+        ('محدوده را بدهید', 'چندضلعی را روی نقشه بکشید یا لایه را انتخاب کنید.'),
+        ('تصویر بگیرید', 'بازه\u200cی زمانی و ماهواره را مشخص کنید.'),
+        ('پایش را روشن کنید', 'اعلان افت سبزی.'),
+    ),
+    guides=(
+        ('satellite', 'تصویر ماهواره\u200cای و پایش'),
+    ),
+    kb=(
+        ('satellite-imagery', 'تصویر ماهواره\u200cای'),
+        ('satellite-analysis', 'تحلیل ماهواره\u200cای'),
+        ('satellite-quota', 'سهمیه\u200cی ماهواره'),
+    ),
+))

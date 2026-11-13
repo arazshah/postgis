@@ -148,7 +148,7 @@ def install_sample(request):
         for res in samples.install(request.user):
             (messages.success if res["active"] else messages.warning)(request, f"«{res['name']}»: {res['message']}")
         messages.info(request, "حالا با حساب مشتری یک پایگاه PostGIS فعال را باز کنید؛ در ریل کناری پایگاه، زیر «داده»، «هواشناسی آنلاین» و «شناسنامه باغات» پیدا می‌شوند "
-                               "(تا ۳۰ ثانیه ممکن است دیر بیایند). در «بازار پلاگین» هم در بخش رایگان هستند.")
+                               "(تا ۳۰ ثانیه ممکن است دیر بیایند). در «بازارچه پلاگین» هم در بخش رایگان هستند.")
     except publish.PublishError as exc:
         messages.error(request, f"ساخت نمونه‌ها انجام نشد: {exc}")
     return redirect(reverse("plugin_hub") + "?tab=create")

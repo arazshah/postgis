@@ -1,32 +1,37 @@
 {% extends "base.html" %}{% load fa humanize static ws %}
-{% block title %}بازار پلاگین — {{ SITE_NAME }}{% endblock %}
-{% block robots %}noindex, nofollow{% endblock %}
+{% block title %}بازارچه پلاگین — {{ SITE_NAME }}{% endblock %}
+{% block description %}بازارچه پلاگین ژئوپایگاه: ورود فایل، تحلیل مکانی، نقشه چندلایه، برداشت میدانی، تصویر ماهواره‌ای، REST API و کلاس درس؛ قابلیت تازه برای پایگاه داده PostGIS شما، با دوره‌ی آزمایشی.{% endblock %}
+{% block og_title %}بازارچه پلاگین — {{ SITE_NAME }}{% endblock %}
+{% block og_description %}قابلیت‌های آماده برای پایگاه داده مکانی PostGIS: از ورود فایل تا نقشه، ماهواره و برداشت میدانی.{% endblock %}
+{% block canonical %}{{ BASE_URL }}{% url 'plugins' %}{% endblock %}
+{% block jsonld %}<script type="application/ld+json">{"@context":"https://schema.org","@type":"ItemList","name":"بازارچه پلاگین {{ SITE_NAME|escapejs }}","itemListElement":[{% for it in items %}{"@type":"ListItem","position":{{ forloop.counter }},"url":"{{ BASE_URL }}{% url 'plugin_detail' it.id %}","name":"{{ it.name|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}]}</script>{% endblock %}
 {% block head %}<link rel="stylesheet" href="{% static 'css/market.css' %}">{% endblock %}
 {% block content %}
 <div class="wrap page mk" data-lf data-lf-url>
   <header class="mk-hero">
     <div>
-      <p class="mk-eyebrow">{% icon "cube" 16 %}بازار پلاگین</p>
-      <h1>قابلیت تازه برای پایگاه داده‌ی مکانی‌تان</h1>
-      <p class="mk-lead">پایش آنلاین، ثبت میدانی، گزارش، هواشناسی و بیشتر؛ با دوره‌ی آزمایشی. خرید برای مدت مشخص است و پس از پایان، داده‌هایتان حذف نمی‌شود و با تمدید برمی‌گردد.</p>
+      <p class="mk-eyebrow">{% icon "cube" 16 %}بازارچه پلاگین</p>
+      <h1>سامانه‌ی مکانی‌تان را با پلاگین بسازید</h1>
+      <p class="mk-lead">از ورود فایل و تحلیل فارسی تا نقشه‌ی چندلایه، برداشت میدانی و تصویر ماهواره‌ای؛ هر قابلیت یک پلاگین است. فقط آنچه لازم دارید روشن کنید، دوره‌ی آزمایشی بگیرید و هر وقت خواستید کنارش بگذارید؛ داده‌هایتان همیشه می‌ماند.</p>
       <div class="mk-search" role="search">
         <label for="mk-q" class="sr-only">جست‌وجو در پلاگین‌ها</label>
         <span aria-hidden="true">{% icon "search" 20 %}</span>
         <input id="mk-q" type="search" data-lf-q placeholder="جست‌وجو: مثلاً هواشناسی، نقشه، گزارش…" autocomplete="off" enterkeyhint="search">
         <kbd aria-hidden="true">/</kbd>
       </div>
+      {% if not user.is_authenticated %}<p class="mk-hero-cta"><a class="btn" href="{% url 'accounts:login' %}?next={% url 'plugins' %}">{% icon "plus" 18 %}ساخت حساب رایگان</a><span class="small muted">ورود فقط با شماره موبایل</span></p>{% endif %}
     </div>
-    <dl class="mk-stats" aria-label="خلاصه‌ی بازار">
+    <dl class="mk-stats" aria-label="خلاصه‌ی بازارچه">
       <div><dd>{{ items|length|fanum }}</dd><dt>پلاگین</dt></div>
       <div><dd>{{ n_free|fanum }}</dd><dt>رایگان</dt></div>
-      <div><dd>{{ n_trial|fanum }}</dd><dt>دارای آزمایشی</dt></div>
+      {% if n_trial %}<div><dd>{{ n_trial|fanum }}</dd><dt>دارای آزمایشی</dt></div>{% else %}<div><dd>{{ categories|length|fanum }}</dd><dt>دسته</dt></div>{% endif %}
     </dl>
   </header>
 
   {% if n_owned %}
   <section class="mk-owned card" aria-labelledby="mk-own-h">
     <h2 id="mk-own-h">{% icon "check" 18 %}پلاگین‌های فعال شما</h2>
-    <ul>{% for it in items %}{% if it.owned %}<li><a href="{% url 'billing:market_detail' it.id %}"><b>{{ it.name }}</b><span class="small muted">{{ it.status_text }}</span></a></li>{% endif %}{% endfor %}</ul>
+    <ul>{% for it in items %}{% if it.owned %}<li><a href="{% url 'plugin_detail' it.id %}"><b>{{ it.name }}</b><span class="small muted">{{ it.status_text }}</span></a></li>{% endif %}{% endfor %}</ul>
   </section>
   {% endif %}
 
@@ -38,6 +43,9 @@
       <button type="button" class="mk-chip" data-lf-chip="trial" aria-pressed="false">دارای آزمایشی <b>{{ n_trial|fanum }}</b></button>
       {% if n_owned %}<button type="button" class="mk-chip" data-lf-chip="owned" aria-pressed="false">فعال من <b>{{ n_owned|fanum }}</b></button>{% endif %}
     </div>
+    {% if audiences %}<div class="mk-chips" role="group" aria-label="مناسب چه کسی">
+      <span class="mk-chip-l small muted">مناسب:</span>{% for key, label, n in audiences %}<button type="button" class="mk-chip" data-lf-chip="aud-{{ key }}" aria-pressed="false">{{ label }} <b>{{ n|fanum }}</b></button>{% endfor %}
+    </div>{% endif %}
     {% if categories %}<div class="mk-chips" role="group" aria-label="فیلتر دسته">
       {% for key, label, n in categories %}<button type="button" class="mk-chip" data-lf-chip="cat-{{ key }}" aria-pressed="false">{{ label }} <b>{{ n|fanum }}</b></button>{% endfor %}
     </div>{% endif %}
@@ -57,12 +65,12 @@
   </ul>
   <div class="empty" data-lf-none hidden>{% icon "search" 28 %}<h2>پلاگینی پیدا نشد</h2><p class="muted">عبارت دیگری بنویسید یا فیلتر را بردارید.</p><button type="button" class="btn ghost" data-lf-clear>پاک‌کردن فیلتر</button></div>
   {% else %}
-  <div class="empty">{% icon "cube" 28 %}<h2>هنوز پلاگینی در بازار نیست</h2><p class="muted">به‌زودی قابلیت‌های تازه اضافه می‌شود.</p></div>
+  <div class="empty">{% icon "cube" 28 %}<h2>هنوز پلاگینی در بازارچه نیست</h2><p class="muted">به‌زودی قابلیت‌های تازه اضافه می‌شود.</p></div>
   {% endif %}
 
   <section class="mk-custom card">
     <div><h2>پلاگین اختصاصی برای تخصص یا سازمان شما</h2>
-      <p class="muted">پلاگینی که در بازار نیست را برایتان می‌سازیم: گزارش و شناسنامه، منبع داده‌ی آنلاین، ابزار تحلیل مکانی، ثبت میدانی و داشبورد.</p></div>
+      <p class="muted">پلاگینی که در بازارچه نیست را برایتان می‌سازیم: گزارش و شناسنامه، منبع داده‌ی آنلاین، ابزار تحلیل مکانی، ثبت میدانی و داشبورد.</p></div>
     <a class="btn" href="{% url 'core:contact' %}?topic=plugin">{% icon "plus" 18 %}ثبت سفارش پلاگین اختصاصی</a>
   </section>
 </div>

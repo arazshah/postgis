@@ -53,24 +53,22 @@ def start(request):
     return redirect("billing:invoice", number=inv.number)
 
 
-def _market_back(request, default="billing:market"):
+def _market_back(request, default="plugins"):
     """بازگشت پس از خرید/آزمایشی: اگر از صفحه‌ی جزئیات آمده بود به همان صفحه."""
     src = request.POST.get("from", "")
     if src.startswith("detail:"):
-        return redirect("billing:market_detail", plugin_id=src[7:])
+        return redirect("plugin_detail", plugin_id=src[7:])
     return redirect(default)
 
 
-@site_user_required
 def market(request):
-    """بازار پلاگین: کاتالوگ جست‌وجوپذیر با دسته و فیلتر؛ خرید و آزمایشی در صفحه‌ی جزئیات."""
+    """بازارچه پلاگین (عمومی، قابل‌ایندکس): کاتالوگ جست‌وجوپذیر با دسته، مخاطب و فیلتر؛ خرید و آزمایشی در صفحه‌ی جزئیات."""
     data = services.market_catalog(request.user)
     return render(request, "billing/market.html", data)
 
 
-@site_user_required
 def market_detail(request, plugin_id):
-    """جزئیات یک پلاگین: تصویر، ویژگی‌ها، توضیح، تغییرات نسخه‌ها و جعبه‌ی خرید/آزمایشی برای هر پایگاه."""
+    """جزئیات یک پلاگین (عمومی): تصویر، ویژگی‌ها، توضیح، تغییرات نسخه‌ها و جعبه‌ی خرید/آزمایشی برای هر پایگاه."""
     conf = SiteSettings.get()
     data = services.market_detail(request.user, plugin_id)
     if data is None:

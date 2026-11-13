@@ -2,6 +2,8 @@
 from kernel import ai, conf, nav, plugins
 from kernel import dash as admin_dash
 from kernel import settings as site_settings
+from kernel.showcase import Showcase
+from kernel.showcase import add as _showcase
 
 plugin = plugins.register("assistant", "دستیار هوشمند", kind="system", requires=("kb",))
 
@@ -30,3 +32,34 @@ def _install_ai():
 
 
 _install_ai()
+
+# ویترین بازارچه پلاگین (docs/adr/0011)
+_showcase(plugin.id, Showcase(
+    tagline='سؤالتان را بپرسید؛ پاسخ از راهنماهای خود سایت با ذکر منبع',
+    category='platform',
+    video='assistant',
+    rail='گوشه\u200cی صفحه ← دستیار',
+    features=(
+        'پاسخ فقط از راهنماها و پایگاه دانش',
+        'منبع هر پاسخ نشان داده می\u200cشود',
+        'فارسی و بدون حدس\u200cزدن',
+        'همراه همه\u200cی پلن\u200cها',
+    ),
+    details='دستیار هوشمند راهنمای زنده\u200cی سامانه است: درباره\u200cی ساخت پایگاه، اتصال، پلن و پلاگین\u200cها می\u200cپرسید و پاسخ را با پیوند به مقاله\u200cی منبع می\u200cگیرید. دستیار فقط از محتوای خود سایت پاسخ می\u200cدهد تا خطا و حدس کم باشد.',
+    audiences=(
+        'student',
+        'dev',
+        'org',
+    ),
+    steps=(
+        ('سؤال بنویسید', 'هر جا که هستید.'),
+        ('پاسخ را بخوانید', 'با منبع.'),
+        ('مقاله را باز کنید', 'برای جزئیات.'),
+    ),
+    guides=(
+        ('assistant', 'دستیار هوشمند'),
+    ),
+    kb=(
+        ('what-is-service', 'سرویس چیست؟'),
+    ),
+))

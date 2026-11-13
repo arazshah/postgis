@@ -27,6 +27,7 @@
           <a class="btn ghost lg" href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a>
         {% else %}
           <a class="btn lg" href="{{ login_url }}">ساخت حساب رایگان</a>
+          <a class="btn ghost lg" href="#plugins">بازارچه پلاگین</a>
           <a class="btn ghost lg" href="#intro"><svg class="hicon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>ببینید چطور کار می‌کند</a>
         {% endif %}
       </div>
@@ -114,6 +115,27 @@ WHERE ST_DWithin(
     </figure>
   </div>
 </section>
+
+{# ───────────── بازارچه پلاگین ───────────── #}
+{% if market_picks %}<section class="section cv" id="plugins" aria-labelledby="plugins-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">سامانه‌ی شما، پلاگین به پلاگین</p>
+      <h2 id="plugins-h">بازارچه پلاگین: فقط آنچه لازم دارید روشن کنید</h2>
+      <p class="muted">{{ market_count|fanum }} پلاگین آماده از ورود فایل و تحلیل فارسی تا نقشه، برداشت میدانی و تصویر ماهواره‌ای؛ با دوره‌ی آزمایشی و بدون قفل‌شدن داده‌ها.</p>
+    </div>
+    <ul class="mk-home" aria-label="پلاگین‌های برگزیده">
+      {% for it in market_picks %}<li class="mk-home-card">
+        {% if it.image %}<img src="{{ it.image }}" alt="" loading="lazy" decoding="async" width="640" height="360">{% endif %}
+        <div class="mk-home-b"><span class="chip">{{ it.category }}</span><h3><a href="{% url 'plugin_detail' it.id %}">{{ it.name }}</a></h3><p class="muted">{{ it.tagline }}</p></div>
+      </li>{% endfor %}
+    </ul>
+    <ul class="who-links" aria-label="پلاگین مناسب شما">
+      {% for key, label in market_audiences %}<li><a href="{% url 'plugins' %}?f=aud-{{ key }}">{{ label }}</a></li>{% endfor %}
+    </ul>
+    <p class="mk-home-go"><a class="btn lg" href="{% url 'plugins' %}">دیدن همه‌ی پلاگین‌ها در بازارچه</a></p>
+  </div>
+</section>{% endif %}
 
 {# ───────────── امکانات ───────────── #}
 <section class="section alt cv" id="features" aria-labelledby="features-h">

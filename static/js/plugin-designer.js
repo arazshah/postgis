@@ -164,7 +164,7 @@
     root.querySelector("#pd-redo").disabled = hist.i >= hist.ids.length - 1;
     const all = S.analysis.issues || [], nc = all.filter((i) => i.scope === "code").length, n = all.length - nc;
     const nav = root.querySelector("#pd-nav");
-    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["code", "کد", "code"], ["auto", "خودکارسازی", "bolt"], ["quality", "کیفیت", "check"], ["market", "بازار و قیمت", "card"], ["publish", "انتشار و نسخه‌ها", "share"], ["stats", "پس از انتشار", "chart"]];
+    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["code", "کد", "code"], ["auto", "خودکارسازی", "bolt"], ["quality", "کیفیت", "check"], ["market", "بازارچه و قیمت", "card"], ["publish", "انتشار و نسخه‌ها", "share"], ["stats", "پس از انتشار", "chart"]];
     const bad = { pages: n, code: nc };
     const q = S.quality, qb = root.querySelector("#pd-q");
     if (q && qb) {
@@ -1083,7 +1083,7 @@
   const SEV = { block: ["warn", "مانع انتشار"], warn: ["warn", "هشدار"], info: ["info", "نکته"] };
 
   function goTo(w) {
-    if (w.tab === "publish") w = { ...w, tab: "market" };  // دسترسی و آگهی در «بازار و قیمت» است
+    if (w.tab === "publish") w = { ...w, tab: "market" };  // دسترسی و آگهی در «بازارچه و قیمت» است
     tab = w.tab || "pages";
     if (w.page) pageKey = w.page;
     selId = w.block || "";
@@ -1168,7 +1168,7 @@
   }
 
 
-  // ---------------------------------------------------------------- بازار و قیمت (آگهی، دسترسی، تصویر، پیش‌نمایش کارت)
+  // ---------------------------------------------------------------- بازارچه و قیمت (آگهی، دسترسی، تصویر، پیش‌نمایش کارت)
   const CATS = [["monitoring", "پایش و ردیابی"], ["agri", "کشاورزی و منابع طبیعی"], ["urban", "شهری و املاک"], ["water", "آب و محیط زیست"], ["survey", "نقشه‌برداری و میدانی"], ["analysis", "تحلیل و گزارش"], ["other", "سایر"]];
   const MODES = [["public_free", "عمومی رایگان", "همه‌ی مشتری‌ها می‌بینند.", "globe"], ["public_paid", "عمومی پولی", "در بازار با قیمت و مدت؛ بعد از خرید فعال می‌شود.", "card"], ["private", "اختصاصی", "فقط سازمان، کاربر، پایگاه یا پلن مشخص.", "lock"]];
   const DURATIONS = [["30", "۳۰ روز"], ["90", "۹۰ روز"], ["180", "۱۸۰ روز"], ["365", "۳۶۵ روز"]];
@@ -1359,7 +1359,7 @@
         <div class="pd-row"><span class="pd-qchip ${!q.publishable ? "bad" : q.score >= 90 ? "ok" : "mid"}" style="cursor:default">${ic(q.publishable ? "check" : "warn")}<span>کیفیت ${FA(q.score)} — ${esc(q.grade)}</span></span>
           <span class="pd-hint">دسترسی: ${esc((MODES.find((m) => m[0] === a.mode) || [, "تنظیم نشده"])[1])}</span><span class="pd-spacer"></span><button class="btn ghost sm" type="button" id="pd-toq">${ic("check")}<span>فهرست کیفیت</span></button></div>
         ${q.publishable ? "" : `<div class="pd-issue">${ic("warn")}<span>مانع‌هایی هست؛ تا رفع نشوند انتشار ممکن نیست (بخش «کیفیت»).</span></div>`}
-        ${a.mode ? "" : `<div class="pd-issue">${ic("info")}<span>دسترسی و قیمت را در «بازار و قیمت» انتخاب کنید.</span></div>`}
+        ${a.mode ? "" : `<div class="pd-issue">${ic("info")}<span>دسترسی و قیمت را در «بازارچه و قیمت» انتخاب کنید.</span></div>`}
         ${fld("یادداشت انتشار (چه چیزی در این نسخه تغییر کرد؟)", `<textarea id="pd-notes" rows="3" placeholder="مثلاً: نقشه‌ی آخرین موقعیت و هشدار توقف اضافه شد.">${esc(pubOut.notes || "")}</textarea>`)}
         <div class="pd-row"><button class="btn ghost sm" type="button" id="pd-notesai"${CODE.ai_ready ? "" : " disabled"}>${ic("spark")}<span>پیش‌نویس یادداشت با دستیار</span></button><span class="pd-spacer"></span>
           <button class="btn" type="button" id="pd-dopub"${q.publishable && a.mode ? "" : " disabled"}>${ic("share")}<span>انتشار</span></button></div>

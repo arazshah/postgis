@@ -6,20 +6,21 @@
       {% else %}<span class="mk-art-ic" aria-hidden="true">{% icon "cube" 40 %}</span>{% endif %}
       <span class="mk-badges">
         {% if it.is_new %}<span class="mk-badge new">{% icon "spark" 14 %}جدید</span>{% endif %}
+        {% if it.included %}<span class="mk-badge own">{% icon "check" 14 %}همراه سکو</span>{% endif %}
         {% if it.owned %}<span class="mk-badge own">{% icon "check" 14 %}دارید</span>{% endif %}
       </span>
     </div>
     <div class="mk-body">
       <div class="mk-meta">{% if it.category_label %}<span class="chip">{{ it.category_label }}</span>{% endif %}<span class="mk-ver ltr" dir="ltr">v{{ it.version }}</span></div>
-      <h3 id="mk-n-{{ it.id }}"><a class="mk-link" href="{% url 'billing:market_detail' it.id %}">{{ it.name }}</a></h3>
+      <h3 id="mk-n-{{ it.id }}"><a class="mk-link" href="{% url 'plugin_detail' it.id %}">{{ it.name }}</a></h3>
       {% if it.summary %}<p class="mk-sum">{{ it.summary }}</p>{% endif %}
       {% if it.features %}<ul class="mk-feat">{% for f in it.features|slice:":3" %}<li>{% icon "check" 14 %}<span>{{ f }}</span></li>{% endfor %}</ul>{% endif %}
       {% if it.status_text %}<p class="mk-state small">{{ it.status_text }}</p>{% endif %}
     </div>
     <footer class="mk-foot">
-      <div class="mk-price">{% if it.paid %}<b>{{ it.price_toman|money }}</b> <small>تومان / {{ it.duration_days|fanum }} روز</small>{% else %}<span class="chip ok">{% icon "globe" 14 %}رایگان</span>{% endif %}
+      <div class="mk-price">{% if it.paid %}<b>{{ it.price_toman|money }}</b> <small>تومان / {{ it.duration_days|fanum }} روز</small>{% elif it.included %}<span class="chip ok">{% icon "check" 14 %}همراه همه‌ی پلن‌ها</span>{% else %}<span class="chip ok">{% icon "globe" 14 %}رایگان</span>{% endif %}
         {% if it.can_trial and not it.owned %}<span class="small muted">{{ it.trial_days|fanum }} روز آزمایشی رایگان</span>{% endif %}</div>
-      <span class="mk-cta">{% if it.owned %}مدیریت و جزئیات{% elif it.can_trial and not it.best %}شروع آزمایشی{% elif it.paid %}جزئیات و خرید{% else %}مشاهده{% endif %}{% icon "back" 16 %}</span>
+      <span class="mk-cta">{% if it.owned %}مدیریت و جزئیات{% elif it.can_trial and not it.best %}شروع آزمایشی{% elif it.paid %}جزئیات و خرید{% else %}معرفی و امکانات{% endif %}{% icon "back" 16 %}</span>
     </footer>
   </article>
 </li>

@@ -1,4 +1,4 @@
-// بازار پلاگین: وضعیت دکمه‌های مرتب‌سازی (aria-pressed) و گالری تصویر صفحه‌ی جزئیات؛ فیلتر و جست‌وجو با list-filter.js
+// بازارچه پلاگین: وضعیت دکمه‌های مرتب‌سازی (aria-pressed) و گالری تصویر صفحه‌ی جزئیات؛ فیلتر و جست‌وجو با list-filter.js
 (function () {
   "use strict";
   document.querySelectorAll(".mk-sort").forEach((g) => {

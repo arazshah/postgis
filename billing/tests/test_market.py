@@ -1,4 +1,4 @@
-"""بازار پلاگین سمت مشتری: صفحه، دوره‌ی آزمایشی یک‌بار، خرید و تمدید، و اطلاع‌رسانی انقضا (ADR-0008 مرحله‌ی ۶)."""
+"""بازارچه پلاگین سمت مشتری: صفحه، دوره‌ی آزمایشی یک‌بار، خرید و تمدید، و اطلاع‌رسانی انقضا (ADR-0008 مرحله‌ی ۶)."""
 import datetime
 from unittest import mock
 
@@ -29,7 +29,7 @@ class MarketTests(TestCase):
                                                 trial_days=7, limits={"page_views_per_month": 500})
         entitlements.invalidate()
         self.client.force_login(self.user)
-        self.url = reverse("billing:market")
+        self.url = reverse("plugins")
 
     def test_page_lists_paid_with_trial_and_free_plugins(self):
         r = self.client.get(self.url)
@@ -37,11 +37,25 @@ class MarketTests(TestCase):
         self.assertContains(r, "پایش ناوگان")
         self.assertContains(r, "شروع آزمایشی")
         self.assertContains(r, "رایگان‌ی")  # بخش رایگان و فعال برای همه
-        self.assertContains(self.client.get(reverse("billing:market_detail", args=["fleet"])), self.db.db_name)  # هر پایگاه در جعبه‌ی خرید جزئیات
+        self.assertContains(self.client.get(reverse("plugin_detail", args=["fleet"])), self.db.db_name)  # هر پایگاه در جعبه‌ی خرید جزئیات
 
-    def test_anonymous_is_redirected(self):
+    def test_anonymous_can_browse_but_not_buy(self):
+        """بازارچه عمومی است؛ مهمان کاتالوگ و جزئیات را می‌بیند و به‌جای خرید، ورود پیشنهاد می‌شود، ولی خرید و آزمایشی ورود می‌خواهد."""
         self.client.logout()
-        self.assertEqual(self.client.get(self.url).status_code, 302)
+        r = self.client.get(self.url)
+        self.assertContains(r, "پایش ناوگان")
+        self.assertNotContains(r, 'content="noindex')
+        det = self.client.get(reverse("plugin_detail", args=["fleet"]))
+        self.assertContains(det, reverse("accounts:login"))
+        self.assertNotContains(det, 'action="/billing/start-addon/"')
+        self.assertEqual(self.client.post(reverse("billing:start_trial"), {"addon": self.addon.pk}).status_code, 302)
+        self.assertTrue(self.client.post(reverse("billing:start_addon"), {"addon": self.addon.pk}).url.startswith("/accounts/login"))
+
+    def test_old_market_addresses_redirect_permanently(self):
+        r = self.client.get("/billing/market/")
+        self.assertRedirects(r, reverse("plugins"), status_code=301, fetch_redirect_response=False)
+        r = self.client.get("/billing/market/fleet/")
+        self.assertRedirects(r, reverse("plugin_detail", args=["fleet"]), status_code=301, fetch_redirect_response=False)
 
     def test_trial_grants_time_limited_license_once(self):
         r = self.client.post(reverse("billing:start_trial"), {"addon": self.addon.pk, "target": self.db.pk})
@@ -204,15 +218,16 @@ class MarketRedesignTests(TestCase):
     def test_catalog_cards_carry_filter_and_sort_data_and_accessible_structure(self):
         r = self.client.get(self.url)
         html = r.content.decode()
-        self.assertEqual(html.count("data-lf-row"), 2)  # یک پولی و یک رایگان
+        self.assertGreaterEqual(html.count("data-lf-row"), 2)  # دست‌کم یک پولی و یک رایگان (پلاگین‌های واقعی با ویترین هم هستند)
         self.assertIn('data-tags="paid trial"', html)
         self.assertIn('data-tags="free"', html)
         self.assertIn('data-sort-price="90000"', html)
         self.assertIn('for="mk-q"', html)                     # جست‌وجو برچسب دارد
         self.assertIn('aria-live="polite"', html)             # شمار نتیجه اعلام می‌شود
         self.assertIn('aria-pressed="true"', html)
-        self.assertNotIn("<img", html.split("mk-grid")[1].split("</ul>")[0])  # بدون تصویر: طرح جایگزین، نه تصویر شکسته
-        self.assertContains(r, reverse("billing:market_detail", args=["fleet"]))
+        fleet_card = html.split('data-sort-name="پایش ناوگان"')[1].split("</li>")[0]
+        self.assertNotIn("<img", fleet_card)  # بدون تصویر: طرح جایگزین، نه تصویر شکسته
+        self.assertContains(r, reverse("plugin_detail", args=["fleet"]))
 
     def test_listing_fields_show_on_card_and_detail(self):
         from kernel import media_view
@@ -226,7 +241,7 @@ class MarketRedesignTests(TestCase):
         Image.new("RGB", (400, 300), (10, 100, 90)).save(buf, "PNG")
         m = media_view.store("fleet", buf.getvalue())
         PluginRelease.objects.create(plugin_id="fleet", version="1.2.0", sha256="c" * 64, blob=b"", status="active", notes="نقشه‌ی تازه اضافه شد", access={})
-        cat, det = self.client.get(self.url), self.client.get(reverse("billing:market_detail", args=["fleet"]))
+        cat, det = self.client.get(self.url), self.client.get(reverse("plugin_detail", args=["fleet"]))
         for r in (cat, det):
             self.assertContains(r, "پایش و ردیابی")
             self.assertContains(r, "نقشه‌ی زنده")
@@ -243,20 +258,20 @@ class MarketRedesignTests(TestCase):
 
         PluginRelease.objects.create(plugin_id="freebie", version="1.0.0", sha256="d" * 64, blob=b"", status="active",
                                      access={"mode": "public_free", "summary": "خلاصه‌ی رایگان", "listing": {"category": "agri", "features": ["ساده"], "details": "شرح"}})
-        det = self.client.get(reverse("billing:market_detail", args=["freebie"]))
+        det = self.client.get(reverse("plugin_detail", args=["freebie"]))
         self.assertContains(det, "کشاورزی و منابع طبیعی")
         self.assertContains(det, "خلاصه‌ی رایگان")
         self.assertContains(det, "رایگان")
         self.assertNotContains(det, "شروع آزمایشی")
 
     def test_detail_404_and_login(self):
-        self.assertEqual(self.client.get(reverse("billing:market_detail", args=["nope"])).status_code, 404)
-        self.assertEqual(self.client.get(reverse("billing:market_detail", args=["accounts"])).status_code, 404)  # سیستمی در بازار نیست
+        self.assertEqual(self.client.get(reverse("plugin_detail", args=["nope"])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("plugin_detail", args=["accounts"])).status_code, 404)  # سیستمی در بازارچه نیست
         self.client.logout()
-        self.assertEqual(self.client.get(reverse("billing:market_detail", args=["fleet"])).status_code, 302)
+        self.assertEqual(self.client.get(reverse("plugin_detail", args=["fleet"])).status_code, 200)  # عمومی
 
     def test_trial_and_failed_purchase_from_detail_return_to_detail(self):
-        back = reverse("billing:market_detail", args=["fleet"])
+        back = reverse("plugin_detail", args=["fleet"])
         r = self.client.post(reverse("billing:start_trial"), {"addon": self.addon.pk, "target": self.db.pk, "from": "detail:fleet"})
         self.assertRedirects(r, back, fetch_redirect_response=False)
         r = self.client.post(reverse("billing:start_addon"), {"addon": self.addon.pk, "target": "", "from": "detail:fleet"})
@@ -272,4 +287,4 @@ class MarketRedesignTests(TestCase):
         self.assertIn("مدیریت و جزئیات", html)
 
     def test_topbar_links_to_market(self):
-        self.assertContains(self.client.get(reverse("databases:dashboard")), reverse("billing:market"))
+        self.assertContains(self.client.get(reverse("databases:dashboard")), reverse("plugins"))

@@ -29,6 +29,11 @@ def register_all() -> None:
     for cap, (name, desc) in CAPS.items():
         if pid(cap) not in registry.plugins:
             registry.register(pid(cap), name, kind="feature", description=desc)
+    from . import showcase
+    from .caps_showcase import PROFILES
+
+    for key, prof in PROFILES.items():
+        showcase.add(key, prof)
 
 
 def allowed(cap: str, *, user=None, ws=None) -> bool:

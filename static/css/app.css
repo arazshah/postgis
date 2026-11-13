@@ -70,6 +70,7 @@ code,.mono,kbd{font-family:var(--f-mono);font-size:.88em}
 .brand img{width:30px;height:30px}
 .nav{display:flex;gap:var(--s4);margin-inline-start:auto;align-items:center;flex-wrap:wrap}
 .nav a{color:var(--ink);text-decoration:none;font-weight:500}
+.nav a.nav-hot{color:var(--teal-dark);font-weight:800}
 .nav a:hover,.nav a[aria-current=page]{color:var(--teal);text-decoration:underline;text-decoration-thickness:2px}
 .nav form{margin:0}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--ink-2);cursor:pointer}

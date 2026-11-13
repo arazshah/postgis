@@ -10,7 +10,7 @@ from __future__ import annotations
 from . import blueprint
 
 PENALTY = {"block": 30, "warn": 6, "info": 2}
-GROUPS = (("validity", "اعتبار"), ("content", "محتوا و برچسب‌ها"), ("ux", "تجربه‌ی کاربر"), ("code", "کد و آزمون"), ("market", "بازار و دسترسی"), ("safety", "امنیت و عملیات"))
+GROUPS = (("validity", "اعتبار"), ("content", "محتوا و برچسب‌ها"), ("ux", "تجربه‌ی کاربر"), ("code", "کد و آزمون"), ("market", "بازارچه و دسترسی"), ("safety", "امنیت و عملیات"))
 DISPLAY = ("kpi", "table", "bars", "map", "text", "sql", "handler")
 WRITING = ("form", "ingest", "records", "source")
 GRADES = ((90, "آماده‌ی فروش"), (70, "نزدیک به آماده"), (40, "نیازمند کار"), (0, "ناقص"))
@@ -91,7 +91,7 @@ def evaluate(spec: dict, plugin_id: str) -> dict:
     acc = spec.get("access") or {}
     add("access", "market", "دسترسی و قیمت تنظیم شده", bool(acc.get("mode")), "warn", "هنوز «عمومی رایگان / عمومی پولی / اختصاصی» انتخاب نشده است.", {"tab": "market"})
     lst = spec.get("listing") or {}
-    add("listing", "market", "آگهی بازار کامل است (دسته و ویژگی‌ها)", not (acc.get("mode") == "public_paid" and (not lst.get("category") or len(lst.get("features") or []) < 2)), "warn",
+    add("listing", "market", "آگهی بازارچه کامل است (دسته و ویژگی‌ها)", not (acc.get("mode") == "public_paid" and (not lst.get("category") or len(lst.get("features") or []) < 2)), "warn",
         "برای پلاگین پولی دسته و دست‌کم دو ویژگی بنویسید تا در بازار پیدا و فهمیده شود.", {"tab": "market"})
     add("trial", "market", "پلاگین پولی دوره‌ی آزمایشی دارد", not (acc.get("mode") == "public_paid" and not int(acc.get("trial_days") or 0)), "info",
         "مشتری بدون آزمایش کمتر می‌خرد؛ چند روز آزمایشی رایگان در نظر بگیرید.", {"tab": "market"})

@@ -117,7 +117,10 @@ def home(request):
     conf = SiteSettings.get()
     trust_cards = HomeTrustCard.visible(conf) if conf.home_trust_enabled else []
     trust_buttons = HomeTrustButton.visible() if conf.home_trust_enabled else []
-    return render(request, "core/home.html", {"plans": plans, "guides_count": len(GUIDES), "faqs": faqs,
+    from kernel import showcase
+
+    return render(request, "core/home.html", {"market_picks": showcase.home_picks(6), "market_count": showcase.count(), "market_audiences": showcase.AUDIENCES,
+                                              "plans": plans, "guides_count": len(GUIDES), "faqs": faqs,
                                               "faq_json": faq_jsonld(faqs), "trust_conf": conf,
                                               "trust_cards": trust_cards, "trust_buttons": trust_buttons})
 
@@ -258,6 +261,10 @@ def sitemap_xml(request):
              (reverse("core:help"), "0.9", "help/index.html"),
              (reverse("core:docs"), "0.8", "docs/index.html")]
     pages += [(reverse("core:help_page", args=[g.slug]), "0.7", "help/page.html") for g in GUIDES]
+    from kernel import showcase
+
+    pages.append((reverse("plugins"), "0.9", "billing/market.html"))
+    pages += [(reverse("plugin_detail", args=[pid]), "0.7", "billing/market_detail.html") for pid in sorted(showcase.registry._points.get(showcase.POINT, {})) if showcase.visible(pid)]
     pages += [(reverse("core:doc", args=[d[0]]), "0.9" if d[0] == "what-is-postgis" else "0.7", f"docs/{d[0]}.html")
               for d in DOCS]
     pages.append((reverse("core:terms"), "0.3", "core/terms.html"))
