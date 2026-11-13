@@ -93,25 +93,39 @@ def hidden(plugin_id: str) -> bool:
 
 
 def get(plugin_id: str) -> Showcase | None:
-    """پروفایل مؤثر: پیش‌فرض کد، با فیلدهای پرشده‌ی ویرایش پنل روی آن."""
+    """پروفایل مؤثر: پیش‌فرض کد با فیلدهای پرشده‌ی ویرایش پنل روی آن؛ پلاگین بدون پروفایل کد (مثلاً ساخته‌شده در پنل) از روی خود ویرایش پنل ساخته می‌شود."""
     from dataclasses import replace
 
     base = code_profile(plugin_id)
     o = _overrides().get(plugin_id)
-    if base is None or o is None:
+    if o is None:
         return base
     kw = {}
     if o.tagline.strip():
         kw["tagline"] = o.tagline.strip()
+    if o.category in _CATS:
+        kw["category"] = o.category
     if o.details.strip():
         kw["details"] = o.details.strip()
     if o.features:
         kw["features"] = tuple(o.features)
     if o.audiences:
         kw["audiences"] = tuple(a for a in o.audiences if a in _AUD)
+    if o.steps:
+        kw["steps"] = tuple((str(a), str(b)) for a, b in o.steps)
     if o.featured is not None:
         kw["featured"] = o.featured
-    return replace(base, **kw)
+    if base is not None:
+        return replace(base, **kw)
+    if not (kw.get("tagline") and kw.get("category") and len(kw.get("features", ())) >= 3):
+        return None  # ویرایش ناقص بدون پروفایل کد: هنوز در بازارچه ساخته نمی‌شود
+    return Showcase(**kw)
+
+
+def profile_ids() -> list[str]:
+    """شناسه‌ی همه‌ی پلاگین‌هایی که پروفایل مؤثر دارند (کد یا پنل)."""
+    ids = set(registry._points.get(POINT, {})) | set(_overrides())
+    return sorted(i for i in ids if get(i) is not None)
 
 
 def images(plugin_id: str) -> list[str]:
@@ -140,7 +154,7 @@ def visible(plugin_id: str) -> bool:
 
 def featured(limit: int = 6) -> list[tuple[str, object, Showcase]]:
     """برگزیده‌های صفحه‌ی اول: (id، پلاگین، پروفایل)."""
-    rows = [(pid, registry.plugins[pid], sc) for pid in registry._points.get(POINT, {})
+    rows = [(pid, registry.plugins[pid], sc) for pid in profile_ids()
             if pid in registry.plugins and visible(pid) and (sc := get(pid)).featured]
     rows.sort(key=lambda r: r[2].featured)
     return rows[:limit]
@@ -148,7 +162,7 @@ def featured(limit: int = 6) -> list[tuple[str, object, Showcase]]:
 
 def count() -> int:
     """شمار پلاگین‌های دارای ویترین که در بازارچه دیده می‌شوند."""
-    return sum(1 for pid in registry._points.get(POINT, {}) if visible(pid))
+    return sum(1 for pid in profile_ids() if visible(pid))
 
 
 def home_picks(limit: int = 6) -> list[dict]:

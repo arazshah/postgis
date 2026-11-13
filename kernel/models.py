@@ -527,6 +527,8 @@ class PluginShowcaseOverride(models.Model):
 
     plugin_id = models.CharField("پلاگین", max_length=41, unique=True)
     tagline = models.CharField("شعار (یک خط)", max_length=160, blank=True)
+    category = models.CharField("دسته", max_length=30, blank=True)
+    steps = models.JSONField("سه گام شروع", default=list, blank=True)
     details = models.TextField("توضیح کامل", blank=True, help_text="پاراگراف‌ها با یک خط خالی جدا می‌شوند.")
     features = models.JSONField("ویژگی‌ها", default=list, blank=True)
     audiences = models.JSONField("مخاطب‌ها", default=list, blank=True)

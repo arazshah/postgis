@@ -268,7 +268,7 @@ def sitemap_xml(request):
 
     pages.append((reverse("plugins"), "0.9", "billing/market.html"))
     pages += [(reverse("plugin_audience", args=[k]), "0.8", "billing/market.html") for k in showcase.AUDIENCE_PITCH]
-    pages += [(reverse("plugin_detail", args=[pid]), "0.7", "billing/market_detail.html") for pid in sorted(showcase.registry._points.get(showcase.POINT, {})) if showcase.visible(pid)]
+    pages += [(reverse("plugin_detail", args=[pid]), "0.7", "billing/market_detail.html") for pid in showcase.profile_ids() if showcase.visible(pid)]
     pages += [(reverse("core:doc", args=[d[0]]), "0.9" if d[0] == "what-is-postgis" else "0.7", f"docs/{d[0]}.html")
               for d in DOCS]
     pages.append((reverse("core:terms"), "0.3", "core/terms.html"))

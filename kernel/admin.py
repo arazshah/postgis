@@ -17,6 +17,7 @@ from .models import (
     Organization,
     OrgMember,
     PluginDraft,
+    PluginMedia,
     PluginRelease,
     PluginShowcaseOverride,
     PluginState,
@@ -743,23 +744,37 @@ class SourceStateAdmin(admin.ModelAdmin):
 
 
 class ShowcaseOverrideForm(forms.ModelForm):
-    features_text = forms.CharField(label="ویژگی‌ها", required=False, widget=forms.Textarea(attrs={"rows": 6}), help_text="هر ویژگی در یک خط (۳ تا ۶ مورد، هرکدام تا ۸۰ نویسه). خالی = پیش‌فرض کد.")
-    audiences = forms.MultipleChoiceField(label="مخاطب‌ها", required=False, widget=forms.CheckboxSelectMultiple, help_text="هیچ‌کدام = پیش‌فرض کد.")
+    """ویترین بازارچه برای هر پلاگین. پلاگین دارای پروفایل کد: فقط فیلدهای پرشده بر آن مقدم می‌شود. پلاگین بدون پروفایل (ساخته‌شده در پنل): شعار، دسته و ۳ تا ۶ ویژگی لازم است."""
+
+    category = forms.ChoiceField(label="دسته", required=False)
+    features_text = forms.CharField(label="ویژگی‌ها", required=False, widget=forms.Textarea(attrs={"rows": 6}), help_text="هر ویژگی در یک خط (۳ تا ۶ مورد، هرکدام تا ۸۰ نویسه). برای پلاگین دارای پروفایل کد، خالی = پیش‌فرض کد.")
+    steps_text = forms.CharField(label="سه گام شروع", required=False, widget=forms.Textarea(attrs={"rows": 4}), help_text="هر گام یک خط: «عنوان | توضیح». دقیقاً ۳ خط یا خالی.")
+    audiences = forms.MultipleChoiceField(label="مخاطب‌ها", required=False, widget=forms.CheckboxSelectMultiple, help_text="حداکثر ۳ مورد؛ صفحه‌ی فرود هر مخاطب از همین‌ها ساخته می‌شود.")
+    new_image = forms.FileField(label="افزودن تصویر", required=False, help_text="PNG، JPEG یا WebP، حداکثر ۱ مگابایت، نسبت ۱۶:۹ (مثلاً ۱۲۸۰×۷۲۰)؛ تا ۳ تصویر برای هر پلاگین.")
+    delete_images = forms.MultipleChoiceField(label="حذف تصویر", required=False, widget=forms.CheckboxSelectMultiple)
 
     class Meta:
         model = PluginShowcaseOverride
-        fields = ("plugin_id", "tagline", "details", "audiences", "featured", "hidden")
+        fields = ("plugin_id", "tagline", "category", "features_text", "details", "steps_text", "audiences", "featured", "hidden", "new_image", "delete_images")
 
     def __init__(self, *a, **kw):
-        from . import showcase
+        from . import market, showcase
 
         super().__init__(*a, **kw)
-        ids = sorted(pid for pid in registry._points.get(showcase.POINT, {}))
-        self.fields["plugin_id"] = forms.ChoiceField(label="پلاگین", choices=[(i, f"{registry.plugins[i].name} ({i})") for i in ids if i in registry.plugins])
+        ids = sorted(pid for pid, p in registry.plugins.items() if p.kind != "system" or showcase.code_profile(pid))
+        self.fields["plugin_id"] = forms.ChoiceField(label="پلاگین", choices=[(i, f"{registry.plugins[i].name} ({i})") for i in ids])
+        self.fields["category"].choices = [("", "—")] + list(market.CATEGORIES)
         self.fields["audiences"].choices = showcase.AUDIENCES
         if self.instance.pk:
-            self.fields["features_text"].initial = "\n".join(self.instance.features or [])
             self.fields["plugin_id"].disabled = True
+            self.fields["features_text"].initial = "\n".join(self.instance.features or [])
+            self.fields["steps_text"].initial = "\n".join(f"{t} | {d}" for t, d in (self.instance.steps or []))
+            media = PluginMedia.objects.filter(plugin_id=self.instance.plugin_id).order_by("order")
+            self.fields["delete_images"].choices = [(str(m.pk), f"تصویر {n}") for n, m in enumerate(media, 1)]
+            self.thumbs = list(media)
+        else:
+            self.fields["delete_images"].widget = forms.HiddenInput()
+            self.thumbs = []
 
     def clean_features_text(self):
         lines = [ln.strip() for ln in self.cleaned_data["features_text"].splitlines() if ln.strip()]
@@ -768,6 +783,23 @@ class ShowcaseOverrideForm(forms.ModelForm):
         if any(len(ln) > 80 for ln in lines):
             raise forms.ValidationError("هر ویژگی حداکثر ۸۰ نویسه است.")
         return lines
+
+    def clean_steps_text(self):
+        out = []
+        for ln in (x.strip() for x in self.cleaned_data["steps_text"].splitlines() if x.strip()):
+            title, _sep, desc = ln.partition("|")
+            if not title.strip() or not desc.strip() or len(title) > 60 or len(desc) > 160:
+                raise forms.ValidationError("هر گام به شکل «عنوان | توضیح» (عنوان تا ۶۰ و توضیح تا ۱۶۰ نویسه).")
+            out.append([title.strip(), desc.strip()])
+        if out and len(out) != 3:
+            raise forms.ValidationError("دقیقاً ۳ گام بنویسید.")
+        return out
+
+    def clean_audiences(self):
+        a = self.cleaned_data["audiences"]
+        if len(a) > 3:
+            raise forms.ValidationError("حداکثر ۳ مخاطب.")
+        return a
 
     def clean_details(self):
         d = self.cleaned_data["details"]
@@ -781,10 +813,22 @@ class ShowcaseOverrideForm(forms.ModelForm):
             raise forms.ValidationError("جایگاه بین ۰ و ۹ باشد.")
         return f
 
+    def clean(self):
+        from . import showcase
+
+        data = super().clean()
+        pid = data.get("plugin_id") or getattr(self.instance, "plugin_id", "")
+        if pid and showcase.code_profile(pid) is None and not self.errors:
+            if not (data.get("tagline", "").strip() and data.get("category") and len(data.get("features_text") or []) >= 3):
+                raise forms.ValidationError("این پلاگین پروفایل آماده ندارد: شعار، دسته و ۳ تا ۶ ویژگی را حتماً پر کنید.")
+        return data
+
     def save(self, commit=True):
         obj = super().save(commit=False)
         obj.features = self.cleaned_data["features_text"]
+        obj.steps = self.cleaned_data["steps_text"]
         obj.audiences = list(self.cleaned_data["audiences"])
+        obj.category = self.cleaned_data.get("category") or ""
         if commit:
             obj.save()
         return obj
@@ -792,9 +836,23 @@ class ShowcaseOverrideForm(forms.ModelForm):
 
 @admin.register(PluginShowcaseOverride)
 class PluginShowcaseOverrideAdmin(admin.ModelAdmin):
-    """ویرایش ویترین بازارچه بدون استقرار دوباره: شعار، توضیح، ویژگی‌ها، مخاطب و جایگاه صفحه‌ی اول؛ تصویر از «آگهی» پلاگین بارگذاری می‌شود."""
+    """ویترین بازارچه: شعار، دسته، ویژگی‌ها، توضیح، گام‌ها، مخاطب، تصویر و جایگاه صفحه‌ی اول؛ بدون استقرار دوباره.
+    برای پلاگین ساخته‌شده در پنل (بدون پروفایل کد) همین فرم پروفایل کامل می‌سازد."""
 
     form = ShowcaseOverrideForm
-    list_display = ("plugin_id", "tagline", "featured", "hidden", "updated_at")
+    list_display = ("plugin_id", "tagline", "category", "featured", "hidden", "updated_at")
     list_filter = ("hidden",)
     search_fields = ("plugin_id", "tagline")
+
+    def save_model(self, request, obj, form, change):
+        from . import media_view
+
+        super().save_model(request, obj, form, change)
+        for pk in form.cleaned_data.get("delete_images") or []:
+            PluginMedia.objects.filter(pk=pk, plugin_id=obj.plugin_id).delete()
+        up = form.cleaned_data.get("new_image")
+        if up:
+            try:
+                media_view.store(obj.plugin_id, up.read(media_view.MAX_BYTES + 1))
+            except media_view.MediaError as exc:
+                messages.error(request, f"تصویر ذخیره نشد: {exc}")
