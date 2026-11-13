@@ -12,7 +12,7 @@ import re
 import secrets
 from typing import Any
 
-from . import wizard, wizard_code
+from . import market, wizard, wizard_code
 
 MAX_PAGES = wizard.MAX_PAGES
 MAX_BLOCKS = 24  # سقف کیت صفحه (pagekit.parse_page)
@@ -395,7 +395,31 @@ def _code_del(s, pid, op):
     del s["code"][name]
 
 
+def _listing_set(s, pid, op):
+    """آگهی بازار: دسته، ویژگی‌ها (تا ۶ مورد) و توضیح کامل؛ عنوان و خلاصه از نام و توضیح کوتاه پلاگین می‌آید."""
+    lst = s.setdefault("listing", {})
+    if "category" in op:
+        c = str(op["category"] or "")
+        if c and c not in {x[0] for x in market.CATEGORIES}:
+            raise BlueprintError("دسته‌ی آگهی نامعتبر است.")
+        lst["category"] = c
+    if "features" in op:
+        f = op["features"]
+        if not isinstance(f, list):
+            raise BlueprintError("ویژگی‌ها فهرست متن است.")
+        f = [str(x).strip() for x in f if str(x).strip()]
+        if len(f) > market.MAX_FEATURES or any(len(x) > 80 for x in f):
+            raise BlueprintError(f"حداکثر {market.MAX_FEATURES} ویژگی، هرکدام تا ۸۰ نویسه.")
+        lst["features"] = f
+    if "details" in op:
+        d = str(op["details"] or "").strip()
+        if len(d) > market.MAX_DETAILS:
+            raise BlueprintError(f"توضیح کامل حداکثر {market.MAX_DETAILS} نویسه است.")
+        lst["details"] = d
+
+
 _OPS = {
+    "listing.set": _listing_set,
     "code.add": _code_add, "code.new": _code_new, "code.set": _code_set, "code.del": _code_del,
     "meta.set": _meta_set, "table.add": _table_add, "table.set": _table_set, "table.del": _table_del,
     "page.add": _page_add, "page.set": _page_set, "page.del": _page_del, "page.move": _page_move,

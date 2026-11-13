@@ -15,9 +15,26 @@ from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET, require_POST
 
-from . import ai, blueprint, pagekit, pkgtest, quality, sampledata, stepup, studio_ai, wizard, wizard_admin, wizard_code
+from . import (
+    ai,
+    blueprint,
+    media_view,
+    pagekit,
+    pkg,
+    pkgtest,
+    publish,
+    quality,
+    release_diff,
+    sampledata,
+    stepup,
+    studio,
+    studio_ai,
+    wizard,
+    wizard_admin,
+    wizard_code,
+)
 from . import workspace as ws_mod
-from .models import PluginDraft, PluginDraftRevision
+from .models import PluginDraft, PluginDraftRevision, PluginMedia, PluginRelease
 
 MAX_BODY = 200_000
 
@@ -35,8 +52,14 @@ def _spec(draft: PluginDraft) -> dict:
 
 def _state(draft: PluginDraft, spec: dict, save_error: str = "") -> dict:
     return {"spec": spec, "plugin_id": draft.plugin_id, "name": draft.name, "version": draft.version,
-            "analysis": blueprint.analyze(spec, draft.plugin_id), "quality": quality.evaluate(spec, draft.plugin_id), "save_error": save_error,
+            "analysis": blueprint.analyze(spec, draft.plugin_id), "quality": quality.evaluate(spec, draft.plugin_id), "save_error": save_error, "media": _media(draft),
             "revision": PluginDraftRevision.objects.filter(draft=draft).values_list("id", flat=True).first()}
+
+
+def _media(draft: PluginDraft) -> list[dict]:
+    from django.urls import reverse
+
+    return [{"id": m.pk, "url": reverse("kernel:media", args=[m.token]), "w": m.width, "h": m.height} for m in PluginMedia.objects.filter(plugin_id=draft.plugin_id)]
 
 
 def _record(draft: PluginDraft, spec: dict, label: str, user) -> None:
@@ -131,6 +154,140 @@ def assistant(request, pk):
     return JsonResponse(out)
 
 
+# ---------------------------------------------------------------------- بازار و نسخه‌ها (مرحله‌ی ۸)
+@require_POST
+def access(request, pk):
+    """دسترسی و قیمت: {access: {mode, price_toman, ...}} ← نقشه‌ی تازه (اعتبارسنجی همان انتشار)."""
+    draft = _draft(request, pk)
+    try:
+        data = _body(request)
+        acc = publish.normalize_access(data.get("access") or {})
+        bad = publish.check_targets(acc)
+        if bad:
+            raise publish.PublishError("هدف‌های پیدا‌نشده: " + "، ".join(bad))
+    except (blueprint.BlueprintError, publish.PublishError) as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    spec = _spec(draft)
+    spec["access"] = acc
+    return JsonResponse(_commit(request, draft, spec, "دسترسی و قیمت"))
+
+
+@require_POST
+def media(request, pk):
+    """آپلود تصویر آگهی (multipart: file) یا حذف ({delete: id})."""
+    draft = _draft(request, pk)
+    if request.content_type == "application/json":
+        try:
+            rid = int(_body(request).get("delete"))
+        except (TypeError, ValueError, blueprint.BlueprintError):
+            return JsonResponse({"error": "شناسه‌ی تصویر نامعتبر است."}, status=400)
+        PluginMedia.objects.filter(plugin_id=draft.plugin_id, pk=rid).delete()
+        return JsonResponse({"media": _media(draft)})
+    up = request.FILES.get("file")
+    if up is None:
+        return JsonResponse({"error": "فایل تصویر را بفرستید."}, status=400)
+    try:
+        media_view.store(draft.plugin_id, up.read(media_view.MAX_BYTES + 1))
+    except media_view.MediaError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    ws_mod.log_event("plugin_studio_media", f"{draft.plugin_id}: تصویر آگهی افزوده شد", user=request.user)
+    return JsonResponse({"media": _media(draft)})
+
+
+STATUS_FA = dict(PluginRelease.Status.choices)
+
+
+@require_GET
+def releases(request, pk):
+    draft = _draft(request, pk)
+    rows = PluginRelease.objects.filter(plugin_id=draft.plugin_id).order_by("-id")[:30]
+    return JsonResponse({"releases": [{"id": r.pk, "version": r.version, "status": r.status, "status_label": STATUS_FA.get(r.status, r.status),
+                                       "at": r.uploaded_at.isoformat(), "publisher": r.publisher, "notes": r.notes, "size": r.size,
+                                       "has_spec": bool(r.spec), "mode": (r.access or {}).get("mode", "")} for r in rows],
+                         "draft_version": draft.version, "next_version": publish.next_version(draft.plugin_id, draft.version)})
+
+
+@require_GET
+def compare(request, pk):
+    """تفاوت نسخه‌ی `a` با نسخه‌ی `b` یا (b=draft) با پیش‌نویس فعلی."""
+    draft = _draft(request, pk)
+    try:
+        a = get_object_or_404(PluginRelease, pk=int(request.GET.get("a", "")), plugin_id=draft.plugin_id)
+        old = release_diff.summarize(release_diff.files_of(a))
+        if request.GET.get("b") == "draft":
+            new, b_label = release_diff.summarize(studio.files_of(draft)), "پیش‌نویس فعلی"
+        else:
+            b = get_object_or_404(PluginRelease, pk=int(request.GET.get("b", "")), plugin_id=draft.plugin_id)
+            new, b_label = release_diff.summarize(release_diff.files_of(b)), f"نسخه‌ی {b.version}"
+    except (ValueError, pkg.PackageError):
+        return JsonResponse({"error": "نسخه‌ها نامعتبرند."}, status=400)
+    return JsonResponse({"from": f"نسخه‌ی {a.version}", "to": b_label, "lines": release_diff.diff(old, new)})
+
+
+@require_POST
+def rollback(request, pk):
+    """فعال‌کردن یک نسخه‌ی قبلی (بازگشت). نیازمند مجوز فعال‌سازی و تأیید تازه؛ آگهی و دسترسی همان نسخه دوباره اعمال می‌شود."""
+    draft = _draft(request, pk)
+    try:
+        rid = int(_body(request).get("release"))
+    except (TypeError, ValueError, blueprint.BlueprintError):
+        return JsonResponse({"error": "شناسه‌ی نسخه نامعتبر است."}, status=400)
+    rel = get_object_or_404(PluginRelease, pk=rid, plugin_id=draft.plugin_id)
+    if not stepup.ok(request):
+        return JsonResponse({"error": "برای بازگشت تأیید تازه‌ی ورود دومرحله لازم است.", "stepup": stepup.url(request)}, status=403)
+    if not request.user.has_perm("kernel.activate_pluginrelease"):
+        return JsonResponse({"error": "مجوز «تأیید و فعال‌سازی نسخه‌ی پلاگین» لازم است."}, status=403)
+    try:
+        pkg.activate(rel, request.user)
+        pkg.sync()
+    except pkg.PackageError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    ws_mod.log_event("plugin_rollback", f"{draft.plugin_id}: بازگشت به نسخه‌ی {rel.version}", user=request.user)
+    return JsonResponse({"ok": True, "message": f"نسخه‌ی {rel.version} فعال شد."})
+
+
+@require_POST
+def restore_release(request, pk):
+    """پیش‌نویس را به نقشه‌ی یک نسخه‌ی منتشرشده برمی‌گرداند (فقط نسخه‌های استودیو؛ برگشت‌پذیر با واگرد)."""
+    draft = _draft(request, pk)
+    try:
+        rid = int(_body(request).get("release"))
+    except (TypeError, ValueError, blueprint.BlueprintError):
+        return JsonResponse({"error": "شناسه‌ی نسخه نامعتبر است."}, status=400)
+    rel = get_object_or_404(PluginRelease, pk=rid, plugin_id=draft.plugin_id)
+    if not rel.spec:
+        return JsonResponse({"error": "این نسخه نقشه‌ی استودیو ندارد (بسته‌ی بیرونی یا قدیمی)."}, status=400)
+    return JsonResponse(_commit(request, draft, blueprint.ensure_ids(copy.deepcopy(rel.spec)), f"بازگرداندن پیش‌نویس به نسخه‌ی {rel.version}"))
+
+
+@require_POST
+def publish_view(request, pk):
+    """انتشار از استودیو: {notes}. مانع‌ها: ایراد نقشه، مانع کیفیت، تأیید تازه، مجوز."""
+    draft = _draft(request, pk)
+    try:
+        data = _body(request)
+    except blueprint.BlueprintError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    spec = _spec(draft)
+    q = quality.evaluate(spec, draft.plugin_id)
+    if not q["publishable"]:
+        first = next((c for c in q["checks"] if not c["ok"] and c["severity"] == "block"), None)
+        return JsonResponse({"error": "پلاگین هنوز مانع انتشار دارد: " + (first["message"] if first else "")}, status=400)
+    if not stepup.ok(request):
+        return JsonResponse({"error": "برای انتشار تأیید تازه‌ی ورود دومرحله لازم است.", "stepup": stepup.url(request)}, status=403)
+    if not pkg.second_approval_required() and not request.user.has_perm("kernel.activate_pluginrelease"):
+        return JsonResponse({"error": "انتشار مستقیم مجوز «تأیید و فعال‌سازی نسخه‌ی پلاگین» می‌خواهد؛ یا «تأیید مدیر دیگر» را روشن کنید."}, status=403)
+    err = wizard_admin._save(draft, spec, request.user)  # صفحه‌ها و کد از روی نقشه‌ی جاری دوباره ساخته شود
+    if err:
+        return JsonResponse({"error": err}, status=400)
+    try:
+        out = publish.publish(draft, request.user, spec.get("access") or {}, str(data.get("notes", ""))[:2000])
+    except publish.PublishError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    ws_mod.log_event("plugin_publish", f"{draft.plugin_id} {out['release'].version}: {out['message']}", user=request.user)
+    return JsonResponse({"active": out["active"], "message": out["message"], "version": out["release"].version})
+
+
 def _runner_error() -> str:
     from .runner import client
 
@@ -213,7 +370,7 @@ def designer(request, pk):
     from django.urls import reverse
 
     draft = _draft(request, pk)
-    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore", "run", "assistant")}
+    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore", "run", "assistant", "access", "media", "releases", "compare", "rollback", "restore_release", "publish")}
     tpl = [{"key": k, "role": t["role"], "title": t["title"], "hint": t["hint"], "needs": t["needs"], "nums": t.get("nums", [])} for k, t in wizard_code.TEMPLATES.items()]
     codeinfo = {"templates": tpl, "roles": wizard_code.ROLE_LABEL, "cols": {k: [v[0], list(v[1])] for k, v in wizard_code.COLS.items()},
                 "nums": {k: v[0] for k, v in wizard_code.NUMS.items()}, "runner_ready": not _runner_error(), "ai_ready": ai.available()}

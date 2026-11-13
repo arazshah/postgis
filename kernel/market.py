@@ -14,6 +14,9 @@ from .plugins import registry
 
 POINT = "market.provider"
 SCOPES = ("workspace", "user")
+CATEGORIES = (("monitoring", "پایش و ردیابی"), ("agri", "کشاورزی و منابع طبیعی"), ("urban", "شهری و املاک"), ("water", "آب و محیط زیست"),
+              ("survey", "نقشه‌برداری و میدانی"), ("analysis", "تحلیل و گزارش"), ("other", "سایر"))
+MAX_FEATURES, MAX_DETAILS = 6, 4000
 
 
 class MarketError(Exception):
@@ -30,6 +33,9 @@ class Listing:
     trial_days: int = 0
     limits: dict = field(default_factory=dict)
     is_public: bool = True
+    category: str = ""
+    features: tuple = ()
+    details: str = ""
 
     def validate(self) -> None:
         if not self.title.strip():
@@ -42,6 +48,12 @@ class Listing:
             raise MarketError("مدت باید بین ۱ و ۳۶۵۰ روز باشد.")
         if not 0 <= int(self.trial_days) <= 90:
             raise MarketError("دوره‌ی آزمایشی بین ۰ و ۹۰ روز باشد.")
+        if self.category and self.category not in {c[0] for c in CATEGORIES}:
+            raise MarketError("دسته‌ی آگهی نامعتبر است.")
+        if len(self.features) > MAX_FEATURES or any(not isinstance(f, str) or not f.strip() or len(f) > 80 for f in self.features):
+            raise MarketError(f"حداکثر {MAX_FEATURES} ویژگی، هرکدام تا ۸۰ نویسه.")
+        if len(self.details) > MAX_DETAILS:
+            raise MarketError(f"توضیح کامل حداکثر {MAX_DETAILS} نویسه است.")
         if not isinstance(self.limits, dict) or any(not isinstance(v, (int, float)) or isinstance(v, bool) for v in self.limits.values()):
             raise MarketError("سقف‌ها باید عددی باشند.")
 

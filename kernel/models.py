@@ -153,6 +153,29 @@ class PluginDraftRevision(models.Model):
         return f"{self.draft.plugin_id} #{self.pk}"
 
 
+class PluginMedia(models.Model):
+    """تصویر آگهی بازار پلاگین (docs/adr/0010 مرحله‌ی ۸): بازرمزگذاری‌شده‌ی بی‌فراداده، حداکثر ۳ تصویر برای هر پلاگین؛ عمومی با نشانی غیرقابل‌حدس (token)."""
+
+    MAX_PER_PLUGIN = 3
+
+    plugin_id = models.CharField("پلاگین", max_length=41, db_index=True)
+    token = models.CharField(max_length=24, unique=True)
+    content_type = models.CharField(max_length=20, default="image/webp")
+    data = models.BinaryField(editable=False)
+    width = models.PositiveSmallIntegerField(default=0)
+    height = models.PositiveSmallIntegerField(default=0)
+    order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "تصویر آگهی پلاگین"
+        verbose_name_plural = "تصویرهای آگهی پلاگین"
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return f"{self.plugin_id} #{self.pk}"
+
+
 class PluginAlertState(models.Model):
     """وضعیت اجرای هشدار دوره‌ای handler سطح ۲ برای یک پایگاه داده (kernel.alerts): زمان آخرین اجرا و جلوگیری از تکرار پیام."""
 
@@ -285,6 +308,9 @@ class PluginRelease(models.Model):
                                     related_name="+", verbose_name="تأییدکننده")
     access = models.JSONField("دسترسی و قیمت (ویزارد)", default=dict, blank=True,
                               help_text="هنگام فعال‌شدن اعمال می‌شود (kernel.publish)؛ بسته‌ی بارگذاری‌شده‌ی بیرونی خالی است.")
+    notes = models.TextField("یادداشت انتشار", blank=True, help_text="چه چیزی در این نسخه تغییر کرد (استودیوی پلاگین).")
+    spec = models.JSONField("نقشه‌ی استودیو", default=dict, blank=True,
+                            help_text="نسخه‌ی نقشه‌ی پلاگین هنگام انتشار؛ برای بازگرداندن پیش‌نویس به این نسخه (فقط نسخه‌های استودیو).")
     uploaded_at = models.DateTimeField(auto_now_add=True)
     activated_at = models.DateTimeField("زمان فعال‌سازی", null=True, blank=True)
 

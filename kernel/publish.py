@@ -118,16 +118,18 @@ def apply_access(plugin_id: str, access: dict) -> None:
         for t in access.get("targets", []):
             entitlements.grant(plugin_id, t["kind"], t["subject"], source="manual", days=t.get("days"), note="ویزارد")
     if mode == "public_paid":
+        lst = access.get("listing") or {}
         market.upsert(plugin_id, market.Listing(
             title=(p.name if p else plugin_id), summary=str(access.get("summary", "")), price_toman=access["price_toman"], duration_days=access["duration_days"],
-            scope=access["scope"], trial_days=access["trial_days"], limits=access.get("limits") or {}, is_public=True))
+            scope=access["scope"], trial_days=access["trial_days"], limits=access.get("limits") or {}, is_public=True,
+            category=str(lst.get("category") or ""), features=tuple(str(f) for f in lst.get("features") or []), details=str(lst.get("details") or "")))
     else:
         market.remove(plugin_id)
     entitlements.invalidate()
 
 
 @transaction.atomic
-def _create_release(draft, user, access: dict) -> PluginRelease:
+def _create_release(draft, user, access: dict, notes: str = "") -> PluginRelease:
     draft.version = next_version(draft.plugin_id, draft.version)
     draft.save(update_fields=["version", "updated_at"])
     try:
@@ -135,13 +137,16 @@ def _create_release(draft, user, access: dict) -> PluginRelease:
     except pkg.PackageError as exc:
         raise PublishError(str(exc)) from exc
     rel.access = access
-    rel.save(update_fields=["access"])
+    rel.notes = notes[:2000]
+    rel.spec = draft.wizard or {}
+    rel.save(update_fields=["access", "notes", "spec"])
     return rel
 
 
-def publish(draft, user, access: dict) -> dict:
+def publish(draft, user, access: dict, notes: str = "") -> dict:
     """انتشار. {release, active, message} یا PublishError. ورود دومرحله‌ی تازه را نمای فراخوان می‌سنجد (stepup)."""
-    access = {**normalize_access(access), "summary": str(((draft.wizard or {}).get("intro") or {}).get("summary", ""))[:240]}
+    access = {**normalize_access(access), "summary": str(((draft.wizard or {}).get("intro") or {}).get("summary", ""))[:240],
+              "listing": (draft.wizard or {}).get("listing") or {}}
     try:
         wizard_code.validate_code(draft.wizard or {})
         wizard.compile_pages(draft.plugin_id, draft.wizard or {})
@@ -157,7 +162,7 @@ def publish(draft, user, access: dict) -> dict:
     steps = studio.check(draft)
     if not studio.ok(steps):
         raise PublishError("بررسی بسته موفق نبود: " + "؛ ".join(f"{s['stage']}: {s['detail']}" for s in steps if not s["ok"]))
-    rel = _create_release(draft, user, access)
+    rel = _create_release(draft, user, access, notes)
     if rel.status != PluginRelease.Status.CHECKED:
         raise PublishError("بررسی نسخه موفق نبود: " + "؛ ".join(str(r.get("detail", "")) for r in rel.report if not r.get("ok", True)))
     why = pkg.can_approve(rel, user)

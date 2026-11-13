@@ -14,7 +14,8 @@ def handle(action: str, plugin_id: str, listing: Listing | None) -> None:
     scope = PluginAddon.Scope.USER if listing.scope == "user" else PluginAddon.Scope.WORKSPACE
     fields = {"title": listing.title[:80], "description": listing.summary[:240], "price_toman": int(listing.price_toman),
               "duration_days": int(listing.duration_days), "scope": scope, "trial_days": int(listing.trial_days),
-              "limits": dict(listing.limits), "is_public": bool(listing.is_public)}
+              "limits": dict(listing.limits), "is_public": bool(listing.is_public),
+              "category": listing.category, "features": list(listing.features), "details": listing.details}
     if addon is None:
         PluginAddon.objects.create(plugin_id=plugin_id, **fields)
     else:

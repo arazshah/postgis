@@ -114,12 +114,13 @@
         <button class="pd-qchip" type="button" id="pd-q" aria-label="کیفیت پلاگین"></button>
         <button class="btn ghost sm" type="button" id="pd-ai" aria-label="دستیار هوش مصنوعی" aria-pressed="false">${ic("spark")}<span>دستیار</span></button>
         <button class="btn ghost sm" type="button" id="pd-more" aria-label="بیشتر">${ic("more")}<span>بیشتر</span></button>
-        <a class="btn sm" id="pd-publish" href="${esc(LINKS.publish)}">${ic("share")}<span>دسترسی و انتشار</span></a>
+        <button class="btn sm" type="button" id="pd-publish">${ic("share")}<span>انتشار</span></button>
       </header>
       <nav class="pd-nav" role="tablist" id="pd-nav"></nav>
       <div class="pd-main" id="pd-main"></div>`);
     root.querySelector("#pd-ai").addEventListener("click", () => toggleAi());
     root.querySelector("#pd-q").addEventListener("click", () => { tab = "quality"; selId = ""; draw(); });
+    root.querySelector("#pd-publish").addEventListener("click", () => { tab = "publish"; selId = ""; draw(); });
     root.querySelector("#pd-undo").addEventListener("click", undo);
     root.querySelector("#pd-redo").addEventListener("click", redo);
     root.querySelectorAll("[data-vp]").forEach((b) => b.addEventListener("click", () => {
@@ -144,7 +145,7 @@
     root.querySelector("#pd-redo").disabled = hist.i >= hist.ids.length - 1;
     const all = S.analysis.issues || [], nc = all.filter((i) => i.scope === "code").length, n = all.length - nc;
     const nav = root.querySelector("#pd-nav");
-    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["code", "کد", "code"], ["auto", "خودکارسازی", "bolt"], ["quality", "کیفیت", "check"]];
+    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["code", "کد", "code"], ["auto", "خودکارسازی", "bolt"], ["quality", "کیفیت", "check"], ["market", "بازار و قیمت", "card"], ["publish", "انتشار و نسخه‌ها", "share"]];
     const bad = { pages: n, code: nc };
     const q = S.quality, qb = root.querySelector("#pd-q");
     if (q && qb) {
@@ -179,6 +180,8 @@
     if (tab === "auto") { main.innerHTML = ""; drawAuto(main); return; }
     if (tab === "code") { main.innerHTML = ""; drawCode(main); return; }
     if (tab === "quality") { main.innerHTML = ""; drawQuality(main); return; }
+    if (tab === "market") { main.innerHTML = ""; drawMarket(main); return; }
+    if (tab === "publish") { main.innerHTML = ""; drawPublish(main); return; }
     main.innerHTML = `
       <aside class="pd-pal" id="pd-pal" aria-label="اجزا"></aside>
       <section class="pd-center"><div class="pd-pages" id="pd-pages"></div><div class="pd-scroll" id="pd-scroll"></div></section>
@@ -1029,7 +1032,7 @@
   const SEV = { block: ["warn", "مانع انتشار"], warn: ["warn", "هشدار"], info: ["info", "نکته"] };
 
   function goTo(w) {
-    if (w.tab === "publish") { location.href = LINKS.publish; return; }
+    if (w.tab === "publish") w = { ...w, tab: "market" };  // دسترسی و آگهی در «بازار و قیمت» است
     tab = w.tab || "pages";
     if (w.page) pageKey = w.page;
     selId = w.block || "";
@@ -1048,7 +1051,7 @@
           <p class="pd-hint" style="margin:6px 0 0">${q.publishable ? "هیچ مانعی برای انتشار نیست." : "تا مانع‌ها رفع نشوند انتشار ممکن نیست."} · مانع ${FA(q.counts.block)} · هشدار ${FA(q.counts.warn)} · نکته ${FA(q.counts.info)}</p></div>
         <div class="pd-row"><button class="btn ghost sm" type="button" id="pd-q400">${ic("phone")}<span>بررسی ۴۰۰ پیکسل</span></button>
           <button class="btn ghost sm" type="button" id="pd-qtests"${Object.keys(code()).length ? "" : " disabled"}>${ic("play")}<span>اجرای آزمون‌های کد</span></button>
-          <a class="btn sm" href="${esc(LINKS.publish)}">${ic("share")}<span>دسترسی و انتشار</span></a></div></section>
+          <button class="btn sm" type="button" id="pd-qpub">${ic("share")}<span>انتشار</span></button></div></section>
       <div id="pd-qextra"></div>` +
       q.groups.filter((g) => g.total).map((g) => `<section class="pd-card"><div class="pd-row"><h3>${esc(g.label)}</h3><span class="pd-spacer"></span><span class="pd-hint">${FA(g.ok)} از ${FA(g.total)}</span></div>
         <ul class="pd-checks">${q.checks.filter((c) => c.group === g.key).map((c) => `<li class="${c.ok ? "ok" : "fail"}" data-cid="${c.id}">
@@ -1059,6 +1062,7 @@
             <button class="btn ghost sm" type="button" data-qai="${c.id}">${ic("spark")}<span>دستیار</span></button></div>`}</li>`).join("")}</ul></section>`).join("");
     box.querySelector("#pd-qextra").innerHTML = qExtraHtml();
     box.querySelector("#pd-q400").addEventListener("click", check400);
+    box.querySelector("#pd-qpub").addEventListener("click", () => { tab = "publish"; draw(); });
     box.querySelector("#pd-qtests").addEventListener("click", runAllTests);
     const find = (id) => q.checks.find((c) => c.id === id);
     box.querySelectorAll("[data-qgo]").forEach((b) => b.addEventListener("click", () => goTo(find(b.dataset.qgo).where)));
@@ -1110,6 +1114,207 @@
     qOut.tests = out;
     btn.disabled = false;
     root.querySelector("#pd-qextra").innerHTML = qExtraHtml();
+  }
+
+
+  // ---------------------------------------------------------------- بازار و قیمت (آگهی، دسترسی، تصویر، پیش‌نمایش کارت)
+  const CATS = [["monitoring", "پایش و ردیابی"], ["agri", "کشاورزی و منابع طبیعی"], ["urban", "شهری و املاک"], ["water", "آب و محیط زیست"], ["survey", "نقشه‌برداری و میدانی"], ["analysis", "تحلیل و گزارش"], ["other", "سایر"]];
+  const MODES = [["public_free", "عمومی رایگان", "همه‌ی مشتری‌ها می‌بینند.", "globe"], ["public_paid", "عمومی پولی", "در بازار با قیمت و مدت؛ بعد از خرید فعال می‌شود.", "card"], ["private", "اختصاصی", "فقط سازمان، کاربر، پایگاه یا پلن مشخص.", "lock"]];
+  const DURATIONS = [["30", "۳۰ روز"], ["90", "۹۰ روز"], ["180", "۱۸۰ روز"], ["365", "۳۶۵ روز"]];
+  const LIMITS = [["page_views_per_month", "بازدید صفحه در ماه"], ["ingest_rows_per_month", "ردیف دریافتی در ماه"], ["form_submits_per_month", "ثبت فرم در ماه"]];
+  const MONEY = (n) => FA(Number(n || 0).toLocaleString("en-US"));
+  const KINDS_T = [["org", "سازمان"], ["user", "کاربر"], ["workspace", "پایگاه داده"], ["plan", "پلن (slug)"]];
+
+  function cardHtml() {
+    const a = spec().access || {}, l = spec().listing || {}, intro = spec().intro || {};
+    const cat = (CATS.find((c) => c[0] === l.category) || [])[1] || "";
+    const img = (S.media || [])[0];
+    const price = a.mode === "public_paid" ? `<span class="price">${MONEY(a.price_toman)} <small>تومان</small></span>` : a.mode === "public_free" ? `<span class="chip">رایگان</span>` : `<span class="chip">اختصاصی</span>`;
+    return `<section class="legend buy-card pd-mkcard">${img ? `<img src="${esc(img.url)}" alt="" style="width:100%;max-height:170px;object-fit:cover;border-radius:var(--r-card);margin-bottom:var(--s3)">` : `<div class="pd-mkph">${ic("image")}<span>بدون تصویر</span></div>`}
+      <div class="legend-title"><h3>${esc(S.name)}</h3>${price}</div>${cat ? `<span class="chip">${esc(cat)}</span>` : ""}
+      ${intro.summary ? `<p class="small muted">${esc(intro.summary)}</p>` : `<p class="small muted" style="color:var(--red)">توضیح کوتاه خالی است (در «نمای کلی/معرفی»).</p>`}
+      ${(l.features || []).length ? `<ul class="small" style="margin:6px 0;padding-inline-start:18px">${l.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
+      ${l.details ? `<details class="small muted"><summary>توضیح کامل</summary><p style="white-space:pre-wrap">${esc(l.details)}</p></details>` : ""}
+      ${a.mode === "public_paid" ? `<p class="small muted">مدت هر خرید: ${FA(a.duration_days)} روز، ${a.scope === "user" ? "برای کل حساب" : "برای هر پایگاه داده"}${a.trial_days ? `؛ آزمایشی ${FA(a.trial_days)} روز` : ""}.</p><button class="btn sm" type="button" disabled>${a.trial_days ? "شروع آزمایشی" : "خرید"}</button>` : ""}
+    </section>`;
+  }
+
+  function drawMarket(main) {
+    const a = spec().access || {}, l = spec().listing || {};
+    main.innerHTML = `<div class="pd-mk"><div class="pd-mkform" id="pd-mkform"></div><aside class="pd-mkside"><h3 class="pd-h">${ic("eye")}پیش‌نمایش کارت بازار</h3><div id="pd-mkcard"></div><p class="pd-hint">مشتری آگهی را همین‌طور می‌بیند.</p></aside></div>`;
+    const f = main.querySelector("#pd-mkform");
+    f.innerHTML = `<section class="pd-card"><h3 class="pd-h">${ic("lock")}دسترسی و قیمت</h3>
+      <div class="pd-tiles" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${MODES.map(([k, t, d, i]) => `<button type="button" class="pd-tile" data-mode="${k}" aria-pressed="${a.mode === k}" style="${a.mode === k ? "border-color:var(--teal);background:var(--teal-soft)" : ""}"><b>${ic(i)}${t}</b><small>${d}</small></button>`).join("")}</div>
+      <div id="pd-mkacc"></div><p class="pd-hint" id="pd-mkerr" style="color:var(--red)"></p></section>
+      <section class="pd-card"><h3 class="pd-h">${ic("info")}آگهی بازار</h3>
+        ${fld("دسته", chips("category", [["", "بدون دسته"]].concat(CATS), l.category || ""))}
+        ${fld("ویژگی‌ها (تا ۶ مورد؛ هر کدام یک جمله‌ی کوتاه)", listEditor("features", (l.features || []).map((x) => [x]), [["0", "ویژگی"]]))}
+        ${fld("توضیح کامل (اختیاری)", `<textarea id="pd-details" rows="5">${esc(l.details || "")}</textarea>`)}</section>
+      <section class="pd-card"><h3 class="pd-h">${ic("image")}تصویر آگهی</h3><p class="pd-hint">تا ۳ تصویر PNG، JPEG یا WebP (حداکثر ۱ مگابایت). تصویر بازرمزگذاری و کوچک می‌شود.</p>
+        <div class="pd-thumbs" id="pd-thumbs"></div><label class="btn ghost sm" style="cursor:pointer;display:inline-flex">${ic("upload")}<span>افزودن تصویر</span><input type="file" id="pd-file" accept="image/png,image/jpeg,image/webp" hidden></label></section>`;
+    paintAcc(f.querySelector("#pd-mkacc"));
+    paintThumbs(f.querySelector("#pd-thumbs"));
+    const cardEl = main.querySelector("#pd-mkcard");
+    const repaintCard = () => { cardEl.innerHTML = cardHtml(); };
+    repaintCard();
+    f.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => {
+      const m = b.dataset.mode;
+      if (m === "public_free") return saveAccess({ mode: m }, () => drawMarket(main));
+      // پولی و اختصاصی تا پر شدن مقدارها معتبر نیستند: اول محلی نشان داده می‌شود و با معتبر شدن ذخیره می‌شود
+      S.spec.access = m === "public_paid" ? { mode: m, price_toman: "", duration_days: 30, scope: "workspace", trial_days: 0 } : { mode: m, targets: [{ kind: "org", subject: "", days: "" }] };
+      drawMarket(main);
+    }));
+    f.querySelector("[data-single=category]").addEventListener("click", async (e) => {
+      const c = e.target.closest(".pd-chip");
+      if (c) { try { await run({ op: "listing.set", category: c.dataset.v }); drawMarket(main); } catch (_) { /* */ } }
+    });
+    const feat = f.querySelector("[data-list=features]");
+    const featOp = () => run({ op: "listing.set", features: collectList(feat).map((o) => (Array.isArray(o) ? o[0] : o["0"] || "")).filter(Boolean) }).then(repaintCard).catch(() => {});
+    let t;
+    feat.addEventListener("input", () => { clearTimeout(t); t = setTimeout(featOp, 600); });
+    feat.addEventListener("click", async (e) => {
+      if (e.target.closest("[data-addrow]")) { const cur = (spec().listing || {}).features || []; if (cur.length >= 6) return toast("حداکثر ۶ ویژگی.", "danger"); await run({ op: "listing.set", features: cur.concat("ویژگی تازه") }).catch(() => {}); drawMarket(main); }
+      const d = e.target.closest("[data-delrow]");
+      if (d) { const cur = ((spec().listing || {}).features || []).slice(); cur.splice(Number(d.dataset.delrow.split(":")[1]), 1); await run({ op: "listing.set", features: cur }).catch(() => {}); drawMarket(main); }
+    });
+    f.querySelector("#pd-details").addEventListener("input", (e) => { clearTimeout(t); t = setTimeout(() => run({ op: "listing.set", details: e.target.value }).then(repaintCard).catch(() => {}), 600); });
+    f.querySelector("#pd-file").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        const r = await fetch(API.media, { method: "POST", credentials: "same-origin", headers: { "X-CSRFToken": CSRF }, body: fd });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || "آپلود نشد.");
+        S.media = j.media;
+        drawMarket(main);
+      } catch (err) { toast(err.message, "danger"); }
+    });
+    f.querySelector("#pd-thumbs").addEventListener("click", async (e) => {
+      const d = e.target.closest("[data-delmedia]");
+      if (!d) return;
+      try { S.media = (await call(API.media, { delete: Number(d.dataset.delmedia) })).media; drawMarket(main); } catch (err) { toast(err.message, "danger"); }
+    });
+  }
+
+  function paintThumbs(el) {
+    el.innerHTML = (S.media || []).map((m) => `<div class="pd-thumb"><img src="${esc(m.url)}" alt=""><button type="button" class="pd-ib" data-delmedia="${m.id}" aria-label="حذف تصویر">${ic("trash")}</button></div>`).join("") || `<p class="pd-hint">هنوز تصویری نیست.</p>`;
+  }
+
+  async function saveAccess(acc, done) {
+    const err = root.querySelector("#pd-mkerr");
+    try {
+      const st = await call(API.access, { access: acc });
+      S = st;
+      if (done) done();
+    } catch (e) { if (err) err.textContent = e.message; }
+  }
+
+  function paintAcc(el) {
+    const a = spec().access || {};
+    let h = "";
+    if (a.mode === "public_paid") {
+      h += `<div class="pd-row" style="margin-top:12px">${fld("قیمت (تومان)", `<input type="number" id="pd-price" min="1" dir="ltr" value="${esc(a.price_toman || "")}">`)}
+        ${fld("مدت هر خرید", chips("duration_days", DURATIONS, String(a.duration_days || 30)))}</div>
+        ${fld("واحد خرید", chips("scope", [["workspace", "هر پایگاه داده"], ["user", "حساب کاربر"]], a.scope || "workspace"))}
+        ${fld("دوره‌ی آزمایشی رایگان (روز؛ ۰ = ندارد)", `<input type="number" id="pd-trial" min="0" max="90" dir="ltr" value="${esc(a.trial_days || 0)}" style="max-width:140px">`)}
+        <div class="pd-grp">سقف مصرف ماهانه (خالی = نامحدود)</div><div class="pd-row">${LIMITS.map(([k, l]) => fld(l, `<input type="number" data-lim="${k}" min="1" dir="ltr" value="${esc((a.limits || {})[k] || "")}">`)).join("")}</div>`;
+    } else if (a.mode === "private") {
+      h += `<p class="pd-hint" style="margin-top:12px">هر ردیف یک هدف است (شناسه‌ی عددی یا slug پلن). مدت خالی = بدون انقضا.</p>` +
+        `<div class="pd-list" data-list="targets">${(a.targets || [{ kind: "org" }]).map((t, i) => `<div class="pd-lrow" data-i="${i}"><select data-k="kind">${KINDS_T.map(([v, l]) => `<option value="${v}"${t.kind === v ? " selected" : ""}>${l}</option>`).join("")}</select>
+          <input type="text" class="ltr" dir="ltr" data-k="subject" value="${esc(t.subject || "")}" placeholder="شناسه"><input type="text" class="ltr" dir="ltr" data-k="days" value="${esc(t.days || "")}" placeholder="روز"><button type="button" class="pd-ib" data-delrow="targets:${i}" aria-label="حذف">${ic("trash")}</button></div>`).join("")}
+        <button type="button" class="btn ghost sm" data-addrow="targets">${ic("plus")}<span>هدف</span></button></div>`;
+    } else if (a.mode === "public_free") h += `<p class="pd-hint" style="margin-top:12px">همه‌ی مشتری‌ها این پلاگین را در بخش رایگان بازار می‌بینند.</p>`;
+    el.innerHTML = h;
+    const collect = () => {
+      const cur = { ...(spec().access || {}) };
+      if (cur.mode === "public_paid") {
+        const g = (id) => (el.querySelector(id) || {}).value;
+        cur.price_toman = Number(g("#pd-price") || 0); cur.trial_days = Number(g("#pd-trial") || 0);
+        cur.limits = Object.fromEntries([...el.querySelectorAll("[data-lim]")].filter((i) => i.value).map((i) => [i.dataset.lim, Number(i.value)]));
+      } else if (cur.mode === "private") {
+        cur.targets = [...el.querySelectorAll(".pd-lrow")].map((r) => ({ kind: r.querySelector("[data-k=kind]").value, subject: r.querySelector("[data-k=subject]").value.trim(), days: r.querySelector("[data-k=days]").value.trim() })).filter((x) => x.subject);
+      }
+      return cur;
+    };
+    let t;
+    const later = () => { clearTimeout(t); t = setTimeout(() => saveAccess(collect(), () => { const c = root.querySelector("#pd-mkcard"); if (c) c.innerHTML = cardHtml(); const e = root.querySelector("#pd-mkerr"); if (e) e.textContent = ""; }), 600); };
+    el.addEventListener("input", later);
+    el.addEventListener("change", later);
+    el.querySelectorAll("[data-single]").forEach((box) => box.addEventListener("click", (e) => {
+      const c = e.target.closest(".pd-chip");
+      if (c) saveAccess({ ...collect(), [box.dataset.single]: box.dataset.single === "duration_days" ? Number(c.dataset.v) : c.dataset.v }, () => { paintAcc(el); const cd = root.querySelector("#pd-mkcard"); if (cd) cd.innerHTML = cardHtml(); });
+    }));
+    const tl = el.querySelector("[data-list=targets]");
+    if (tl) tl.addEventListener("click", (e) => {
+      const rows = () => [...tl.querySelectorAll(".pd-lrow")].map((r) => ({ kind: r.querySelector("[data-k=kind]").value, subject: r.querySelector("[data-k=subject]").value.trim(), days: r.querySelector("[data-k=days]").value.trim() }));
+      if (e.target.closest("[data-addrow]")) { spec().access.targets = rows().concat({ kind: "org", subject: "", days: "" }); paintAcc(el); return; }
+      const d = e.target.closest("[data-delrow]");
+      if (d) { const r = rows(); r.splice(Number(d.dataset.delrow.split(":")[1]), 1); spec().access.targets = r; paintAcc(el); later(); }
+    });
+  }
+
+  // ---------------------------------------------------------------- انتشار و نسخه‌ها
+  const RSTATUS = { active: "فعال", retired: "جایگزین‌شده", checked: "منتظر تأیید", rejected: "ردشده" };
+  let pubOut = {};
+
+  async function drawPublish(main) {
+    main.innerHTML = `<div class="pd-data" id="pd-pub"></div>`;
+    const box = main.querySelector("#pd-pub");
+    box.innerHTML = `<p class="pd-hint">در حال بارگذاری…</p>`;
+    let rel = { releases: [], next_version: "" };
+    try { rel = await call(API.releases); } catch (e) { box.innerHTML = `<div class="pd-issue">${ic("warn")}<span>${esc(e.message)}</span></div>`; return; }
+    const q = S.quality, a = spec().access || {};
+    box.innerHTML = `<section class="pd-card"><h2 class="pd-h">${ic("share")}انتشار نسخه‌ی ${esc(FA(rel.next_version))}</h2>
+        <div class="pd-row"><span class="pd-qchip ${!q.publishable ? "bad" : q.score >= 90 ? "ok" : "mid"}" style="cursor:default">${ic(q.publishable ? "check" : "warn")}<span>کیفیت ${FA(q.score)} — ${esc(q.grade)}</span></span>
+          <span class="pd-hint">دسترسی: ${esc((MODES.find((m) => m[0] === a.mode) || [, "تنظیم نشده"])[1])}</span><span class="pd-spacer"></span><button class="btn ghost sm" type="button" id="pd-toq">${ic("check")}<span>فهرست کیفیت</span></button></div>
+        ${q.publishable ? "" : `<div class="pd-issue">${ic("warn")}<span>مانع‌هایی هست؛ تا رفع نشوند انتشار ممکن نیست (بخش «کیفیت»).</span></div>`}
+        ${a.mode ? "" : `<div class="pd-issue">${ic("info")}<span>دسترسی و قیمت را در «بازار و قیمت» انتخاب کنید.</span></div>`}
+        ${fld("یادداشت انتشار (چه چیزی در این نسخه تغییر کرد؟)", `<textarea id="pd-notes" rows="3" placeholder="مثلاً: نقشه‌ی آخرین موقعیت و هشدار توقف اضافه شد.">${esc(pubOut.notes || "")}</textarea>`)}
+        <div class="pd-row"><button class="btn ghost sm" type="button" id="pd-notesai"${CODE.ai_ready ? "" : " disabled"}>${ic("spark")}<span>پیش‌نویس یادداشت با دستیار</span></button><span class="pd-spacer"></span>
+          <button class="btn" type="button" id="pd-dopub"${q.publishable && a.mode ? "" : " disabled"}>${ic("share")}<span>انتشار</span></button></div>
+        <div id="pd-pubmsg"></div></section>
+      <section class="pd-card"><h2 class="pd-h">${ic("clock")}نسخه‌ها</h2>
+        ${rel.releases.length ? `<ul class="pd-rels">${rel.releases.map((r) => `<li class="${r.status}"><div class="pd-row"><b class="ltr" dir="ltr">${esc(r.version)}</b><span class="pd-sev ${r.status === "active" ? "ok" : ""}">${RSTATUS[r.status] || r.status}</span>
+          <span class="pd-hint">${new Date(r.at).toLocaleString("fa-IR")} · ${esc(r.publisher || "—")}</span><span class="pd-spacer"></span>
+          <button type="button" class="btn ghost sm" data-cmp="${r.id}:draft">با پیش‌نویس</button>
+          ${r.status !== "active" && r.status !== "rejected" ? `<button type="button" class="btn ghost sm" data-rb="${r.id}">${ic("undo")}<span>بازگشت (فعال‌سازی)</span></button>` : ""}
+          ${r.has_spec ? `<button type="button" class="btn ghost sm" data-rs="${r.id}">${ic("copy")}<span>پیش‌نویس به این نسخه</span></button>` : ""}</div>
+          ${r.notes ? `<p style="margin:6px 0 0">${esc(r.notes)}</p>` : ""}</li>`).join("")}</ul>` : `<div class="pd-empty">${ic("clock")}<b>هنوز نسخه‌ای منتشر نشده</b><span>اولین انتشار نسخه‌ی ${esc(FA(rel.next_version))} را می‌سازد.</span></div>`}
+        <div id="pd-cmpout"></div></section>`;
+    box.querySelector("#pd-toq").addEventListener("click", () => { tab = "quality"; draw(); });
+    const notes = box.querySelector("#pd-notes");
+    notes.addEventListener("input", () => { pubOut.notes = notes.value; });
+    box.querySelector("#pd-notesai").addEventListener("click", async () => {
+      const last = rel.releases[0];
+      sendAi("chat", "یادداشت انتشار کوتاه فارسی (۲ تا ۴ خط) برای نسخه‌ی تازه بنویس" + (last ? "؛ نسخه‌ی قبلی " + last.version + " بود." : ".") + " فقط در reply بنویس و ops را خالی بگذار.");
+    });
+    const msg = box.querySelector("#pd-pubmsg");
+    box.querySelector("#pd-dopub").addEventListener("click", async (e) => {
+      e.currentTarget.disabled = true;
+      msg.innerHTML = `<p class="pd-hint">در حال انتشار…</p>`;
+      const r = await fetch(API.publish, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF }, body: JSON.stringify({ notes: notes.value }) }).then((x) => x.json().then((j) => ({ ok: x.ok, j }))).catch(() => ({ ok: false, j: { error: "ارتباط برقرار نشد." } }));
+      if (r.ok) { pubOut = {}; msg.innerHTML = `<div class="pd-issue" style="border-color:var(--green);background:var(--green-soft)">${ic("check")}<span>${esc(r.j.message)} (نسخه‌ی ${esc(FA(r.j.version))})</span></div>`; setTimeout(() => drawPublish(main), 900); }
+      else { msg.innerHTML = `<div class="pd-issue">${ic("warn")}<span>${esc(r.j.error || "انتشار انجام نشد.")}${r.j.stepup ? ` <a href="${esc(r.j.stepup)}">تأیید تازه</a>` : ""}</span></div>`; e.currentTarget.disabled = false; }
+    });
+    const out = box.querySelector("#pd-cmpout");
+    const compare = async (a_, b_) => {
+      try {
+        const r = await call(API.compare + "?a=" + a_ + "&b=" + b_);
+        out.innerHTML = `<h3 class="pd-h" style="margin-top:16px">تفاوت ${esc(r.from)} ← ${esc(r.to)}</h3>` + (r.lines.length ? `<ul class="pd-diff">${r.lines.map((l) => `<li class="${l.kind}">${esc(l.text)}</li>`).join("")}</ul>` : `<p class="pd-hint">بدون تغییر در صفحه‌ها، جدول‌ها و کد.</p>`);
+      } catch (e) { out.innerHTML = `<div class="pd-issue">${ic("warn")}<span>${esc(e.message)}</span></div>`; }
+    };
+    box.querySelectorAll("[data-cmp]").forEach((b) => b.addEventListener("click", () => { const [x, y] = b.dataset.cmp.split(":"); compare(x, y); }));
+    box.querySelectorAll("[data-rb]").forEach((b) => b.addEventListener("click", async () => {
+      if (!await Ui.confirm({ title: "بازگشت به نسخه‌ی قبلی", message: "این نسخه فعال می‌شود و نسخه‌ی فعلی «جایگزین‌شده» می‌ماند. آگهی و دسترسی همان نسخه دوباره اعمال می‌شود. داده‌ی مشتری حذف نمی‌شود.", confirmText: "فعال‌سازی" })) return;
+      const r = await fetch(API.rollback, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF }, body: JSON.stringify({ release: Number(b.dataset.rb) }) }).then((x) => x.json().then((j) => ({ ok: x.ok, j }))).catch(() => ({ ok: false, j: { error: "ارتباط برقرار نشد." } }));
+      if (r.ok) { toast(r.j.message, "success"); drawPublish(main); } else out.innerHTML = `<div class="pd-issue">${ic("warn")}<span>${esc(r.j.error)}${r.j.stepup ? ` <a href="${esc(r.j.stepup)}">تأیید تازه</a>` : ""}</span></div>`;
+    }));
+    box.querySelectorAll("[data-rs]").forEach((b) => b.addEventListener("click", async () => {
+      if (!await Ui.confirm({ title: "بازگرداندن پیش‌نویس", message: "پیش‌نویس فعلی با نقشه‌ی آن نسخه جایگزین می‌شود. با واگرد برمی‌گردد.", confirmText: "بازگردان" })) return;
+      try { S = await call(API.restore_release, { release: Number(b.dataset.rs) }); hist.ids = hist.ids.slice(0, hist.i + 1).concat(S.revision); hist.i = hist.ids.length - 1; ensurePage(); toast("پیش‌نویس به آن نسخه برگشت.", "success"); draw(); } catch (e) { toast(e.message, "danger"); }
+    }));
   }
 
   // ---------------------------------------------------------------- بخش خودکارسازی (نمای کلی همه‌ی اجزای غیرنمایشی)

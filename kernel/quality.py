@@ -43,7 +43,7 @@ def evaluate(spec: dict, plugin_id: str) -> dict:
 
     # ---- محتوا
     add("summary", "content", "توضیح کوتاه پلاگین (کارت بازار) نوشته شده", (spec.get("intro") or {}).get("summary", "").strip(), "warn",
-        "توضیح کوتاه خالی است؛ مشتری در بازار فقط همین را می‌بیند.", {"tab": "publish"})
+        "توضیح کوتاه خالی است؛ مشتری در بازار فقط همین را می‌بیند.", {"tab": "market"})
     bad = [(t["name"], c["name"]) for t in spec.get("tables") or [] for c in t.get("columns") or [] if not (c.get("label") or "").strip() and not c.get("auto_now")]
     add("labels", "content", "ستون‌ها برچسب فارسی دارند", not bad, "warn",
         f"{len(bad)} ستون برچسب فارسی ندارد (مثل «{bad[0][1]}» در {bad[0][0]})؛ در فرم و جدول نام لاتین دیده می‌شود." if bad else "", {"tab": "data"})
@@ -84,9 +84,12 @@ def evaluate(spec: dict, plugin_id: str) -> dict:
 
     # ---- بازار
     acc = spec.get("access") or {}
-    add("access", "market", "دسترسی و قیمت تنظیم شده", bool(acc.get("mode")), "warn", "هنوز «عمومی رایگان / عمومی پولی / اختصاصی» انتخاب نشده است.", {"tab": "publish"})
+    add("access", "market", "دسترسی و قیمت تنظیم شده", bool(acc.get("mode")), "warn", "هنوز «عمومی رایگان / عمومی پولی / اختصاصی» انتخاب نشده است.", {"tab": "market"})
+    lst = spec.get("listing") or {}
+    add("listing", "market", "آگهی بازار کامل است (دسته و ویژگی‌ها)", not (acc.get("mode") == "public_paid" and (not lst.get("category") or len(lst.get("features") or []) < 2)), "warn",
+        "برای پلاگین پولی دسته و دست‌کم دو ویژگی بنویسید تا در بازار پیدا و فهمیده شود.", {"tab": "market"})
     add("trial", "market", "پلاگین پولی دوره‌ی آزمایشی دارد", not (acc.get("mode") == "public_paid" and not int(acc.get("trial_days") or 0)), "info",
-        "مشتری بدون آزمایش کمتر می‌خرد؛ چند روز آزمایشی رایگان در نظر بگیرید.", {"tab": "publish"})
+        "مشتری بدون آزمایش کمتر می‌خرد؛ چند روز آزمایشی رایگان در نظر بگیرید.", {"tab": "market"})
 
     # ---- امنیت و عملیات
     sql = [(p, b) for p, b in _blocks(spec) if b.get("kind") == "sql"]

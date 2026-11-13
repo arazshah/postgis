@@ -9,8 +9,12 @@
   <div class="plans">
     {% for it in paid %}
     <section class="legend buy-card">
+      {% if it.image %}<img src="{{ it.image }}" alt="" loading="lazy" style="width:100%;max-height:180px;object-fit:cover;border-radius:var(--r-card);margin-bottom:var(--s3)">{% endif %}
       <div class="legend-title"><h3>{{ it.name }}</h3><span class="price">{{ it.addon.price_toman|money }} <small>تومان</small></span></div>
+      {% if it.category %}<span class="chip">{{ it.category }}</span>{% endif %}
       {% if it.summary %}<p class="small muted">{{ it.summary }}</p>{% endif %}
+      {% if it.features %}<ul class="small" style="margin:6px 0;padding-inline-start:18px">{% for f in it.features %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
+      {% if it.details %}<details class="small muted"><summary>توضیح کامل</summary><p style="white-space:pre-wrap">{{ it.details }}</p></details>{% endif %}
       <p class="small muted">مدت هر خرید: {{ it.addon.duration_days|fanum }} روز، {% if it.workspace %}برای هر پایگاه داده{% else %}برای کل حساب شما{% endif %}{% if it.can_trial %}، <b>{{ it.addon.trial_days|fanum }} روز آزمایشی رایگان</b>{% endif %}</p>
       {% for r in it.rows %}
       <div class="mk-row" style="border-top:1px solid var(--line-2);padding:10px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center">

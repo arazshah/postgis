@@ -340,7 +340,10 @@ def start_trial(user, addon: PluginAddon, database: UserDatabase | None = None):
 
 def market_items(user) -> dict:
     """داده‌ی صفحه‌ی بازار: پلاگین‌های پولی با وضعیت هر دارنده، و پلاگین‌های رایگانِ باز."""
-    from kernel.models import PluginState
+    from django.urls import reverse
+
+    from kernel.market import CATEGORIES as market_categories_const
+    from kernel.models import PluginMedia, PluginState
     from kernel.plugins import registry
 
     dbs = list(user.databases.exclude(status__in=[UserDatabase.Status.DELETED, UserDatabase.Status.ERROR,
@@ -353,7 +356,11 @@ def market_items(user) -> dict:
             rows = [{"db": d, **addon_status(a, user, d)} for d in dbs]
         else:
             rows = [{"db": None, **addon_status(a, user)}]
+        media = PluginMedia.objects.filter(plugin_id=a.plugin_id).first()
+        cat = dict(market_categories_const).get(a.category, "")
         paid.append({"addon": a, "name": a.title, "summary": a.description or (p.description if p else ""), "rows": rows,
+                     "category": cat, "features": list(a.features or []), "details": a.details,
+                     "image": reverse("kernel:media", args=[media.token]) if media else "",
                      "can_trial": a.trial_days > 0, "workspace": a.scope == PluginAddon.Scope.WORKSPACE})
     free = []
     for st in PluginState.objects.filter(enabled=True, access=PluginState.Access.OPEN):
