@@ -21,7 +21,7 @@ import urllib.parse
 
 from django.utils import timezone
 
-from . import crypto, entitlements, metering, notify, pagekit, platform, tables, workspace
+from . import caps, crypto, entitlements, metering, notify, pagekit, platform, tables, workspace
 
 log = logging.getLogger(__name__)
 MAX_BYTES, TIMEOUT = 2 * 1024 * 1024, 10
@@ -277,7 +277,7 @@ def run_now(ws, plugin, page, spec, user=None) -> str:
     st = _state(ws.pk, plugin, page.key, spec.key)
     if st.last_run and timezone.now() - st.last_run < RUN_NOW_GAP:
         return "دریافت دستی را هر ۵ دقیقه یک‌بار می‌توانید بزنید."
-    if not entitlements.allowed(plugin, user=user, ws=ws):
+    if not entitlements.allowed(plugin, user=user, ws=ws) or not caps.allowed("sources", user=user, ws=ws):
         return "دسترسی به پلاگین ندارید."
     return run_one(st, page, spec, ws)
 
@@ -297,7 +297,8 @@ def tick(now=None) -> dict:
             st.next_run = now + datetime.timedelta(hours=6)  # پلاگین/پایگاه فعلاً در دسترس نیست
             st.save(update_fields=["next_run"])
             continue
-        if not entitlements.allowed(st.plugin_id, user=getattr(ws, "owner", None), ws=ws):
+        owner = getattr(ws, "owner", None)
+        if not entitlements.allowed(st.plugin_id, user=owner, ws=ws) or not caps.allowed("sources", user=owner, ws=ws):
             st.next_run = now + datetime.timedelta(hours=6)
             st.save(update_fields=["next_run"])
             continue

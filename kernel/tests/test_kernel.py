@@ -44,7 +44,9 @@ class InstalledPluginsTests(SimpleTestCase):
     def test_every_project_app_declares_a_plugin_and_loads_cleanly(self):
         self.assertEqual(registry.errors, {})
         mine = {c.name for c in apps.get_app_configs() if not c.name.startswith("django.")} - {"kernel"}
-        self.assertEqual(mine, set(registry.plugins))
+        from kernel import caps
+
+        self.assertEqual(mine | {caps.pid(c) for c in caps.CAPS}, set(registry.plugins))  # پلاگین‌های قابلیت را خود هسته ثبت می‌کند
         self.assertEqual(registry.missing_requirements(), [])
         self.assertEqual([e for e in run_checks() if e.id.startswith("kernel.")], [])
 

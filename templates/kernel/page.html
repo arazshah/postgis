@@ -4,10 +4,10 @@
 {% block ws %}
 <div class="wrap page">
   <div class="page-head"><div><h1>{{ page.title }}</h1>{% if page.subtitle %}<p class="muted page-sub">{{ page.subtitle }}</p>{% endif %}</div>
-    {% if page.refresh or page.reports %}<div class="page-acts">
-      {% for rp in page.reports %}<a class="btn ghost" href="{% url 'kernel:report' db.pk page.plugin page.key rp.key %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" download>{% icon "download" 18 %}{{ rp.button }}</a>
+    {% if page.refresh or page.reports and cap_reports %}<div class="page-acts">
+      {% for rp in page.reports %}{% if cap_reports %}<a class="btn ghost" href="{% url 'kernel:report' db.pk page.plugin page.key rp.key %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" download>{% icon "download" 18 %}{{ rp.button }}</a>
       <a class="btn ghost sm" href="{% url 'kernel:report_png' db.pk page.plugin page.key rp.key %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" download>{% icon "image" 16 %}تصویر</a>
-      {% if can_edit_rows %}<a class="btn ghost sm" href="{% url 'kernel:report_editor' db.pk page.plugin page.key rp.key %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}">{% icon "edit" 16 %}چیدمان</a>{% endif %}{% endfor %}
+      {% if can_edit_rows %}<a class="btn ghost sm" href="{% url 'kernel:report_editor' db.pk page.plugin page.key rp.key %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}">{% icon "edit" 16 %}چیدمان</a>{% endif %}{% endif %}{% endfor %}
       {% if page.refresh %}<span class="small muted pk-live" data-pk-live>{% icon "clock" 16 %}به‌روزرسانی خودکار هر {{ page.refresh|fanum }} ثانیه</span>{% endif %}</div>{% endif %}</div>
 
   {% if page.params %}
@@ -54,7 +54,7 @@
     <button class="btn ghost" type="submit">{% icon "download" 18 %}{{ ex.submit }}</button>
   </form>
   {% endfor %}
-  {% for f in page.forms %}
+  {% for f in forms %}
   <form method="post" action="{% url 'kernel:form' db.pk page.plugin page.key f.key %}" class="card pk-form" id="form-{{ f.key }}" novalidate>
     {% csrf_token %}
     <div class="ch"><h2>{{ f.title }}</h2></div>
