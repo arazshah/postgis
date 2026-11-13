@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
 
-from kernel import notify
+from kernel import caps, notify
 from kernel.models import NotifyAddress, NotifyPref
 
 URL = "accounts:profile"
@@ -11,8 +11,9 @@ URL = "accounts:profile"
 
 def context(request) -> dict:
     addrs = {a.channel: a for a in NotifyAddress.objects.filter(user=request.user)}
-    rows = [{"key": c.key, "label": notify.CHANNELS[c.key]["label"], "addr": addrs.get(c.key)} for c in notify.active_channels()]
-    return {"rows": rows, "pref": NotifyPref.objects.filter(user=request.user).first(), "hours": range(24),
+    on = caps.allowed("notify", user=request.user)
+    rows = [{"key": c.key, "label": notify.CHANNELS[c.key]["label"], "addr": addrs.get(c.key)} for c in (notify.active_channels() if on else [])]
+    return {"rows": rows, "pref": NotifyPref.objects.filter(user=request.user).first(), "hours": range(24), "cap_on": on,
             "link": request.session.pop("notify_link", None)}
 
 

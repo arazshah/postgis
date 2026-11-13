@@ -110,7 +110,7 @@ class RecordSpec:
 
 
 COLUMN_TYPES = ("text", "integer", "bigint", "double", "boolean", "date", "timestamptz", "jsonb", "point", "line", "polygon", "multipolygon")
-MAX_TABLES, MAX_COLUMNS, MAX_INDEXES = 5, 20, 3
+MAX_TABLES, MAX_COLUMNS, MAX_INDEXES = 5, 40, 3
 
 
 @dataclass(frozen=True)
@@ -164,11 +164,12 @@ class SourceInput:
 
     name: str
     label: str
-    kind: str = "number"  # number | int | text
+    kind: str = "number"  # number | int | text | choice (یکی از choices) | multi (چند تا از choices؛ با ویرگول به query می‌رود)
     required: bool = True
     default: str = ""
     min: float | None = None
     max: float | None = None
+    choices: tuple[tuple[str, str], ...] = ()  # (مقدار، برچسب) برای choice و multi
 
 
 @dataclass(frozen=True)
@@ -196,6 +197,9 @@ class SourceSpec:
     secret_header: str = ""
     secret_param: str = ""
     hint: str = ""
+    optional: tuple[str, ...] = ()  # ستون‌هایی که اگر در پاسخ نبودند NULL می‌شوند (مثلاً متغیری که کاربر انتخاب نکرده)
+    consts: tuple[tuple[str, str], ...] = ()  # (ستون، نام ورودی): مقدار ستون از ورودی پایگاه می‌آید نه پاسخ (مثل lat، lon، model)
+    mode: str = "append"  # append (فقط تازه‌تر از cursor) | replace (پنجره‌ی هم‌پوشان با همان consts پاک و دوباره نوشته می‌شود؛ برای پیش‌بینی)
 
 
 @dataclass(frozen=True)
@@ -455,7 +459,7 @@ def valid_host(h: str) -> bool:
 SRC_HEADER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9-]{1,39}$")
 PLACEHOLDER_RE = re.compile(r"\{([a-z][a-z0-9_]{0,30})\}")
 SRC_BUILTIN = ("since", "today")
-MAX_SOURCE_FIELDS = 12
+MAX_SOURCE_FIELDS = 40
 
 
 def parse_report(d: dict) -> ReportSpec:
@@ -520,7 +524,7 @@ def parse_source(d: dict) -> SourceSpec:
     rows_path = _str(d, "rows_path", limit=120)
     if rows_path and not SRC_PATH_RE.fullmatch(rows_path):
         raise SpecError("«rows_path» نامعتبر است (مسیر نقطه‌ای).")
-    fields, paths = [], []
+    fields, paths, optional, const_pairs = [], [], [], []
     raw_fields = d.get("fields") or []
     if not raw_fields or len(raw_fields) > MAX_SOURCE_FIELDS:
         raise SpecError(f"منبع ۱ تا {MAX_SOURCE_FIELDS} فیلد لازم دارد.")
@@ -528,11 +532,16 @@ def parse_source(d: dict) -> SourceSpec:
         fd = parse_field(f)
         if fd.kind == "geometry":
             raise SpecError("فیلد هندسه برای منبع بیرونی پشتیبانی نمی‌شود.")
-        path = _str(f, "path", default=fd.name, limit=120)
-        if not SRC_PATH_RE.fullmatch(path):
-            raise SpecError(f"مسیر فیلد «{fd.name}» نامعتبر است.")
+        if f.get("input"):  # ستون از ورودی پایگاه (نه پاسخ)
+            const_pairs.append((fd.name, _str(f, "input", limit=30)))
+        else:
+            path = _str(f, "path", default=fd.name, limit=120)
+            if not SRC_PATH_RE.fullmatch(path):
+                raise SpecError(f"مسیر فیلد «{fd.name}» نامعتبر است.")
+            paths.append((fd.name, path))
+            if f.get("optional"):
+                optional.append(fd.name)
         fields.append(fd)
-        paths.append((fd.name, path))
     if len({f.name for f in fields}) != len(fields):
         raise SpecError("فیلدهای منبع باید یکتا باشند.")
     cursor = _str(d, "cursor", limit=63)
@@ -544,16 +553,31 @@ def parse_source(d: dict) -> SourceSpec:
         if not PARAM_RE.fullmatch(name) or name in SRC_BUILTIN:
             raise SpecError(f"نام ورودی «{name}» نامعتبر یا رزروشده است.")
         kind = _str(i, "kind", default="number")
-        if kind not in ("number", "int", "text"):
+        if kind not in ("number", "int", "text", "choice", "multi"):
             raise SpecError(f"نوع ورودی «{name}» نامعتبر است.")
+        choices = ()
+        if kind in ("choice", "multi"):
+            rawc = i.get("choices") or []
+            if not rawc or len(rawc) > 60 or not all(isinstance(c, (list, tuple)) and len(c) == 2 and re.fullmatch(r"[A-Za-z0-9_.:-]{1,60}", str(c[0])) for c in rawc):
+                raise SpecError(f"ورودی «{name}» گزینه‌های [مقدار، برچسب] لازم دارد (مقدار: حروف لاتین، رقم و _.:-).")
+            choices = tuple((str(a), str(b)) for a, b in rawc)
         lo, hi = i.get("min"), i.get("max")
         for v in (lo, hi):
             if v is not None and (not isinstance(v, (int, float)) or isinstance(v, bool)):
                 raise SpecError(f"کران ورودی «{name}» باید عدد باشد.")
         inputs.append(SourceInput(name, _str(i, "label", required=True, limit=80), kind, bool(i.get("required", True)),
-                                  _str(i, "default", limit=60), lo, hi))
-    if len(inputs) > 6 or len({i.name for i in inputs}) != len(inputs):
-        raise SpecError("حداکثر ۶ ورودی یکتا.")
+                                  _str(i, "default", limit=600), lo, hi, choices))
+    if len(inputs) > 8 or len({i.name for i in inputs}) != len(inputs):
+        raise SpecError("حداکثر ۸ ورودی یکتا.")
+    in_names = {i.name for i in inputs}
+    for col, inp in const_pairs:
+        if inp not in in_names:
+            raise SpecError(f"ستون «{col}» از ورودی «{inp}» می‌آید که اعلام نشده است.")
+    mode = _str(d, "mode", default="append")
+    if mode not in ("append", "replace"):
+        raise SpecError("«mode» یکی از append یا replace است.")
+    if mode == "replace" and not cursor:
+        raise SpecError("حالت replace کلید زمانی (cursor) لازم دارد.")
     known = {i.name for i in inputs} | set(SRC_BUILTIN)
     raw_q = d.get("query") or {}
     if not isinstance(raw_q, dict) or len(raw_q) > 12:
@@ -584,7 +608,8 @@ def parse_source(d: dict) -> SourceSpec:
             raise SpecError(f"«{name}» عددی بین {lo} و {hi} است.")
         out.append(v)
     return SourceSpec(key, _str(d, "title", required=True, limit=80), url, host, u.path or "/", tuple(query), table, tuple(fields),
-                      tuple(paths), layout, rows_path, cursor, out[0], out[1], tuple(inputs), sh, sp, _str(d, "hint", limit=240))
+                      tuple(paths), layout, rows_path, cursor, out[0], out[1], tuple(inputs), sh, sp, _str(d, "hint", limit=240),
+                      tuple(optional), tuple(const_pairs), mode)
 
 
 EXT_RE = re.compile(r"\.[a-z0-9]{1,8}")
@@ -1058,6 +1083,28 @@ def insert_rows(ws, form, rows: list[dict]) -> None:
         _check_geoms(conn, form, rows)
         with conn.cursor() as cur:
             cur.executemany(query, [[_param(r[n], n, geom_cols) for n in names] for r in rows])
+        conn.commit()
+
+
+def replace_rows(ws, spec, rows: list[dict]) -> None:
+    """حالت `replace` منبع بیرونی (مثل پیش‌بینی): در **یک تراکنش** ردیف‌های هم‌پوشان (کلید زمانی ≥ کمترین زمان ورودی و همان مقدار ستون‌های
+    consts: lat، lon، model…) از همان جدول پاک و ردیف‌های تازه نوشته می‌شود. فقط جدول و ستون‌های اعلام‌شده؛ همه پارامتری."""
+    if not rows:
+        return
+    schema, name, names, geom_cols, ph = _resolve(ws, spec)
+    key = spec.cursor
+    scope = [c for c, _i in spec.consts]
+    lo = min(str(r[key]) for r in rows if r.get(key) is not None)
+    where = [sql.SQL("{} >= %s").format(sql.Identifier(key))] + [sql.SQL("{} IS NOT DISTINCT FROM %s").format(sql.Identifier(c)) for c in scope]
+    params = [lo] + [rows[0][c] for c in scope]
+    insert = sql.SQL("INSERT INTO {rel} ({cols}) VALUES ({vals})").format(
+        rel=sql.Identifier(schema, name), cols=sql.SQL(", ").join(sql.Identifier(n) for n in names),
+        vals=sql.SQL(", ").join(ph[n] for n in names))
+    with tenantdb.connect(ws, write=True, as_owner=True) as conn:
+        conn.execute(sql.SQL("SET LOCAL statement_timeout = {}").format(sql.Literal(f"{TIMEOUT_S}s")))
+        conn.execute(sql.SQL("DELETE FROM {rel} WHERE {w}").format(rel=sql.Identifier(schema, name), w=sql.SQL(" AND ").join(where)), params)
+        with conn.cursor() as cur:
+            cur.executemany(insert, [[_param(r[n], n, geom_cols) for n in names] for r in rows])
         conn.commit()
 
 

@@ -14,6 +14,9 @@ class KernelConfig(AppConfig):
         from .plugins import registry
 
         registry.discover()
+        from . import caps
+
+        caps.register_all()  # قابلیت‌های مشترک به‌صورت پلاگین مستقل (ADR-0009)
         from . import jobs
 
         jobs.register_tick("plugin_alerts", "kernel.alerts.tick", plugin="kernel", order=90)

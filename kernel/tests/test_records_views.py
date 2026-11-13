@@ -94,3 +94,13 @@ class RecordViewTests(BaseCase):
         self.assertContains(r, reverse("kernel:record_edit", args=self.args))
         self.assertContains(r, reverse("kernel:record_delete", args=self.args))
         self.assertContains(r, "data-confirm=")
+
+    def test_list_uses_persian_labels_and_choice_names(self):
+        heads, rows = ["id", "name", "crop"], [[7, "الف", "wheat"]]
+        with mock.patch("kernel.pagekit.fetch_records", return_value=(heads, rows)), \
+                mock.patch("kernel.pages_view.pagekit.render_block", return_value={"kind": "text", "paras": ["x"], "width": "full"}):
+            r = self.client.get(reverse("kernel:page", args=[self.db.pk, "demo", "farms"]))
+        self.assertContains(r, "<th>نام</th>")  # برچسب فارسی، نه نام ستون
+        self.assertContains(r, "<th>محصول</th>")
+        self.assertContains(r, "گندم")  # مقدار گزینه با برچسب
+        self.assertNotContains(r, ">wheat<")

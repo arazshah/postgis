@@ -437,3 +437,96 @@ class RealChainTests(BaseCase):
         self.assertEqual(self.rows(), [])
         self.st.refresh_from_db()
         self.assertEqual((self.st.cursor, self.st.fails), ("", 1))
+
+
+@unittest.skipUnless(PG_HOST, "به PostgreSQL آزمون نیاز دارد (TEST_PG_HOST)")
+@override_settings(STORAGES=STORAGES, MAX_DATABASES_PER_USER=10)
+class WeatherReplaceTests(BaseCase):
+    """منبع هواشناسی نمونه روی PostgreSQL واقعی: حالت replace پنجره‌ی هم‌پوشان همان مکان/مدل را به‌روز می‌کند و بقیه را نگه می‌دارد."""
+
+    def setUp(self):
+        super().setUp()
+        import tomllib
+
+        from kernel import samples, tables
+        registry.register(samples.WEATHER_ID, "هوا", kind="custom")
+        self.addCleanup(registry.remove_plugin, samples.WEATHER_ID)
+        self.addCleanup(entitlements.invalidate)
+        self.addCleanup(platform.invalidate)
+        self.page = pagekit.parse_page(samples.WEATHER_ID, tomllib.loads(samples.page_text(samples.WEATHER_ID)))
+        self.spec = self.page.sources[0]
+        kw = dict(host=PG_HOST, port=int(os.environ.get("TEST_PG_PORT", "5432")), user=os.environ.get("TEST_PG_USER", "postgres"),
+                  password=os.environ.get("TEST_PG_PASSWORD", "postgres"), autocommit=True)
+        self.kw = kw
+        with psycopg.connect(dbname="postgres", **kw) as c:
+            c.execute("DROP DATABASE IF EXISTS pagekit_wx")
+            c.execute("CREATE DATABASE pagekit_wx")
+        with psycopg.connect(dbname="pagekit_wx", **kw) as c:
+            c.execute("CREATE EXTENSION IF NOT EXISTS postgis")
+            for t in self.page.tables:
+                c.execute(tables.create_statement(t))
+        t0 = self.page.tables[0]
+        cat = mock.Mock()
+        cat.tables.return_value = [SimpleNamespace(schema="public", name=t.name, kind="r", oid=i) for i, t in enumerate(self.page.tables)]
+        cat.columns.side_effect = lambda table: [{"name": c.name, "type": "x", "generated": False, "identity": "", "spatial": False, "pk": False}
+                                                 for c in t0.columns] + [{"name": "id", "type": "bigint", "generated": False, "identity": "", "spatial": False, "pk": True}]
+
+        @contextmanager
+        def connect(ws, **k):
+            conn = psycopg.connect(dbname="pagekit_wx", **kw)
+            conn.autocommit = False
+            try:
+                yield conn
+            finally:
+                conn.close()
+
+        for target, val in (("kernel.tenantdb.catalog", lambda ws: cat), ("kernel.tenantdb.connect", connect), ("kernel.tables.ensure", lambda *a: 0)):
+            p = mock.patch(target, val)
+            p.start()
+            self.addCleanup(p.stop)
+        platform.set_("sources_enabled", "1")
+        SourceHost.objects.create(host="api.open-meteo.com")
+        self.ws = SimpleNamespace(pk=11, owner=self.user, is_live=True)
+
+    def state(self, **inputs):
+        base = {"lat": "35.7", "lon": "51.4", "variables": ["temperature_2m", "wind_speed_10m"], "model": "ecmwf_ifs025", "days": "3"}
+        SourceState.objects.filter(workspace_id=11).delete()
+        return SourceState.objects.create(plugin_id=self.page.plugin, page="meteo", key="forecast", workspace_id=11, enabled=True, inputs={**base, **inputs})
+
+    def rows(self):
+        with psycopg.connect(dbname="pagekit_wx", **self.kw) as c:
+            return c.execute("SELECT t, model, lat, temperature_2m, wind_speed_10m, relative_humidity_2m FROM weather_online_forecast ORDER BY model, t").fetchall()
+
+    def resp(self, times, temps):
+        return json.dumps({"hourly": {"time": times, "temperature_2m": temps, "wind_speed_10m": [5.0] * len(times)}}).encode()
+
+    def test_replace_updates_overlap_keeps_other_models(self):
+        st = self.state()
+        with mock.patch.object(sources, "_fetch", return_value=self.resp(["2026-11-13T00:00", "2026-11-13T01:00"], [10.0, 11.0])):
+            self.assertEqual(sources.run_one(st, self.page, self.spec, self.ws), "")
+        self.assertEqual(self.rows(), [("2026-11-13T00:00", "ecmwf_ifs025", 35.7, 10.0, 5.0, None), ("2026-11-13T01:00", "ecmwf_ifs025", 35.7, 11.0, 5.0, None)])
+        # پیش‌بینی تازه: ساعت اول عوض شد، ساعت سوم تازه؛ ردیف قبلی بدون تکرار جایگزین می‌شود
+        with mock.patch.object(sources, "_fetch", return_value=self.resp(["2026-11-13T01:00", "2026-11-13T02:00"], [12.5, 13.0])):
+            self.assertEqual(sources.run_one(st, self.page, self.spec, self.ws), "")
+        got = self.rows()
+        self.assertEqual([(r[0], r[3]) for r in got], [("2026-11-13T00:00", 10.0), ("2026-11-13T01:00", 12.5), ("2026-11-13T02:00", 13.0)])
+        # مدل دیگر هم‌زمان کنار می‌ماند و ردیف‌های مدل اول را پاک نمی‌کند
+        st2 = self.state(model="gfs_seamless")
+        SourceState.objects.filter(pk=st2.pk).update(cursor="")
+        with mock.patch.object(sources, "_fetch", return_value=self.resp(["2026-11-13T01:00"], [9.0])):
+            sources.run_one(st2, self.page, self.spec, self.ws)
+        by_model = {}
+        for r in self.rows():
+            by_model.setdefault(r[1], []).append(r[3])
+        self.assertEqual(by_model, {"ecmwf_ifs025": [10.0, 12.5, 13.0], "gfs_seamless": [9.0]})
+
+    def test_unselected_variable_is_null_and_bad_response_writes_nothing(self):
+        st = self.state()
+        with mock.patch.object(sources, "_fetch", return_value=self.resp(["2026-11-13T00:00"], [1.0])):
+            sources.run_one(st, self.page, self.spec, self.ws)
+        self.assertIsNone(self.rows()[0][5])  # رطوبت انتخاب نشده بود
+        st = self.state()
+        bad = json.dumps({"hourly": {"time": ["2026-11-13T05:00"]}}).encode()  # بدون هیچ متغیری
+        with mock.patch.object(sources, "_fetch", return_value=bad):
+            err = sources.run_one(st, self.page, self.spec, self.ws)
+        self.assertTrue(err)

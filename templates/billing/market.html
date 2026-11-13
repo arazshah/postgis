@@ -49,5 +49,11 @@
     {% for f in free %}<section class="legend"><div class="legend-title"><h3>{{ f.name }}</h3><span class="chip">رایگان</span></div>{% if f.summary %}<p class="small muted">{{ f.summary }}</p>{% endif %}</section>{% endfor %}
   </div>
   {% endif %}
+
+  <section class="legend" style="margin-top:32px">
+    <div class="legend-title"><h3>پلاگین اختصاصی برای تخصص یا سازمان شما</h3></div>
+    <p class="small muted">پلاگینی که در بازار نیست را برایتان می‌سازیم: گزارش و شناسنامه، منبع داده‌ی آنلاین، ابزار تحلیل مکانی، ثبت میدانی. می‌تواند فقط برای شما یا سازمانتان باشد، یا در بازار عرضه شود.</p>
+    <a class="btn" href="{% url 'core:contact' %}?topic=plugin">{% icon "plus" 18 %}ثبت سفارش پلاگین اختصاصی</a>
+  </section>
 </div>
 {% endblock %}
