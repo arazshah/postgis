@@ -22,6 +22,7 @@ from . import (
     pagekit,
     pkg,
     pkgtest,
+    postpub,
     publish,
     quality,
     release_diff,
@@ -147,7 +148,8 @@ def assistant(request, pk):
     try:
         out = studio_ai.ask(request.user, _spec(draft), draft.plugin_id, str(data.get("message", "")), history=data.get("history"),
                             mode=str(data.get("mode") or "chat"), page=str(data.get("page") or "")[:40], selected=str(data.get("selected") or "")[:20],
-                            focus=str(data.get("focus") or "")[:40], failures=str(data.get("failures") or "")[:studio_ai.MAX_FAILURES])
+                            focus=str(data.get("focus") or "")[:40], failures=str(data.get("failures") or "")[:studio_ai.MAX_FAILURES],
+                            stats=postpub.collect(draft.plugin_id) if data.get("mode") == "postpub" else None)
     except ai.AiError as exc:
         return JsonResponse({"error": str(exc)}, status=429 if "سقف" in str(exc) else 400)
     ws_mod.log_event("plugin_studio_ai", f"{draft.plugin_id}: {data.get('mode') or 'chat'}، {len(out['ops'])} پیشنهاد" + ("" if out["valid"] else " (نامعتبر)"), user=request.user)
@@ -195,6 +197,13 @@ def media(request, pk):
 
 
 STATUS_FA = dict(PluginRelease.Status.choices)
+
+
+@require_GET
+def stats(request, pk):
+    """آمار پس از انتشار (فقط شمارنده؛ kernel.postpub)."""
+    draft = _draft(request, pk)
+    return JsonResponse(postpub.collect(draft.plugin_id))
 
 
 @require_GET
@@ -370,7 +379,7 @@ def designer(request, pk):
     from django.urls import reverse
 
     draft = _draft(request, pk)
-    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore", "run", "assistant", "access", "media", "releases", "compare", "rollback", "restore_release", "publish")}
+    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore", "run", "assistant", "access", "media", "releases", "compare", "rollback", "restore_release", "publish", "stats")}
     tpl = [{"key": k, "role": t["role"], "title": t["title"], "hint": t["hint"], "needs": t["needs"], "nums": t.get("nums", [])} for k, t in wizard_code.TEMPLATES.items()]
     codeinfo = {"templates": tpl, "roles": wizard_code.ROLE_LABEL, "cols": {k: [v[0], list(v[1])] for k, v in wizard_code.COLS.items()},
                 "nums": {k: v[0] for k, v in wizard_code.NUMS.items()}, "runner_ready": not _runner_error(), "ai_ready": ai.available()}

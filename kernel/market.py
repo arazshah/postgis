@@ -63,11 +63,11 @@ def provider(func: str, *, plugin: str) -> None:
     registry.add(POINT, "provider", func, plugin=plugin, replace=True)
 
 
-def _call(action: str, plugin_id: str, listing: Listing | None) -> None:
+def _call(action: str, plugin_id: str, listing: Listing | None):
     func = registry.get(POINT, "provider")
     if func is None:
         raise MarketError("فروش پلاگین فعال نیست (ارائه‌دهنده‌ی صورتحساب ثبت نشده).")
-    load(func)(action, plugin_id, listing)
+    return load(func)(action, plugin_id, listing)
 
 
 def available() -> bool:
@@ -84,3 +84,13 @@ def upsert(plugin_id: str, listing: Listing) -> None:
 def remove(plugin_id: str) -> None:
     if available():
         _call("remove", plugin_id, None)
+
+
+def stats(plugin_id: str) -> dict:
+    """آمار فروش یک پلاگین از ارائه‌دهنده (فقط شمارنده و مبلغ، بدون نام مشتری)؛ بدون ارائه‌دهنده یا آگهی: {}."""
+    if not available():
+        return {}
+    try:
+        return dict(_call("stats", plugin_id, None) or {})
+    except MarketError:
+        return {}

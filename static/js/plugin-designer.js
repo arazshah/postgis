@@ -145,7 +145,7 @@
     root.querySelector("#pd-redo").disabled = hist.i >= hist.ids.length - 1;
     const all = S.analysis.issues || [], nc = all.filter((i) => i.scope === "code").length, n = all.length - nc;
     const nav = root.querySelector("#pd-nav");
-    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["code", "کد", "code"], ["auto", "خودکارسازی", "bolt"], ["quality", "کیفیت", "check"], ["market", "بازار و قیمت", "card"], ["publish", "انتشار و نسخه‌ها", "share"]];
+    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["code", "کد", "code"], ["auto", "خودکارسازی", "bolt"], ["quality", "کیفیت", "check"], ["market", "بازار و قیمت", "card"], ["publish", "انتشار و نسخه‌ها", "share"], ["stats", "پس از انتشار", "chart"]];
     const bad = { pages: n, code: nc };
     const q = S.quality, qb = root.querySelector("#pd-q");
     if (q && qb) {
@@ -182,6 +182,7 @@
     if (tab === "quality") { main.innerHTML = ""; drawQuality(main); return; }
     if (tab === "market") { main.innerHTML = ""; drawMarket(main); return; }
     if (tab === "publish") { main.innerHTML = ""; drawPublish(main); return; }
+    if (tab === "stats") { main.innerHTML = ""; drawStats(main); return; }
     main.innerHTML = `
       <aside class="pd-pal" id="pd-pal" aria-label="اجزا"></aside>
       <section class="pd-center"><div class="pd-pages" id="pd-pages"></div><div class="pd-scroll" id="pd-scroll"></div></section>
@@ -1268,6 +1269,44 @@
       const d = e.target.closest("[data-delrow]");
       if (d) { const r = rows(); r.splice(Number(d.dataset.delrow.split(":")[1]), 1); spec().access.targets = r; paintAcc(el); later(); }
     });
+  }
+
+
+  // ---------------------------------------------------------------- پس از انتشار (فقط شمارنده؛ kernel.postpub)
+  const METRIC_FA = { page_views: "بازدید صفحه", form_submits: "ثبت فرم", ingest_rows: "ردیف دریافتی", handler_runs: "اجرای کد", report_pdfs: "گزارش PDF" };
+  const monthFa = (m) => new Date(m + "-15").toLocaleDateString("fa-IR", { year: "numeric", month: "long" });
+
+  async function drawStats(main) {
+    main.innerHTML = `<div class="pd-data" id="pd-stats"><p class="pd-hint">در حال بارگذاری…</p></div>`;
+    const box = main.querySelector("#pd-stats");
+    let d;
+    try { d = await call(API.stats); } catch (e) { box.innerHTML = `<div class="pd-issue">${ic("warn")}<span>${esc(e.message)}</span></div>`; return; }
+    if (!d.published) {
+      box.innerHTML = `<div class="pd-empty">${ic("chart")}<b>هنوز منتشر نشده</b><span>بعد از انتشار نخستین نسخه، مشترک‌ها، فروش، مصرف و سلامت پلاگین اینجا دیده می‌شود.</span><button class="btn" type="button" id="pd-gopub">${ic("share")}<span>رفتن به انتشار</span></button></div>`;
+      box.querySelector("#pd-gopub").addEventListener("click", () => { tab = "publish"; draw(); });
+      return;
+    }
+    const c = d.customers, sl = d.sales || {}, h = d.health;
+    const alerts = [];
+    if (h.unseen) alerts.push(["warn", `${FA(h.unseen)} قطع خودکار دیده‌نشده (آخرین: ${h.last ? h.last.version : ""})؛ نسخه‌ی تازه یا بازگشت لازم است.`]);
+    if (d.near_limit) alerts.push(["warn", `${FA(d.near_limit)} دارنده به ۸۰٪ سقف ماهانه‌ی خود رسیده‌اند؛ فرصت ارتقا یا سقف بالاتر.`]);
+    if (c.expiring_7d) alerts.push(["info", `${FA(c.expiring_7d)} مجوز تا ۷ روز دیگر منقضی می‌شود.`]);
+    if (c.trial && !c.purchase) alerts.push(["info", `${FA(c.trial)} آزمایشی فعال هست و هنوز خریدی نشده؛ قیمت، آگهی یا طول دوره‌ی آزمایشی را بازبینی کنید.`]);
+    const tile = (n, l, hint) => `<div class="pd-kpi"><b>${n}</b><span>${l}</span>${hint ? `<small>${hint}</small>` : ""}</div>`;
+    const maxM = Math.max(1, ...(sl.months || []).map((m) => m.amount));
+    box.innerHTML = `<div class="pd-row"><h2 class="pd-h" style="margin:0">${ic("chart")}پس از انتشار</h2><span class="pd-hint ltr" dir="ltr">v${esc(d.active_version)}</span><span class="pd-spacer"></span>
+        <button class="btn ghost sm" type="button" id="pd-statai"${CODE.ai_ready ? "" : " disabled"}>${ic("spark")}<span>جمع‌بندی با دستیار</span></button></div>
+      <p class="pd-hint">فقط شمارنده و مبلغ؛ نام یا نشانی هیچ مشتری و پایگاهی دیده نمی‌شود.</p>
+      ${alerts.map(([k, t]) => `<div class="pd-issue" ${k === "info" ? 'style="border-color:var(--ochre);background:var(--ochre-soft)"' : ""}>${ic(k === "warn" ? "warn" : "info")}<span>${esc(t)}</span></div>`).join("")}
+      <div class="pd-kpis">${tile(FA(c.active), "مجوز فعال", c.everyone ? "برای همه باز است" : "")}${tile(FA(c.trial), "آزمایشی فعال")}${tile(FA(c.purchase), "خریداری‌شده")}
+        ${sl.listed ? tile(FA(Number(sl.revenue_30d || 0).toLocaleString("en-US")), "درآمد ۳۰ روز (تومان)", `${FA(sl.invoices_30d)} فاکتور`) : ""}${tile(FA(Math.max(0, ...Object.values(d.usage).map((u) => u.workspaces), 0)), "پایگاه فعال", "بر پایه‌ی بیشترین معیار")}${tile(FA(h.trips_30d), "قطع خودکار ۳۰ روز", h.last ? "آخرین: " + h.last.version : "")}</div>
+      ${sl.listed ? `<section class="pd-card"><h3 class="pd-h">${ic("card")}فروش</h3><p class="pd-hint">کل درآمد ${FA(Number(sl.revenue_total || 0).toLocaleString("en-US"))} تومان از ${FA(sl.invoices_paid)} فاکتور پرداخت‌شده${sl.invoices_open ? ` · ${FA(sl.invoices_open)} فاکتور باز` : ""}.</p>
+        ${(sl.months || []).length ? `<ul class="pd-bars">${sl.months.map((m) => `<li><span>${esc(monthFa(m.month))}</span><i style="--w:${Math.round(m.amount * 100 / maxM)}%"></i><b>${FA(Number(m.amount).toLocaleString("en-US"))}</b></li>`).join("")}</ul>` : `<p class="pd-hint">هنوز فروشی ثبت نشده است.</p>`}</section>` : ""}
+      <section class="pd-card"><h3 class="pd-h">${ic("chart")}مصرف ۳۰ روز اخیر</h3>
+        ${Object.keys(d.usage).length ? Object.entries(d.usage).map(([k, u]) => { const mx = Math.max(1, ...u.series); return `<div class="pd-spark"><div class="pd-row"><b>${esc(METRIC_FA[k] || k)}</b><span class="pd-spacer"></span><span class="pd-hint">${FA(Number(u.total_30d).toLocaleString("en-US"))} · ${FA(u.workspaces)} پایگاه</span></div>
+          <div class="pd-sbars" role="img" aria-label="${esc(METRIC_FA[k] || k)}: روند ۱۴ روز اخیر">${u.series.map((v) => `<i style="height:${Math.max(4, Math.round(v * 100 / mx))}%" title="${FA(v)}"></i>`).join("")}</div></div>`; }).join("") : `<p class="pd-hint">هنوز مصرفی ثبت نشده است.</p>`}</section>
+      <section class="pd-card"><h3 class="pd-h">${ic("clock")}نسخه‌ها</h3><ul class="pd-rels">${d.versions.map((v) => `<li class="${v.status}"><div class="pd-row"><b class="ltr" dir="ltr">${esc(v.version)}</b><span class="pd-sev ${v.status === "active" ? "ok" : ""}">${esc(RSTATUS[v.status] || v.status)}</span><span class="pd-hint">${new Date(v.at).toLocaleDateString("fa-IR")}</span></div>${v.notes ? `<p style="margin:6px 0 0">${esc(v.notes)}</p>` : ""}</li>`).join("")}</ul></section>`;
+    box.querySelector("#pd-statai").addEventListener("click", () => sendAi("postpub", "آمار پس از انتشار را جمع‌بندی کن و برای نسخه‌ی بعد پیشنهاد بده."));
   }
 
   // ---------------------------------------------------------------- انتشار و نسخه‌ها

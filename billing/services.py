@@ -338,33 +338,100 @@ def start_trial(user, addon: PluginAddon, database: UserDatabase | None = None):
     return ent
 
 
-def market_items(user) -> dict:
-    """داده‌ی صفحه‌ی بازار: پلاگین‌های پولی با وضعیت هر دارنده، و پلاگین‌های رایگانِ باز."""
+NEW_DAYS = 30
+STATE_TEXT = {"active": "فعال", "trial": "آزمایشی", "expired": "منقضی شد؛ داده‌ها محفوظ است"}
+
+
+def _row_text(r: dict) -> str:
+    st, left = r["state"], r.get("days_left")
+    if st == "active":
+        return "فعال" + (f"؛ {left} روز مانده" if left is not None else "، بدون انقضا")
+    if st == "trial":
+        return f"آزمایشی؛ {left} روز مانده"
+    return STATE_TEXT.get(st, "")
+
+
+def _market_listing(plugin_id: str, addon: PluginAddon | None):
+    """(نسخه‌ی فعال، آگهی): دسته، ویژگی‌ها و توضیح از افزونه‌ی فروشی یا، برای پلاگین رایگان، از آگهی ذخیره‌شده‌ی نسخه‌ی فعال."""
+    from kernel.models import PluginRelease
+
+    rel = PluginRelease.objects.filter(plugin_id=plugin_id, status=PluginRelease.Status.ACTIVE).first()
+    acc = (rel.access or {}) if rel else {}
+    lst = acc.get("listing") or {}
+    return rel, {"category": (addon.category if addon else "") or lst.get("category", ""),
+                 "features": list((addon.features if addon else None) or lst.get("features") or []),
+                 "details": (addon.details if addon else "") or lst.get("details", ""), "summary": acc.get("summary", "")}
+
+
+def _market_item(plugin, addon: PluginAddon | None, user, dbs) -> dict:
+    """کارت/صفحه‌ی یک پلاگین در بازار (رایگان یا پولی) با وضعیت دارنده."""
     from django.urls import reverse
 
-    from kernel.market import CATEGORIES as market_categories_const
-    from kernel.models import PluginMedia, PluginState
+    from kernel.market import CATEGORIES
+    from kernel.models import PluginMedia
+
+    rel, lst = _market_listing(plugin.id, addon)
+    media = [reverse("kernel:media", args=[m.token]) for m in PluginMedia.objects.filter(plugin_id=plugin.id)]
+    rows, best = [], None
+    if addon is not None and user is not None and user.is_authenticated:
+        rows = [{"db": d, **addon_status(addon, user, d)} for d in dbs] if addon.scope == PluginAddon.Scope.WORKSPACE else [{"db": None, **addon_status(addon, user)}]
+        for r in rows:
+            r["text"] = _row_text(r) if r["state"] != "none" else ""
+        rank = {"active": 0, "trial": 1, "expired": 2, "none": 3}
+        best = min(rows, key=lambda r: rank[r["state"]], default=None)
+        if best is not None and best["state"] == "none":
+            best = None
+    when = rel.activated_at or rel.uploaded_at if rel else None
+    return {"id": plugin.id, "name": addon.title if addon else plugin.name, "summary": (addon.description if addon else "") or lst["summary"] or plugin.description,
+            "category": lst["category"], "category_label": dict(CATEGORIES).get(lst["category"], ""), "features": lst["features"], "details": lst["details"],
+            "images": media, "image": media[0] if media else "", "paid": addon is not None, "addon": addon, "price_toman": addon.price_toman if addon else 0,
+            "duration_days": addon.duration_days if addon else 0, "workspace": bool(addon and addon.scope == PluginAddon.Scope.WORKSPACE),
+            "trial_days": addon.trial_days if addon else 0, "can_trial": bool(addon and addon.trial_days > 0), "version": rel.version if rel else plugin.version,
+            "updated": when, "is_new": bool(when and (timezone.now() - when).days < NEW_DAYS), "rows": rows, "best": best,
+            "status_text": (f"{best['db'].db_name} — " if best and best["db"] else "") + best["text"] if best else "", "owned": bool(best and best["state"] in ("active", "trial")),
+            "sort_new": int(when.timestamp()) if when else 0}
+
+
+def market_catalog(user) -> dict:
+    """داده‌ی بازار: همه‌ی پلاگین‌های قابل‌عرضه (پولی با وضعیت دارنده، و رایگانِ باز)، دسته‌ها با شمار و پایگاه‌های کاربر."""
+    from kernel.market import CATEGORIES
+    from kernel.models import PluginState
     from kernel.plugins import registry
 
-    dbs = list(user.databases.exclude(status__in=[UserDatabase.Status.DELETED, UserDatabase.Status.ERROR,
-                                                  UserDatabase.Status.PENDING]).select_related("plan"))
-    paid, listed = [], set()
+    dbs = list(user.databases.exclude(status__in=[UserDatabase.Status.DELETED, UserDatabase.Status.ERROR, UserDatabase.Status.PENDING]).select_related("plan")) if user.is_authenticated else []
+    items, listed = [], set()
     for a in public_addons():
         listed.add(a.plugin_id)
-        p = registry.plugins.get(a.plugin_id)
-        if a.scope == PluginAddon.Scope.WORKSPACE:
-            rows = [{"db": d, **addon_status(a, user, d)} for d in dbs]
-        else:
-            rows = [{"db": None, **addon_status(a, user)}]
-        media = PluginMedia.objects.filter(plugin_id=a.plugin_id).first()
-        cat = dict(market_categories_const).get(a.category, "")
-        paid.append({"addon": a, "name": a.title, "summary": a.description or (p.description if p else ""), "rows": rows,
-                     "category": cat, "features": list(a.features or []), "details": a.details,
-                     "image": reverse("kernel:media", args=[media.token]) if media else "",
-                     "can_trial": a.trial_days > 0, "workspace": a.scope == PluginAddon.Scope.WORKSPACE})
-    free = []
+        items.append(_market_item(registry.plugins[a.plugin_id], a, user, dbs))
     for st in PluginState.objects.filter(enabled=True, access=PluginState.Access.OPEN):
         p = registry.plugins.get(st.plugin_id)
         if p and p.kind != "system" and st.plugin_id not in listed:
-            free.append({"id": p.id, "name": p.name, "summary": p.description})
-    return {"paid": paid, "free": sorted(free, key=lambda x: x["name"]), "dbs": dbs}
+            items.append(_market_item(p, None, user, dbs))
+    items.sort(key=lambda i: (not i["paid"], i["name"]))
+    for it in items:
+        it["tags"] = " ".join(filter(None, ["paid" if it["paid"] else "free", "trial" if it["can_trial"] else "", "owned" if it["owned"] else "", "new" if it["is_new"] else "",
+                                            f"cat-{it['category']}" if it["category"] else ""]))
+        it["q"] = " ".join([it["name"], it["summary"], it["category_label"], *it["features"]])
+    counts = {k: sum(1 for i in items if i["category"] == k) for k, _l in CATEGORIES}
+    return {"items": items, "dbs": dbs, "categories": [(k, label, counts[k]) for k, label in CATEGORIES if counts[k]],
+            "n_paid": sum(1 for i in items if i["paid"]), "n_free": sum(1 for i in items if not i["paid"]), "n_trial": sum(1 for i in items if i["can_trial"]),
+            "n_owned": sum(1 for i in items if i["owned"])}
+
+
+def market_detail(user, plugin_id: str) -> dict | None:
+    """جزئیات یک پلاگین بازار + نسخه‌های اخیر با یادداشت و پلاگین‌های هم‌دسته؛ None اگر در بازار نیست."""
+    from kernel.models import PluginRelease
+
+    data = market_catalog(user)
+    item = next((i for i in data["items"] if i["id"] == plugin_id), None)
+    if item is None:
+        return None
+    rels = PluginRelease.objects.filter(plugin_id=plugin_id, status__in=[PluginRelease.Status.ACTIVE, PluginRelease.Status.RETIRED]).order_by("-id")[:4]
+    related = [i for i in data["items"] if i["id"] != plugin_id and i["category"] and i["category"] == item["category"]][:3]
+    return {"item": item, "dbs": data["dbs"], "releases": [{"version": r.version, "at": r.activated_at or r.uploaded_at, "notes": r.notes, "active": r.status == PluginRelease.Status.ACTIVE} for r in rels],
+            "related": related}
+
+
+def market_items(user) -> dict:
+    """سازگاری با فراخوان‌های قبلی: همان داده‌ی بازار."""
+    return market_catalog(user)

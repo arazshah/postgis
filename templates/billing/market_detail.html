@@ -1,0 +1,63 @@
+{% extends "base.html" %}{% load fa humanize static ws %}
+{% block title %}{{ item.name }} — بازار پلاگین — {{ SITE_NAME }}{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/market.css' %}">{% endblock %}
+{% block content %}
+<div class="wrap page mk mk-detail">
+  <nav class="mk-crumbs small" aria-label="مسیر"><a href="{% url 'billing:market' %}">بازار پلاگین</a><span aria-hidden="true">/</span>{% if item.category_label %}<span>{{ item.category_label }}</span><span aria-hidden="true">/</span>{% endif %}<span aria-current="page">{{ item.name }}</span></nav>
+  <div class="mk-dgrid">
+    <div class="mk-main">
+      <header class="mk-dhead">
+        <div class="mk-meta">{% if item.category_label %}<span class="chip">{{ item.category_label }}</span>{% endif %}{% if item.is_new %}<span class="mk-badge new">{% icon "spark" 14 %}جدید</span>{% endif %}
+          <span class="mk-ver ltr" dir="ltr">v{{ item.version }}</span>{% if item.updated %}<span class="small muted">به‌روزرسانی {{ item.updated|jdate }}</span>{% endif %}</div>
+        <h1>{{ item.name }}</h1>
+        {% if item.summary %}<p class="mk-lead">{{ item.summary }}</p>{% endif %}
+      </header>
+
+      <section class="mk-gallery" aria-label="تصاویر {{ item.name }}" data-mk-gallery>
+        {% if item.images %}
+        <figure class="mk-shot"><img id="mk-shot" src="{{ item.image }}" alt="نمایی از {{ item.name }}" width="1280" height="720"></figure>
+        {% if item.images|length > 1 %}<ul class="mk-thumbs">{% for u in item.images %}<li><a href="{{ u }}" data-mk-thumb aria-label="تصویر {{ forloop.counter|fanum }} از {{ item.images|length|fanum }}"{% if forloop.first %} aria-current="true"{% endif %}><img src="{{ u }}" alt="" loading="lazy" width="160" height="90"></a></li>{% endfor %}</ul>{% endif %}
+        {% else %}<div class="mk-shot mk-art tone-a" role="img" aria-label="بدون تصویر"><span class="mk-art-ic" aria-hidden="true">{% icon "cube" 56 %}</span></div>{% endif %}
+      </section>
+
+      {% if item.features %}<section aria-labelledby="mk-f-h"><h2 id="mk-f-h">چه امکاناتی دارد</h2>
+        <ul class="mk-flist">{% for f in item.features %}<li>{% icon "check" 18 %}<span>{{ f }}</span></li>{% endfor %}</ul></section>{% endif %}
+      {% if item.details %}<section aria-labelledby="mk-d-h"><h2 id="mk-d-h">درباره‌ی این پلاگین</h2><div class="mk-prose">{{ item.details|linebreaks }}</div></section>{% endif %}
+
+      {% if releases %}<section aria-labelledby="mk-r-h"><h2 id="mk-r-h">تغییرات نسخه‌ها</h2>
+        <ol class="mk-rels">{% for r in releases %}<li><div class="mk-rhead"><b class="ltr" dir="ltr">{{ r.version }}</b>{% if r.active %}<span class="chip ok">نسخه‌ی فعلی</span>{% endif %}<span class="small muted">{{ r.at|jdate }}</span></div>
+          {% if r.notes %}<p>{{ r.notes }}</p>{% else %}<p class="muted small">بدون یادداشت.</p>{% endif %}</li>{% endfor %}</ol></section>{% endif %}
+
+      {% if related %}<section aria-labelledby="mk-rel-h"><h2 id="mk-rel-h">هم‌دسته‌ها</h2>
+        <ul class="mk-grid mk-grid-sm">{% for it in related %}{% include "billing/_market_card.html" %}{% endfor %}</ul></section>{% endif %}
+    </div>
+
+    <aside class="mk-buy card" aria-labelledby="mk-b-h">
+      <h2 id="mk-b-h" class="sr-only">خرید یا دریافت</h2>
+      {% if item.paid %}
+      <p class="mk-bprice"><b>{{ item.price_toman|money }}</b> <small>تومان</small></p>
+      <p class="small muted">مدت هر خرید {{ item.duration_days|fanum }} روز، {% if item.workspace %}برای هر پایگاه داده{% else %}برای کل حساب شما{% endif %}.{% if item.can_trial %} <b>{{ item.trial_days|fanum }} روز آزمایشی رایگان</b> (یک‌بار).{% endif %}</p>
+      <ul class="mk-assure small"><li>{% icon "check" 14 %}پس از پایان، داده‌هایتان حذف نمی‌شود</li><li>{% icon "check" 14 %}تمدید به انتهای مجوز فعلی افزوده می‌شود</li></ul>
+      {% for r in item.rows %}
+      <div class="mk-brow">
+        <div>{% if r.db %}<b class="ltr" dir="ltr">{{ r.db.db_name }}</b>{% else %}<b>حساب شما</b>{% endif %}
+          <div class="small" style="{% if r.state == 'expired' %}color:var(--red){% else %}color:var(--ink-2){% endif %}">{% if r.state == "none" %}فعال نیست{% else %}{{ r.text }}{% endif %}</div></div>
+        <div class="mk-bacts">
+          {% if item.can_trial and r.state == "none" %}<form method="post" action="{% url 'billing:start_trial' %}">{% csrf_token %}<input type="hidden" name="addon" value="{{ item.addon.pk }}"><input type="hidden" name="from" value="detail:{{ item.id }}">{% if r.db %}<input type="hidden" name="target" value="{{ r.db.pk }}">{% endif %}<button class="btn ghost sm" type="submit">شروع آزمایشی</button></form>{% endif %}
+          {% if enabled %}<form method="post" action="{% url 'billing:start_addon' %}">{% csrf_token %}<input type="hidden" name="addon" value="{{ item.addon.pk }}"><input type="hidden" name="from" value="detail:{{ item.id }}">{% if r.db %}<input type="hidden" name="target" value="{{ r.db.pk }}">{% endif %}<button class="btn sm" type="submit">{% if r.state == "none" %}خرید{% else %}تمدید{% endif %}</button></form>{% endif %}
+        </div>
+      </div>
+      {% empty %}<p class="small muted">برای این پلاگین ابتدا باید یک پایگاه داده بسازید.</p>{% endfor %}
+      {% if item.workspace and not item.rows %}<a class="btn" href="{% url 'databases:dashboard' %}">{% icon "plus" 18 %}ساخت پایگاه داده</a>{% endif %}
+      {% if not enabled %}<p class="small muted" style="margin-top:12px">پرداخت فعلاً فعال نیست؛ دوره‌ی آزمایشی (اگر هست) قابل استفاده است.</p>{% endif %}
+      {% else %}
+      <p class="mk-bprice"><span class="chip ok">{% icon "globe" 14 %}رایگان</span></p>
+      <p class="small muted">برای همه‌ی پایگاه‌های داده فعال است و نیاز به خرید ندارد. بعد از باز کردن یک پایگاه، در ریل کناری (زیر «داده») پیدایش می‌کنید.</p>
+      <a class="btn" href="{% url 'databases:dashboard' %}">{% icon "db" 18 %}رفتن به پایگاه‌های من</a>
+      {% endif %}
+    </aside>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{% static 'js/market.js' %}" defer></script>{% endblock %}

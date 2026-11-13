@@ -414,6 +414,7 @@ class PluginDraftAdmin(admin.ModelAdmin):
                 path("<int:pk>/designer/api/assistant/", wrap(studio_api.assistant), name="kernel_plugindraft_api_assistant"),
                 path("<int:pk>/designer/api/access/", wrap(studio_api.access), name="kernel_plugindraft_api_access"),
                 path("<int:pk>/designer/api/media/", wrap(studio_api.media), name="kernel_plugindraft_api_media"),
+                path("<int:pk>/designer/api/stats/", wrap(studio_api.stats), name="kernel_plugindraft_api_stats"),
                 path("<int:pk>/designer/api/releases/", wrap(studio_api.releases), name="kernel_plugindraft_api_releases"),
                 path("<int:pk>/designer/api/compare/", wrap(studio_api.compare), name="kernel_plugindraft_api_compare"),
                 path("<int:pk>/designer/api/rollback/", wrap(studio_api.rollback), name="kernel_plugindraft_api_rollback"),
