@@ -1,6 +1,6 @@
 """مانیفست پلاگین «دستیار هوشمند» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
+from kernel import ai, conf, nav, plugins
 from kernel import dash as admin_dash
-from kernel import nav, plugins
 from kernel import settings as site_settings
 
 plugin = plugins.register("assistant", "دستیار هوشمند", kind="system", requires=("kb",))
@@ -17,3 +17,16 @@ site_settings.tool("assistanttest", "assistant-test/", "assistant.settings_admin
 site_settings.tool("assistantembed", "assistant-embed/", "assistant.settings_admin.embed_view", plugin=plugin.id)
 
 admin_dash.health("assistant.admin_cards.health", plugin=plugin.id, order=60)
+
+# هوش مصنوعی استودیوی پلاگین (docs/adr/0010): قرارداد هسته با همین تنظیم «دستیار سایت»
+conf.option(plugin.id, "studio_daily", "سقف روزانه‌ی دستیار استودیوی پلاگین (برای هر مدیر)", kind="int", default=60, min=1, max=1000,
+            help="هر درخواست به دستیار در استودیوی پلاگین یک واحد است؛ متن پرسش و پاسخ ذخیره نمی‌شود.")
+
+
+def _install_ai():
+    from .studio_ai import StudioAi
+
+    ai.set_provider(StudioAi())
+
+
+_install_ai()

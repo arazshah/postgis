@@ -145,3 +145,19 @@
 @media (max-width:900px){.pd-codewrap{flex-direction:column;overflow:auto}.pd-clist{width:auto;border:0;border-bottom:1px solid var(--line);flex-direction:row;flex-wrap:wrap}.pd-cmain{overflow:visible}.pd-mock{grid-template-columns:1fr}.pd-mock textarea{grid-column:auto;grid-row:auto}}
 .pd-newh .i{width:18px;height:18px;flex:none}
 .pd-newh .pd-tile{cursor:pointer}
+
+.pd-aip{position:fixed;top:54px;bottom:0;inset-inline-start:0;width:380px;max-width:100vw;background:var(--surface);border-inline-end:1px solid var(--line);box-shadow:var(--shadow);z-index:60;display:flex;flex-direction:column}
+.pd-aih{display:flex;align-items:center;gap:var(--s2);padding:var(--s3);border-bottom:1px solid var(--line)}
+.pd-aih b{font-family:var(--f-display);display:flex;gap:6px;align-items:center}
+.pd-aichips{display:flex;flex-wrap:wrap;gap:6px;padding:var(--s3);border-bottom:1px solid var(--line)}
+.pd-aichips .pd-chip{display:inline-flex;gap:4px;align-items:center}.pd-aichips .i{width:14px;height:14px}
+.pd-aimsgs{flex:1;overflow:auto;padding:var(--s3);display:flex;flex-direction:column;gap:var(--s3)}
+.pd-ai-u{align-self:flex-start;max-width:90%;background:var(--teal-soft);color:var(--ink);border-radius:var(--r-card);padding:var(--s2) var(--s3);white-space:pre-wrap}
+.pd-ai-a{align-self:stretch;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s3)}
+.pd-ai-a p{margin:0 0 var(--s2);white-space:pre-wrap}
+.pd-aiprop{border:1px dashed var(--teal);border-radius:var(--r-ctl);padding:var(--s2) var(--s3);background:var(--paper)}
+.pd-aiprop b{display:flex;gap:6px;align-items:center;font-size:13px}.pd-aiprop ul{margin:var(--s2) 0;padding-inline-start:var(--s4);font-size:13px;display:grid;gap:2px}
+.pd-aiform{display:flex;gap:var(--s2);padding:var(--s3);border-top:1px solid var(--line);align-items:flex-end}
+.pd-aiform textarea{flex:1;box-sizing:border-box;border:1px solid var(--line);border-radius:var(--r-ctl);padding:var(--s2) var(--s3);font:inherit;background:var(--card);color:var(--ink);resize:none;min-height:var(--ctl-h)}
+.pd-aifoot{padding:0 var(--s3) var(--s3);margin:0}
+@media (max-width:900px){.pd-aip{top:auto;height:78vh;width:100%;border-radius:18px 18px 0 0}}

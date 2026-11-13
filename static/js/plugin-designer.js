@@ -111,11 +111,13 @@
         <div class="pd-seg vp" role="group" aria-label="اندازه‌ی نمایش">
           <button type="button" data-vp="desktop" aria-pressed="true">${ic("desktop")}<span>دسکتاپ</span></button>
           <button type="button" data-vp="narrow" aria-pressed="false">${ic("phone")}<span>۴۰۰</span></button></div>
+        <button class="btn ghost sm" type="button" id="pd-ai" aria-label="دستیار هوش مصنوعی" aria-pressed="false">${ic("spark")}<span>دستیار</span></button>
         <button class="btn ghost sm" type="button" id="pd-more" aria-label="بیشتر">${ic("more")}<span>بیشتر</span></button>
         <a class="btn sm" id="pd-publish" href="${esc(LINKS.publish)}">${ic("share")}<span>دسترسی و انتشار</span></a>
       </header>
       <nav class="pd-nav" role="tablist" id="pd-nav"></nav>
       <div class="pd-main" id="pd-main"></div>`);
+    root.querySelector("#pd-ai").addEventListener("click", () => toggleAi());
     root.querySelector("#pd-undo").addEventListener("click", undo);
     root.querySelector("#pd-redo").addEventListener("click", redo);
     root.querySelectorAll("[data-vp]").forEach((b) => b.addEventListener("click", () => {
@@ -394,7 +396,12 @@
 
   function refreshIssue() {
     const box = root.querySelector("#pd-issues");
-    if (box && selId) box.innerHTML = issuesOf(selId).map((m) => `<div class="pd-issue">${ic("warn")}<span>${esc(m)}</span></div>`).join("");
+    if (box && selId) {
+      const iss = issuesOf(selId);
+      box.innerHTML = iss.map((m) => `<div class="pd-issue">${ic("warn")}<span>${esc(m)}</span></div>`).join("") + (iss.length ? `<button type="button" class="btn ghost sm" id="pd-aifix" style="margin-bottom:12px">${ic("spark")}<span>رفع با دستیار</span></button>` : "");
+      const b = box.querySelector("#pd-aifix");
+      if (b) b.addEventListener("click", () => sendAi("fix", "این ایراد بلوک انتخاب‌شده را توضیح بده و درست کن: " + iss.join("؛ ")));
+    }
     syncBar();
   }
 
@@ -626,6 +633,104 @@
     el.querySelectorAll("[data-num]").forEach((i) => i.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { if (i.value !== "") set({ refresh: Number(i.value) }); }, 450); }));
   }
 
+
+
+  // ---------------------------------------------------------------- دستیار هوش مصنوعی (فقط پیشنهاد؛ اعمال با تأیید شما)
+  let aiOpen = false, aiBusy = false;
+  const aiMsgs = [];   // {role: user|assistant|note, text, ops, summary, valid, error, before, after, done}
+  const AI_CHIPS = [["fix", "ایرادها را درست کن", "warn"], ["labels", "برچسب فارسی بساز", "edit"], ["idea", "ایده بده", "spark"], ["sql", "SQL از جمله‌ی فارسی", "code"]];
+
+  function toggleAi(force) {
+    aiOpen = force === undefined ? !aiOpen : force;
+    root.querySelector("#pd-ai").setAttribute("aria-pressed", String(aiOpen));
+    let el = root.querySelector("#pd-aip");
+    if (!aiOpen) { if (el) el.hidden = true; return; }
+    if (!el) {
+      el = document.createElement("aside");
+      el.id = "pd-aip";
+      el.className = "pd-aip";
+      el.setAttribute("aria-label", "دستیار هوش مصنوعی");
+      root.append(el);
+      el.innerHTML = `<div class="pd-aih"><b>${ic("spark")}دستیار استودیو</b><span class="pd-spacer"></span><button type="button" class="pd-ib" id="pd-aix" aria-label="بستن">${ic("close")}</button></div>
+        <div class="pd-aichips" id="pd-aichips">${AI_CHIPS.map(([m, l, i]) => `<button type="button" class="pd-chip" data-aim="${m}">${ic(i)} ${l}</button>`).join("")}</div>
+        <div class="pd-aimsgs" id="pd-aimsgs" aria-live="polite"></div>
+        <form class="pd-aiform" id="pd-aiform"><textarea id="pd-aitext" rows="2" placeholder="بنویسید چه می‌خواهید؛ مثلاً «یک صفحه‌ی پایش با نقشه و نمودار بساز»"></textarea>
+          <button class="btn sm" type="submit" id="pd-aisend">${ic("play")}<span>بفرست</span></button></form>
+        <p class="pd-hint pd-aifoot">دستیار فقط پیشنهاد می‌دهد و فقط ساختار (جدول و صفحه) را می‌بیند، نه داده‌ی مشتری. هر پیشنهاد را با «اعمال» می‌پذیرید و با واگرد برمی‌گردانید.</p>`;
+      el.querySelector("#pd-aix").addEventListener("click", () => toggleAi(false));
+      el.querySelector("#pd-aiform").addEventListener("submit", (e) => { e.preventDefault(); const t = el.querySelector("#pd-aitext"); const v = t.value.trim(); if (v) { t.value = ""; sendAi("chat", v); } });
+      el.querySelector("#pd-aitext").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); el.querySelector("#pd-aiform").requestSubmit(); } });
+      el.querySelector("#pd-aichips").addEventListener("click", (e) => {
+        const c = e.target.closest("[data-aim]");
+        if (!c) return;
+        const m = c.dataset.aim;
+        if (m === "sql") { const t = el.querySelector("#pd-aitext"); t.placeholder = "توصیف کنید چه عددی یا جدولی می‌خواهید…"; t.focus(); aiMode = "sql"; return; }
+        sendAi(m, m === "fix" ? "ایرادها را بررسی و درست کن." : m === "labels" ? "برچسب و عنوان فارسی پیشنهاد بده." : "چند صفحه‌ی مفید پیشنهاد بده.");
+      });
+    }
+    el.hidden = false;
+    paintAi();
+    const t = el.querySelector("#pd-aitext");
+    if (t) t.focus();
+  }
+  let aiMode = "chat";
+
+  function paintAi() {
+    const box = root.querySelector("#pd-aimsgs");
+    if (!box) return;
+    if (!aiMsgs.length) {
+      box.innerHTML = CODE.ai_ready ? `<div class="pd-empty" style="padding:var(--s4)">${ic("spark")}<b>چه کمکی می‌خواهید؟</b><span>ایراد را توضیح می‌دهم و درست می‌کنم، برچسب فارسی می‌سازم، یا صفحه پیشنهاد می‌دهم.</span></div>`
+        : `<div class="pd-issue">${ic("info")}<span>دستیار هنوز تنظیم نشده است. آدرس سرویس (مثل AvalAI)، کلید API و مدل را در «تنظیمات سایت ← دستیار هوشمند» بگذارید؛ همان تنظیم دستیار سایت است.</span></div>`;
+      return;
+    }
+    box.innerHTML = aiMsgs.map((m, i) => {
+      if (m.role === "user") return `<div class="pd-ai-u">${esc(m.text)}</div>`;
+      if (m.role === "note") return `<div class="pd-hint" style="text-align:center">${esc(m.text)}</div>`;
+      let h = `<div class="pd-ai-a"><p>${esc(m.text)}</p>`;
+      if (m.error) h += `<div class="pd-issue">${ic("warn")}<span>${esc(m.error)}</span></div>`;
+      if (m.ops && m.ops.length) {
+        h += `<div class="pd-aiprop"><b>${ic("check")}پیشنهاد (${FA(m.ops.length)} تغییر)</b><ul>${m.summary.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+          <p class="pd-hint">ایرادها: ${FA(m.before)} ← ${FA(m.after)}</p>
+          ${m.done ? `<p class="pd-hint">${m.done === "applied" ? "اعمال شد؛ با واگرد برمی‌گردد." : "رد شد."}</p>` : `<div class="pd-row"><button class="btn sm" type="button" data-aiapply="${i}">${ic("check")}<span>اعمال</span></button><button class="btn ghost sm" type="button" data-aiskip="${i}">رد</button></div>`}</div>`;
+      }
+      return h + "</div>";
+    }).join("") + (aiBusy ? `<div class="pd-hint">در حال فکر کردن…</div>` : "");
+    box.scrollTop = box.scrollHeight;
+    box.querySelectorAll("[data-aiapply]").forEach((b) => b.addEventListener("click", () => applyAi(Number(b.dataset.aiapply))));
+    box.querySelectorAll("[data-aiskip]").forEach((b) => b.addEventListener("click", () => { aiMsgs[Number(b.dataset.aiskip)].done = "skipped"; paintAi(); }));
+  }
+
+  async function sendAi(mode, text) {
+    if (aiBusy) return;
+    if (mode === "chat" && aiMode === "sql") { mode = "sql"; aiMode = "chat"; const t = root.querySelector("#pd-aitext"); if (t) t.placeholder = "بنویسید چه می‌خواهید…"; }
+    if (!aiOpen) toggleAi(true);
+    const history = aiMsgs.filter((m) => m.role !== "note").map((m) => ({ role: m.role, content: m.text }));
+    aiMsgs.push({ role: "user", text });
+    aiBusy = true;
+    paintAi();
+    try {
+      const r = await call(API.assistant, { message: text, mode, history, page: pageKey, selected: selId });
+      aiMsgs.push({ role: "assistant", text: r.reply, ops: r.ops, summary: r.summary, valid: r.valid, error: r.error ? "پیشنهاد معتبر نبود: " + r.error : "", before: r.issues_before, after: r.issues_after });
+    } catch (e) {
+      aiMsgs.push({ role: "assistant", text: e.message, error: "" });
+    }
+    aiBusy = false;
+    paintAi();
+  }
+
+  async function applyAi(i) {
+    const m = aiMsgs[i];
+    if (!m || m.done) return;
+    try {
+      await run({ ops: m.ops });
+      m.done = "applied";
+      ensurePage();
+      await draw();
+    } catch (e) {
+      m.error = "اعمال نشد: " + e.message;
+    }
+    paintAi();
+  }
 
   // ---------------------------------------------------------------- بخش کد (handler سطح ۲)
   let codeSel = "", codeTab = "source", codeOut = {};

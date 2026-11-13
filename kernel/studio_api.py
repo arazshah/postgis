@@ -15,7 +15,7 @@ from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET, require_POST
 
-from . import blueprint, pagekit, pkgtest, sampledata, stepup, wizard, wizard_admin, wizard_code
+from . import ai, blueprint, pagekit, pkgtest, sampledata, stepup, studio_ai, wizard, wizard_admin, wizard_code
 from . import workspace as ws_mod
 from .models import PluginDraft, PluginDraftRevision
 
@@ -110,6 +110,26 @@ def preview(request, pk, page):
     return JsonResponse({"blocks": items, "sample": True})
 
 
+@require_POST
+def assistant(request, pk):
+    """یک نوبت گفتگو با دستیار: {message, history?, mode?, page?, selected?} ← {reply, ops, summary, valid, error, issues_*}.
+    دستیار فقط پیشنهاد می‌دهد؛ اعمال از `api/op/` با تأیید کاربر است. فقط ساختار نقشه به مدل می‌رسد."""
+    draft = _draft(request, pk)
+    try:
+        data = _body(request)
+    except blueprint.BlueprintError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    if not ai.available():
+        return JsonResponse({"error": "دستیار تنظیم نشده است؛ آدرس و کلید API را در تنظیمات سایت ← دستیار هوشمند بگذارید."}, status=400)
+    try:
+        out = studio_ai.ask(request.user, _spec(draft), draft.plugin_id, str(data.get("message", "")), history=data.get("history"),
+                            mode=str(data.get("mode") or "chat"), page=str(data.get("page") or "")[:40], selected=str(data.get("selected") or "")[:20])
+    except ai.AiError as exc:
+        return JsonResponse({"error": str(exc)}, status=429 if "سقف" in str(exc) else 400)
+    ws_mod.log_event("plugin_studio_ai", f"{draft.plugin_id}: {data.get('mode') or 'chat'}، {len(out['ops'])} پیشنهاد" + ("" if out["valid"] else " (نامعتبر)"), user=request.user)
+    return JsonResponse(out)
+
+
 def _runner_error() -> str:
     from .runner import client
 
@@ -192,10 +212,10 @@ def designer(request, pk):
     from django.urls import reverse
 
     draft = _draft(request, pk)
-    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore", "run")}
+    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore", "run", "assistant")}
     tpl = [{"key": k, "role": t["role"], "title": t["title"], "hint": t["hint"], "needs": t["needs"], "nums": t.get("nums", [])} for k, t in wizard_code.TEMPLATES.items()]
     codeinfo = {"templates": tpl, "roles": wizard_code.ROLE_LABEL, "cols": {k: [v[0], list(v[1])] for k, v in wizard_code.COLS.items()},
-                "nums": {k: v[0] for k, v in wizard_code.NUMS.items()}, "runner_ready": not _runner_error()}
+                "nums": {k: v[0] for k, v in wizard_code.NUMS.items()}, "runner_ready": not _runner_error(), "ai_ready": ai.available()}
     api["preview"] = reverse("admin:kernel_plugindraft_api_preview", args=[draft.pk, "__PAGE__"])
     return render(request, "admin/kernel/designer.html", {
         "draft": draft, "api": api, "codeinfo": codeinfo, "icons": wizard_admin.ICON_CHOICES, "col_types": wizard_admin.COL_TYPES,
