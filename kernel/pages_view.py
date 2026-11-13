@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
@@ -591,6 +592,7 @@ def report_save(request, pk, plugin, page, key):
 
 @login_required
 @require_POST
+@xframe_options_sameorigin  # پیش‌نمایش داخل iframe همین سایت باز می‌شود؛ سایت پیش‌فرض DENY است
 def report_preview(request, pk, plugin, page, key):
     """پیش‌نمایش HTML همان چیدمانِ ذخیره‌نشده (برای iframe بدون اسکریپت)؛ همان داده و فیلترها."""
     from . import reportlayout
@@ -618,7 +620,7 @@ def report_preview(request, pk, plugin, page, key):
     except reports.ReportError as exc:
         return HttpResponse(str(exc), status=400)
     resp = HttpResponse(html, content_type="text/html; charset=utf-8")
-    resp["Content-Security-Policy"] = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"
+    resp["Content-Security-Policy"] = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; frame-ancestors 'self'"
     resp["Cache-Control"] = "no-store"
     resp["X-Content-Type-Options"] = "nosniff"
     return resp

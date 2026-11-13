@@ -202,6 +202,7 @@ class EditorViewTests(BaseCase):
 
     def test_editor_page_loads_with_layout_and_blocks(self):
         r = self.client.get(self.u("report_editor"))
+        self.assertEqual(r["X-Frame-Options"], "DENY")  # خود ویرایشگر قابل‌قاب‌کردن نیست
         self.assertContains(r, 're-layout')
         self.assertContains(r, "re-list")
         self.assertContains(r, "report-editor.js")
@@ -238,6 +239,8 @@ class EditorViewTests(BaseCase):
         self.assertIn("default-src 'none'", r["Content-Security-Policy"])
         self.assertNotIn("script-src", r["Content-Security-Policy"].replace("default-src 'none'", ""))
         self.assertFalse(ReportLayout.objects.exists())  # ذخیره نشد
+        self.assertEqual(r["X-Frame-Options"], "SAMEORIGIN")  # وگرنه iframe پیش‌نمایش در مرورگر مسدود می‌شود
+        self.assertIn("frame-ancestors 'self'", r["Content-Security-Policy"])
         bad = self.client.post(self.u("report_preview"), {"layout_json": json.dumps({"elements": [{"type": "x"}]})})
         self.assertEqual(bad.status_code, 400)
 
