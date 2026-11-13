@@ -5,6 +5,7 @@
 {% block head %}
 <link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
 <link rel="stylesheet" href="{% static 'css/page-kit.css' %}">
+<link rel="stylesheet" href="{% static 'css/map-studio.css' %}">
 <link rel="stylesheet" href="{% static 'css/plugin-designer.css' %}">
 {% endblock %}
 {% block footer %}{% endblock %}
@@ -17,6 +18,7 @@
 {{ icons|json_script:"pd-icons" }}
 {{ col_types|json_script:"pd-coltypes" }}
 {{ links|json_script:"pd-links" }}
+{{ codeinfo|json_script:"pd-code" }}
 {% endblock %}
 {% block scripts %}
 <script src="{% static 'vendor/leaflet/leaflet.js' %}"></script>

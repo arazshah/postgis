@@ -410,6 +410,7 @@ class PluginDraftAdmin(admin.ModelAdmin):
                 path("<int:pk>/designer/api/op/", wrap(studio_api.op), name="kernel_plugindraft_api_op"),
                 path("<int:pk>/designer/api/preview/<str:page>/", wrap(studio_api.preview), name="kernel_plugindraft_api_preview"),
                 path("<int:pk>/designer/api/revisions/", wrap(studio_api.revisions), name="kernel_plugindraft_api_revisions"),
+                path("<int:pk>/designer/api/run/", wrap(studio_api.run), name="kernel_plugindraft_api_run"),
                 path("<int:pk>/designer/api/restore/", wrap(studio_api.restore), name="kernel_plugindraft_api_restore"),
                 path("wizard/", wrap(wizard_admin.view), name="kernel_plugindraft_wizard_new"),
                 path("<int:pk>/wizard/<int:step>/", wrap(wizard_admin.view), name="kernel_plugindraft_wizard"),

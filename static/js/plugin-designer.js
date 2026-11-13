@@ -5,7 +5,7 @@
   const root = document.getElementById("pd");
   if (!root) return;
   const J = (id) => JSON.parse(document.getElementById(id).textContent);
-  const API = J("pd-api"), LINKS = J("pd-links"), COLTYPES = J("pd-coltypes");
+  const API = J("pd-api"), LINKS = J("pd-links"), COLTYPES = J("pd-coltypes"), CODE = J("pd-code");
   const CSRF = root.querySelector("input[name=csrfmiddlewaretoken]").value;
   const esc = StudioUI.esc, ic = StudioUI.icon;
   const FA = (n) => String(n).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
@@ -138,10 +138,11 @@
     root.querySelector("#pd-id").textContent = S.plugin_id + " · " + S.version;
     root.querySelector("#pd-undo").disabled = hist.i <= 0;
     root.querySelector("#pd-redo").disabled = hist.i >= hist.ids.length - 1;
-    const n = (S.analysis.issues || []).length;
+    const all = S.analysis.issues || [], nc = all.filter((i) => i.scope === "code").length, n = all.length - nc;
     const nav = root.querySelector("#pd-nav");
-    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["auto", "خودکارسازی", "bolt"]];
-    nav.innerHTML = tabs.map(([k, l, i]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${tab === k}">${ic(i)}<span>${l}</span>${k === "pages" && n ? `<span class="badge-n" title="ایراد">${FA(n)}</span>` : ""}</button>`).join("");
+    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["code", "کد", "code"], ["auto", "خودکارسازی", "bolt"]];
+    const bad = { pages: n, code: nc };
+    nav.innerHTML = tabs.map(([k, l, i]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${tab === k}">${ic(i)}<span>${l}</span>${bad[k] ? `<span class="badge-n" title="ایراد">${FA(bad[k])}</span>` : ""}</button>`).join("");
     nav.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; selId = ""; draw(); }));
   }
 
@@ -166,6 +167,7 @@
     const main = root.querySelector("#pd-main");
     if (tab === "data") { main.innerHTML = ""; drawData(main); return; }
     if (tab === "auto") { main.innerHTML = ""; drawAuto(main); return; }
+    if (tab === "code") { main.innerHTML = ""; drawCode(main); return; }
     main.innerHTML = `
       <aside class="pd-pal" id="pd-pal" aria-label="اجزا"></aside>
       <section class="pd-center"><div class="pd-pages" id="pd-pages"></div><div class="pd-scroll" id="pd-scroll"></div></section>
@@ -622,6 +624,263 @@
     let t;
     el.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { if (i.dataset.text !== "title" || i.value.trim()) set({ [i.dataset.text]: i.value }, true); }, 450); }));
     el.querySelectorAll("[data-num]").forEach((i) => i.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { if (i.value !== "") set({ refresh: Number(i.value) }); }, 450); }));
+  }
+
+
+  // ---------------------------------------------------------------- بخش کد (handler سطح ۲)
+  let codeSel = "", codeTab = "source", codeOut = {};
+  const codeIssues = (n) => (S.analysis.issues || []).filter((i) => i.scope === "code" && i.handler === n).map((i) => i.message);
+  const ROLE_BLOCK = { block: "بلوک صفحه", importer: "ورود فایل", exporter: "خروجی فایل", ingest: "تبدیل داده‌ی دریافتی", alert: "هشدار دوره‌ای" };
+  const needsFile = (role) => role === "importer" || role === "ingest";
+
+  function drawCode(main) {
+    const names = Object.keys(code());
+    if (!names.includes(codeSel)) codeSel = names[0] || "";
+    main.innerHTML = `<div class="pd-codewrap"><aside class="pd-clist" id="pd-clist"></aside><section class="pd-cmain" id="pd-cmain"></section></div>`;
+    const list = main.querySelector("#pd-clist");
+    list.innerHTML = `<button class="btn sm" type="button" id="pd-newcode">${ic("plus")}<span>کد تازه</span></button>` +
+      names.map((n) => `<button type="button" class="pd-citem${n === codeSel ? " on" : ""}" data-h="${esc(n)}"><b class="ltr" dir="ltr">${esc(n)}</b><small>${esc(ROLE_BLOCK[code()[n].role] || code()[n].role)}</small>${codeIssues(n).length ? `<span class="pd-dot" title="ایراد"></span>` : ""}</button>`).join("") +
+      (names.length ? "" : `<p class="pd-hint">برای محاسبه‌هایی که SQL از پسشان برنمی‌آید: شاخص‌های سنجش‌ازدور، تبخیر-تعرق، تبدیل فرمت‌ها، خروجی GeoJSON و هشدار.</p>`);
+    list.querySelector("#pd-newcode").addEventListener("click", newHandlerDialog);
+    list.querySelectorAll("[data-h]").forEach((b) => b.addEventListener("click", () => { codeSel = b.dataset.h; codeOut = {}; drawCode(main); }));
+    drawHandler(main.querySelector("#pd-cmain"));
+  }
+
+  function drawHandler(el) {
+    const h = code()[codeSel];
+    if (!h) { el.innerHTML = `<div class="pd-empty">${ic("code")}<b>هنوز کدی نیست</b><span>از قالب شروع کنید؛ کد، آزمون و اجرای آزمایشی را همین‌جا می‌بینید.</span></div>`; return; }
+    const iss = codeIssues(codeSel);
+    el.innerHTML = `<div class="pd-row"><h2 class="pd-h" style="margin:0"><span class="ltr" dir="ltr">${esc(codeSel)}</span></h2><span class="pd-hint">${esc(ROLE_BLOCK[h.role] || h.role)}${h.tables && h.tables.length ? " · " + esc(h.tables.join("، ")) : ""}</span><span class="pd-spacer"></span>
+        ${["block", "importer", "exporter", "ingest"].includes(h.role) ? `<button class="btn ghost sm" type="button" id="pd-hadd">${ic("plus")}<span>افزودن به صفحه</span></button>` : ""}
+        <button class="pd-ib" type="button" id="pd-hdel" aria-label="حذف کد">${ic("trash")}</button></div>
+      ${CODE.runner_ready ? "" : `<div class="pd-issue">${ic("info")}<span>اجرای کد در این استقرار خاموش است؛ نوشتن و ذخیره ممکن است ولی آزمون و اجرای آزمایشی تا روشن‌شدن «اجرای کد» (پیشرفته ← کلیدهای ناشر) کار نمی‌کند.</span></div>`}
+      ${iss.map((m) => `<div class="pd-issue">${ic("warn")}<span>${esc(m)}</span></div>`).join("")}
+      <div class="pd-seg" role="tablist" style="margin:12px 0">${[["source", "کد"], ["tests", "آزمون‌ها"], ["trial", "اجرای آزمایشی"]].map(([k, l]) => `<button type="button" data-ct="${k}" aria-pressed="${codeTab === k}">${l}</button>`).join("")}</div>
+      <div id="pd-cbody"></div>`;
+    el.querySelectorAll("[data-ct]").forEach((b) => b.addEventListener("click", () => { codeTab = b.dataset.ct; drawHandler(el); }));
+    el.querySelector("#pd-hdel").addEventListener("click", async () => {
+      if (!await Ui.confirm({ title: "حذف کد", message: `«${codeSel}» حذف شود؟ بلوک‌هایی که به آن وصل‌اند ایراد می‌گیرند. با واگرد برمی‌گردد.`, kind: "danger", confirmText: "حذف" })) return;
+      try { await run({ op: "code.del", name: codeSel }); codeSel = ""; await draw(); } catch (_) { /* */ }
+    });
+    const add = el.querySelector("#pd-hadd");
+    if (add) add.addEventListener("click", () => handlerToPage(add, h));
+    const body = el.querySelector("#pd-cbody");
+    if (codeTab === "source") sourceTab(body, h); else if (codeTab === "tests") testsTab(body, h); else trialTab(body, h);
+  }
+
+  function sourceTab(body, h) {
+    body.innerHTML = `<div class="pd-f"><span class="lbl">کد پایتون — <span class="ltr" dir="ltr">def handle(ctx, params)</span>؛ فقط کتابخانه‌ی استاندارد و <span class="ltr">geo</span>؛ <span class="ltr">ctx.sql</span> فقط‌خواندنی</span>
+      <textarea class="pd-src" id="pd-src" dir="ltr" spellcheck="false">${esc(h.source || "")}</textarea></div>
+      ${h.role === "alert" ? fld("هر چند دقیقه اجرا شود (۵ تا ۱۴۴۰)", `<input type="number" id="pd-every" min="5" max="1440" dir="ltr" value="${esc(h.every || 60)}">`) : ""}
+      <p class="pd-hint" id="pd-srcst">${ic("check")} ذخیره شد</p>`;
+    const st = body.querySelector("#pd-srcst");
+    let t;
+    body.querySelector("#pd-src").addEventListener("input", (e) => {
+      st.textContent = "در حال ذخیره…";
+      clearTimeout(t);
+      t = setTimeout(async () => { try { await run({ op: "code.set", name: codeSel, source: e.target.value }, { silent: true }); st.textContent = "ذخیره شد"; refreshCodeIssues(); } catch (err) { st.textContent = err.message; } }, 700);
+    });
+    const ev = body.querySelector("#pd-every");
+    if (ev) ev.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { if (ev.value) run({ op: "code.set", name: codeSel, every: Number(ev.value) }).catch(() => {}); }, 600); });
+  }
+
+  function refreshCodeIssues() {
+    syncBar();
+    const el = root.querySelector("#pd-cmain");
+    if (!el) return;
+    const sel = el.querySelectorAll(".pd-issue");
+    // فقط ایرادهای بالای صفحه تازه شود (ویرایشگر را بازرسم نکن تا مکان‌نما نپرد)
+    const h = code()[codeSel];
+    if (!h) return;
+    sel.forEach((x) => { if (x.dataset.live) x.remove(); });
+    const anchor = el.querySelector(".pd-seg");
+    codeIssues(codeSel).forEach((m) => anchor.insertAdjacentHTML("beforebegin", `<div class="pd-issue" data-live="1">${ic("warn")}<span>${esc(m)}</span></div>`));
+  }
+
+  // ---- سازنده‌ی آزمون دیداری
+  const EXP = [["rows_count", "تعداد ردیف"], ["text_contains", "شامل متن"], ["alerts_count", "تعداد هشدار"], ["error_contains", "خطا شامل"], ["equals", "برابر با (JSON)"]];
+  const cell = (x) => { x = x.trim(); if (x === "") return ""; if (/^-?\d+$/.test(x)) return Number(x); if (/^-?\d*\.\d+$/.test(x)) return Number(x); if (x === "true") return true; if (x === "false") return false; if (x === "null") return null; return x; };
+  const rowsText = (rows) => (rows || []).map((r) => r.map((v) => (v === null ? "null" : String(v))).join(", ")).join("\n");
+
+  function caseHtml(c, i, role) {
+    const ek = Object.keys(c.expect || {})[0] || "rows_count", ev = (c.expect || {})[ek];
+    return `<section class="pd-card pd-case" data-ci="${i}">
+      <div class="pd-row"><input type="text" data-f="name" value="${esc(c.name || "")}" placeholder="نام مورد آزمون" aria-label="نام مورد" style="flex:1"><button type="button" class="pd-ib" data-delcase="${i}" aria-label="حذف مورد">${ic("trash")}</button></div>
+      <div class="pd-f"><span class="lbl">ورودی handler (JSON؛ اختیاری)</span><input type="text" class="ltr" dir="ltr" data-f="params" value="${esc(c.params ? JSON.stringify(c.params) : "")}" placeholder='{"n": 1}'></div>
+      ${needsFile(role) ? `<div class="pd-f"><span class="lbl">فایل نمونه (متن)</span><textarea class="ltr" dir="ltr" data-f="file">${esc(c.file || "")}</textarea></div>` : ""}
+      <div class="pd-grp">پاسخ ساختگی پرس‌وجوهای <span class="ltr">ctx.sql</span></div>
+      <div data-sqls>${(c.sql || []).map((m, j) => `<div class="pd-mock" data-mj="${j}"><input type="text" class="ltr" dir="ltr" data-m="match" value="${esc(m.match)}" placeholder="بخشی از متن SQL، مثلاً select" aria-label="تطبیق">
+        <input type="text" class="ltr" dir="ltr" data-m="columns" value="${esc((m.columns || []).join(", "))}" placeholder="ستون‌ها: a, b" aria-label="ستون‌ها">
+        <textarea class="ltr" dir="ltr" data-m="rows" placeholder="هر خط یک ردیف: 1, 2.5">${esc(rowsText(m.rows))}</textarea>
+        <button type="button" class="pd-ib" data-delmock="${i}:${j}" aria-label="حذف پاسخ">${ic("trash")}</button></div>`).join("")}</div>
+      <button type="button" class="btn ghost sm" data-addmock="${i}">${ic("plus")}<span>پاسخ ساختگی</span></button>
+      <div class="pd-grp">انتظار</div>
+      <div class="pd-chips" data-expk>${EXP.filter(([k]) => role === "exporter" || k !== "text_contains" || true).map(([k, l]) => `<button type="button" class="pd-chip" data-ek="${k}" aria-pressed="${k === ek}">${l}</button>`).join("")}</div>
+      <div class="pd-f" style="margin-top:8px"><input type="text" data-f="expect" ${["rows_count", "alerts_count"].includes(ek) ? 'inputmode="numeric" dir="ltr"' : ek === "equals" ? 'class="ltr" dir="ltr"' : ""} value="${esc(ek === "equals" ? JSON.stringify(ev ?? {}) : ev ?? "")}" placeholder="مقدار انتظار"></div></section>`;
+  }
+
+  function collectCases(box) {
+    const out = [];
+    let bad = "";
+    box.querySelectorAll(".pd-case").forEach((sec) => {
+      const g = (f) => (sec.querySelector(`[data-f=${f}]`) || {}).value;
+      const c = { name: (g("name") || "").trim() };
+      const ps = (g("params") || "").trim();
+      if (ps) { try { c.params = JSON.parse(ps); } catch (_) { bad = "ورودی باید JSON معتبر باشد."; } }
+      if (g("file")) c.file = g("file");
+      const sqls = [];
+      sec.querySelectorAll(".pd-mock").forEach((m) => {
+        const mg = (f) => m.querySelector(`[data-m=${f}]`).value;
+        sqls.push({ match: mg("match").trim(), columns: mg("columns").split(",").map((x) => x.trim()).filter(Boolean),
+          rows: mg("rows").split("\n").map((l) => l.trim()).filter(Boolean).map((l) => l.split(",").map(cell)) });
+      });
+      if (sqls.length) c.sql = sqls;
+      const ek = (sec.querySelector("[data-ek][aria-pressed=true]") || {}).dataset.ek || "rows_count", raw = (g("expect") || "").trim();
+      let v = raw;
+      if (["rows_count", "alerts_count"].includes(ek)) v = raw === "" ? 0 : Number(raw);
+      else if (ek === "equals") { try { v = JSON.parse(raw || "{}"); } catch (_) { bad = "مقدار «برابر با» باید JSON معتبر باشد."; } }
+      c.expect = { [ek]: v };
+      out.push(c);
+    });
+    return { cases: out, bad };
+  }
+
+  function testsTab(body, h) {
+    const cases = h.cases;
+    if (!cases || (!cases.length && h.test && h.test.trim())) {
+      body.innerHTML = `<div class="pd-issue">${ic("info")}<span>${h.test && h.test.trim() ? "این آزمون به‌صورت متن (TOML) نوشته شده و در قالب دیداری نمی‌گنجد." : "این handler هنوز آزمون ندارد."}</span></div>
+        ${h.test && h.test.trim() ? `<pre class="pd-pre-block" dir="ltr">${esc(h.test)}</pre>` : ""}
+        <button class="btn sm" type="button" id="pd-newcases">${ic("plus")}<span>ساخت آزمون دیداری${h.test && h.test.trim() ? " (جایگزین)" : ""}</span></button>`;
+      body.querySelector("#pd-newcases").addEventListener("click", () => saveCases([{ name: "نمونه", expect: { rows_count: 1 } }], true));
+      return;
+    }
+    body.innerHTML = `<p class="pd-hint">آزمون اعلانی است: ورودی نمونه، پاسخ ساختگی <span class="ltr">ctx.sql</span> و یک انتظار. اجرا در جعبه‌ی امن و بدون پایگاه داده است؛ برای انتشار هر handler دست‌کم یک مورد لازم است.</p>
+      <div id="pd-cases">${cases.map((c, i) => caseHtml(c, i, h.role)).join("")}</div>
+      <div class="pd-row" style="margin:12px 0"><button class="btn ghost sm" type="button" id="pd-addcase">${ic("plus")}<span>مورد آزمون</span></button><span class="pd-spacer"></span>
+        <span class="pd-hint" id="pd-castat"></span><button class="btn sm" type="button" id="pd-runtests">${ic("play")}<span>اجرای آزمون‌ها</span></button></div>
+      <div id="pd-tres">${resultsHtml(codeOut.tests)}</div>`;
+    const box = body.querySelector("#pd-cases"), st = body.querySelector("#pd-castat");
+    let t;
+    const push = (now) => {
+      clearTimeout(t);
+      const go = async () => { const { cases: cs, bad } = collectCases(box); if (bad) { st.textContent = bad; return; } st.textContent = "در حال ذخیره…"; try { await run({ op: "code.set", name: codeSel, cases: cs }, { silent: true }); st.textContent = "ذخیره شد"; refreshCodeIssues(); } catch (e) { st.textContent = e.message; } };
+      if (now) go(); else t = setTimeout(go, 600);
+    };
+    box.addEventListener("input", () => push(false));
+    box.addEventListener("click", async (e) => {
+      const ek = e.target.closest("[data-ek]");
+      if (ek) { ek.parentElement.querySelectorAll("[data-ek]").forEach((x) => x.setAttribute("aria-pressed", String(x === ek))); return push(true); }
+      const dc = e.target.closest("[data-delcase]"), dm = e.target.closest("[data-delmock]"), am = e.target.closest("[data-addmock]");
+      if (!dc && !dm && !am) return;
+      const { cases: cs } = collectCases(box);
+      if (dc) cs.splice(Number(dc.dataset.delcase), 1);
+      if (dm) { const [i, j] = dm.dataset.delmock.split(":").map(Number); cs[i].sql.splice(j, 1); if (!cs[i].sql.length) delete cs[i].sql; }
+      if (am) { const i = Number(am.dataset.addmock); cs[i].sql = (cs[i].sql || []).concat({ match: "select", columns: ["v"], rows: [] }); }
+      await saveCases(cs, true);
+    });
+    body.querySelector("#pd-addcase").addEventListener("click", async () => { const { cases: cs } = collectCases(box); cs.push({ name: "مورد " + FA(cs.length + 1), expect: { rows_count: 1 } }); await saveCases(cs, true); });
+    body.querySelector("#pd-runtests").addEventListener("click", () => runTests(body));
+  }
+
+  async function saveCases(cases, redraw) {
+    try { await run({ op: "code.set", name: codeSel, cases }); if (redraw) drawHandler(root.querySelector("#pd-cmain")); } catch (_) { /* */ }
+  }
+
+  function resultsHtml(r) {
+    if (!r) return "";
+    if (r.error) return `<div class="pd-issue">${ic("warn")}<span>${esc(r.error)}${r.stepup ? ` <a href="${esc(r.stepup)}">تأیید تازه</a>` : ""}</span></div>`;
+    return `<ul class="pd-res">${(r.results || []).map((x) => `<li class="${x.ok ? "ok" : "bad"}">${ic(x.ok ? "check" : "warn")}<b>${esc(x.case)}</b><span>${esc(x.message || "")}</span></li>`).join("")}</ul>`;
+  }
+
+  async function runCall(body) {
+    try { return await call(API.run, body); } catch (e) {
+      const r = await fetch(API.run, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF }, body: JSON.stringify(body) }).then((x) => x.json()).catch(() => ({}));
+      return { error: r.error || e.message, stepup: r.stepup };
+    }
+  }
+
+  async function runTests(body) {
+    const el = body.querySelector("#pd-tres");
+    el.innerHTML = `<p class="pd-hint">در حال اجرا…</p>`;
+    codeOut.tests = await runCall({ action: "tests", name: codeSel });
+    el.innerHTML = resultsHtml(codeOut.tests);
+  }
+
+  function trialTab(body, h) {
+    const o = codeOut.trial;
+    body.innerHTML = `<p class="pd-hint">handler را با ورودی نمونه در جعبه‌ی امن اجرا می‌کند؛ چیزی نوشته نمی‌شود. بدون پایگاه داده، <span class="ltr">ctx.sql</span> خطا می‌دهد.</p>
+      <div class="pd-f"><span class="lbl">ورودی (JSON)</span><input type="text" class="ltr" dir="ltr" id="pd-tp" value="${esc(codeOut.tp || "{}")}"></div>
+      ${needsFile(h.role) ? `<div class="pd-f"><span class="lbl">فایل نمونه (متن)</span><textarea class="ltr" dir="ltr" id="pd-tf">${esc(codeOut.tf || "")}</textarea></div>` : ""}
+      <div class="pd-f"><span class="lbl">شناسه‌ی پایگاه داده‌ی نمونه برای <span class="ltr">ctx.sql</span> (اختیاری)</span><input type="text" inputmode="numeric" dir="ltr" id="pd-td" value="${esc(codeOut.td || "")}" style="max-width:200px"></div>
+      <button class="btn sm" type="button" id="pd-trun">${ic("play")}<span>اجرا</span></button><div id="pd-tout">${trialHtml(o)}</div>`;
+    body.querySelector("#pd-trun").addEventListener("click", async () => {
+      const q = (id) => (body.querySelector(id) || {}).value;
+      codeOut.tp = q("#pd-tp"); codeOut.tf = q("#pd-tf"); codeOut.td = q("#pd-td");
+      let params = {};
+      try { params = JSON.parse(codeOut.tp || "{}"); } catch (_) { return toast("ورودی باید JSON معتبر باشد.", "danger"); }
+      const out = body.querySelector("#pd-tout");
+      out.innerHTML = `<p class="pd-hint">در حال اجرا…</p>`;
+      codeOut.trial = await runCall({ action: "trial", name: codeSel, params, file_text: codeOut.tf || null, database: codeOut.td || null });
+      out.innerHTML = trialHtml(codeOut.trial);
+    });
+  }
+
+  function trialHtml(o) {
+    if (!o) return "";
+    if (o.error && o.ok === undefined) return resultsHtml(o);
+    return (o.ok ? `<div class="pd-issue" style="border-color:var(--green);background:var(--green-soft)">${ic("check")}<span>${esc(o.verdict)}</span></div>` : `<div class="pd-issue">${ic("warn")}<span>${esc(o.error)}</span></div>`) +
+      (o.result ? `<pre class="pd-pre-block" dir="ltr">${esc(o.result)}</pre>` : "") + ((o.logs || []).length ? `<pre class="pd-pre-block" dir="ltr">${esc(o.logs.join("\n"))}</pre>` : "");
+  }
+
+  // ---- افزودن handler از قالب و اتصال به صفحه
+  function newHandlerDialog() {
+    let tpl = null, table = "", cols = {}, nums = {};
+    const wrap = document.createElement("div");
+    wrap.className = "pd-newh";
+    const m = StudioUI.modal({ title: "کد تازه", icon: "code", size: "lg", body: wrap });
+    const paint = () => {
+      const t = CODE.templates.find((x) => x.key === tpl);
+      wrap.innerHTML = `<div class="pd-tiles" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr))">${CODE.templates.map((x) => `<button type="button" class="pd-tile" data-tpl="${x.key}" aria-pressed="${x.key === tpl}" style="${x.key === tpl ? "border-color:var(--teal);background:var(--teal-soft)" : ""}"><b>${esc(x.title)}</b><small>${esc(ROLE_BLOCK[x.role] || x.role)} — ${esc(x.hint)}</small></button>`).join("")}</div>
+        ${t ? `<div style="margin-top:16px">${fld("نام handler (لاتین)", `<input type="text" id="pd-hn" class="ltr" dir="ltr" pattern="[a-z][a-z0-9_]{1,30}" placeholder="${esc(t.key.replace(/^[a-z]+_/, ""))}" value="${esc(wrap.dataset.name || "")}">`)}
+          ${t.needs.includes("table") ? fld("جدول", tables().length ? chips("table", tableOpts(), table, true) : `<span class="pd-hint">اول در «داده» جدول بسازید.</span>`) : ""}
+          ${t.needs.filter((n) => n !== "table").map((n) => fld(CODE.cols[n][0], chips("col_" + n, colsOf(table, CODE.cols[n][1]).map((c) => [c.name, c.name]), cols[n], true))).join("")}
+          ${t.nums.map((n) => fld(CODE.nums[n], `<input type="number" step="any" data-n="${n}" dir="ltr" value="${esc(nums[n] ?? "")}">`)).join("")}
+          <div class="pd-row"><span class="pd-spacer"></span><button class="btn" type="button" id="pd-hcreate">${ic("check")}<span>ساخت</span></button></div></div>` : ""}`;
+      wrap.querySelectorAll("[data-tpl]").forEach((b) => b.addEventListener("click", () => { tpl = b.dataset.tpl; cols = {}; nums = {}; paint(); }));
+      wrap.querySelectorAll("[data-single]").forEach((box) => box.addEventListener("click", (e) => {
+        const c = e.target.closest(".pd-chip");
+        if (!c) return;
+        wrap.dataset.name = (wrap.querySelector("#pd-hn") || {}).value || "";
+        if (box.dataset.single === "table") { table = c.dataset.v; cols = {}; } else cols[box.dataset.single.slice(4)] = c.dataset.v;
+        paint();
+      }));
+      wrap.querySelectorAll("[data-n]").forEach((i) => i.addEventListener("input", () => { nums[i.dataset.n] = i.value; }));
+      const go = wrap.querySelector("#pd-hcreate");
+      if (go) go.addEventListener("click", async () => {
+        const name = wrap.querySelector("#pd-hn").value.trim();
+        try {
+          await run({ op: "code.add", name, template: tpl, params: { table, ...Object.fromEntries(Object.entries(cols)), ...nums } });
+          codeSel = name; codeTab = "source"; codeOut = {};
+          m.api.close();
+          await draw();
+        } catch (_) { /* پیام نمایش داده شد */ }
+      });
+    };
+    paint();
+  }
+
+  async function handlerToPage(btn, h) {
+    if (!curPage()) return toast("اول یک صفحه بسازید.", "danger");
+    const name = codeSel;
+    const items = h.role === "block" ? ["table", "kpi", "bars", "map"].map((d) => ({ icon: ACT_ICON[d] || ({ table: "table", kpi: "k-kpi", bars: "k-bar", map: "globe" })[d], label: "نمایش به‌صورت " + ({ table: "جدول", kpi: "شمارنده", bars: "میله‌ای", map: "نقشه" })[d], act: d }))
+      : [{ icon: "plus", label: "افزودن به صفحه‌ی «" + curPage().title + "»", act: "x" }];
+    StudioUI.menu(btn, items, async (act) => {
+      const blk = h.role === "block" ? { kind: "handler", handler: name, display: act, title: name }
+        : h.role === "importer" ? { kind: "import", handler: name, extensions: ".csv", title: name }
+        : h.role === "exporter" ? { kind: "export", handler: name, format: "csv", title: name }
+        : { kind: "ingest", handler: name, table: (h.tables || [])[0] || (tables()[0] || {}).name, title: name };
+      try { await run({ op: "block.add", page: curPage().key, block: blk }); tab = "pages"; selId = ""; await draw(); } catch (_) { /* */ }
+    });
   }
 
   // ---------------------------------------------------------------- بخش خودکارسازی (نمای کلی همه‌ی اجزای غیرنمایشی)

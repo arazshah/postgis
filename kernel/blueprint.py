@@ -12,7 +12,7 @@ import re
 import secrets
 from typing import Any
 
-from . import wizard
+from . import wizard, wizard_code
 
 MAX_PAGES = wizard.MAX_PAGES
 MAX_BLOCKS = 24  # سقف کیت صفحه (pagekit.parse_page)
@@ -316,7 +316,61 @@ def _block_dup(s, pid, op):
     p["blocks"].insert(i + 1, b)
 
 
+def _code_get(s: dict, name: str) -> dict:
+    h = (s.get("code") or {}).get(str(name))
+    if h is None:
+        raise BlueprintError("handler پیدا نشد.")
+    return h
+
+
+def _code_add(s, pid, op):
+    """handler تازه از قالب (جدول و ستون از نقشه، اعتبارسنجی در wizard_code.build)."""
+    name = str(op.get("name", "")).strip()
+    code = s.setdefault("code", {})
+    if not wizard_code.NAME_RE.fullmatch(name) or name in code:
+        raise BlueprintError("نام handler نامعتبر یا تکراری است (حروف کوچک لاتین، رقم و _؛ ۲ تا ۳۱ نویسه).")
+    if len(code) >= wizard_code.MAX_HANDLERS:
+        raise BlueprintError(f"حداکثر {wizard_code.MAX_HANDLERS} handler.")
+    params = op.get("params") if isinstance(op.get("params"), dict) else {}
+    try:
+        h = wizard_code.build(s, str(op.get("template", "")), {k: str(v) for k, v in params.items()})
+    except wizard.WizardError as exc:
+        raise BlueprintError(str(exc)) from exc
+    h["cases"] = wizard_code.cases_from_toml(h.get("test", ""))
+    code[name] = h
+
+
+def _code_set(s, pid, op):
+    h = _code_get(s, op.get("name"))
+    if "source" in op:
+        src = op["source"]
+        if not isinstance(src, str) or len(src) > wizard_code.MAX_SOURCE:
+            raise BlueprintError(f"کد باید متن و حداکثر {wizard_code.MAX_SOURCE:,} نویسه باشد.")
+        h["source"] = src
+    if "every" in op:
+        e = op["every"]
+        if isinstance(e, bool) or not isinstance(e, int) or not 5 <= e <= 1440:
+            raise BlueprintError("فاصله‌ی هشدار بین ۵ و ۱۴۴۰ دقیقه است.")
+        h["every"] = e
+    if "cases" in op:
+        if op["cases"] in (None, []):
+            h["cases"], h["test"] = [], ""
+        else:
+            try:
+                h["test"] = wizard_code.cases_toml(op["cases"])
+                h["cases"] = wizard_code.normalize_cases(op["cases"])
+            except wizard.WizardError as exc:
+                raise BlueprintError(str(exc)) from exc
+
+
+def _code_del(s, pid, op):
+    name = str(op.get("name", ""))
+    _code_get(s, name)
+    del s["code"][name]
+
+
 _OPS = {
+    "code.add": _code_add, "code.set": _code_set, "code.del": _code_del,
     "meta.set": _meta_set, "table.add": _table_add, "table.set": _table_set, "table.del": _table_del,
     "page.add": _page_add, "page.set": _page_set, "page.del": _page_del, "page.move": _page_move,
     "block.add": _block_add, "block.set": _block_set, "block.del": _block_del, "block.move": _block_move, "block.dup": _block_dup,
@@ -344,6 +398,21 @@ def analyze(spec: dict, plugin_id: str) -> dict:
                 wizard.check_block(spec, b, p)
             except wizard.WizardError as exc:
                 add("block", str(exc), p["key"], b.get("id", ""))
+    for name, h in (spec.get("code") or {}).items():
+        try:
+            wizard_code.check_source(h.get("source", ""), name)
+        except wizard.WizardError as exc:
+            issues.append({"scope": "code", "page": "", "block": "", "handler": name, "message": str(exc)})
+        text = h.get("test", "")
+        if not (text or "").strip():
+            issues.append({"scope": "code", "page": "", "block": "", "handler": name, "message": "آزمون ندارد؛ برای انتشار هر handler دست‌کم یک مورد آزمون لازم است."})
+        else:
+            from . import pkgtest
+
+            try:
+                pkgtest.parse(text, name)
+            except pkgtest.TestSpecError as exc:
+                issues.append({"scope": "code", "page": "", "block": "", "handler": name, "message": str(exc)})
     if not (spec.get("pages") or []):
         add("meta", "دست‌کم یک صفحه لازم است.")
     if not issues:

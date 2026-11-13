@@ -15,7 +15,8 @@ from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET, require_POST
 
-from . import blueprint, sampledata, wizard_admin
+from . import blueprint, pagekit, pkgtest, sampledata, stepup, wizard, wizard_admin, wizard_code
+from . import workspace as ws_mod
 from .models import PluginDraft, PluginDraftRevision
 
 MAX_BODY = 200_000
@@ -109,16 +110,95 @@ def preview(request, pk, page):
     return JsonResponse({"blocks": items, "sample": True})
 
 
+def _runner_error() -> str:
+    from .runner import client
+
+    if client.mode() not in ("local", "remote"):
+        return "اجرای کد در این استقرار خاموش است. از «پلاگین‌ها ← پیشرفته ← کلیدهای ناشر و اجرای کد» حالت «راه‌دور» را روشن کنید."
+    return ""
+
+
+@require_POST
+def run(request, pk):
+    """اجرای آزمون‌های اعلانی یا اجرای آزمایشی یک handler در runner (نیازمند تأیید تازه‌ی ورود دومرحله).
+    {action: "tests"|"trial", name, params?, file_text?, database?}؛ چیزی در پایگاه مشتری نوشته نمی‌شود."""
+    draft = _draft(request, pk)
+    try:
+        data = _body(request)
+    except blueprint.BlueprintError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    h = ((draft.wizard or {}).get("code") or {}).get(str(data.get("name", "")))
+    if h is None:
+        return JsonResponse({"error": "handler پیدا نشد."}, status=404)
+    if not stepup.ok(request):
+        return JsonResponse({"error": "برای اجرا تأیید تازه‌ی ورود دومرحله لازم است.", "stepup": stepup.url(request)}, status=403)
+    if msg := _runner_error():
+        return JsonResponse({"error": msg}, status=400)
+    name = data["name"]
+    if data.get("action") == "tests":
+        try:
+            results = wizard_admin._test_results(name, h)
+        except (pkgtest.TestSpecError, wizard.WizardError) as exc:
+            return JsonResponse({"error": f"آزمون: {exc}"}, status=400)
+        except Exception as exc:  # noqa: BLE001 - خطای runner
+            return JsonResponse({"error": f"آزمون اجرا نشد: {str(exc)[:200]}"}, status=400)
+        return JsonResponse({"results": results, "ok": bool(results) and all(r["ok"] for r in results)})
+    if data.get("action") != "trial":
+        return JsonResponse({"error": "عمل نامعتبر است."}, status=400)
+    return _trial(request, draft, name, h, data)
+
+
+def _trial(request, draft, name, h, data):
+    from . import pluginio
+    from .runner import client
+
+    params = data.get("params") or {}
+    if not isinstance(params, dict):
+        return JsonResponse({"error": "ورودی باید یک شیء JSON باشد."}, status=400)
+    file_text = data.get("file_text")
+    file = file_text.encode() if isinstance(file_text, str) and file_text else None
+    pkv = data.get("database")
+    ws = ws_mod.peek(int(pkv)) if str(pkv or "").isdigit() else None
+    if pkv not in (None, "") and (ws is None or not getattr(ws, "is_live", False)):
+        return JsonResponse({"error": "پایگاه داده‌ی فعال با این شناسه نیست."}, status=400)
+    role = wizard_admin.ROLE_RUN.get(h.get("role", "block"), "block")
+    logs: list[str] = []
+    sql_fn = (lambda q, a: pagekit.read_select(ws, q, a)) if ws is not None else None  # noqa: E731
+    try:
+        out = client.run_files({f"code/{name}.py": h["source"]}, name, params, sql_fn, getattr(ws, "pk", 0) or 0, file=file,
+                               io=role != "block", on_log=logs.append, allow_no_ws=True, plugin="studio")
+        if role == "import":
+            t = pluginio.normalize_import("trial_table", out)
+            verdict = f"ورود معتبر است: {len(t.rows):,} ردیف، {len(t.columns)} ستون" + ("، با ستون مکانی" if t.geometry else "")
+        elif role == "export":
+            fname, body, _ctype = pluginio.normalize_export(out, "txt")
+            verdict = f"خروجی معتبر است: {fname} ({len(body):,} بایت)"
+        elif role == "ingest":
+            verdict = f"{len(out.get('rows', [])):,} ردیف تبدیل شد." if isinstance(out, dict) and isinstance(out.get("rows"), list) else "خروجی باید {rows: [...]} باشد."
+        else:
+            verdict = "اجرا موفق بود."
+    except client.RunnerError as exc:
+        return JsonResponse({"ok": False, "error": str(exc), "logs": logs})
+    except pluginio.PluginIOError as exc:
+        return JsonResponse({"ok": False, "error": f"خروجی معتبر نیست: {exc}", "logs": logs})
+    shown = json.dumps(out, ensure_ascii=False, indent=2, default=str)
+    ws_mod.log_event("plugin_studio", f"اجرای آزمایشی استودیو {draft.plugin_id}/{name}", user=request.user, database=ws)
+    return JsonResponse({"ok": True, "verdict": verdict, "result": shown if len(shown) <= 6000 else shown[:6000] + "\n… (کوتاه‌شده)", "logs": logs})
+
+
 def designer(request, pk):
     """صفحه‌ی استودیوی دیداری؛ همه‌ی کار با API همین ماژول انجام می‌شود."""
     from django.shortcuts import render
     from django.urls import reverse
 
     draft = _draft(request, pk)
-    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore")}
+    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore", "run")}
+    tpl = [{"key": k, "role": t["role"], "title": t["title"], "hint": t["hint"], "needs": t["needs"], "nums": t.get("nums", [])} for k, t in wizard_code.TEMPLATES.items()]
+    codeinfo = {"templates": tpl, "roles": wizard_code.ROLE_LABEL, "cols": {k: [v[0], list(v[1])] for k, v in wizard_code.COLS.items()},
+                "nums": {k: v[0] for k, v in wizard_code.NUMS.items()}, "runner_ready": not _runner_error()}
     api["preview"] = reverse("admin:kernel_plugindraft_api_preview", args=[draft.pk, "__PAGE__"])
     return render(request, "admin/kernel/designer.html", {
-        "draft": draft, "api": api, "icons": wizard_admin.ICON_CHOICES, "col_types": wizard_admin.COL_TYPES,
+        "draft": draft, "api": api, "codeinfo": codeinfo, "icons": wizard_admin.ICON_CHOICES, "col_types": wizard_admin.COL_TYPES,
         "links": {"hub": reverse("admin:kernel_plugindraft_changelist"), "publish": reverse("admin:kernel_plugindraft_wizard", args=[draft.pk, 5]),
                   "toml": reverse("admin:kernel_plugindraft_studio", args=[draft.pk]), "code": reverse("admin:kernel_plugindraft_wizard", args=[draft.pk, 3])}})
 
