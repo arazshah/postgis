@@ -1,4 +1,4 @@
-{% load fa %}<div class="field">
+{% load fa %}<div class="field{% if fd.kind == 'geometry' or fd.kind == 'choice' %} wide{% endif %}">
   {% if fd.kind == 'bool' %}
   <label class="pick-chip"><input type="checkbox" name="f_{{ fd.name }}" value="1" {% if val %}checked{% endif %}><span>{{ fd.label }}</span></label>
   {% elif fd.kind == 'geometry' %}

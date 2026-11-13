@@ -53,3 +53,4 @@
 - ژئوکدر فارسی (`kernel/persian.py`، `kernel/geocode.py`، docs/plugins/geocoder.md): تطبیق روی `osm_*` همان پایگاه در شعاع یک شهر؛ دقت «معبر/مکان» است نه پلاک. آزمایشگاه پنل (`geocode_admin`) فقط مدیر ارشد با `stepup`؛ هر خروجی CSV ورودی کاربر را با `_safe` در برابر تزریق فرمول خنثی کند.
 
 - استودیوی دیداری پلاگین (docs/adr/0010): ساخت از `…/plugindraft/<pk>/designer/`؛ هر تغییر یک «عملیات» در `kernel/blueprint.py` است (مرورگر هرگز TOML/SQL نمی‌فرستد؛ API: `kernel/studio_api.py`، تاریخچه: `PluginDraftRevision`، پیش‌نمایش نمونه: `kernel/sampledata.py`). قابلیت تازه‌ی کیت صفحه را اول به عملیات و نمای استودیو اضافه کنید، نه فقط به TOML.
+- قابلیت‌های مشترک ADR-0009 پلاگین مستقل‌اند (`kernel/caps.py`، شناسه‌های `cap_notify`، `cap_sources`، `cap_draw`، `cap_reports`، `cap_geocoder`؛ بدون ردیف وضعیت باز): هر نقطه‌ی ورود تازه‌ی یک قابلیت باید با `caps.allowed(cap, user=..., ws=...)` سنجیده شود و خاموش‌بودن به ۴۰۴ یا بازگشت به رفتار قبلی (مثلاً پیامک/ایمیل) برسد، نه خطا.

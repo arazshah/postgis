@@ -1,6 +1,6 @@
 {% extends "admin/base_site.html" %}
 {% block content %}
-<div id="content-main">
+<div id="content-main" class="ap-flat">
   <p class="help">نشانی‌ها را روی «داده آماده ایران» یک پایگاه می‌آزماید (جدول‌های osm_roads، osm_pois و osm_places همان پایگاه). OSM پلاک و کدپستی ندارد؛ دقت در حد «معبر یا مکان» است. هر سطر یک نشانی (حداکثر ۳۰۰).</p>
   <form method="post">{% csrf_token %}
     <fieldset class="module aligned">

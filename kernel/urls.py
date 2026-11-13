@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import pages_view
+from . import geocode_views, pages_view
 
 app_name = "kernel"
 urlpatterns = [
@@ -15,6 +15,7 @@ urlpatterns = [
     path("dashboard/<int:pk>/p/<slug:plugin>/<slug:page>/report/<slug:key>/save/", pages_view.report_save, name="report_save"),
     path("dashboard/<int:pk>/p/<slug:plugin>/<slug:page>/report/<slug:key>/preview/", pages_view.report_preview, name="report_preview"),
     path("dashboard/<int:pk>/p/<slug:plugin>/<slug:page>/report/<slug:key>/logo/", pages_view.report_logo, name="report_logo"),
+    path("dashboard/<int:pk>/geocode/", geocode_views.tool, name="geocode"),
     path("ingest/", pages_view.ingest_receive, name="ingest"),
     path("dashboard/<int:pk>/p/<slug:plugin>/<slug:page>/s/<slug:key>/", pages_view.source_save, name="source_save"),
     path("dashboard/<int:pk>/p/<slug:plugin>/<slug:page>/s/<slug:key>/run/", pages_view.source_run, name="source_run"),

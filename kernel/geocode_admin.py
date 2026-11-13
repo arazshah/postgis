@@ -5,8 +5,6 @@
 """
 from __future__ import annotations
 
-import csv
-import io
 import logging
 import secrets
 
@@ -26,23 +24,6 @@ MAX_LINES, TTL = 300, 900
 def allowed(request) -> bool:
     u = request.user
     return bool(u.is_active and u.is_staff and u.is_superuser)
-
-
-def _csv(results: list[geocode.Result]) -> str:
-    out = io.StringIO()
-    out.write("﻿")  # BOM: اکسل فارسی را درست باز کند
-    w = csv.writer(out)
-    w.writerow(["نشانی", "سطح", "اطمینان", "امتیاز", "طول", "عرض", "نام تطبیق‌خورده", "توضیح"])
-    for r in results:
-        w.writerow([_safe(r.text), geocode.LEVELS[r.level], r.label, r.score, r.lon if r.lon is not None else "", r.lat if r.lat is not None else "",
-                    _safe(r.matched), _safe(r.note)])
-    return out.getvalue()
-
-
-def _safe(v: str) -> str:
-    """جلوگیری از تزریق فرمول در اکسل (ورودی کاربر)."""
-    v = str(v or "")
-    return "'" + v if v[:1] in "=+-@\t\r" else v
 
 
 def lab(request):
@@ -91,7 +72,7 @@ def lab(request):
         else:
             log.warning("geocode lab: user %s ws %s city %s n=%s", request.user.pk, ws.pk, gz.city_name, len(lines))
             token = secrets.token_urlsafe(12)
-            cache.set(f"geolab:{request.user.pk}:{token}", _csv(results), TTL)
+            cache.set(f"geolab:{request.user.pk}:{token}", geocode.results_csv(results), TTL)
             ctx.update(results=results, stats=geocode.stats(results), levels=geocode.LEVELS, city=gz.city_name, token=token,
                        n_streets=len(gz.streets), n_pois=len(gz.pois), n_hoods=len(gz.hoods))
     return TemplateResponse(request, "admin/kernel/geocode_lab.html", ctx)

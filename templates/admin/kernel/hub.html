@@ -19,7 +19,7 @@
 .ph-wrap{overflow-x:auto}
 </style>{% endblock %}
 {% block content %}
-<div id="content-main">
+<div id="content-main" class="ap-flat">
   <nav class="ph-tabs" aria-label="بخش‌های پلاگین">{% for key, label in tabs %}<a href="?tab={{ key }}" class="{% if key == tab %}on{% endif %}">{{ label }}</a>{% endfor %}</nav>
 
   {% if tab == "all" %}
@@ -50,10 +50,10 @@
   {% if wizard_url %}<p><a class="button default" href="{{ wizard_url }}">شروع ساخت پلاگین تازه</a></p>{% endif %}
   {% if drafts %}<h2>پیش‌نویس‌ها</h2>
   <ul class="ph-list">{% for d in drafts %}<li><a href="{{ d.url }}">{{ d.name }}</a> <span class="help ltr">{{ d.id }}</span> <span class="help">{% if d.wizard %}استودیوی دیداری{% else %}TOML{% endif %}</span></li>{% endfor %}</ul>{% endif %}
-  <h2>پلاگین نمونه برای آزمایش</h2>
+  <h2>پلاگین‌های نمونه‌ی رایگان</h2>
   <form method="post" action="{% url 'plugin_sample' %}">{% csrf_token %}
-    <p class="help">یک پلاگین آماده به نام «آزمایشگاه ژئوپایگاه» می‌سازد و منتشر می‌کند تا چندضلعی و ترسیم روی نقشه، ویرایش ردیف، منبع بیرونی هواشناسی و گزارش PDF را روی پایگاه واقعی خودتان بیازمایید. راهنمای گام‌به‌گام: <span class="ltr">docs/plugins/testing-guide.md</span>.</p>
-    <button class="button" type="submit">ساخت و انتشار نمونه</button></form>
+    <p class="help">دو پلاگین آماده را می‌سازد و عمومی-رایگان منتشر می‌کند (در بخش رایگان بازار): <b>هواشناسی آنلاین</b> (Open-Meteo؛ ۲۰ متغیر، ۳۰ مدل، پیش‌بینی و تاریخچه) و <b>شناسنامه باغات</b> (محدوده‌ی باغ روی نقشه، ویرایش و حذف، گزارش PDF). هر دو نمونه‌ی ساخت پلاگین‌اند. راهنمای تست: <span class="ltr">docs/plugins/testing-guide.md</span>.</p>
+    <button class="button" type="submit">نصب نمونه‌ها</button></form>
   {% if studio_url %}<p class="help">ویرایش دستی (TOML و کد) و خروجی بسته: <a href="{{ studio_url }}">استودیوی پلاگین</a>.</p>{% endif %}
 
   {% elif tab == "sales" %}

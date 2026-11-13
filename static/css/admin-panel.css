@@ -230,3 +230,28 @@ body.ap-filter-open::after{content:"";position:fixed;inset:0;z-index:75;backgrou
 /* زبانه‌های زیاد: متن وضعیت فقط روی صفحه‌ی عریض؛ نقطه‌ی رنگی با tooltip همیشه هست */
 .ap-tab{padding:0 8px;font-size:13px}
 @media (max-width:1700px){.ap-tab small{display:none}}
+
+/* صفحه‌های سفارشی پنل (پلاگین‌ها، سکو، استودیو، آزمایشگاه ژئوکدر، ویزارد): چیدمان یکدست فیلدها و دکمه‌ها */
+.ap #content-main.ap-flat{padding-bottom:var(--s5,24px)}
+.ap #content-main.ap-flat .submit-row{position:static;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px;margin:12px 0;box-shadow:none}
+.ap #content-main.ap-flat fieldset.aligned .form-row{display:grid;grid-template-columns:minmax(120px,200px) minmax(0,1fr);gap:6px 14px;align-items:start;padding:12px 14px;overflow:visible}
+.ap #content-main.ap-flat fieldset.aligned .form-row>label{float:none;width:auto;padding:6px 0 0;margin:0;font-weight:700}
+.ap #content-main.ap-flat fieldset.aligned .form-row>div{margin:0;padding:0}
+.ap #content-main.ap-flat fieldset.aligned .form-row input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=submit]),
+.ap #content-main.ap-flat fieldset.aligned .form-row select,.ap #content-main.ap-flat fieldset.aligned .form-row textarea{width:100%;max-width:560px;box-sizing:border-box;margin:0}
+.ap #content-main.ap-flat fieldset.aligned .form-row .help{margin:2px 0 0;padding:0}
+.ap #content-main.ap-flat .form-row input[size]{width:100%}
+.ap #content-main.ap-flat input[type=checkbox],.ap #content-main.ap-flat input[type=radio]{width:auto;margin-inline:0 6px}
+.ap #content-main.ap-flat .st-bar input,.ap #content-main.ap-flat .st-bar select{max-width:100%;min-width:0}
+.ap #content-main.ap-flat button,.ap #content-main.ap-flat input[type=submit]{display:inline-flex;align-items:center;justify-content:center;height:var(--ctl-h);padding:0 16px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--card);color:var(--ink);font:600 13px var(--f-body);cursor:pointer;line-height:1}
+.ap #content-main.ap-flat button:hover,.ap #content-main.ap-flat .button:hover{border-color:var(--teal);color:var(--teal-dark)}
+.ap #content-main.ap-flat button.default,.ap #content-main.ap-flat input[type=submit].default,.ap #content-main.ap-flat .button.default{background:var(--teal);border-color:var(--teal);color:var(--on-accent)}
+.ap #content-main.ap-flat .st-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 14px;margin:0}
+.ap #content-main.ap-flat .st-code{margin:0;width:100%;box-sizing:border-box;border-radius:0;border-inline:0}
+.ap #content-main.ap-flat .st-rep td:first-child{white-space:nowrap;width:1%;padding-inline-end:20px}
+.ap #content-main.ap-flat .module>.help,.ap #content-main.ap-flat fieldset>.help{padding:8px 14px 0}
+@media (max-width:700px){
+  .ap #content-main.ap-flat fieldset.aligned .form-row{grid-template-columns:minmax(0,1fr)}
+  .ap #content-main.ap-flat .st-bar>*{flex:1 1 100%}
+  .ap #content-main.ap-flat .submit-row>*{flex:1 1 auto}
+}

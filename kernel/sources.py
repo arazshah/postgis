@@ -21,7 +21,7 @@ import urllib.parse
 
 from django.utils import timezone
 
-from . import crypto, entitlements, metering, notify, pagekit, platform, tables, workspace
+from . import caps, crypto, entitlements, metering, notify, pagekit, platform, tables, workspace
 
 log = logging.getLogger(__name__)
 MAX_BYTES, TIMEOUT = 2 * 1024 * 1024, 10
@@ -128,15 +128,28 @@ def build_request(spec, state, now) -> tuple[str, dict]:
 
 
 def _inputs(spec, raw: dict) -> dict:
+    """ورودی‌های پایگاه ← مقدار آماده‌ی جای‌نگهدار؛ هر مقدار با قواعد خودش (گزینه‌ها فقط از فهرست اعلام‌شده) سنجیده می‌شود."""
     out = {}
     for i in spec.inputs:
-        v = str((raw or {}).get(i.name, i.default) or "").strip()
+        val = (raw or {}).get(i.name, i.default)
+        if i.kind in ("choice", "multi"):
+            allowed = [c[0] for c in i.choices]
+            items = val if isinstance(val, list) else [x for x in str(val or "").split(",")]
+            items = [str(x).strip() for x in items if str(x).strip()]
+            if i.kind == "choice":
+                items = items[:1]
+            bad = [x for x in items if x not in allowed]
+            if bad or (i.required and not items):
+                raise SourceError(f"«{i.label}»: گزینه‌ی نامعتبر یا خالی.")
+            out[i.name] = ",".join(x for x in allowed if x in items)  # ترتیب پایدار
+            continue
+        v = str(val or "").strip()
         f = pagekit.Field(i.name, "number" if i.kind == "number" else i.kind, i.label, i.required, (), i.max, i.min)
         try:
-            val = pagekit.convert_field(f, v)
+            conv = pagekit.convert_field(f, v)
         except ValueError as exc:
             raise SourceError(str(exc)) from None
-        out[i.name] = "" if val is None else val
+        out[i.name] = "" if conv is None else conv
     return out
 
 
@@ -150,34 +163,41 @@ def _walk(data, path: str):
 
 
 def extract(spec, data) -> list[dict]:
-    """پاسخ JSON ← فهرست {ستون: مقدار خام}؛ SourceError اگر ساختار نمی‌خواند."""
+    """پاسخ JSON ← فهرست {ستون: مقدار خام}؛ SourceError اگر ساختار نمی‌خواند. ستون optional که در پاسخ نیست NULL می‌شود."""
     root = _walk(data, spec.rows_path) if spec.rows_path else data
     paths = dict(spec.paths)
+    opt = set(spec.optional)
     if spec.layout == "columns":
         if not isinstance(root, dict):
             raise SourceError("ساختار پاسخ با تعریف منبع نمی‌خواند.")
         cols = {n: _walk(root, p) for n, p in paths.items()}
-        if not all(isinstance(c, list) for c in cols.values()):
-            raise SourceError("ساختار پاسخ با تعریف منبع نمی‌خواند.")
-        n = min(len(c) for c in cols.values())
-        return [{k: c[i] for k, c in cols.items()} for i in range(min(n, MAX_ROWS))]
+        present = {n: c for n, c in cols.items() if isinstance(c, list)}
+        if any(n not in present and n not in opt for n in cols) or not present or (opt and not (opt & set(present))):
+            raise SourceError("ساختار پاسخ با تعریف منبع نمی‌خواند (هیچ‌کدام از متغیرهای انتخاب‌شده در پاسخ نیست).")
+        n = min(len(c) for c in present.values())
+        return [{k: (present[k][i] if k in present else None) for k in cols} for i in range(min(n, MAX_ROWS))]
     if not isinstance(root, list):
         raise SourceError("ساختار پاسخ با تعریف منبع نمی‌خواند.")
     return [{n: _walk(r, p) for n, p in paths.items()} for r in root[:MAX_ROWS] if isinstance(r, dict)]
 
 
-def convert(spec, raw_rows: list[dict], cursor: str) -> tuple[list[dict], int, str]:
-    """(ردیف‌های معتبر و تازه، شمار نامعتبر، cursor تازه). ردیف نامعتبر رد می‌شود (داده‌ی بیرونی تحمل‌پذیر)."""
+def convert(spec, raw_rows: list[dict], cursor: str, inputs: dict | None = None) -> tuple[list[dict], int, str]:
+    """(ردیف‌های معتبر و تازه، شمار نامعتبر، cursor تازه). ردیف نامعتبر رد می‌شود (داده‌ی بیرونی تحمل‌پذیر).
+    ستون‌های consts از ورودی‌های پایگاه پر می‌شوند؛ در حالت replace فیلتر cursor اعمال نمی‌شود (همه‌ی پنجره بازنویسی می‌شود)."""
+    consts = dict(spec.consts)
     good, bad, newest = [], 0, cursor
     for r in raw_rows:
         try:
-            row = {f.name: pagekit.convert_field(f, pagekit._norm_raw(r.get(f.name))) for f in spec.fields}
+            row = {}
+            for f in spec.fields:
+                src = (inputs or {}).get(consts[f.name]) if f.name in consts else r.get(f.name)
+                row[f.name] = pagekit.convert_field(f, pagekit._norm_raw(src))
         except ValueError:
             bad += 1
             continue
         if spec.cursor:
             c = str(r.get(spec.cursor) or "")
-            if not c or (cursor and c <= cursor):
+            if not c or (spec.mode == "append" and cursor and c <= cursor):
                 continue
             newest = max(newest, c)
         good.append(row)
@@ -194,7 +214,8 @@ def _state(ws_pk, plugin, page, key):
 def configure(ws, plugin: str, page, spec, post: dict, *, enable: bool):
     """ذخیره‌ی ورودی‌ها و کلید API (خالی = بدون تغییر)؛ ValueError با پیام فارسی."""
     st = _state(ws.pk, plugin, page.key, spec.key)
-    raw = {i.name: str(post.get(f"i_{i.name}", "")).strip() for i in spec.inputs}
+    raw = {i.name: (post.getlist(f"i_{i.name}") if i.kind == "multi" and hasattr(post, "getlist") else
+                    post.get(f"i_{i.name}", "") if i.kind == "multi" else str(post.get(f"i_{i.name}", "")).strip()) for i in spec.inputs}
     try:
         _inputs(spec, raw)
     except SourceError as exc:
@@ -252,13 +273,13 @@ def run_one(st, page, spec, ws, now=None) -> str:
             data = json.loads(raw)
         except ValueError:
             raise SourceError("پاسخ سرویس بیرونی JSON معتبر نیست.") from None
-        rows, bad, newest = convert(spec, extract(spec, data), st.cursor)
+        rows, bad, newest = convert(spec, extract(spec, data), st.cursor, _inputs(spec, st.inputs))
         if bad and not rows:
             raise SourceError("هیچ ردیف معتبری در پاسخ نبود؛ نوع یا مسیر فیلدها را بررسی کنید.")
         if page.tables:
             tables.ensure(ws, st.plugin_id, page.tables)
         if rows:
-            pagekit.insert_rows(ws, spec, rows)
+            (pagekit.replace_rows if spec.mode == "replace" else pagekit.insert_rows)(ws, spec, rows)
         metering.record(st.plugin_id, "source_fetches", ws=ws)
         metering.record(st.plugin_id, "source_rows", len(rows), ws=ws)
     except (SourceError, pagekit.SpecError, tables.TableError) as exc:
@@ -277,7 +298,7 @@ def run_now(ws, plugin, page, spec, user=None) -> str:
     st = _state(ws.pk, plugin, page.key, spec.key)
     if st.last_run and timezone.now() - st.last_run < RUN_NOW_GAP:
         return "دریافت دستی را هر ۵ دقیقه یک‌بار می‌توانید بزنید."
-    if not entitlements.allowed(plugin, user=user, ws=ws):
+    if not entitlements.allowed(plugin, user=user, ws=ws) or not caps.allowed("sources", user=user, ws=ws):
         return "دسترسی به پلاگین ندارید."
     return run_one(st, page, spec, ws)
 
@@ -297,7 +318,8 @@ def tick(now=None) -> dict:
             st.next_run = now + datetime.timedelta(hours=6)  # پلاگین/پایگاه فعلاً در دسترس نیست
             st.save(update_fields=["next_run"])
             continue
-        if not entitlements.allowed(st.plugin_id, user=getattr(ws, "owner", None), ws=ws):
+        owner = getattr(ws, "owner", None)
+        if not entitlements.allowed(st.plugin_id, user=owner, ws=ws) or not caps.allowed("sources", user=owner, ws=ws):
             st.next_run = now + datetime.timedelta(hours=6)
             st.save(update_fields=["next_run"])
             continue

@@ -121,7 +121,7 @@ def hub(request):
 
 
 def install_sample(request):
-    """ساخت و انتشار پلاگین نمونه‌ی «آزمایشگاه» (docs/plugins/testing-guide.md): فقط POST، تأیید تازه و مجوز فعال‌سازی نسخه."""
+    """ساخت و انتشار پلاگین‌های نمونه‌ی «هواشناسی آنلاین» و «شناسنامه باغات» (docs/plugins/testing-guide.md): فقط POST، تأیید تازه و مجوز فعال‌سازی نسخه."""
     from django.contrib import messages
     from django.shortcuts import redirect
 
@@ -136,10 +136,10 @@ def install_sample(request):
     if not stepup.ok(request):
         return redirect(stepup.url(request))
     try:
-        out = samples.install(request.user)
-        (messages.success if out["active"] else messages.warning)(
-            request, "پلاگین «آزمایشگاه ژئوپایگاه»: " + out["message"]
-            + " حالا با حساب مشتری یک پایگاه PostGIS فعال را باز کنید؛ در ریل کناری پایگاه، زیر «داده»، گزینه‌ی «آزمایشگاه ژئوپایگاه» پیدا می‌شود (تا ۳۰ ثانیه ممکن است دیر بیاید).")
+        for res in samples.install(request.user):
+            (messages.success if res["active"] else messages.warning)(request, f"«{res['name']}»: {res['message']}")
+        messages.info(request, "حالا با حساب مشتری یک پایگاه PostGIS فعال را باز کنید؛ در ریل کناری پایگاه، زیر «داده»، «هواشناسی آنلاین» و «شناسنامه باغات» پیدا می‌شوند "
+                               "(تا ۳۰ ثانیه ممکن است دیر بیایند). در «بازار پلاگین» هم در بخش رایگان هستند.")
     except publish.PublishError as exc:
-        messages.error(request, f"ساخت نمونه انجام نشد: {exc}")
+        messages.error(request, f"ساخت نمونه‌ها انجام نشد: {exc}")
     return redirect(reverse("plugin_hub") + "?tab=create")

@@ -4,10 +4,12 @@ from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from . import (
+    caps,
     entitlements,
     gate,
     ingest,
@@ -60,8 +62,10 @@ def page(request, pk, plugin, page):
         for i in spec.ingests:
             ingests.append({"spec": i, "tokens": ingest.tokens_for(ws, plugin, page, i.key),
                             "new": new if new and new.get("key") == i.key and new.get("ws") == ws.pk else None})
+    cap = {c: caps.allowed(c, user=request.user, ws=ws) for c in ("sources", "draw", "reports")}
+    forms = [f for f in spec.forms if cap["draw"] or not any(fd.kind == "geometry" for fd in f.fields)]
     srcs = []
-    if spec.sources:
+    if spec.sources and cap["sources"]:
         from .models import SourceState
 
         states = {x.key: x for x in SourceState.objects.filter(plugin_id=plugin, page=page, workspace_id=ws.pk)}
@@ -69,12 +73,16 @@ def page(request, pk, plugin, page):
             st = states.get(x.key)
             vals = (st.inputs if st else {}) or {}
             srcs.append({"spec": x, "state": st, "host_ok": sources.host_allowed(x.host),
-                         "inputs": [{"i": i, "value": vals.get(i.name, i.default)} for i in x.inputs]})
+                         "inputs": [{"i": i, "value": vals.get(i.name, i.default), "sel": _selected(vals.get(i.name, i.default))} for i in x.inputs]})
     recs = []
-    for rc in spec.records:
+    for rc in (spec.records if cap["draw"] else ()):
         try:
             heads, rows = pagekit.fetch_records(ws, rc)
-            recs.append({"spec": rc, "heads": heads[1:], "rows": rows, "error": ""})
+            labels = {f.name: f.label for f in rc.fields}
+            order = {n: i for i, n in enumerate(rc.columns)}
+            cmap = {order[f.name] + 1: dict(f.choices) for f in rc.fields if f.name in order and f.kind == "choice"}
+            rows = [[r[0]] + [cmap.get(i, {}).get(v, v) for i, v in enumerate(r[1:], 1)] for r in rows]
+            recs.append({"spec": rc, "heads": [labels.get(h, h) for h in heads[1:]], "rows": rows, "error": ""})
         except pagekit.SpecError as exc:
             recs.append({"spec": rc, "heads": [], "rows": [], "error": str(exc)})
         except Exception:  # noqa: BLE001  جدول هنوز ساخته نشده یا خطای پایگاه داده: پیام کوتاه
@@ -82,7 +90,7 @@ def page(request, pk, plugin, page):
     ctx = {"db": ws, "page": spec, "blocks": blocks, "ingests": ingests, "sources": srcs, "records": recs, "sources_on": platform.sources_enabled(), "can_manage_ingest": workspace.level(request.user, ws) >= 2,
            "ingest_url": request.build_absolute_uri("/ingest/"), "values": values, "layers": layers, "param_errors": errors,
            "has_map": any(b["kind"] == "map" for b in blocks),
-           "has_draw": any(fd.kind == "geometry" for fm in spec.forms for fd in fm.fields),
+           "has_draw": any(fd.kind == "geometry" for fm in forms for fd in fm.fields), "forms": forms, "cap_reports": cap["reports"],
            "can_edit_rows": workspace.level(request.user, ws) >= 1 and spec.need != "viewer", "section": "pages"}
     template = "kernel/_page_body.html" if request.GET.get("fragment") == "1" else "kernel/page.html"
     return render(request, template, ctx)
@@ -99,6 +107,8 @@ def submit(request, pk, plugin, page, form):
     ws = workspace.get(request, pk, spec.need)
     if not entitlements.allowed(plugin, user=request.user, ws=ws):
         raise Http404
+    if any(fd.kind == "geometry" for fd in fm.fields) and not caps.allowed("draw", user=request.user, ws=ws):
+        raise Http404  # فرم دارای فیلد هندسه به پلاگین «ترسیم روی نقشه» وابسته است
     back = redirect("kernel:page", pk=ws.pk, plugin=plugin, page=page)
     if not ws.is_live:
         messages.error(request, "این صفحه فقط برای پایگاه داده‌ی فعال در دسترس است.")
@@ -311,9 +321,15 @@ def _source_target(request, pk, plugin, page, key):
     if item is None:
         raise Http404
     ws = workspace.get(request, pk, "owner")  # کلید API مثل رمز است: فقط مالک
-    if not entitlements.allowed(plugin, user=request.user, ws=ws):
+    if not entitlements.allowed(plugin, user=request.user, ws=ws) or not caps.allowed("sources", user=request.user, ws=ws):
         raise Http404
     return ws, spec, item, redirect(f"{reverse('kernel:page', kwargs={'pk': ws.pk, 'plugin': plugin, 'page': page})}#source-{key}")
+
+
+def _selected(v) -> list[str]:
+    """مقدار ذخیره‌شده‌ی ورودی choice/multi (فهرست یا متن با ویرگول) ← فهرست گزینه‌های انتخاب‌شده."""
+    items = v if isinstance(v, list) else str(v or "").split(",")
+    return [str(x).strip() for x in items if str(x).strip()]
 
 
 @login_required
@@ -353,7 +369,7 @@ def _record_target(request, pk, plugin, page, key, rid):
     if rc is None:
         raise Http404
     ws = workspace.get(request, pk, spec.need)
-    if not entitlements.allowed(plugin, user=request.user, ws=ws):
+    if not entitlements.allowed(plugin, user=request.user, ws=ws) or not caps.allowed("draw", user=request.user, ws=ws):
         raise Http404
     if not ws.is_live:
         raise Http404
@@ -435,7 +451,7 @@ def _report_target(request, pk, plugin, page, key, *, write: bool = False):
         raise Http404
     need = spec.need if not write or spec.need == "owner" else "editor"
     ws = workspace.get(request, pk, need)
-    if not entitlements.allowed(plugin, user=request.user, ws=ws):
+    if not entitlements.allowed(plugin, user=request.user, ws=ws) or not caps.allowed("reports", user=request.user, ws=ws):
         raise Http404
     return ws, spec, rp
 
@@ -591,6 +607,7 @@ def report_save(request, pk, plugin, page, key):
 
 @login_required
 @require_POST
+@xframe_options_sameorigin  # پیش‌نمایش داخل iframe همین سایت باز می‌شود؛ سایت پیش‌فرض DENY است
 def report_preview(request, pk, plugin, page, key):
     """پیش‌نمایش HTML همان چیدمانِ ذخیره‌نشده (برای iframe بدون اسکریپت)؛ همان داده و فیلترها."""
     from . import reportlayout
@@ -618,7 +635,7 @@ def report_preview(request, pk, plugin, page, key):
     except reports.ReportError as exc:
         return HttpResponse(str(exc), status=400)
     resp = HttpResponse(html, content_type="text/html; charset=utf-8")
-    resp["Content-Security-Policy"] = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"
+    resp["Content-Security-Policy"] = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; frame-ancestors 'self'"
     resp["Cache-Control"] = "no-store"
     resp["X-Content-Type-Options"] = "nosniff"
     return resp

@@ -19,7 +19,7 @@ import urllib.request
 
 from django.utils import timezone
 
-from . import crypto
+from . import caps, crypto
 
 log = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ def begin_link(user, key: str) -> dict:
     from .models import NotifyAddress, NotifyChannel
 
     ch = NotifyChannel.objects.filter(key=key, enabled=True).first()
-    if ch is None:
+    if ch is None or not caps.allowed("notify", user=user):
         raise NotifyError("این کانال فعال نیست.")
     code = secrets.token_hex(4).upper()
     NotifyAddress.objects.update_or_create(user=user, channel=key, defaults={
@@ -217,7 +217,7 @@ def deliver(user, subject: str, body: str, *, severity: str = "normal", key: str
         pref = NotifyPref.objects.filter(user=user).first()
         quiet = not crit and _quiet(pref, now)
         text = f"{subject}\n{body}".strip()[:MAX_TEXT] if body and body != subject else subject[:MAX_TEXT]
-        active = {c.key: c for c in active_channels()}
+        active = {c.key: c for c in active_channels()} if caps.allowed("notify", user=user) else {}  # پلاگین خاموش/بی‌مجوز: فقط پیامک/ایمیل
         for addr in NotifyAddress.objects.filter(user=user).exclude(chat_id=""):
             ch = active.get(addr.channel)
             if ch is None:
