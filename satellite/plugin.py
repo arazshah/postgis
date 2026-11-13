@@ -43,7 +43,6 @@ _showcase(plugin.id, Showcase(
         'agri',
         'student',
         'org',
-        'city',
     ),
     steps=(
         ('محدوده را بدهید', 'چندضلعی را روی نقشه بکشید یا لایه را انتخاب کنید.'),

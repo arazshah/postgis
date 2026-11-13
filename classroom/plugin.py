@@ -37,6 +37,7 @@ _showcase(plugin.id, Showcase(
     audiences=(
         'edu',
         'student',
+        'org',
     ),
     steps=(
         ('کلاس بسازید', 'کد کلاس را بدهید.'),

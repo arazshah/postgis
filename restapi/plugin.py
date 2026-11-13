@@ -27,7 +27,6 @@ _showcase(plugin.id, Showcase(
     audiences=(
         'dev',
         'survey',
-        'city',
         'agri',
     ),
     steps=(

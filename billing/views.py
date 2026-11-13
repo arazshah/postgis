@@ -10,6 +10,8 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from accounts.decorators import site_user_required
+from analytics import services as analytics
+from analytics.models import Event
 from core.models import SiteSettings
 from databases.models import Plan, UserDatabase
 
@@ -29,8 +31,14 @@ def plans(request):
     conf = SiteSettings.get()
     dbs = request.user.databases.exclude(status__in=[UserDatabase.Status.DELETED, UserDatabase.Status.ERROR,
                                                      UserDatabase.Status.PENDING]).select_related("plan")
+    from kernel import showcase
+
+    plans = list(services.paid_plans())
+    bundled = showcase.bundled_with_plan([p.slug for p in plans])
+    for p in plans:
+        p.bundled = bundled[p.slug]
     return render(request, "billing/plans.html", {
-        "plans": services.paid_plans(), "addons": services.public_addons(), "dbs": dbs, "enabled": conf.pay_enabled and services.methods_available(conf),
+        "plans": plans, "addons": services.public_addons(), "dbs": dbs, "enabled": conf.pay_enabled and services.methods_available(conf),
         "selected_plan": request.GET.get("plan", ""), "selected_db": request.GET.get("db", ""),
     })
 
@@ -63,7 +71,25 @@ def _market_back(request, default="plugins"):
 
 def market(request):
     """بازارچه پلاگین (عمومی، قابل‌ایندکس): کاتالوگ جست‌وجوپذیر با دسته، مخاطب و فیلتر؛ خرید و آزمایشی در صفحه‌ی جزئیات."""
+    analytics.record(request, Event.MARKET_LIST)
     data = services.market_catalog(request.user)
+    return render(request, "billing/market.html", data)
+
+
+def market_audience(request, aud):
+    """صفحه‌ی فرود هر مخاطب: همان بازارچه، فقط پلاگین‌های مناسب او، با معرفی و عنوان اختصاصی (قابل‌ایندکس)."""
+    from kernel import showcase
+
+    if aud not in showcase.AUDIENCE_PITCH:
+        raise Http404
+    analytics.record(request, Event.MARKET_LIST, audience=aud)
+    data = services.market_catalog(request.user)
+    items = [i for i in data["items"] if any(k == aud for k, _l in i["audiences"])]
+    title, pitch = showcase.AUDIENCE_PITCH[aud]
+    data.update(items=items, audience={"key": aud, "title": title, "pitch": pitch, "label": dict(showcase.AUDIENCES)[aud]},
+                n_paid=sum(1 for i in items if i["paid"]), n_free=sum(1 for i in items if not i["paid"]),
+                n_trial=sum(1 for i in items if i["can_trial"]), n_owned=sum(1 for i in items if i["owned"]),
+                categories=[(k, label, n) for k, label, n in data["categories"] if any(i["category"] == k for i in items)])
     return render(request, "billing/market.html", data)
 
 
@@ -73,6 +99,7 @@ def market_detail(request, plugin_id):
     data = services.market_detail(request.user, plugin_id)
     if data is None:
         raise Http404
+    analytics.record(request, Event.MARKET_DETAIL, plugin=plugin_id)
     return render(request, "billing/market_detail.html", {**data, "enabled": conf.pay_enabled and services.methods_available(conf)})
 
 
@@ -89,6 +116,7 @@ def start_trial(request):
     except services.BillingError as exc:
         messages.error(request, str(exc))
     else:
+        analytics.record(request, Event.MARKET_TRIAL, plugin=addon.plugin_id)
         messages.success(request, f"دوره‌ی آزمایشی «{addon.title}» ({addon.trial_days} روز) فعال شد.")
     return _market_back(request)
 
@@ -108,6 +136,7 @@ def start_addon(request):
         if request.POST.get("from") == "market" or request.POST.get("from", "").startswith("detail:"):
             return _market_back(request)
         return redirect("billing:plans")
+    analytics.record(request, Event.MARKET_BUY, plugin=addon.plugin_id)
     return redirect("billing:invoice", number=inv.number)
 
 

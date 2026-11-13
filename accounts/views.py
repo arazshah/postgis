@@ -52,6 +52,8 @@ def login_start(request):
     cta = request.GET.get("cta", "")
     if request.method == "GET" and re.fullmatch(r"[a-z0-9-]{1,30}", cta):
         analytics.record(request, Event.CTA_CLICK, where=cta)  # دکمه‌ی «شروع رایگان» صفحه‌های عمومی
+    if request.method == "GET" and nxt and nxt.startswith("/plugins/"):
+        analytics.record(request, Event.MARKET_CTA, plugin=nxt.strip("/").partition("/")[2][:41])  # ورود از بازارچه پلاگین
     form = PhoneForm(request.POST or None, initial={"phone": request.session.get(SESSION_PHONE, "")})
     if request.method == "POST" and form.is_valid():
         phone = form.cleaned_data["phone"]

@@ -22,6 +22,7 @@
         <li><span class="sym pt"></span><span>زمان هر کوئری</span><strong>{{ p.statement_timeout_s|fanum }} ثانیه</strong></li>
         <li><span class="sym hatch"></span><span>نگهداری بکاپ</span><strong>{{ p.backup_retention_days|fanum }} روز</strong></li>
       </ul>
+      {% if p.bundled %}<p class="small"><b>پلاگین‌های همراه این پلن:</b> {% for x in p.bundled %}{% if x.public %}<a href="{% url 'plugin_detail' x.id %}">{{ x.name }}</a>{% else %}{{ x.name }}{% endif %}{% if not forloop.last %}، {% endif %}{% endfor %}</p>{% endif %}
       <div class="field" style="margin:16px 0 12px">
         <label for="t-{{ p.pk }}" class="small">برای کدام پایگاه داده؟</label>
         <select name="target" id="t-{{ p.pk }}">

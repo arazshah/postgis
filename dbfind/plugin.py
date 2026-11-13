@@ -35,7 +35,6 @@ _showcase(plugin.id, Showcase(
         'student',
         'city',
         'agri',
-        'org',
     ),
     steps=(
         ('لایه را انتخاب کنید', 'جدول مورد جست\u200cوجو را برگزینید.'),

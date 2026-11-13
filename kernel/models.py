@@ -520,3 +520,37 @@ class ReportLayout(models.Model):
         constraints = [models.UniqueConstraint(fields=["workspace_id", "plugin_id", "page", "key"], name="report_layout_unique")]
         verbose_name = "چیدمان گزارش"
         verbose_name_plural = "چیدمان گزارش‌ها"
+
+
+class PluginShowcaseOverride(models.Model):
+    """ویرایش ویترین بازارچه از پنل (docs/adr/0011): فقط فیلدهای پرشده بر پروفایل کد (kernel.showcase) مقدم می‌شود؛ خالی = همان پیش‌فرض کد."""
+
+    plugin_id = models.CharField("پلاگین", max_length=41, unique=True)
+    tagline = models.CharField("شعار (یک خط)", max_length=160, blank=True)
+    details = models.TextField("توضیح کامل", blank=True, help_text="پاراگراف‌ها با یک خط خالی جدا می‌شوند.")
+    features = models.JSONField("ویژگی‌ها", default=list, blank=True)
+    audiences = models.JSONField("مخاطب‌ها", default=list, blank=True)
+    featured = models.PositiveSmallIntegerField("جایگاه در صفحه‌ی اول (۱ تا ۹)", null=True, blank=True, help_text="خالی = پیش‌فرض کد؛ ۰ = نمایش داده نشود.")
+    hidden = models.BooleanField("پنهان از بازارچه", default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "ویترین پلاگین"
+        verbose_name_plural = "ویترین پلاگین‌ها (بازارچه)"
+        ordering = ["plugin_id"]
+
+    def __str__(self):
+        return self.plugin_id
+
+    def save(self, *args, **kw):
+        super().save(*args, **kw)
+        from . import showcase
+
+        showcase.invalidate()
+
+    def delete(self, *args, **kw):
+        out = super().delete(*args, **kw)
+        from . import showcase
+
+        showcase.invalidate()
+        return out

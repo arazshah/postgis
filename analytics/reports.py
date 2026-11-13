@@ -64,12 +64,43 @@ def funnel(days: int) -> list[dict]:
     return out
 
 
+def market_funnel(days: int) -> dict:
+    """قیف بازارچه پلاگین: بازدیدکننده‌های متمایز در هر گام + جدول هر پلاگین. بازدید اول بدون کوکی را فرود روی /plugins/ جبران می‌کند."""
+    from django.db.models import Count
+
+    from .models import Visit
+
+    since = timezone.now() - timedelta(days=days)
+    ev = Event.objects.filter(created_at__gte=since, visitor__flag="")
+
+    def who(name):
+        return set(ev.filter(name=name).values_list("visitor_id", flat=True))
+
+    landed = set(Visit.objects.filter(started_at__gte=since, visitor__flag="", landing_path__startswith="/plugins/").values_list("visitor_id", flat=True))
+    viewed = who(Event.MARKET_LIST) | who(Event.MARKET_DETAIL) | landed
+    detail, cta, trial, buy = who(Event.MARKET_DETAIL), who(Event.MARKET_CTA), who(Event.MARKET_TRIAL), who(Event.MARKET_BUY)
+    steps = [("دیدن بازارچه", len(viewed)), ("دیدن جزئیات یک پلاگین", len(detail)), ("کلیک ورود از بازارچه", len(cta)),
+             ("شروع آزمایشی", len(trial)), ("شروع خرید", len(buy))]
+    out, prev = [], None
+    for label, n in steps:
+        out.append({"label": label, "n": n, "of_total": _pct(n, len(viewed)), "of_prev": _pct(n, prev) if prev else "—", "width": int(n * 100 / len(viewed)) if viewed else 0})
+        prev = n
+
+    def per(name):
+        return {r["meta__plugin"]: r["n"] for r in ev.filter(name=name).values("meta__plugin").annotate(n=Count("visitor", distinct=True)) if r["meta__plugin"]}
+
+    d, c, t, b = per(Event.MARKET_DETAIL), per(Event.MARKET_CTA), per(Event.MARKET_TRIAL), per(Event.MARKET_BUY)
+    rows = [{"plugin": pid, "detail": d.get(pid, 0), "cta": c.get(pid, 0), "trial": t.get(pid, 0), "buy": b.get(pid, 0)} for pid in sorted({*d, *c, *t, *b})]
+    rows.sort(key=lambda r: (-r["detail"], r["plugin"]))
+    return {"steps": out, "plugins": rows}
+
+
 def build(days: int) -> dict:
     days = days if days in RANGES else 30
     quality.refresh()
     return {
         "excluded": quality.excluded_counts(days),
-        "days": days, "ranges": RANGES, "funnel": funnel(days),
+        "days": days, "ranges": RANGES, "funnel": funnel(days), "market": market_funnel(days),
         "sources": breakdown(["first_source", "first_medium", "first_campaign"], days),
         "landing": breakdown(["first_landing"], days, 15),
         "referrers": breakdown(["first_referrer"], days, 15),

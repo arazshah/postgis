@@ -36,7 +36,6 @@ _showcase(plugin.id, Showcase(
         'student',
         'city',
         'dev',
-        'org',
     ),
     steps=(
         ('منطقه را انتخاب کنید', 'استان یا شهر.'),

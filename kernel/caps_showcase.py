@@ -19,7 +19,6 @@ PROFILES['cap_notify'] = Showcase(
         'agri',
         'org',
         'survey',
-        'city',
     ),
     steps=(
         ('حساب را پیوند دهید', 'کد را در پیام\u200cرسان بفرستید.'),
@@ -47,7 +46,6 @@ PROFILES['cap_sources'] = Showcase(
     details='داده\u200cای که هر روز عوض می\u200cشود (هواشناسی، آلودگی، قیمت) را لازم نیست دستی وارد کنید: منبع را معرفی می\u200cکنید و سیستم به\u200cطور دوره\u200cای واکشی و در جدول ذخیره می\u200cکند؛ فقط از میزبان\u200cهایی که مدیر تأیید کرده است.',
     audiences=(
         'agri',
-        'city',
         'dev',
         'org',
     ),
@@ -76,7 +74,6 @@ PROFILES['cap_draw'] = Showcase(
         'survey',
         'city',
         'agri',
-        'dev',
     ),
     steps=(
         ('فرم را باز کنید', 'فیلد هندسه.'),
@@ -102,7 +99,6 @@ PROFILES['cap_reports'] = Showcase(
     audiences=(
         'org',
         'city',
-        'agri',
         'survey',
     ),
     steps=(
@@ -128,9 +124,8 @@ PROFILES['cap_geocoder'] = Showcase(
     details='ژئوکدر فارسی فهرست نشانی را می\u200cخواند، املا را نرمال می\u200cکند و روی داده\u200cی OSM پایگاه خودتان مختصات و میزان اطمینان می\u200cدهد. دقت در سطح معبر و مکان است، نه پلاک.\n\nاین قابلیت آزمایشی است و برای پاک\u200cسازی و پردازش اولیه\u200cی فهرست\u200cها مناسب است.',
     audiences=(
         'city',
-        'org',
-        'student',
         'dev',
+        'student',
     ),
     steps=(
         ('داده\u200cی OSM را بیاورید', 'از داده\u200cی آماده\u200cی ایران.'),

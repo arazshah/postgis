@@ -54,7 +54,6 @@ _showcase(plugin.id, Showcase(
         'student',
         'city',
         'agri',
-        'org',
     ),
     steps=(
         ('ابزار را انتخاب کنید', 'مثلاً «حریم (بافر)».'),
