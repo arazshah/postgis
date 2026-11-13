@@ -123,7 +123,8 @@ def assistant(request, pk):
         return JsonResponse({"error": "دستیار تنظیم نشده است؛ آدرس و کلید API را در تنظیمات سایت ← دستیار هوشمند بگذارید."}, status=400)
     try:
         out = studio_ai.ask(request.user, _spec(draft), draft.plugin_id, str(data.get("message", "")), history=data.get("history"),
-                            mode=str(data.get("mode") or "chat"), page=str(data.get("page") or "")[:40], selected=str(data.get("selected") or "")[:20])
+                            mode=str(data.get("mode") or "chat"), page=str(data.get("page") or "")[:40], selected=str(data.get("selected") or "")[:20],
+                            focus=str(data.get("focus") or "")[:40], failures=str(data.get("failures") or "")[:studio_ai.MAX_FAILURES])
     except ai.AiError as exc:
         return JsonResponse({"error": str(exc)}, status=429 if "سقف" in str(exc) else 400)
     ws_mod.log_event("plugin_studio_ai", f"{draft.plugin_id}: {data.get('mode') or 'chat'}، {len(out['ops'])} پیشنهاد" + ("" if out["valid"] else " (نامعتبر)"), user=request.user)

@@ -638,7 +638,10 @@
   // ---------------------------------------------------------------- دستیار هوش مصنوعی (فقط پیشنهاد؛ اعمال با تأیید شما)
   let aiOpen = false, aiBusy = false;
   const aiMsgs = [];   // {role: user|assistant|note, text, ops, summary, valid, error, before, after, done}
-  const AI_CHIPS = [["fix", "ایرادها را درست کن", "warn"], ["labels", "برچسب فارسی بساز", "edit"], ["idea", "ایده بده", "spark"], ["sql", "SQL از جمله‌ی فارسی", "code"]];
+  const AI_CHIPS = [["build", "ساخت از ایده", "spark"], ["review", "بازبینی پیش از انتشار", "check"], ["fix", "ایرادها را درست کن", "warn"], ["labels", "برچسب فارسی بساز", "edit"],
+    ["sql", "SQL از جمله‌ی فارسی", "code"], ["code", "نوشتن کد (handler)", "bolt"], ["idea", "ایده بده", "spark"]];
+  const AI_ASK = { sql: "توصیف کنید چه عددی یا جدولی می‌خواهید…", build: "ایده‌ی پلاگین را بنویسید؛ مثلاً «پایش ناوگان با نقشه‌ی آخرین موقعیت و هشدار توقف»…", code: "بنویسید کد چه محاسبه‌ای بکند؛ مثلاً «میانگین مساحت قطعه‌ها بر حسب محصول»…" };
+  const AI_NOW = { fix: "ایرادها را بررسی و درست کن.", labels: "برچسب و عنوان فارسی پیشنهاد بده.", idea: "چند صفحه‌ی مفید پیشنهاد بده.", review: "پلاگین را پیش از انتشار بازبینی کن." };
 
   function toggleAi(force) {
     aiOpen = force === undefined ? !aiOpen : force;
@@ -664,8 +667,8 @@
         const c = e.target.closest("[data-aim]");
         if (!c) return;
         const m = c.dataset.aim;
-        if (m === "sql") { const t = el.querySelector("#pd-aitext"); t.placeholder = "توصیف کنید چه عددی یا جدولی می‌خواهید…"; t.focus(); aiMode = "sql"; return; }
-        sendAi(m, m === "fix" ? "ایرادها را بررسی و درست کن." : m === "labels" ? "برچسب و عنوان فارسی پیشنهاد بده." : "چند صفحه‌ی مفید پیشنهاد بده.");
+        if (AI_ASK[m]) { const t = el.querySelector("#pd-aitext"); t.placeholder = AI_ASK[m]; t.focus(); aiMode = m; return; }
+        sendAi(m, AI_NOW[m]);
       });
     }
     el.hidden = false;
@@ -690,6 +693,8 @@
       if (m.error) h += `<div class="pd-issue">${ic("warn")}<span>${esc(m.error)}</span></div>`;
       if (m.ops && m.ops.length) {
         h += `<div class="pd-aiprop"><b>${ic("check")}پیشنهاد (${FA(m.ops.length)} تغییر)</b><ul>${m.summary.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+          ${(m.code || []).map((c) => `<details class="pd-aicode"><summary>${ic("code")} کد «${esc(c.name)}» را بخوانید</summary><pre dir="ltr">${esc(c.source)}</pre></details>`).join("")}
+          ${(m.code || []).length ? `<p class="pd-hint">کد از بررسی ایستا گذشته است. پس از «اعمال»، آزمون‌ها اجرا می‌شود (نیازمند تأیید تازه‌ی ورود دومرحله).</p>` : ""}
           <p class="pd-hint">ایرادها: ${FA(m.before)} ← ${FA(m.after)}</p>
           ${m.done ? `<p class="pd-hint">${m.done === "applied" ? "اعمال شد؛ با واگرد برمی‌گردد." : "رد شد."}</p>` : `<div class="pd-row"><button class="btn sm" type="button" data-aiapply="${i}">${ic("check")}<span>اعمال</span></button><button class="btn ghost sm" type="button" data-aiskip="${i}">رد</button></div>`}</div>`;
       }
@@ -700,17 +705,18 @@
     box.querySelectorAll("[data-aiskip]").forEach((b) => b.addEventListener("click", () => { aiMsgs[Number(b.dataset.aiskip)].done = "skipped"; paintAi(); }));
   }
 
-  async function sendAi(mode, text) {
+  async function sendAi(mode, text, opts = {}) {
     if (aiBusy) return;
-    if (mode === "chat" && aiMode === "sql") { mode = "sql"; aiMode = "chat"; const t = root.querySelector("#pd-aitext"); if (t) t.placeholder = "بنویسید چه می‌خواهید…"; }
+    if (mode === "chat" && aiMode !== "chat") { mode = aiMode; aiMode = "chat"; const t = root.querySelector("#pd-aitext"); if (t) t.placeholder = "بنویسید چه می‌خواهید…"; }
     if (!aiOpen) toggleAi(true);
     const history = aiMsgs.filter((m) => m.role !== "note").map((m) => ({ role: m.role, content: m.text }));
     aiMsgs.push({ role: "user", text });
     aiBusy = true;
     paintAi();
     try {
-      const r = await call(API.assistant, { message: text, mode, history, page: pageKey, selected: selId });
-      aiMsgs.push({ role: "assistant", text: r.reply, ops: r.ops, summary: r.summary, valid: r.valid, error: r.error ? "پیشنهاد معتبر نبود: " + r.error : "", before: r.issues_before, after: r.issues_after });
+      const codeMode = mode === "code" || mode === "codefix";
+      const r = await call(API.assistant, { message: text, mode, history, page: pageKey, selected: selId, focus: opts.focus || (codeMode ? codeSel : ""), failures: opts.failures || "" });
+      aiMsgs.push({ role: "assistant", text: r.reply, ops: r.ops, summary: r.summary, code: r.code || [], valid: r.valid, error: r.error ? "پیشنهاد معتبر نبود: " + r.error : "", before: r.issues_before, after: r.issues_after });
     } catch (e) {
       aiMsgs.push({ role: "assistant", text: e.message, error: "" });
     }
@@ -725,7 +731,12 @@
       await run({ ops: m.ops });
       m.done = "applied";
       ensurePage();
-      await draw();
+      if ((m.code || []).length) {  // کد تازه: برو به همان handler و آزمون‌ها را اجرا کن (اجرا فقط با تأیید تازه)
+        codeSel = m.code[0].name; tab = "code"; codeTab = "tests"; codeOut = {};
+        await draw();
+        const rb = root.querySelector("#pd-runtests");
+        if (rb && CODE.runner_ready) rb.click();
+      } else await draw();
     } catch (e) {
       m.error = "اعمال نشد: " + e.message;
     }
@@ -757,6 +768,7 @@
     const iss = codeIssues(codeSel);
     el.innerHTML = `<div class="pd-row"><h2 class="pd-h" style="margin:0"><span class="ltr" dir="ltr">${esc(codeSel)}</span></h2><span class="pd-hint">${esc(ROLE_BLOCK[h.role] || h.role)}${h.tables && h.tables.length ? " · " + esc(h.tables.join("، ")) : ""}</span><span class="pd-spacer"></span>
         ${["block", "importer", "exporter", "ingest"].includes(h.role) ? `<button class="btn ghost sm" type="button" id="pd-hadd">${ic("plus")}<span>افزودن به صفحه</span></button>` : ""}
+        <button class="btn ghost sm" type="button" id="pd-hai">${ic("spark")}<span>بهبود با دستیار</span></button>
         <button class="pd-ib" type="button" id="pd-hdel" aria-label="حذف کد">${ic("trash")}</button></div>
       ${CODE.runner_ready ? "" : `<div class="pd-issue">${ic("info")}<span>اجرای کد در این استقرار خاموش است؛ نوشتن و ذخیره ممکن است ولی آزمون و اجرای آزمایشی تا روشن‌شدن «اجرای کد» (پیشرفته ← کلیدهای ناشر) کار نمی‌کند.</span></div>`}
       ${iss.map((m) => `<div class="pd-issue">${ic("warn")}<span>${esc(m)}</span></div>`).join("")}
@@ -766,6 +778,10 @@
     el.querySelector("#pd-hdel").addEventListener("click", async () => {
       if (!await Ui.confirm({ title: "حذف کد", message: `«${codeSel}» حذف شود؟ بلوک‌هایی که به آن وصل‌اند ایراد می‌گیرند. با واگرد برمی‌گردد.`, kind: "danger", confirmText: "حذف" })) return;
       try { await run({ op: "code.del", name: codeSel }); codeSel = ""; await draw(); } catch (_) { /* */ }
+    });
+    el.querySelector("#pd-hai").addEventListener("click", async () => {
+      const t = await Ui.prompt({ title: "بهبود کد با دستیار", label: "چه تغییری می‌خواهید؟", placeholder: "مثلاً «ردیف‌های خالی را نادیده بگیر و میانه را هم بده»", multiline: true });
+      if (t) sendAi("codefix", t, { focus: codeSel });
     });
     const add = el.querySelector("#pd-hadd");
     if (add) add.addEventListener("click", () => handlerToPage(add, h));
@@ -864,6 +880,7 @@
       <div class="pd-row" style="margin:12px 0"><button class="btn ghost sm" type="button" id="pd-addcase">${ic("plus")}<span>مورد آزمون</span></button><span class="pd-spacer"></span>
         <span class="pd-hint" id="pd-castat"></span><button class="btn sm" type="button" id="pd-runtests">${ic("play")}<span>اجرای آزمون‌ها</span></button></div>
       <div id="pd-tres">${resultsHtml(codeOut.tests)}</div>`;
+    wireFix(body.querySelector("#pd-tres"));
     const box = body.querySelector("#pd-cases"), st = body.querySelector("#pd-castat");
     let t;
     const push = (now) => {
@@ -909,6 +926,15 @@
     el.innerHTML = `<p class="pd-hint">در حال اجرا…</p>`;
     codeOut.tests = await runCall({ action: "tests", name: codeSel });
     el.innerHTML = resultsHtml(codeOut.tests);
+    wireFix(el);
+  }
+
+  function wireFix(el) {
+    const r = codeOut.tests;
+    const bad = r && r.results ? r.results.filter((x) => !x.ok) : [];
+    if (!bad.length) return;
+    el.insertAdjacentHTML("beforeend", `<button type="button" class="btn sm" id="pd-testfix" style="margin-top:8px">${ic("spark")}<span>رفع با دستیار</span></button>`);
+    el.querySelector("#pd-testfix").addEventListener("click", () => sendAi("codefix", "آزمون‌ها شکست خورد؛ کد (یا آزمون) را درست کن.", { focus: codeSel, failures: bad.map((x) => x.case + ": " + x.message).join("\n") }));
   }
 
   function trialTab(body, h) {

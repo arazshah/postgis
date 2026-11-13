@@ -241,3 +241,91 @@ class StudioAiProviderTests(TestCase):
             self.assertFalse(self.p.available())
             with self.assertRaises(ai.AiError):
                 self.p.chat(self.user, "studio", [])
+
+
+CASE = {"name": "عادی", "sql": [{"match": "select", "columns": ["v"], "rows": [[1.0], [3.0]]}], "expect": {"rows_count": 1}}
+GOOD_CODE = "def handle(ctx, params):\n    r = ctx.sql('select v from farm_plots')\n    return {'columns': ['میانگین'], 'rows': [[sum(x[0] for x in r['rows']) / len(r['rows'])]]}\n"
+
+
+def new_op(**over):
+    return {"op": "code.new", "name": "avg_area", "role": "block", "source": GOOD_CODE, "tables": ["farm_plots"], "cases": [CASE], **over}
+
+
+class CodeModeTests(ProviderCase):
+    def test_code_new_blueprint_validation(self):
+        s = blueprint.apply(spec(), PID, new_op())
+        h = s["code"]["avg_area"]
+        self.assertEqual((h["role"], h["tables"]), ("block", ["farm_plots"]))
+        self.assertIn("rows_count = 1", h["test"])
+        for over in ({"name": "Bad"}, {"name": "stats"}, {"role": "x"}, {"source": ""}, {"tables": ["zz"]}, {"cases": [{"name": "a", "expect": {}}]}):
+            with self.assertRaises(blueprint.BlueprintError):
+                blueprint.apply(spec(), PID, new_op(**over))
+
+    def test_code_ops_only_in_code_modes(self):
+        f = self.use({"reply": "x", "ops": [new_op()]}, {"reply": "x", "ops": [new_op()]})
+        self.assertFalse(studio_ai.ask(None, spec(), PID, "x", mode="chat")["valid"])
+        f.replies[:] = [{"reply": "کد", "ops": [new_op()]}]
+        out = studio_ai.ask(None, spec(), PID, "میانگین مساحت", mode="code")
+        self.assertTrue(out["valid"], out)
+        self.assertEqual(out["code"][0]["name"], "avg_area")
+        self.assertIn("ساخت کد", out["summary"][0])
+
+    def test_code_delete_never_allowed(self):
+        self.use({"reply": "x", "ops": [{"op": "code.del", "name": "stats"}]}, {"reply": "x", "ops": [{"op": "code.del", "name": "stats"}]})
+        self.assertFalse(studio_ai.ask(None, spec(), PID, "x", mode="code")["valid"])
+
+    def test_unsafe_code_fails_static_scan_then_repairs(self):
+        bad = new_op(source="import os\ndef handle(ctx, params):\n    return os.getcwd()\n")
+        f = self.use({"reply": "x", "ops": [bad]}, {"reply": "درست شد", "ops": [new_op()]})
+        out = studio_ai.ask(None, spec(), PID, "x", mode="code")
+        self.assertTrue(out["valid"])
+        self.assertIn("بررسی ایستا", f.calls[1][1][-1]["content"])  # خطای جعبه به مدل برگشت
+
+    def test_unsafe_code_never_offered(self):
+        bad = {"reply": "x", "ops": [new_op(source="import subprocess\ndef handle(ctx, params):\n    return {}\n")]}
+        self.use(bad, bad)
+        out = studio_ai.ask(None, spec(), PID, "x", mode="code")
+        self.assertEqual((out["valid"], out["ops"], out["code"]), (False, [], []))
+
+    def test_code_without_tests_is_refused(self):
+        bad = {"reply": "x", "ops": [new_op(cases=[])]}
+        self.use(bad, bad)
+        self.assertIn("آزمون", studio_ai.ask(None, spec(), PID, "x", mode="code")["error"])
+
+    def test_focus_source_only_in_code_modes(self):
+        f = self.use({"reply": "x", "ops": []}, {"reply": "x", "ops": []})
+        studio_ai.ask(None, spec(), PID, "x", mode="chat", focus="stats")
+        studio_ai.ask(None, spec(), PID, "این را درست کن", mode="codefix", focus="stats", failures="مورد ۲: تعداد ردیف ۰ است")
+        chat_ctx, fix_ctx = f.calls[0][1][1]["content"], f.calls[1][1][1]["content"]
+        self.assertNotIn("SECRET_SOURCE_MARKER", chat_ctx)
+        self.assertIn("SECRET_SOURCE_MARKER", fix_ctx)
+        self.assertIn("تعداد ردیف ۰ است", fix_ctx)
+        self.assertIn("عملیات کد", f.calls[1][1][0]["content"])
+        self.assertNotIn("عملیات کد", f.calls[0][1][0]["content"])
+
+
+class BuildReviewTests(ProviderCase):
+    def test_build_can_ask_questions_without_ops(self):
+        self.use({"reply": "چند دستگاه دارید؟ داده را چند وقت یک‌بار می‌فرستند؟", "ops": []})
+        out = studio_ai.ask(None, spec(), PID, "پلاگین ناوگان می‌خواهم", mode="build")
+        self.assertEqual((out["valid"], out["ops"]), (True, []))
+        self.assertIn("؟", out["reply"])
+
+    def test_review_gets_deterministic_observations(self):
+        s = spec()
+        s = blueprint.apply(s, PID, {"op": "block.add", "page": "p1", "block": {"kind": "form", "table": "farm_plots"}})
+        facts = studio_ai.review_facts(s, PID)
+        self.assertTrue(any("توضیح کوتاه" in x for x in facts))
+        self.assertTrue(any("فهرست ثبت‌ها" in x for x in facts))
+        self.assertTrue(any("برچسب فارسی" in x for x in facts))
+        f = self.use({"reply": "نکته‌ها", "ops": []})
+        studio_ai.ask(None, s, PID, "بازبینی", mode="review")
+        self.assertIn("observations", f.calls[0][1][1]["content"])
+        self.assertIn("مشاهدات", f.calls[0][1][-2]["content"] + f.calls[0][1][1]["content"] + studio_ai.TASK_HINT["review"])
+
+    def test_clean_spec_has_few_observations(self):
+        s = spec()
+        s["intro"]["summary"] = "پایش مزرعه"
+        s["tables"][0]["columns"] = [{**c, "label": c["name"]} for c in s["tables"][0]["columns"]]
+        s["code"]["stats"]["cases"] = [CASE]
+        self.assertEqual(studio_ai.review_facts(s, PID), [])

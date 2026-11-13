@@ -363,6 +363,32 @@ def _code_set(s, pid, op):
                 raise BlueprintError(str(exc)) from exc
 
 
+def _code_new(s, pid, op):
+    """handler تازه با کد و آزمونِ داده‌شده (بدون قالب)؛ فقط ساختار اینجا سنجیده می‌شود، بررسی ایستا در `analyze` و runner است."""
+    name = str(op.get("name", "")).strip()
+    code = s.setdefault("code", {})
+    if not wizard_code.NAME_RE.fullmatch(name) or name in code:
+        raise BlueprintError("نام handler نامعتبر یا تکراری است (حروف کوچک لاتین، رقم و _؛ ۲ تا ۳۱ نویسه).")
+    if len(code) >= wizard_code.MAX_HANDLERS:
+        raise BlueprintError(f"حداکثر {wizard_code.MAX_HANDLERS} handler.")
+    role = op.get("role")
+    if role not in wizard_code.ROLES:
+        raise BlueprintError("نقش handler نامعتبر است.")
+    src = op.get("source")
+    if not isinstance(src, str) or not src.strip() or len(src) > wizard_code.MAX_SOURCE:
+        raise BlueprintError(f"کد لازم است (حداکثر {wizard_code.MAX_SOURCE:,} نویسه).")
+    known = {t["name"] for t in s.get("tables") or []}
+    tbls = [t for t in (op.get("tables") or []) if isinstance(t, str)]
+    if any(t not in known for t in tbls):
+        raise BlueprintError("جدول handler در نقشه نیست.")
+    h = {"role": role, "source": src, "test": "", "every": 60 if role == "alert" else None, "tables": tbls, "cases": []}
+    code[name] = h
+    if "every" in op:
+        _code_set(s, pid, {"name": name, "every": op["every"]})
+    if op.get("cases"):
+        _code_set(s, pid, {"name": name, "cases": op["cases"]})
+
+
 def _code_del(s, pid, op):
     name = str(op.get("name", ""))
     _code_get(s, name)
@@ -370,7 +396,7 @@ def _code_del(s, pid, op):
 
 
 _OPS = {
-    "code.add": _code_add, "code.set": _code_set, "code.del": _code_del,
+    "code.add": _code_add, "code.new": _code_new, "code.set": _code_set, "code.del": _code_del,
     "meta.set": _meta_set, "table.add": _table_add, "table.set": _table_set, "table.del": _table_del,
     "page.add": _page_add, "page.set": _page_set, "page.del": _page_del, "page.move": _page_move,
     "block.add": _block_add, "block.set": _block_set, "block.del": _block_del, "block.move": _block_move, "block.dup": _block_dup,

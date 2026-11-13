@@ -161,3 +161,7 @@
 .pd-aiform textarea{flex:1;box-sizing:border-box;border:1px solid var(--line);border-radius:var(--r-ctl);padding:var(--s2) var(--s3);font:inherit;background:var(--card);color:var(--ink);resize:none;min-height:var(--ctl-h)}
 .pd-aifoot{padding:0 var(--s3) var(--s3);margin:0}
 @media (max-width:900px){.pd-aip{top:auto;height:78vh;width:100%;border-radius:18px 18px 0 0}}
+
+.pd-aicode{margin:var(--s2) 0}
+.pd-aicode summary{cursor:pointer;display:flex;gap:6px;align-items:center;font-size:13px}
+.pd-aicode pre{font-family:var(--f-mono);font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-ctl);padding:var(--s2);max-height:260px;overflow:auto;white-space:pre-wrap;margin:var(--s2) 0 0}
