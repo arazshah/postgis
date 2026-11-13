@@ -128,8 +128,11 @@
     <form method="post" action="{% url 'kernel:source_save' db.pk page.plugin page.key sx.spec.key %}" class="pk-form-fields">
       {% csrf_token %}
       {% for it in sx.inputs %}
-      {% if it.i.kind == 'choice' or it.i.kind == 'multi' %}
-      <div class="field"><span class="lbl" id="sxl-{{ sx.spec.key }}-{{ it.i.name }}">{{ it.i.label }}</span>
+      {% if it.i.kind == 'choice' and it.i.choices|length > 8 %}
+      <div class="field wide"><label for="sx-{{ sx.spec.key }}-{{ it.i.name }}">{{ it.i.label }}</label>
+        <select id="sx-{{ sx.spec.key }}-{{ it.i.name }}" name="i_{{ it.i.name }}">{% for v, text in it.i.choices %}<option value="{{ v }}" {% if v in it.sel %}selected{% endif %}>{{ text }}</option>{% endfor %}</select></div>
+      {% elif it.i.kind == 'choice' or it.i.kind == 'multi' %}
+      <div class="field wide"><span class="lbl" id="sxl-{{ sx.spec.key }}-{{ it.i.name }}">{{ it.i.label }}</span>
         <div class="chips" role="{% if it.i.kind == 'multi' %}group{% else %}radiogroup{% endif %}" aria-labelledby="sxl-{{ sx.spec.key }}-{{ it.i.name }}">{% for v, text in it.i.choices %}<label class="pick-chip"><input type="{% if it.i.kind == 'multi' %}checkbox{% else %}radio{% endif %}" name="i_{{ it.i.name }}" value="{{ v }}" {% if v in it.sel %}checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</div></div>
       {% else %}
       <div class="field"><label for="sx-{{ sx.spec.key }}-{{ it.i.name }}">{{ it.i.label }}</label>
@@ -150,6 +153,11 @@
     {% else %}<p class="muted small">تنظیم منبع با مالک پایگاه داده است.</p>{% endif %}
   </section>
   {% endfor %}
+  <section class="card pk-form pk-cta">
+    <div class="ch"><h2>پلاگین اختصاصی برای شما</h2></div>
+    <p class="small muted">این صفحه یک پلاگین ژئوپایگاه است. برای تخصص، سازمان یا مشتریان خودتان پلاگین اختصاصی (گزارش، منبع داده، ابزار تحلیل، شناسنامه و ثبت میدانی) سفارش دهید؛ می‌توان آن را فقط برای خودتان نگه داشت یا در بازار عرضه کرد.</p>
+    <a class="btn ghost" href="{% url 'core:contact' %}?topic=plugin">{% icon "plus" 18 %}ثبت سفارش پلاگین اختصاصی</a>
+  </section>
 </div>
 {% endblock %}
 {% block ws_scripts %}{% if has_map or page.refresh or has_draw %}<script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>{% endif %}{% if has_draw %}<script src="{% static 'vendor/leaflet-geoman/leaflet-geoman.min.js' %}" defer></script>{% endif %}<script src="{% static 'js/page-kit.js' %}" defer></script>{% endblock %}

@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from . import entitlements
+from . import entitlements, nav
 from .plugins import registry
 
 CAPS = {
@@ -15,6 +15,10 @@ CAPS = {
     "reports": ("گزارش PDF و چیدمان قابل‌ویرایش", "گزارش PDF/تصویر از صفحه با ویرایشگر چیدمان (لوگو، متن، نقشه)."),
     "geocoder": ("ژئوکدر فارسی", "تبدیل نشانی فارسی به مختصات روی داده‌ی OSM پایگاه (آزمایشی)."),
 }
+
+
+# بخش ریل پایگاه برای ابزار مشتری ژئوکدر؛ فقط وقتی پلاگین cap_geocoder برای آن پایگاه روشن/مجاز باشد دیده می‌شود
+nav.ws_section("data", "ژئوکدر فارسی", "kernel:geocode", "pin", "viewer", plugin="cap_geocoder", order=180, views=("kernel:geocode",))
 
 
 def pid(cap: str) -> str:

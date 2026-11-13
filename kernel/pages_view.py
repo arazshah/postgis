@@ -78,7 +78,11 @@ def page(request, pk, plugin, page):
     for rc in (spec.records if cap["draw"] else ()):
         try:
             heads, rows = pagekit.fetch_records(ws, rc)
-            recs.append({"spec": rc, "heads": heads[1:], "rows": rows, "error": ""})
+            labels = {f.name: f.label for f in rc.fields}
+            order = {n: i for i, n in enumerate(rc.columns)}
+            cmap = {order[f.name] + 1: dict(f.choices) for f in rc.fields if f.name in order and f.kind == "choice"}
+            rows = [[r[0]] + [cmap.get(i, {}).get(v, v) for i, v in enumerate(r[1:], 1)] for r in rows]
+            recs.append({"spec": rc, "heads": [labels.get(h, h) for h in heads[1:]], "rows": rows, "error": ""})
         except pagekit.SpecError as exc:
             recs.append({"spec": rc, "heads": [], "rows": [], "error": str(exc)})
         except Exception:  # noqa: BLE001  جدول هنوز ساخته نشده یا خطای پایگاه داده: پیام کوتاه

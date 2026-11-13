@@ -1,0 +1,47 @@
+{% extends "databases/_ws.html" %}{% load fa static ws %}
+{% block title %}ژئوکدر فارسی — {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/page-kit.css' %}">{% endblock %}
+{% block ws %}
+<div class="wrap page">
+  <div class="page-head"><div><h1>ژئوکدر فارسی</h1><p class="muted page-sub">نشانی متنی را به مختصات تبدیل کنید؛ هر نتیجه درجه‌ی اطمینان دارد.</p></div></div>
+  <section class="card pk-form">
+    <p class="small muted">روی «داده آماده ایران» (OpenStreetMap) همین پایگاه کار می‌کند. دقت در حد <b>معبر، مکان یا محله</b> است؛ OSM پلاک و کدپستی ندارد، پس پلاک فقط در توضیح می‌آید و نقطه روی معبر است.</p>
+    {% if setup_error %}
+    <div class="empty">{% icon "pin" 28 %}<p>{{ setup_error }}</p></div>
+    {% else %}
+    <form method="post" enctype="multipart/form-data" class="pk-form-fields" id="gt-form">
+      {% csrf_token %}
+      <div class="field"><label for="gt-city">شهر</label>
+        <input id="gt-city" name="city" list="gt-cities" value="{{ form.city }}" placeholder="مثلاً تهران" required autocomplete="off">
+        <datalist id="gt-cities">{% for c in cities %}<option value="{{ c }}">{% endfor %}</datalist></div>
+      <div class="field"><span class="lbl" id="gt-rl">شعاع جست‌وجو (کیلومتر)</span>
+        <div class="chips" role="radiogroup" aria-labelledby="gt-rl">{% for r in radii %}<label class="pick-chip"><input type="radio" name="radius" value="{{ r }}" {% if form.radius == r|stringformat:"s" %}checked{% endif %}><span>{{ r|fanum }}</span></label>{% endfor %}</div></div>
+      <div class="field"><label for="gt-text">نشانی‌ها (هر سطر یکی؛ حداکثر {{ max_lines|fanum }})</label>
+        <textarea id="gt-text" name="text" rows="8" placeholder="تهران، خیابان ولیعصر، پلاک ۱۲">{{ form.text }}</textarea></div>
+      <div class="field"><label for="gt-file">یا فایل CSV (UTF-8، حداکثر ۱ مگابایت)</label><input id="gt-file" type="file" name="file" accept=".csv,.txt,text/csv,text/plain"></div>
+      <div class="field"><label for="gt-col">نام ستون نشانی در CSV (اختیاری)</label><input id="gt-col" name="column" value="{{ form.column }}" maxlength="60" placeholder="address"></div>
+      <button class="btn" type="submit">{% icon "search" 18 %}تبدیل به مختصات</button>
+    </form>
+    {% endif %}
+  </section>
+  {% if stats %}
+  <section class="card">
+    <div class="ch"><h2>نتیجه — {{ city }}</h2></div>
+    <div class="pk-grid">
+      <div class="stat pk-w-third"><span class="stat-n">{{ stats.rate|floatformat:0|fanum }}٪</span><span class="stat-l">نرخ تطبیق</span></div>
+      <div class="stat pk-w-third"><span class="stat-n">{{ stats.matched|fanum }} / {{ stats.total|fanum }}</span><span class="stat-l">نشانی تطبیق‌خورده</span></div>
+      <div class="stat pk-w-third"><span class="stat-n">{{ stats.high|fanum }}</span><span class="stat-l">اطمینان بالا</span></div>
+    </div>
+    <p><a class="btn" href="?dl={{ token }}">{% icon "download" 18 %}دانلود CSV</a></p>
+    <div class="table-scroll"><table class="data-table"><thead><tr><th>نشانی</th><th>سطح</th><th>اطمینان</th><th>مختصات</th><th>نام تطبیق‌خورده</th><th>توضیح</th></tr></thead>
+      <tbody>{% for r in results %}<tr><td>{{ r.text }}</td><td>{{ r.level_label }}</td><td>{{ r.label }}</td>
+        <td dir="ltr">{% if r.lon %}{{ r.lat|floatformat:5 }}, {{ r.lon|floatformat:5 }}{% else %}—{% endif %}</td><td>{{ r.matched }}</td><td class="small muted">{{ r.note }}</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+  {% endif %}
+  <section class="card pk-form">
+    <div class="ch"><h2>پلاگین اختصاصی می‌خواهید؟</h2></div>
+    <p class="small muted">برای تخصص یا سازمان شما پلاگین اختصاصی می‌سازیم (گزارش، منبع داده، ابزار تحلیل).</p>
+    <a class="btn ghost" href="{% url 'core:contact' %}?topic=plugin">ثبت سفارش پلاگین اختصاصی</a>
+  </section>
+</div>
+{% endblock %}

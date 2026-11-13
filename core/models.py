@@ -663,6 +663,7 @@ class ContactRequest(models.Model):
         DEMO = "demo", "جلسه‌ی معرفی آنلاین"
         ONPREM = "onprem", "نصب اختصاصی روی سرور سازمان"
         EDU = "edu", "دانشگاه و کلاس"
+        PLUGIN = "plugin", "سفارش پلاگین اختصاصی"
         OTHER = "other", "سایر"
 
     class Status(models.TextChoices):

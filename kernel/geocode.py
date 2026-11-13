@@ -73,6 +73,10 @@ class Result:
     ambiguous: bool = False
 
     @property
+    def level_label(self) -> str:
+        return LEVELS[self.level]
+
+    @property
     def label(self) -> str:
         return "بالا" if self.score >= 0.85 else "متوسط" if self.score >= 0.6 else "پایین" if self.score > 0 else "—"
 
@@ -277,3 +281,46 @@ def stats(results: list[Result]) -> dict:
             "high": sum(1 for r in results if r.score >= 0.85), "mid": sum(1 for r in results if 0.6 <= r.score < 0.85),
             "low": sum(1 for r in results if 0 < r.score < 0.6), "none": sum(1 for r in results if r.level == "none"),
             "street_rate": round(100 * by["street"] / n, 1), "ambiguous": sum(1 for r in results if r.ambiguous), "levels": by}
+
+
+def safe_cell(v) -> str:
+    """جلوگیری از تزریق فرمول در اکسل (ورودی کاربر)."""
+    v = str(v or "")
+    return "'" + v if v[:1] in "=+-@\t\r" else v
+
+
+def results_csv(results: list[Result]) -> str:
+    """نتیجه ← متن CSV (با BOM برای اکسل فارسی)."""
+    import csv
+    import io
+
+    out = io.StringIO()
+    out.write("\ufeff")
+    w = csv.writer(out)
+    w.writerow(["نشانی", "سطح", "اطمینان", "امتیاز", "طول", "عرض", "نام تطبیق‌خورده", "توضیح"])
+    for r in results:
+        w.writerow([safe_cell(r.text), LEVELS[r.level], r.label, r.score, r.lon if r.lon is not None else "", r.lat if r.lat is not None else "",
+                    safe_cell(r.matched), safe_cell(r.note)])
+    return out.getvalue()
+
+
+def lines_from_upload(data: bytes, column: str = "") -> list[str]:
+    """فایل CSV/متن (UTF-8) ← فهرست نشانی. ستون: نام داده‌شده، یا «address/نشانی/آدرس» در سرستون، وگرنه ستون اول."""
+    import csv
+    import io
+
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise GeocodeError("فایل باید UTF-8 باشد.") from None
+    rows = [r for r in csv.reader(io.StringIO(text)) if any(c.strip() for c in r)]
+    if not rows:
+        return []
+    head = [h.strip().lower() for h in rows[0]]
+    idx = 0
+    for cand in ([column.strip().lower()] if column.strip() else []) + ["address", "نشانی", "آدرس", "addr"]:
+        if cand in head:
+            idx = head.index(cand)
+            rows = rows[1:]
+            break
+    return [r[idx].strip() for r in rows if len(r) > idx and r[idx].strip()]
