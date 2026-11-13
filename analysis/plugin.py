@@ -3,6 +3,8 @@ from kernel import dash as admin_dash
 from kernel import home, jobs, llm, nav, plugins
 from kernel import profile as profile_sections
 from kernel import settings as site_settings
+from kernel.showcase import Showcase
+from kernel.showcase import add as _showcase
 
 plugin = plugins.register("analysis", "تحلیل و پرسش فارسی", kind="feature", requires=("databases", "jobs"))
 
@@ -28,3 +30,37 @@ from .llm_config import AnalysisLlm  # noqa: E402
 llm.set_provider(AnalysisLlm())
 admin_dash.report_sheet("analysis.reports.sheets", plugin=plugin.id, order=10)
 
+# ویترین بازارچه پلاگین (docs/adr/0011)
+_showcase(plugin.id, Showcase(
+    tagline='سؤالتان را فارسی بنویسید؛ تحلیل مکانی انجام می\u200cشود',
+    category='analysis',
+    video='analysis',
+    featured=2,
+    rail='ریل پایگاه ← تحلیل و انتشار ← تحلیل',
+    features=(
+        'پرسش فارسی با s3geo',
+        'نقشه و نمودار از نتیجه\u200cی تحلیل',
+        'اجرای کار در پس\u200cزمینه با اعلان',
+        'تاریخچه\u200cی اجراها',
+        'پایه\u200cی ابزارهای تحلیل پایگاه',
+    ),
+    details='«تعداد مدرسه\u200cهای هر منطقه را بشمار» را همان\u200cطور که می\u200cگویید بنویسید؛ سیستم کوئری مکانی مناسب را می\u200cسازد، اجرا می\u200cکند و نتیجه را جدول و نقشه نشان می\u200cدهد. کلید مدل زبانی را خودتان می\u200cدهید و رمزنگاری می\u200cشود.\n\nاجراهای قبلی در تاریخچه می\u200cمانند تا دوباره باز یا نتیجه به نقشه تبدیل شود.',
+    audiences=(
+        'student',
+        'city',
+        'org',
+        'agri',
+    ),
+    steps=(
+        ('سؤال بنویسید', 'فارسی و ساده.'),
+        ('نتیجه را ببینید', 'جدول و نقشه.'),
+        ('نقشه یا نمودار بسازید', 'نتیجه را به نقشه\u200cی چندلایه ببرید.'),
+    ),
+    guides=(
+        ('analysis', 'تحلیل بدون SQL و پرسش فارسی'),
+    ),
+    kb=(
+        ('ask-in-persian', 'پرسش فارسی'),
+        ('map-chart-from-analysis', 'نقشه و نمودار از تحلیل'),
+    ),
+))

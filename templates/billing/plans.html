@@ -2,7 +2,7 @@
 {% block title %}خرید پلن — {{ SITE_NAME }}{% endblock %}
 {% block content %}
 <div class="wrap page">
-  <div class="page-head"><div><h1>خرید یا ارتقای پلن</h1><p class="muted page-sub">پلن را انتخاب کنید و روی همان پایگاه داده ارتقا بدهید؛ داده‌ها دست نمی‌خورند.</p></div><div class="page-acts"><a class="btn ghost" href="{% url 'billing:market' %}">{% icon "cube" 18 %}بازار پلاگین</a><a class="btn ghost" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}صورتحساب‌های من</a></div></div>
+  <div class="page-head"><div><h1>خرید یا ارتقای پلن</h1><p class="muted page-sub">پلن را انتخاب کنید و روی همان پایگاه داده ارتقا بدهید؛ داده‌ها دست نمی‌خورند.</p></div><div class="page-acts"><a class="btn ghost" href="{% url 'plugins' %}">{% icon "cube" 18 %}بازارچه پلاگین</a><a class="btn ghost" href="{% url 'billing:invoices' %}">{% icon "card" 18 %}صورتحساب‌های من</a></div></div>
   {% if not enabled %}
     <div class="empty">{% icon "card" 28 %}<h2>فروش پلن پولی فعلاً فعال نیست</h2><p class="muted">به‌زودی فعال می‌شود. برای سؤال با پشتیبانی تماس بگیرید.</p></div>
   {% elif not plans and not addons %}

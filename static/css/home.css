@@ -168,3 +168,18 @@
   .sticky-cta .btn{width:100%}
   .footer{padding-bottom:calc(var(--s5) + 76px)}
 }
+
+/* بازارچه پلاگین در صفحه‌ی اول */
+.mk-home{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s4)}
+.mk-home-card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);overflow:hidden;transition:border-color .15s,transform .15s}
+.mk-home-card:hover,.mk-home-card:focus-within{border-color:var(--teal);transform:translateY(-2px)}
+.mk-home-card img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:var(--line-2)}
+.mk-home-b{display:grid;gap:var(--s2);padding:var(--s4);justify-items:start}
+.mk-home-b h3{margin:0;font-size:1.05rem}
+.mk-home-b h3 a{color:var(--ink);text-decoration:none}
+.mk-home-b h3 a::after{content:"";position:absolute;inset:0}
+.mk-home-b p{margin:0;font-size:.92rem;line-height:1.8}
+.mk-home-go{text-align:center;margin:var(--s5) 0 0}
+@media (max-width:900px){.mk-home{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.mk-home{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){.mk-home-card{transition:none}.mk-home-card:hover{transform:none}}

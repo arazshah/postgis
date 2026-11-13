@@ -1,4 +1,4 @@
-"""پذیرش ADR-0008 (مرحله‌ی ۷): «مانیتورینگ آنلاین» کاملاً در استودیوی دیداری ساخته، منتشر، از بازار آزمایشی‌گرفته و با داده‌ی دستگاه زنده می‌شود.
+"""پذیرش ADR-0008 (مرحله‌ی ۷): «مانیتورینگ آنلاین» کاملاً در استودیوی دیداری ساخته، منتشر، از بازارچه آزمایشی‌گرفته و با داده‌ی دستگاه زنده می‌شود.
 
 کل زنجیره روی PostgreSQL/PostGIS واقعی: ساخت در پنل ← انتشار ← بازار ← آزمایشی ← ساخت خودکار جدول ← توکن ← دریافت داده ← صفحه ← انقضا.
 """
@@ -138,10 +138,10 @@ class MonitoringAcceptanceTests(BaseCase):
         self.assertEqual((addon.price_toman, addon.trial_days, addon.description), (90000, 7, "وضعیت زنده‌ی دستگاه‌ها روی نقشه"))
         self.assertEqual(self.rows("select count(*) from pg_tables where tablename like 'monitoring_%'"), [(0,)])  # هنوز هیچ جدولی در پایگاه مشتری نیست
 
-        # --- مشتری: بدون مجوز صفحه را نمی‌بیند؛ در بازار پلاگین را می‌بیند
+        # --- مشتری: بدون مجوز صفحه را نمی‌بیند؛ در بازارچه پلاگین را می‌بیند
         page_url = reverse("kernel:page", args=[self.db.pk, "monitoring", "p1"])
         self.assertEqual(self.customer.get(page_url).status_code, 404)
-        market = self.customer.get(reverse("billing:market"))
+        market = self.customer.get(reverse("plugins"))
         self.assertContains(market, "مانیتورینگ آنلاین")
         self.assertContains(market, "شروع آزمایشی")
         self.assertContains(market, "وضعیت زنده‌ی دستگاه‌ها روی نقشه")
@@ -153,7 +153,7 @@ class MonitoringAcceptanceTests(BaseCase):
         self.assertEqual((ent.kind, ent.source), ("workspace", "trial"))
         entitlements.invalidate()
         self.assertEqual(services.addon_status(addon, self.user, self.db)["state"], "trial")
-        self.assertContains(self.customer.get(reverse("billing:market")), "آزمایشی؛")
+        self.assertContains(self.customer.get(reverse("plugins")), "آزمایشی؛")
 
         # --- نخستین باز کردن صفحه: جدول خودکار ساخته می‌شود و بلوک‌ها رندر می‌شوند (هنوز داده‌ای نیست)
         r = self.customer.get(page_url)

@@ -1,5 +1,7 @@
 """مانیفست پلاگین «جدول‌ها و ویرایش داده»: بخشی از داده‌ی یک پایگاه که مسیرش را در فضای‌نام databases ثبت می‌کند (docs/adr/0006)."""
 from kernel import nav, plugins, routes
+from kernel.showcase import Showcase
+from kernel.showcase import add as _showcase
 
 plugin = plugins.register("dbtables", "جدول‌ها و ویرایش داده", kind="feature", requires=("databases",))
 
@@ -22,3 +24,39 @@ routes.add("databases", "<int:pk>/explore/t/<str:schema>/<str:table>/export/<str
 nav.ws_section("data", "جدول‌ها", "databases:explore", "table", "viewer", plugin=plugin.id, order=10, views=("databases:explore", "databases:explore_table"))
 nav.home_action("data", "جدول‌ها و داده‌ها", "جدول‌ها، ستون‌ها و روی نقشه را ببین؛ خروجی CSV و GeoJSON بگیر",
                 "databases:explore", "table", plugin=plugin.id, order=10)
+
+# ویترین بازارچه پلاگین (docs/adr/0011)
+_showcase(plugin.id, Showcase(
+    tagline='جدول\u200cها را ببینید، روی نقشه بیاورید و با امنیت ویرایش کنید',
+    category='data',
+    video='edittable',
+    rail='ریل پایگاه ← داده ← جدول\u200cها',
+    features=(
+        'مرورگر جدول و نقشه بدون نصب نرم\u200cافزار',
+        'ویرایش سطر و هندسه با پیش\u200cنویس و تأیید',
+        'بازگرداندن آخرین ذخیره',
+        'تغییر ساختار جدول: ستون، نام و حذف',
+        'خروجی در هفت قالب',
+    ),
+    details='مرورگر داده همه\u200cی جدول\u200cهای پایگاه را نشان می\u200cدهد؛ هر لایه را روی نقشه ببینید و خروجی بگیرید. ویرایش عمداً دو مرحله\u200cای است: تغییرها ابتدا پیش\u200cنویس هستند، بازبینی می\u200cشوند و بعد یک\u200cجا ذخیره می\u200cشوند و در صورت نیاز آخرین ذخیره برگردانده می\u200cشود.\n\nساختار جدول (ستون تازه، تغییر نام، حذف) هم از همین\u200cجا و با هشدار پیش از کار خطرناک قابل تغییر است.',
+    audiences=(
+        'student',
+        'city',
+        'org',
+        'dev',
+    ),
+    steps=(
+        ('جدول را باز کنید', 'از فهرست جدول\u200cها یکی را انتخاب کنید و روی نقشه ببینید.'),
+        ('حالت ویرایش را روشن کنید', 'سطر یا هندسه را اضافه، ویرایش یا حذف کنید.'),
+        ('بازبینی و ذخیره', 'تغییرها را مرور و یک\u200cجا ذخیره کنید.'),
+    ),
+    guides=(
+        ('explore', 'مرورگر داده'),
+        ('edittable', 'ویرایش داده و شکل جدول'),
+    ),
+    kb=(
+        ('explorer-overview', 'مرورگر داده'),
+        ('edit-table-data', 'ویرایش داده'),
+        ('export-formats', 'قالب\u200cهای خروجی'),
+    ),
+))

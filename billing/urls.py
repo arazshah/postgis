@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from . import views
 
@@ -7,9 +8,10 @@ app_name = "billing"
 urlpatterns = [
     path("plans/", views.plans, name="plans"),
     path("start/", views.start, name="start"),
-    path("market/", views.market, name="market"),
+    # نشانی‌های قدیمی بازار؛ نشانی تازه /plugins/ است (config/urls.py)
+    path("market/", RedirectView.as_view(pattern_name="plugins", permanent=True), name="market"),
     path("market/trial/", views.start_trial, name="start_trial"),
-    path("market/<slug:plugin_id>/", views.market_detail, name="market_detail"),
+    path("market/<slug:plugin_id>/", RedirectView.as_view(pattern_name="plugin_detail", permanent=True), name="market_detail"),
     path("start-addon/", views.start_addon, name="start_addon"),
     path("invoices/", views.invoices, name="invoices"),
     path("invoice/<str:number>/", views.invoice, name="invoice"),

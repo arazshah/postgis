@@ -286,7 +286,7 @@ def unused_vouchers(user):
     return PlanVoucher.objects.filter(user=user, used_by__isnull=True).select_related("plan")
 
 
-# ---------------------------------------------------------------------- بازار پلاگین (ADR-0008 مرحله‌ی ۶)
+# ---------------------------------------------------------------------- بازارچه پلاگین (ADR-0008 مرحله‌ی ۶)
 TRIAL_NOTE = "دوره‌ی آزمایشی"
 
 
@@ -352,26 +352,31 @@ def _row_text(r: dict) -> str:
 
 
 def _market_listing(plugin_id: str, addon: PluginAddon | None):
-    """(نسخه‌ی فعال، آگهی): دسته، ویژگی‌ها و توضیح از افزونه‌ی فروشی یا، برای پلاگین رایگان، از آگهی ذخیره‌شده‌ی نسخه‌ی فعال."""
+    """(نسخه‌ی فعال، آگهی): دسته، ویژگی‌ها و توضیح از افزونه‌ی فروشی، سپس آگهی ذخیره‌شده‌ی نسخه‌ی فعال، سپس ویترین پلاگین (kernel.showcase)."""
+    from kernel import showcase
     from kernel.models import PluginRelease
 
     rel = PluginRelease.objects.filter(plugin_id=plugin_id, status=PluginRelease.Status.ACTIVE).first()
     acc = (rel.access or {}) if rel else {}
     lst = acc.get("listing") or {}
-    return rel, {"category": (addon.category if addon else "") or lst.get("category", ""),
-                 "features": list((addon.features if addon else None) or lst.get("features") or []),
-                 "details": (addon.details if addon else "") or lst.get("details", ""), "summary": acc.get("summary", "")}
+    sc = showcase.get(plugin_id)
+    return rel, {"category": (addon.category if addon else "") or lst.get("category", "") or (sc.category if sc else ""),
+                 "features": list((addon.features if addon else None) or lst.get("features") or (sc.features if sc else ())),
+                 "details": (addon.details if addon else "") or lst.get("details", "") or (sc.details if sc else ""),
+                 "summary": acc.get("summary", "") or (sc.tagline if sc else "")}, sc
 
 
 def _market_item(plugin, addon: PluginAddon | None, user, dbs) -> dict:
-    """کارت/صفحه‌ی یک پلاگین در بازار (رایگان یا پولی) با وضعیت دارنده."""
+    """کارت/صفحه‌ی یک پلاگین در بازارچه (رایگان، همراه سکو یا پولی) با وضعیت دارنده؛ برای مهمان هم کار می‌کند."""
+    from django.templatetags.static import static
     from django.urls import reverse
 
+    from kernel import showcase
     from kernel.market import CATEGORIES
     from kernel.models import PluginMedia
 
-    rel, lst = _market_listing(plugin.id, addon)
-    media = [reverse("kernel:media", args=[m.token]) for m in PluginMedia.objects.filter(plugin_id=plugin.id)]
+    rel, lst, sc = _market_listing(plugin.id, addon)
+    media = [reverse("kernel:media", args=[m.token]) for m in PluginMedia.objects.filter(plugin_id=plugin.id)] or [static(f) for f in showcase.images(plugin.id)]
     rows, best = [], None
     if addon is not None and user is not None and user.is_authenticated:
         rows = [{"db": d, **addon_status(addon, user, d)} for d in dbs] if addon.scope == PluginAddon.Scope.WORKSPACE else [{"db": None, **addon_status(addon, user)}]
@@ -382,9 +387,13 @@ def _market_item(plugin, addon: PluginAddon | None, user, dbs) -> dict:
         if best is not None and best["state"] == "none":
             best = None
     when = rel.activated_at or rel.uploaded_at if rel else None
+    aud = dict(showcase.AUDIENCES)
     return {"id": plugin.id, "name": addon.title if addon else plugin.name, "summary": (addon.description if addon else "") or lst["summary"] or plugin.description,
             "category": lst["category"], "category_label": dict(CATEGORIES).get(lst["category"], ""), "features": lst["features"], "details": lst["details"],
             "images": media, "image": media[0] if media else "", "paid": addon is not None, "addon": addon, "price_toman": addon.price_toman if addon else 0,
+            "included": plugin.kind == "system", "audiences": [(k, aud[k]) for k in (sc.audiences if sc else ()) if k in aud],
+            "steps": list(sc.steps) if sc else [], "guides": list(sc.guides) if sc else [], "kb": list(sc.kb) if sc else [], "rail": sc.rail if sc else "",
+            "video": sc.video if sc and showcase.has_video(sc.video) else "", "featured": sc.featured if sc else 0,
             "duration_days": addon.duration_days if addon else 0, "workspace": bool(addon and addon.scope == PluginAddon.Scope.WORKSPACE),
             "trial_days": addon.trial_days if addon else 0, "can_trial": bool(addon and addon.trial_days > 0), "version": rel.version if rel else plugin.version,
             "updated": when, "is_new": bool(when and (timezone.now() - when).days < NEW_DAYS), "rows": rows, "best": best,
@@ -393,7 +402,8 @@ def _market_item(plugin, addon: PluginAddon | None, user, dbs) -> dict:
 
 
 def market_catalog(user) -> dict:
-    """داده‌ی بازار: همه‌ی پلاگین‌های قابل‌عرضه (پولی با وضعیت دارنده، و رایگانِ باز)، دسته‌ها با شمار و پایگاه‌های کاربر."""
+    """داده‌ی بازارچه: همه‌ی پلاگین‌های قابل‌عرضه (پولی با وضعیت دارنده، رایگان باز و همراه سکو)، دسته‌ها و مخاطب‌ها با شمار و پایگاه‌های کاربر."""
+    from kernel import showcase
     from kernel.market import CATEGORIES
     from kernel.models import PluginState
     from kernel.plugins import registry
@@ -403,23 +413,27 @@ def market_catalog(user) -> dict:
     for a in public_addons():
         listed.add(a.plugin_id)
         items.append(_market_item(registry.plugins[a.plugin_id], a, user, dbs))
-    for st in PluginState.objects.filter(enabled=True, access=PluginState.Access.OPEN):
-        p = registry.plugins.get(st.plugin_id)
-        if p and p.kind != "system" and st.plugin_id not in listed:
+    opened = set(PluginState.objects.filter(enabled=True, access=PluginState.Access.OPEN).values_list("plugin_id", flat=True))
+    for pid, p in registry.plugins.items():
+        if pid in listed or pid.startswith("x_"):
+            continue
+        if showcase.visible(pid) or (pid in opened and p.kind != "system"):
             items.append(_market_item(p, None, user, dbs))
-    items.sort(key=lambda i: (not i["paid"], i["name"]))
+    items.sort(key=lambda i: (i["featured"] or 99, not i["paid"], i["included"], i["name"]))
     for it in items:
         it["tags"] = " ".join(filter(None, ["paid" if it["paid"] else "free", "trial" if it["can_trial"] else "", "owned" if it["owned"] else "", "new" if it["is_new"] else "",
-                                            f"cat-{it['category']}" if it["category"] else ""]))
-        it["q"] = " ".join([it["name"], it["summary"], it["category_label"], *it["features"]])
+                                            f"cat-{it['category']}" if it["category"] else "", *[f"aud-{k}" for k, _l in it["audiences"]]]))
+        it["q"] = " ".join([it["name"], it["summary"], it["category_label"], *it["features"], *[lbl for _k, lbl in it["audiences"]]])
     counts = {k: sum(1 for i in items if i["category"] == k) for k, _l in CATEGORIES}
+    acount = {k: sum(1 for i in items if any(a == k for a, _l in i["audiences"])) for k, _l in showcase.AUDIENCES}
     return {"items": items, "dbs": dbs, "categories": [(k, label, counts[k]) for k, label in CATEGORIES if counts[k]],
+            "audiences": [(k, label, acount[k]) for k, label in showcase.AUDIENCES if acount[k]],
             "n_paid": sum(1 for i in items if i["paid"]), "n_free": sum(1 for i in items if not i["paid"]), "n_trial": sum(1 for i in items if i["can_trial"]),
             "n_owned": sum(1 for i in items if i["owned"])}
 
 
 def market_detail(user, plugin_id: str) -> dict | None:
-    """جزئیات یک پلاگین بازار + نسخه‌های اخیر با یادداشت و پلاگین‌های هم‌دسته؛ None اگر در بازار نیست."""
+    """جزئیات یک پلاگین بازارچه + نسخه‌های اخیر با یادداشت و پلاگین‌های هم‌دسته؛ None اگر در بازارچه نیست."""
     from kernel.models import PluginRelease
 
     data = market_catalog(user)

@@ -1,10 +1,14 @@
 {% extends "base.html" %}{% load fa humanize static ws %}
-{% block title %}{{ item.name }} — بازار پلاگین — {{ SITE_NAME }}{% endblock %}
-{% block robots %}noindex, nofollow{% endblock %}
+{% block title %}{{ item.name }} — بازارچه پلاگین — {{ SITE_NAME }}{% endblock %}
+{% block description %}{{ item.summary }} — {{ item.name }} در بازارچه پلاگین {{ SITE_NAME }}.{% endblock %}
+{% block og_title %}{{ item.name }} — بازارچه پلاگین {{ SITE_NAME }}{% endblock %}
+{% block og_description %}{{ item.summary }}{% endblock %}
+{% block canonical %}{{ BASE_URL }}{% url 'plugin_detail' item.id %}{% endblock %}
+{% block jsonld %}<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"{{ item.name|escapejs }}","description":"{{ item.summary|escapejs }}","applicationCategory":"BusinessApplication","operatingSystem":"Web","inLanguage":"fa-IR","softwareVersion":"{{ item.version|escapejs }}","url":"{{ BASE_URL }}{% url 'plugin_detail' item.id %}"{% if item.image %},"image":"{{ BASE_URL }}{{ item.image }}"{% endif %},"offers":{"@type":"Offer","price":"{{ item.price_toman }}","priceCurrency":"IRT"}}</script>{% endblock %}
 {% block head %}<link rel="stylesheet" href="{% static 'css/market.css' %}">{% endblock %}
 {% block content %}
 <div class="wrap page mk mk-detail">
-  <nav class="mk-crumbs small" aria-label="مسیر"><a href="{% url 'billing:market' %}">بازار پلاگین</a><span aria-hidden="true">/</span>{% if item.category_label %}<span>{{ item.category_label }}</span><span aria-hidden="true">/</span>{% endif %}<span aria-current="page">{{ item.name }}</span></nav>
+  <nav class="mk-crumbs small" aria-label="مسیر"><a href="{% url 'plugins' %}">بازارچه پلاگین</a><span aria-hidden="true">/</span>{% if item.category_label %}<span>{{ item.category_label }}</span><span aria-hidden="true">/</span>{% endif %}<span aria-current="page">{{ item.name }}</span></nav>
   <div class="mk-dgrid">
     <div class="mk-main">
       <header class="mk-dhead">
@@ -21,9 +25,20 @@
         {% else %}<div class="mk-shot mk-art tone-a" role="img" aria-label="بدون تصویر"><span class="mk-art-ic" aria-hidden="true">{% icon "cube" 56 %}</span></div>{% endif %}
       </section>
 
+      {% if item.video %}<section aria-labelledby="mk-v-h"><h2 id="mk-v-h">ببینید چطور کار می‌کند</h2>
+        {% with poster="help/video/"|add:item.video|add:".jpg" mp4="help/video/"|add:item.video|add:".mp4" %}<video class="mk-video" controls preload="none" playsinline poster="{% static poster %}"><source src="{% static mp4 %}" type="video/mp4"></video>{% endwith %}</section>{% endif %}
+      {% if item.audiences %}<section aria-labelledby="mk-a-h"><h2 id="mk-a-h">مناسب چه کسانی است</h2>
+        <ul class="mk-aud">{% for k, label in item.audiences %}<li class="chip">{{ label }}</li>{% endfor %}</ul></section>{% endif %}
       {% if item.features %}<section aria-labelledby="mk-f-h"><h2 id="mk-f-h">چه امکاناتی دارد</h2>
         <ul class="mk-flist">{% for f in item.features %}<li>{% icon "check" 18 %}<span>{{ f }}</span></li>{% endfor %}</ul></section>{% endif %}
       {% if item.details %}<section aria-labelledby="mk-d-h"><h2 id="mk-d-h">درباره‌ی این پلاگین</h2><div class="mk-prose">{{ item.details|linebreaks }}</div></section>{% endif %}
+
+      {% if item.steps %}<section aria-labelledby="mk-s-h"><h2 id="mk-s-h">در سه گام شروع کنید</h2>
+        <ol class="mk-steps">{% for t, d in item.steps %}<li><b>{{ t }}</b><span class="muted">{{ d }}</span></li>{% endfor %}</ol>
+        {% if item.rail %}<p class="small muted">پس از فعال‌سازی: {{ item.rail }}</p>{% endif %}</section>{% endif %}
+      {% if item.guides or item.kb %}<section aria-labelledby="mk-g-h"><h2 id="mk-g-h">راهنما و آموزش</h2>
+        <ul class="mk-links">{% for slug, title in item.guides %}<li><a href="{% url 'core:help_page' slug %}">{% icon "play" 16 %}{{ title }}<small class="muted">ویدیو و مراحل</small></a></li>{% endfor %}
+          {% for slug, title in item.kb %}<li><a href="{% url 'kb:article' slug %}">{% icon "book" 16 %}{{ title }}<small class="muted">پایگاه دانش</small></a></li>{% endfor %}</ul></section>{% endif %}
 
       {% if releases %}<section aria-labelledby="mk-r-h"><h2 id="mk-r-h">تغییرات نسخه‌ها</h2>
         <ol class="mk-rels">{% for r in releases %}<li><div class="mk-rhead"><b class="ltr" dir="ltr">{{ r.version }}</b>{% if r.active %}<span class="chip ok">نسخه‌ی فعلی</span>{% endif %}<span class="small muted">{{ r.at|jdate }}</span></div>
@@ -39,6 +54,7 @@
       <p class="mk-bprice"><b>{{ item.price_toman|money }}</b> <small>تومان</small></p>
       <p class="small muted">مدت هر خرید {{ item.duration_days|fanum }} روز، {% if item.workspace %}برای هر پایگاه داده{% else %}برای کل حساب شما{% endif %}.{% if item.can_trial %} <b>{{ item.trial_days|fanum }} روز آزمایشی رایگان</b> (یک‌بار).{% endif %}</p>
       <ul class="mk-assure small"><li>{% icon "check" 14 %}پس از پایان، داده‌هایتان حذف نمی‌شود</li><li>{% icon "check" 14 %}تمدید به انتهای مجوز فعلی افزوده می‌شود</li></ul>
+      {% if not user.is_authenticated %}<a class="btn" href="{% url 'accounts:login' %}?next={% url 'plugin_detail' item.id %}">{% icon "plus" 18 %}ورود و شروع{% if item.can_trial %} آزمایشی رایگان{% endif %}</a>{% endif %}
       {% for r in item.rows %}
       <div class="mk-brow">
         <div>{% if r.db %}<b class="ltr" dir="ltr">{{ r.db.db_name }}</b>{% else %}<b>حساب شما</b>{% endif %}
@@ -48,13 +64,17 @@
           {% if enabled %}<form method="post" action="{% url 'billing:start_addon' %}">{% csrf_token %}<input type="hidden" name="addon" value="{{ item.addon.pk }}"><input type="hidden" name="from" value="detail:{{ item.id }}">{% if r.db %}<input type="hidden" name="target" value="{{ r.db.pk }}">{% endif %}<button class="btn sm" type="submit">{% if r.state == "none" %}خرید{% else %}تمدید{% endif %}</button></form>{% endif %}
         </div>
       </div>
-      {% empty %}<p class="small muted">برای این پلاگین ابتدا باید یک پایگاه داده بسازید.</p>{% endfor %}
-      {% if item.workspace and not item.rows %}<a class="btn" href="{% url 'databases:dashboard' %}">{% icon "plus" 18 %}ساخت پایگاه داده</a>{% endif %}
+      {% empty %}{% if user.is_authenticated %}<p class="small muted">برای این پلاگین ابتدا باید یک پایگاه داده بسازید.</p>{% endif %}{% endfor %}
+      {% if item.workspace and not item.rows and user.is_authenticated %}<a class="btn" href="{% url 'databases:dashboard' %}">{% icon "plus" 18 %}ساخت پایگاه داده</a>{% endif %}
       {% if not enabled %}<p class="small muted" style="margin-top:12px">پرداخت فعلاً فعال نیست؛ دوره‌ی آزمایشی (اگر هست) قابل استفاده است.</p>{% endif %}
+      {% elif item.included %}
+      <p class="mk-bprice"><span class="chip ok">{% icon "check" 14 %}همراه همه‌ی پلن‌ها</span></p>
+      <p class="small muted">بخشی از خود سامانه است و برای همه فعال می‌شود. نیازی به خرید یا نصب ندارد.</p>
+      {% if user.is_authenticated %}<a class="btn" href="{% url 'databases:dashboard' %}">{% icon "db" 18 %}رفتن به پایگاه‌های من</a>{% else %}<a class="btn" href="{% url 'accounts:login' %}?next={% url 'plugin_detail' item.id %}">{% icon "plus" 18 %}ساخت حساب رایگان</a>{% endif %}
       {% else %}
       <p class="mk-bprice"><span class="chip ok">{% icon "globe" 14 %}رایگان</span></p>
-      <p class="small muted">برای همه‌ی پایگاه‌های داده فعال است و نیاز به خرید ندارد. بعد از باز کردن یک پایگاه، در ریل کناری (زیر «داده») پیدایش می‌کنید.</p>
-      <a class="btn" href="{% url 'databases:dashboard' %}">{% icon "db" 18 %}رفتن به پایگاه‌های من</a>
+      <p class="small muted">برای همه‌ی پایگاه‌های داده فعال است و نیاز به خرید ندارد.{% if item.rail %} بعد از باز کردن یک پایگاه: {{ item.rail }}.{% endif %}</p>
+      {% if user.is_authenticated %}<a class="btn" href="{% url 'databases:dashboard' %}">{% icon "db" 18 %}رفتن به پایگاه‌های من</a>{% else %}<a class="btn" href="{% url 'accounts:login' %}?next={% url 'plugin_detail' item.id %}">{% icon "plus" 18 %}ساخت حساب رایگان</a><p class="small muted">ورود فقط با شماره موبایل؛ شروع رایگان است.</p>{% endif %}
       {% endif %}
     </aside>
   </div>
