@@ -73,7 +73,7 @@ def page(request, pk, plugin, page):
             st = states.get(x.key)
             vals = (st.inputs if st else {}) or {}
             srcs.append({"spec": x, "state": st, "host_ok": sources.host_allowed(x.host),
-                         "inputs": [{"i": i, "value": vals.get(i.name, i.default)} for i in x.inputs]})
+                         "inputs": [{"i": i, "value": vals.get(i.name, i.default), "sel": _selected(vals.get(i.name, i.default))} for i in x.inputs]})
     recs = []
     for rc in (spec.records if cap["draw"] else ()):
         try:
@@ -320,6 +320,12 @@ def _source_target(request, pk, plugin, page, key):
     if not entitlements.allowed(plugin, user=request.user, ws=ws) or not caps.allowed("sources", user=request.user, ws=ws):
         raise Http404
     return ws, spec, item, redirect(f"{reverse('kernel:page', kwargs={'pk': ws.pk, 'plugin': plugin, 'page': page})}#source-{key}")
+
+
+def _selected(v) -> list[str]:
+    """مقدار ذخیره‌شده‌ی ورودی choice/multi (فهرست یا متن با ویرگول) ← فهرست گزینه‌های انتخاب‌شده."""
+    items = v if isinstance(v, list) else str(v or "").split(",")
+    return [str(x).strip() for x in items if str(x).strip()]
 
 
 @login_required
