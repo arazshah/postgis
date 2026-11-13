@@ -169,6 +169,7 @@ admin_group("settings", "تنظیمات و امنیت", "settings", order=70)
 admin_link("platform", "پلاگین‌ها", "plugin_hub", plugin=KERNEL, order=10)
 admin_link("platform", "آزمایشگاه ژئوکدر", "geocode_lab", plugin=KERNEL, order=30)
 admin_item("platform", "kernel.organization", None, plugin=KERNEL, order=20)
+admin_item("marketing", "kernel.pluginshowcaseoverride", None, plugin=KERNEL, order=60)
 # صفحه‌ی «پلاگین‌ها» (kernel.hub) همه‌ی این‌ها را زیر چهار زبانه جمع می‌کند؛ از فهرست کناری برداشته می‌شوند
 for _m in ("kernel.pluginstate", "kernel.pluginrelease", "kernel.plugindraft", "kernel.pluginusage", "kernel.plugintrip",
            "kernel.publisherkey", "billing.pluginaddon"):

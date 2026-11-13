@@ -1,9 +1,9 @@
 {% extends "base.html" %}{% load fa humanize static ws %}
-{% block title %}بازارچه پلاگین — {{ SITE_NAME }}{% endblock %}
-{% block description %}بازارچه پلاگین ژئوپایگاه: ورود فایل، تحلیل مکانی، نقشه چندلایه، برداشت میدانی، تصویر ماهواره‌ای، REST API و کلاس درس؛ قابلیت تازه برای پایگاه داده PostGIS شما، با دوره‌ی آزمایشی.{% endblock %}
-{% block og_title %}بازارچه پلاگین — {{ SITE_NAME }}{% endblock %}
+{% block title %}{% if audience %}{{ audience.title }}{% else %}بازارچه پلاگین{% endif %} — {{ SITE_NAME }}{% endblock %}
+{% block description %}{% if audience %}{{ audience.pitch }}{% else %}بازارچه پلاگین ژئوپایگاه: ورود فایل، تحلیل مکانی، نقشه چندلایه، برداشت میدانی، تصویر ماهواره‌ای، REST API و کلاس درس؛ قابلیت تازه برای پایگاه داده PostGIS شما، با دوره‌ی آزمایشی.{% endif %}{% endblock %}
+{% block og_title %}{% if audience %}{{ audience.title }}{% else %}بازارچه پلاگین{% endif %} — {{ SITE_NAME }}{% endblock %}
 {% block og_description %}قابلیت‌های آماده برای پایگاه داده مکانی PostGIS: از ورود فایل تا نقشه، ماهواره و برداشت میدانی.{% endblock %}
-{% block canonical %}{{ BASE_URL }}{% url 'plugins' %}{% endblock %}
+{% block canonical %}{{ BASE_URL }}{% if audience %}{% url 'plugin_audience' audience.key %}{% else %}{% url 'plugins' %}{% endif %}{% endblock %}
 {% block jsonld %}<script type="application/ld+json">{"@context":"https://schema.org","@type":"ItemList","name":"بازارچه پلاگین {{ SITE_NAME|escapejs }}","itemListElement":[{% for it in items %}{"@type":"ListItem","position":{{ forloop.counter }},"url":"{{ BASE_URL }}{% url 'plugin_detail' it.id %}","name":"{{ it.name|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}]}</script>{% endblock %}
 {% block head %}<link rel="stylesheet" href="{% static 'css/market.css' %}">{% endblock %}
 {% block content %}
@@ -11,8 +11,8 @@
   <header class="mk-hero">
     <div>
       <p class="mk-eyebrow">{% icon "cube" 16 %}بازارچه پلاگین</p>
-      <h1>سامانه‌ی مکانی‌تان را با پلاگین بسازید</h1>
-      <p class="mk-lead">از ورود فایل و تحلیل فارسی تا نقشه‌ی چندلایه، برداشت میدانی و تصویر ماهواره‌ای؛ هر قابلیت یک پلاگین است. فقط آنچه لازم دارید روشن کنید، دوره‌ی آزمایشی بگیرید و هر وقت خواستید کنارش بگذارید؛ داده‌هایتان همیشه می‌ماند.</p>
+      {% if audience %}<h1>{{ audience.title }}</h1>{% else %}<h1>سامانه‌ی مکانی‌تان را با پلاگین بسازید</h1>{% endif %}
+      <p class="mk-lead">{% if audience %}{{ audience.pitch }} <a href="{% url 'plugins' %}">دیدن همه‌ی پلاگین‌ها</a>{% else %}از ورود فایل و تحلیل فارسی تا نقشه‌ی چندلایه، برداشت میدانی و تصویر ماهواره‌ای؛ هر قابلیت یک پلاگین است. فقط آنچه لازم دارید روشن کنید، دوره‌ی آزمایشی بگیرید و هر وقت خواستید کنارش بگذارید؛ داده‌هایتان همیشه می‌ماند.{% endif %}</p>
       <div class="mk-search" role="search">
         <label for="mk-q" class="sr-only">جست‌وجو در پلاگین‌ها</label>
         <span aria-hidden="true">{% icon "search" 20 %}</span>
@@ -44,7 +44,7 @@
       {% if n_owned %}<button type="button" class="mk-chip" data-lf-chip="owned" aria-pressed="false">فعال من <b>{{ n_owned|fanum }}</b></button>{% endif %}
     </div>
     {% if audiences %}<div class="mk-chips" role="group" aria-label="مناسب چه کسی">
-      <span class="mk-chip-l small muted">مناسب:</span>{% for key, label, n in audiences %}<button type="button" class="mk-chip" data-lf-chip="aud-{{ key }}" aria-pressed="false">{{ label }} <b>{{ n|fanum }}</b></button>{% endfor %}
+      <span class="mk-chip-l small muted">مناسب:</span>{% for key, label, n in audiences %}<a class="mk-chip" href="{% url 'plugin_audience' key %}"{% if audience.key == key %} aria-current="page"{% endif %}>{{ label }} <b>{{ n|fanum }}</b></a>{% endfor %}
     </div>{% endif %}
     {% if categories %}<div class="mk-chips" role="group" aria-label="فیلتر دسته">
       {% for key, label, n in categories %}<button type="button" class="mk-chip" data-lf-chip="cat-{{ key }}" aria-pressed="false">{{ label }} <b>{{ n|fanum }}</b></button>{% endfor %}

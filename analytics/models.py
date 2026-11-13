@@ -81,6 +81,12 @@ class Event(models.Model):
     IMPORT_QUEUED = "import_queued"
     CTA_CLICK = "cta_click"
     MAP_VIEWED = "map_viewed"
+    # قیف بازارچه پلاگین (docs/adr/0011): دیدن فهرست، دیدن جزئیات (meta.plugin)، کلیک ورود از بازارچه، شروع آزمایشی و شروع خرید
+    MARKET_LIST = "market_list"
+    MARKET_DETAIL = "market_detail"
+    MARKET_CTA = "market_cta"
+    MARKET_TRIAL = "market_trial"
+    MARKET_BUY = "market_buy"
     # ریزکارهای کاربر واردشده: «view:<مسیر>» برای دیدن صفحه و «do:<مسیر>» برای ارسال فرم/انجام عملیات
     VIEW = "view:"
     DO = "do:"

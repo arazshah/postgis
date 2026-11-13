@@ -107,7 +107,12 @@ def contact(request):
 
 
 def home(request):
-    plans = Plan.objects.filter(is_public=True)
+    from kernel import showcase
+
+    plans = list(Plan.objects.filter(is_public=True))
+    bundled = showcase.bundled_with_plan([p.slug for p in plans])
+    for p in plans:
+        p.bundled = bundled[p.slug]
     from kb.faq import faq_jsonld, home_faqs
 
     from .help import GUIDES
@@ -117,8 +122,6 @@ def home(request):
     conf = SiteSettings.get()
     trust_cards = HomeTrustCard.visible(conf) if conf.home_trust_enabled else []
     trust_buttons = HomeTrustButton.visible() if conf.home_trust_enabled else []
-    from kernel import showcase
-
     return render(request, "core/home.html", {"market_picks": showcase.home_picks(6), "market_count": showcase.count(), "market_audiences": showcase.AUDIENCES,
                                               "plans": plans, "guides_count": len(GUIDES), "faqs": faqs,
                                               "faq_json": faq_jsonld(faqs), "trust_conf": conf,
@@ -264,6 +267,7 @@ def sitemap_xml(request):
     from kernel import showcase
 
     pages.append((reverse("plugins"), "0.9", "billing/market.html"))
+    pages += [(reverse("plugin_audience", args=[k]), "0.8", "billing/market.html") for k in showcase.AUDIENCE_PITCH]
     pages += [(reverse("plugin_detail", args=[pid]), "0.7", "billing/market_detail.html") for pid in sorted(showcase.registry._points.get(showcase.POINT, {})) if showcase.visible(pid)]
     pages += [(reverse("core:doc", args=[d[0]]), "0.9" if d[0] == "what-is-postgis" else "0.7", f"docs/{d[0]}.html")
               for d in DOCS]

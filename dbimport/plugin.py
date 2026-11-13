@@ -34,7 +34,6 @@ _showcase(plugin.id, Showcase(
         'student',
         'city',
         'survey',
-        'org',
     ),
     steps=(
         ('فایل را رها کنید', 'Shapefile (به\u200cصورت zip)، GeoJSON، GeoPackage، KML، CSV یا DXF را انتخاب کنید.'),

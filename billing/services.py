@@ -412,10 +412,11 @@ def market_catalog(user) -> dict:
     items, listed = [], set()
     for a in public_addons():
         listed.add(a.plugin_id)
-        items.append(_market_item(registry.plugins[a.plugin_id], a, user, dbs))
+        if not showcase.hidden(a.plugin_id):
+            items.append(_market_item(registry.plugins[a.plugin_id], a, user, dbs))
     opened = set(PluginState.objects.filter(enabled=True, access=PluginState.Access.OPEN).values_list("plugin_id", flat=True))
     for pid, p in registry.plugins.items():
-        if pid in listed or pid.startswith("x_"):
+        if pid in listed or pid.startswith("x_") or showcase.hidden(pid):
             continue
         if showcase.visible(pid) or (pid in opened and p.kind != "system"):
             items.append(_market_item(p, None, user, dbs))

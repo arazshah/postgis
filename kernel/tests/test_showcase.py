@@ -36,10 +36,19 @@ class ShowcaseContractTests(TestCase):
             if sc.video:
                 self.assertIn(sc.video, slugs, pid)
 
-    def test_non_capability_plugins_have_screenshots(self):
+    def test_every_plugin_has_images(self):
+        """پلاگین صفحه‌دار ۲ تصویر رابط؛ پلاگین قابلیت (بدون صفحه‌ی مستقل) دست‌کم یک کاور."""
         for pid in self._feature_ids():
-            if not pid.startswith("cap_"):
-                self.assertGreaterEqual(len(showcase.images(pid)), 2, f"{pid}: تصویر ویترین (static/market/{pid}) نیست")
+            need = 1 if pid.startswith("cap_") else 2
+            self.assertGreaterEqual(len(showcase.images(pid)), need, f"{pid}: تصویر ویترین (static/market/{pid}) نیست")
+
+    def test_admin_add_page_renders(self):
+        from accounts.models import User
+
+        self.client.force_login(User.objects.create_user(email="boss@example.com", password="x", is_staff=True, is_superuser=True))
+        with self.settings(ADMIN_2FA_REQUIRED=False):
+            r = self.client.get(reverse("admin:kernel_pluginshowcaseoverride_add"))
+        self.assertContains(r, "ویژگی‌ها")
 
     def test_invalid_profile_rejected(self):
         with self.assertRaises(ValueError):
@@ -76,3 +85,73 @@ class PublicMarketTests(TestCase):
     def test_system_plugin_without_profile_is_hidden(self):
         self.assertEqual(self.client.get(reverse("plugin_detail", args=["accounts"])).status_code, 404)
         self.assertEqual(self.client.get(reverse("plugin_detail", args=["assistant"])).status_code, 200)  # همراه سکو
+
+
+class AudiencePagesTests(TestCase):
+    def test_every_audience_has_a_landing_page_with_plugins(self):
+        for key, (title, _pitch) in showcase.AUDIENCE_PITCH.items():
+            r = self.client.get(reverse("plugin_audience", args=[key]))
+            self.assertEqual(r.status_code, 200, key)
+            self.assertContains(r, title)
+            self.assertContains(r, "data-lf-row", msg_prefix=key)  # هر مخاطب دست‌کم یک پلاگین دارد
+
+    def test_audience_page_lists_only_matching_plugins_and_is_in_sitemap(self):
+        r = self.client.get(reverse("plugin_audience", args=["edu"]))
+        self.assertContains(r, "کلاس درس")
+        self.assertNotContains(r, "REST API و فرم میدانی")
+        self.assertEqual(self.client.get(reverse("plugin_audience", args=["nope"])).status_code, 404)
+        self.assertContains(self.client.get(reverse("core:sitemap")), "/plugins/for/edu/")
+
+    def test_pitch_covers_all_audiences(self):
+        self.assertEqual(set(showcase.AUDIENCE_PITCH), {k for k, _l in showcase.AUDIENCES})
+
+
+class PlanBundleTests(TestCase):
+    def test_plan_page_and_home_show_bundled_plugins(self):
+        from databases.models import Plan
+        from kernel import entitlements
+        from kernel.models import Entitlement, PluginState
+
+        self.addCleanup(entitlements.invalidate)
+        plan = Plan.objects.create(name="طلایی", slug="gold", is_public=True, is_free=False, price_toman=1000)
+        st = PluginState.objects.create(plugin_id="survey", access="restricted")
+        Entitlement.objects.create(state=st, kind=Entitlement.Kind.PLAN, subject="gold", source=Entitlement.Source.PLAN)
+        out = showcase.bundled_with_plan(["gold"])
+        self.assertEqual([x["id"] for x in out["gold"]], ["survey"])
+        self.assertContains(self.client.get(reverse("core:home")), "پلاگین‌های همراه")
+        self.assertEqual(plan.slug, "gold")
+
+
+class ShowcaseOverrideTests(TestCase):
+    def setUp(self):
+        self.addCleanup(showcase.invalidate)
+        showcase.invalidate()
+
+    def test_override_wins_only_where_filled_and_hidden_removes_from_market(self):
+        from kernel.models import PluginShowcaseOverride
+
+        base = showcase.code_profile("dbimport")
+        PluginShowcaseOverride.objects.create(plugin_id="dbimport", tagline="شعار تازه از پنل", features=["الف", "ب", "ج"])
+        sc = showcase.get("dbimport")
+        self.assertEqual((sc.tagline, sc.features), ("شعار تازه از پنل", ("الف", "ب", "ج")))
+        self.assertEqual(sc.details, base.details)  # فیلد خالی = پیش‌فرض کد
+        self.assertContains(self.client.get(reverse("plugin_detail", args=["dbimport"])), "شعار تازه از پنل")
+        PluginShowcaseOverride.objects.filter(plugin_id="dbimport").update(hidden=True)
+        showcase.invalidate()
+        self.assertNotContains(self.client.get(reverse("plugins")), 'href="/plugins/dbimport/"')
+        self.assertEqual(self.client.get(reverse("plugin_detail", args=["dbimport"])).status_code, 404)
+
+    def test_featured_override_controls_home(self):
+        from kernel.models import PluginShowcaseOverride
+
+        PluginShowcaseOverride.objects.create(plugin_id="dbimport", featured=0)
+        self.assertNotIn("dbimport", [r["id"] for r in showcase.home_picks(9)])
+
+    def test_admin_form_validates_features(self):
+        from kernel.admin import ShowcaseOverrideForm
+
+        f = ShowcaseOverrideForm(data={"plugin_id": "dbimport", "features_text": "فقط یکی", "tagline": "", "details": ""})
+        self.assertFalse(f.is_valid())
+        f = ShowcaseOverrideForm(data={"plugin_id": "dbimport", "features_text": "الف\nب\nج", "tagline": "", "details": ""})
+        self.assertTrue(f.is_valid(), f.errors)
+        self.assertEqual(f.save().features, ["الف", "ب", "ج"])

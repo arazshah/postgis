@@ -49,7 +49,6 @@ _showcase(plugin.id, Showcase(
         'student',
         'city',
         'org',
-        'agri',
     ),
     steps=(
         ('سؤال بنویسید', 'فارسی و ساده.'),

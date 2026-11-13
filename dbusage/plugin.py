@@ -28,7 +28,7 @@ _showcase(plugin.id, Showcase(
     audiences=(
         'dev',
         'org',
-        'city',
+        'edu',
     ),
     steps=(
         ('مصرف را ببینید', 'نمودار حجم و رشد را بخوانید.'),

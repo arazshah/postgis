@@ -36,6 +36,14 @@
 {% for s in funnel %}<div><span>{{ s.label }}</span><span class="an-bar"><i style="width:{{ s.width }}%"></i></span><span>{{ s.n }} · {{ s.of_total }}{% if forloop.counter > 1 %} · از مرحله قبل {{ s.of_prev }}{% endif %}</span></div>{% endfor %}
 </div>
 
+<h2>قیف بازارچه پلاگین</h2>
+<div class="an-fun">
+{% for s in market.steps %}<div><span>{{ s.label }}</span><span class="an-bar"><i style="width:{{ s.width }}%"></i></span><span>{{ s.n }} · {{ s.of_total }}{% if forloop.counter > 1 %} · از مرحله قبل {{ s.of_prev }}{% endif %}</span></div>{% endfor %}
+</div>
+{% if market.plugins %}<table class="an"><thead><tr><th>پلاگین</th><th>دیدن جزئیات</th><th>کلیک ورود</th><th>آزمایشی</th><th>شروع خرید</th></tr></thead><tbody>
+{% for r in market.plugins %}<tr><td>{{ r.plugin }}</td><td>{{ r.detail }}</td><td>{{ r.cta }}</td><td>{{ r.trial }}</td><td>{{ r.buy }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<p class="an-note">هنوز رویدادی از بازارچه ثبت نشده است.</p>{% endif %}
+
 {% include "admin/analytics/_table.html" with title="منبع / نوع / کمپین" rows=sources %}
 {% include "admin/analytics/_table.html" with title="صفحه فرود" rows=landing %}
 {% include "admin/analytics/_table.html" with title="دامنه ارجاع‌دهنده" rows=referrers %}

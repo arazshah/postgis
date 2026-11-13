@@ -21,6 +21,8 @@
 .mk-bar{position:sticky;top:0;z-index:5;background:var(--paper);padding:var(--s3) 0;display:grid;gap:var(--s2);border-bottom:1px solid var(--line-2);margin-bottom:var(--s4)}
 .mk-chips{display:flex;gap:var(--s2);overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
 .mk-chip{flex:none;display:inline-flex;gap:6px;align-items:center;height:var(--ctl-h-sm);padding:0 var(--s3);border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+a.mk-chip{text-decoration:none}
+.mk-chip[aria-current=page]{background:var(--teal);border-color:var(--teal);color:var(--on-accent);font-weight:700}.mk-chip[aria-current=page] b{color:inherit}
 .mk-chip b{font-weight:600;color:var(--ink-3);font-size:12px}
 .mk-chip:hover{border-color:var(--teal)}
 .mk-chip[aria-pressed=true]{background:var(--teal);border-color:var(--teal);color:var(--on-accent);font-weight:700}

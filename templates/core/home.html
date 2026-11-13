@@ -131,7 +131,7 @@ WHERE ST_DWithin(
       </li>{% endfor %}
     </ul>
     <ul class="who-links" aria-label="پلاگین مناسب شما">
-      {% for key, label in market_audiences %}<li><a href="{% url 'plugins' %}?f=aud-{{ key }}">{{ label }}</a></li>{% endfor %}
+      {% for key, label in market_audiences %}<li><a href="{% url 'plugin_audience' key %}">{{ label }}</a></li>{% endfor %}
     </ul>
     <p class="mk-home-go"><a class="btn lg" href="{% url 'plugins' %}">دیدن همه‌ی پلاگین‌ها در بازارچه</a></p>
   </div>
@@ -197,6 +197,7 @@ WHERE ST_DWithin(
         <li><span class="sym hatch"></span><span>نگهداری بکاپ روزانه</span><strong>{{ p.backup_retention_days|fanum }} روز</strong></li>
         <li><span class="sym ring"></span><span>اتصال رمزنگاری‌شده SSL</span><strong>دارد</strong></li>
       </ul>
+      {% if p.bundled %}<p class="small"><b>پلاگین‌های همراه:</b> {% for x in p.bundled %}{% if x.public %}<a href="{% url 'plugin_detail' x.id %}">{{ x.name }}</a>{% else %}{{ x.name }}{% endif %}{% if not forloop.last %}، {% endif %}{% endfor %}</p>{% endif %}
       <div style="margin-top:16px">
       {% if p.is_free %}
         <a class="btn" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">شروع رایگان</a>

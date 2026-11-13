@@ -18,6 +18,7 @@ from .models import (
     OrgMember,
     PluginDraft,
     PluginRelease,
+    PluginShowcaseOverride,
     PluginState,
     PluginTrip,
     PluginUsage,
@@ -739,3 +740,61 @@ class SourceStateAdmin(admin.ModelAdmin):
 
     def has_module_permission(self, request):
         return request.user.is_superuser or request.user.has_perm("kernel.view_sourcestate")
+
+
+class ShowcaseOverrideForm(forms.ModelForm):
+    features_text = forms.CharField(label="ویژگی‌ها", required=False, widget=forms.Textarea(attrs={"rows": 6}), help_text="هر ویژگی در یک خط (۳ تا ۶ مورد، هرکدام تا ۸۰ نویسه). خالی = پیش‌فرض کد.")
+    audiences = forms.MultipleChoiceField(label="مخاطب‌ها", required=False, widget=forms.CheckboxSelectMultiple, help_text="هیچ‌کدام = پیش‌فرض کد.")
+
+    class Meta:
+        model = PluginShowcaseOverride
+        fields = ("plugin_id", "tagline", "details", "audiences", "featured", "hidden")
+
+    def __init__(self, *a, **kw):
+        from . import showcase
+
+        super().__init__(*a, **kw)
+        ids = sorted(pid for pid in registry._points.get(showcase.POINT, {}))
+        self.fields["plugin_id"] = forms.ChoiceField(label="پلاگین", choices=[(i, f"{registry.plugins[i].name} ({i})") for i in ids if i in registry.plugins])
+        self.fields["audiences"].choices = showcase.AUDIENCES
+        if self.instance.pk:
+            self.fields["features_text"].initial = "\n".join(self.instance.features or [])
+            self.fields["plugin_id"].disabled = True
+
+    def clean_features_text(self):
+        lines = [ln.strip() for ln in self.cleaned_data["features_text"].splitlines() if ln.strip()]
+        if lines and not 3 <= len(lines) <= 6:
+            raise forms.ValidationError("ویژگی‌ها بین ۳ و ۶ مورد باشد.")
+        if any(len(ln) > 80 for ln in lines):
+            raise forms.ValidationError("هر ویژگی حداکثر ۸۰ نویسه است.")
+        return lines
+
+    def clean_details(self):
+        d = self.cleaned_data["details"]
+        if len(d) > 4000:
+            raise forms.ValidationError("توضیح حداکثر ۴۰۰۰ نویسه است.")
+        return d
+
+    def clean_featured(self):
+        f = self.cleaned_data["featured"]
+        if f is not None and f > 9:
+            raise forms.ValidationError("جایگاه بین ۰ و ۹ باشد.")
+        return f
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.features = self.cleaned_data["features_text"]
+        obj.audiences = list(self.cleaned_data["audiences"])
+        if commit:
+            obj.save()
+        return obj
+
+
+@admin.register(PluginShowcaseOverride)
+class PluginShowcaseOverrideAdmin(admin.ModelAdmin):
+    """ویرایش ویترین بازارچه بدون استقرار دوباره: شعار، توضیح، ویژگی‌ها، مخاطب و جایگاه صفحه‌ی اول؛ تصویر از «آگهی» پلاگین بارگذاری می‌شود."""
+
+    form = ShowcaseOverrideForm
+    list_display = ("plugin_id", "tagline", "featured", "hidden", "updated_at")
+    list_filter = ("hidden",)
+    search_fields = ("plugin_id", "tagline")

@@ -38,7 +38,6 @@ _showcase(plugin.id, Showcase(
     audiences=(
         'city',
         'student',
-        'org',
         'edu',
     ),
     steps=(

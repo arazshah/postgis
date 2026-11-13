@@ -41,7 +41,6 @@ _showcase(plugin.id, Showcase(
         'dev',
         'city',
         'org',
-        'student',
     ),
     steps=(
         ('لایه را منتشر کنید', 'جدول را انتخاب و گزینه\u200cی انتشار را بزنید.'),
