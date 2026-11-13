@@ -112,7 +112,7 @@ def hub(request):
     elif tab == "create":
         ctx["studio_url"] = _url("admin:kernel_plugindraft_changelist")
         ctx["wizard_url"] = _url("admin:kernel_plugindraft_wizard_new")
-        ctx["drafts"] = [{"name": d.name, "id": d.plugin_id, "url": _url("admin:kernel_plugindraft_wizard", d.pk, 1) if d.wizard else _url("admin:kernel_plugindraft_studio", d.pk), "wizard": bool(d.wizard)} for d in PluginDraft.objects.all()[:30]]
+        ctx["drafts"] = [{"name": d.name, "id": d.plugin_id, "url": _url("admin:kernel_plugindraft_designer", d.pk) if d.wizard else _url("admin:kernel_plugindraft_studio", d.pk), "wizard": bool(d.wizard)} for d in PluginDraft.objects.all()[:30]]
     elif tab == "sales":
         ctx.update(grants=recent_grants(), links=sales_links())
     else:

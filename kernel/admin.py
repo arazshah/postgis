@@ -405,7 +405,8 @@ class PluginDraftAdmin(admin.ModelAdmin):
         wrap = self.admin_site.admin_view
         from . import studio_api, wizard_admin
 
-        return [path("<int:pk>/designer/api/state/", wrap(studio_api.state), name="kernel_plugindraft_api_state"),
+        return [path("<int:pk>/designer/", wrap(studio_api.designer), name="kernel_plugindraft_designer"),
+                path("<int:pk>/designer/api/state/", wrap(studio_api.state), name="kernel_plugindraft_api_state"),
                 path("<int:pk>/designer/api/op/", wrap(studio_api.op), name="kernel_plugindraft_api_op"),
                 path("<int:pk>/designer/api/preview/<str:page>/", wrap(studio_api.preview), name="kernel_plugindraft_api_preview"),
                 path("<int:pk>/designer/api/revisions/", wrap(studio_api.revisions), name="kernel_plugindraft_api_revisions"),

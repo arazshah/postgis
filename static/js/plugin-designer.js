@@ -1,0 +1,592 @@
+// استودیوی دیداری پلاگین (docs/adr/0010، مرحله‌ی ۲): بوم صفحه‌ها با کشیدن و رها کردن، ویژگی‌ها، طراح داده، undo/redo.
+// مرورگر فقط «عملیات» ساخت‌یافته می‌فرستد (kernel/blueprint.py)؛ هسته می‌سنجد، ذخیره می‌کند و TOML را خودش می‌سازد.
+(function () {
+  "use strict";
+  const root = document.getElementById("pd");
+  if (!root) return;
+  const J = (id) => JSON.parse(document.getElementById(id).textContent);
+  const API = J("pd-api"), LINKS = J("pd-links"), COLTYPES = J("pd-coltypes");
+  const CSRF = root.querySelector("input[name=csrfmiddlewaretoken]").value;
+  const esc = StudioUI.esc, ic = StudioUI.icon;
+  const FA = (n) => String(n).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
+
+  const KINDS = [
+    ["نمایش", [["kpi", "شمارنده", "k-kpi", "یک عدد درشت"], ["table", "جدول", "table", "آخرین ردیف‌ها"], ["bars", "نمودار میله‌ای", "k-bar", "مقایسه‌ی گروه‌ها"],
+      ["map", "نقشه", "globe", "نقطه‌ها روی نقشه"], ["text", "متن", "info", "راهنما و توضیح"]]],
+    ["ورود داده", [["form", "فرم ثبت", "edit", "کاربر ردیف ثبت می‌کند"], ["ingest", "دریافت از دستگاه", "satellite", "دستگاه با توکن می‌فرستد"]]],
+    ["کد و پیشرفته", [["handler", "خروجی کد", "bolt", "نتیجه‌ی handler"], ["import", "ورود فایل", "upload", "فایل ← جدول تازه"],
+      ["export", "خروجی فایل", "download", "دکمه‌ی دانلود"], ["sql", "SQL پیشرفته", "code", "پرس‌وجوی فقط‌خواندنی"]]],
+  ];
+  const KIND_LABEL = {};
+  KINDS.forEach(([, items]) => items.forEach(([k, l]) => { KIND_LABEL[k] = l; }));
+  const AGGS = [["count", "تعداد"], ["sum", "جمع"], ["avg", "میانگین"], ["min", "کمینه"], ["max", "بیشینه"]];
+  const NUM = ["integer", "bigint", "double"], TIME = ["timestamptz", "date"];
+  const WIDTHS = [["", "خودکار"], ["third", "یک‌سوم"], ["half", "نیم"], ["full", "تمام"]];
+  const GROUPS = [["data", "داده"], ["share", "اشتراک"], ["manage", "مدیریت"]];
+  const NEEDS = [["viewer", "بیننده"], ["editor", "ویرایشگر"], ["owner", "مالک"]];
+
+  let S = null;            // وضعیت سرور {spec, analysis, revision, ...}
+  let pageKey = "", selId = "", tab = "pages", narrow = false;
+  let preview = [];        // [{id, kind, html, error, ...}] صفحه‌ی جاری
+  let hist = { ids: [], i: -1 };
+  let chain = Promise.resolve(), pending = 0, dragId = "";
+  const maps = [];
+
+  // ---------------------------------------------------------------- شبکه
+  async function call(url, body) {
+    const r = await fetch(url, body === undefined ? { credentials: "same-origin" } : {
+      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF }, body: JSON.stringify(body) });
+    let j = {};
+    try { j = await r.json(); } catch (_) { /* غیر JSON */ }
+    if (!r.ok) throw new Error(j.error || "درخواست انجام نشد.");
+    return j;
+  }
+  function setSave(kind, text) {
+    const el = root.querySelector("#pd-save");
+    if (!el) return;
+    el.className = "pd-save " + kind;
+    el.innerHTML = (kind === "ok" ? ic("check") : kind === "bad" ? ic("warn") : ic("refresh")) + `<span>${esc(text)}</span>`;
+  }
+  function toast(msg, kind) { if (window.Ui) Ui.toast(msg, kind || "info"); }
+
+  // عملیات پشت‌سرهم و به‌ترتیب؛ نتیجه = وضعیت تازه یا خطا (نقشه دست‌نخورده)
+  function run(body, { silent, push = true } = {}) {
+    pending++;
+    setSave("", "در حال ذخیره…");
+    const p = chain.then(async () => {
+      try {
+        const st = await call(API.op, body);
+        S = st;
+        if (push) { hist.ids = hist.ids.slice(0, hist.i + 1).concat(st.revision); hist.i = hist.ids.length - 1; }
+        return st;
+      } catch (e) {
+        if (!silent) toast(e.message, "danger");
+        throw e;
+      }
+    });
+    chain = p.catch(() => {});
+    return p.finally(() => {
+      pending--;
+      if (!pending) {
+        if (S && S.save_error) setSave("bad", "ذخیره شد، ولی: " + S.save_error);
+        else setSave("ok", "ذخیره شد");
+        syncBar();
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------- کمک‌تابع‌ها
+  const spec = () => S.spec;
+  const pages = () => spec().pages || [];
+  const curPage = () => pages().find((p) => p.key === pageKey) || pages()[0] || null;
+  const blocks = () => (curPage() ? curPage().blocks || [] : []);
+  const selBlock = () => blocks().find((b) => b.id === selId) || null;
+  const tables = () => spec().tables || [];
+  const tableOf = (n) => tables().find((t) => t.name === n);
+  const colsOf = (n, types) => ((tableOf(n) || {}).columns || []).filter((c) => !types || types.includes(c.type));
+  const issuesOf = (id) => (S.analysis.issues || []).filter((i) => i.block === id).map((i) => i.message);
+  const code = () => spec().code || {};
+  const handlersOf = (role) => Object.keys(code()).filter((n) => code()[n].role === role);
+
+  function ensurePage() {
+    if (!pages().length) { pageKey = ""; return; }
+    if (!pages().some((p) => p.key === pageKey)) pageKey = pages()[0].key;
+    if (selId && !blocks().some((b) => b.id === selId)) selId = "";
+  }
+
+  // ---------------------------------------------------------------- اسکلت
+  function shell() {
+    root.insertAdjacentHTML("beforeend", `
+      <header class="pd-bar">
+        <a class="pd-back" href="${esc(LINKS.hub)}" title="بازگشت به استودیو" aria-label="بازگشت">${ic("back")}</a>
+        <span class="pd-name" id="pd-name"></span><span class="pd-id" id="pd-id"></span>
+        <span id="pd-save" class="pd-save"></span>
+        <span class="pd-spacer"></span>
+        <div class="pd-seg" role="group" aria-label="واگرد">
+          <button type="button" id="pd-undo" title="واگرد (Ctrl+Z)" aria-label="واگرد">${ic("undo")}</button>
+          <button type="button" id="pd-redo" title="ازنو (Ctrl+Shift+Z)" aria-label="ازنو">${ic("redo")}</button></div>
+        <div class="pd-seg vp" role="group" aria-label="اندازه‌ی نمایش">
+          <button type="button" data-vp="desktop" aria-pressed="true">${ic("desktop")}<span>دسکتاپ</span></button>
+          <button type="button" data-vp="narrow" aria-pressed="false">${ic("phone")}<span>۴۰۰</span></button></div>
+        <button class="btn ghost sm" type="button" id="pd-more" aria-label="بیشتر">${ic("more")}<span>بیشتر</span></button>
+        <a class="btn sm" id="pd-publish" href="${esc(LINKS.publish)}">${ic("share")}<span>دسترسی و انتشار</span></a>
+      </header>
+      <nav class="pd-nav" role="tablist" id="pd-nav"></nav>
+      <div class="pd-main" id="pd-main"></div>`);
+    root.querySelector("#pd-undo").addEventListener("click", undo);
+    root.querySelector("#pd-redo").addEventListener("click", redo);
+    root.querySelectorAll("[data-vp]").forEach((b) => b.addEventListener("click", () => {
+      narrow = b.dataset.vp === "narrow";
+      root.querySelectorAll("[data-vp]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      const f = root.querySelector(".pd-frame");
+      if (f) { f.classList.toggle("narrow", narrow); setTimeout(() => maps.forEach((m) => m.invalidateSize()), 200); }
+    }));
+    root.querySelector("#pd-more").addEventListener("click", (e) => StudioUI.menu(e.currentTarget, [
+      { icon: "code", label: "ویرایش TOML (پیشرفته)", act: "toml" }, { icon: "bolt", label: "مرحله‌ی کد (ویزارد)", act: "code" }], (a) => { location.href = LINKS[a]; }));
+    document.addEventListener("keydown", (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+      e.preventDefault();
+      (e.shiftKey ? redo : undo)();
+    });
+  }
+
+  function syncBar() {
+    root.querySelector("#pd-name").textContent = S.name;
+    root.querySelector("#pd-id").textContent = S.plugin_id + " · " + S.version;
+    root.querySelector("#pd-undo").disabled = hist.i <= 0;
+    root.querySelector("#pd-redo").disabled = hist.i >= hist.ids.length - 1;
+    const n = (S.analysis.issues || []).length;
+    const nav = root.querySelector("#pd-nav");
+    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"]];
+    nav.innerHTML = tabs.map(([k, l, i]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${tab === k}">${ic(i)}<span>${l}</span>${k === "pages" && n ? `<span class="badge-n" title="ایراد">${FA(n)}</span>` : ""}</button>`).join("");
+    nav.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; selId = ""; draw(); }));
+  }
+
+  // ---------------------------------------------------------------- واگرد
+  async function jump(i) {
+    if (i < 0 || i >= hist.ids.length || pending) return;
+    try {
+      chain = chain.then(async () => { S = await call(API.restore, { revision: hist.ids[i] }); hist.i = i; });
+      await chain;
+      ensurePage();
+      await draw();
+      setSave("ok", "ذخیره شد");
+    } catch (e) { toast(e.message, "danger"); }
+  }
+  const undo = () => jump(hist.i - 1);
+  const redo = () => jump(hist.i + 1);
+
+  // ---------------------------------------------------------------- رسم
+  async function draw() {
+    ensurePage();
+    syncBar();
+    const main = root.querySelector("#pd-main");
+    if (tab === "data") { main.innerHTML = ""; drawData(main); return; }
+    main.innerHTML = `
+      <aside class="pd-pal" id="pd-pal" aria-label="اجزا"></aside>
+      <section class="pd-center"><div class="pd-pages" id="pd-pages"></div><div class="pd-scroll" id="pd-scroll"></div></section>
+      <aside class="pd-props" id="pd-props" aria-label="ویژگی‌ها"></aside>`;
+    drawPalette();
+    drawPages();
+    await drawCanvas();
+    drawProps();
+  }
+
+  function drawPalette() {
+    const el = root.querySelector("#pd-pal");
+    el.innerHTML = KINDS.map(([g, items]) => `<div class="pd-grp">${g}</div><div class="pd-tiles">` + items.map(([k, l, i, d]) =>
+      `<button type="button" class="pd-tile" draggable="true" data-kind="${k}" title="${esc(d)}"${curPage() ? "" : " disabled"}><b>${ic(i)}${l}</b><small>${d}</small></button>`).join("") + "</div>").join("");
+    el.querySelectorAll(".pd-tile").forEach((t) => {
+      t.addEventListener("click", () => addBlock(t.dataset.kind));
+      t.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", "new:" + t.dataset.kind); e.dataTransfer.effectAllowed = "copy"; });
+    });
+  }
+
+  function drawPages() {
+    const el = root.querySelector("#pd-pages");
+    el.innerHTML = pages().map((p) => `<span class="pd-pg${p.key === pageKey ? " on" : ""}"><button type="button" data-pg="${p.key}">${esc(p.title)}</button>
+      <button type="button" class="pd-ib" data-pgm="${p.key}" aria-label="گزینه‌های صفحه">${ic("more")}</button></span>`).join("") +
+      `<button type="button" class="btn ghost sm" id="pd-addpage"${pages().length >= 6 ? " disabled" : ""}>${ic("plus")}<span>صفحه</span></button>`;
+    el.querySelectorAll("[data-pg]").forEach((b) => b.addEventListener("click", () => { pageKey = b.dataset.pg; selId = ""; draw(); }));
+    el.querySelectorAll("[data-pgm]").forEach((b) => b.addEventListener("click", () => pageMenu(b)));
+    el.querySelector("#pd-addpage").addEventListener("click", addPage);
+  }
+
+  async function drawCanvas() {
+    const sc = root.querySelector("#pd-scroll"), pg = curPage();
+    if (!pg) {
+      sc.innerHTML = `<div class="pd-empty">${ic("layers")}<b>هنوز صفحه‌ای نیست</b><span>هر صفحه یک بخش در منوی پایگاه داده‌ی مشتری است.</span><button class="btn" type="button" id="pd-first">${ic("plus")}<span>نخستین صفحه</span></button></div>`;
+      sc.querySelector("#pd-first").addEventListener("click", addPage);
+      return;
+    }
+    try { preview = (await call(API.preview.replace("__PAGE__", encodeURIComponent(pg.key)))).blocks; } catch (_) { preview = []; }
+    const byId = Object.fromEntries(preview.map((p) => [p.id, p]));
+    sc.innerHTML = `<div class="pd-frame${narrow ? " narrow" : ""}">
+      <div class="pd-ph"><h1>${esc(pg.title)}</h1>${pg.subtitle ? `<p>${esc(pg.subtitle)}</p>` : ""}</div>
+      <div class="pd-canvas" id="pd-canvas"></div>
+      <p class="pd-hint" style="margin-top:12px">نمای تقریبی با داده‌ی نمونه است؛ اجرای واقعی روی پایگاه مشتری انجام می‌شود.</p></div>`;
+    const cv = sc.querySelector("#pd-canvas");
+    if (!blocks().length) cv.innerHTML = `<div class="pd-empty">${ic("plus")}<b>صفحه خالی است</b><span>یک جزء را از ستون کناری بکشید و اینجا رها کنید، یا روی آن بزنید.</span></div>`;
+    blocks().forEach((b) => cv.append(blockEl(b, byId[b.id])));
+    initMaps(cv);
+    wireCanvas(cv);
+  }
+
+  function blockEl(b, pv) {
+    const issues = issuesOf(b.id);
+    const el = document.createElement("div");
+    const w = b.width || (b.kind === "kpi" ? "third" : "full");
+    el.className = `pd-blk w-${w}${b.id === selId ? " sel" : ""}${issues.length ? " bad" : ""}`;
+    el.dataset.id = b.id;
+    el.draggable = true;
+    let body = "";
+    if (pv && pv.action) body = `<div class="pd-act">${ic(b.kind === "ingest" ? "satellite" : "edit")}<b>${esc(b.title || KIND_LABEL[b.kind])}</b><span class="pd-hint">${KIND_LABEL[b.kind]}</span></div>`;
+    else if (pv) body = pv.html;
+    else body = `<div class="pd-act">${ic("warn")}<span>پیش‌نمایش در دسترس نیست.</span></div>`;
+    if (["import", "export"].includes(b.kind)) body = `<div class="pd-act">${ic(b.kind === "import" ? "upload" : "download")}<b>${esc(b.title || KIND_LABEL[b.kind])}</b><span class="pd-hint">${KIND_LABEL[b.kind]}</span></div>`;
+    el.innerHTML = `${issues.length ? `<span class="pd-badge" title="${esc(issues[0])}">ایراد</span>` : ""}
+      <div class="pd-tools"><span class="pd-ib pd-grip" aria-hidden="true">${ic("grip")}</span>
+        <button type="button" class="pd-ib" data-m="${b.id}" aria-label="گزینه‌های جزء">${ic("more")}</button></div>
+      <div class="pd-body">${body}</div>`;
+    return el;
+  }
+
+  function initMaps(scope) {
+    maps.splice(0).forEach((m) => { try { m.remove(); } catch (_) { /* قبلاً برداشته شده */ } });
+    if (!window.L) return;
+    scope.querySelectorAll("[data-pk-map]").forEach((el) => {
+      const data = el.nextElementSibling && el.nextElementSibling.type === "application/json" ? JSON.parse(el.nextElementSibling.textContent) : null;
+      const map = L.map(el, { attributionControl: false, zoomControl: false, dragging: false, scrollWheelZoom: false }).setView([35.7, 51.4], 10);
+      if (el.dataset.tiles) L.tileLayer(el.dataset.tiles, { maxZoom: 19 }).addTo(map);
+      const g = L.geoJSON(data, { pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 6, color: "#0F5C59", weight: 1.5, fillColor: "#E0A526", fillOpacity: 0.9 }) }).addTo(map);
+      if (data && data.features && data.features.length) map.fitBounds(g.getBounds(), { padding: [20, 20], maxZoom: 14 });
+      maps.push(map);
+    });
+  }
+
+  // ---------------------------------------------------------------- کشیدن و رها کردن
+  function dropIndex(cv, e) {
+    const els = [...cv.querySelectorAll(".pd-blk")];
+    let hit = e.target.closest ? e.target.closest(".pd-blk") : null;
+    if (!hit) {  // نزدیک‌ترین بلوک به نشانگر
+      let best = 1e9;
+      els.forEach((x) => { const r = x.getBoundingClientRect(), d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2)); if (d < best) { best = d; hit = x; } });
+    }
+    if (!hit) return { idx: 0, el: null, after: false };
+    const r = hit.getBoundingClientRect(), wide = r.width > cv.getBoundingClientRect().width * 0.7 || narrow;
+    const after = wide ? e.clientY > r.top + r.height / 2 : e.clientX < r.left + r.width / 2;  // راست‌به‌چپ: نیمه‌ی چپ = بعد
+    return { idx: els.indexOf(hit) + (after ? 1 : 0), el: hit, after };
+  }
+
+  function wireCanvas(cv) {
+    const clear = () => cv.querySelectorAll(".over").forEach((x) => x.classList.remove("over", "after"));
+    cv.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      clear();
+      const d = dropIndex(cv, e);
+      if (d.el) { d.el.classList.add("over"); if (d.after) d.el.classList.add("after"); }
+    });
+    cv.addEventListener("dragleave", (e) => { if (!cv.contains(e.relatedTarget)) clear(); });
+    cv.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const d = dropIndex(cv, e), data = e.dataTransfer.getData("text/plain");
+      clear();
+      if (data.startsWith("new:")) addBlock(data.slice(4), d.idx);
+      else if (data.startsWith("move:")) {
+        const from = blocks().findIndex((b) => b.id === data.slice(5));
+        if (from >= 0) moveBlock(data.slice(5), from < d.idx ? d.idx - 1 : d.idx);
+      }
+    });
+    cv.addEventListener("dragstart", (e) => {
+      const b = e.target.closest(".pd-blk");
+      if (!b) return;
+      dragId = b.dataset.id;
+      b.classList.add("dragging");
+      e.dataTransfer.setData("text/plain", "move:" + b.dataset.id);
+      e.dataTransfer.effectAllowed = "move";
+    });
+    cv.addEventListener("dragend", () => { dragId = ""; cv.querySelectorAll(".dragging").forEach((x) => x.classList.remove("dragging")); clear(); });
+    cv.addEventListener("click", (e) => {
+      const m = e.target.closest("[data-m]");
+      if (m) { e.stopPropagation(); return blockMenu(m, m.dataset.m); }
+      const b = e.target.closest(".pd-blk");
+      select(b ? b.dataset.id : "");
+    });
+  }
+
+  function select(id) {
+    selId = id;
+    root.querySelectorAll(".pd-blk").forEach((x) => x.classList.toggle("sel", x.dataset.id === id));
+    drawProps();
+  }
+
+  // ---------------------------------------------------------------- عملیات رابط
+  async function addPage() {
+    const title = await Ui.prompt({ title: "صفحه‌ی تازه", label: "عنوان صفحه", placeholder: "مثلاً پایش آنلاین", validate: (v) => (v.trim() && v.trim().length <= 80 ? "" : "عنوان ۱ تا ۸۰ نویسه است.") });
+    if (!title) return;
+    try { await run({ op: "page.add", title: title.trim() }); pageKey = pages()[pages().length - 1].key; selId = ""; await draw(); } catch (_) { /* پیام نمایش داده شد */ }
+  }
+
+  function pageMenu(btn) {
+    const key = btn.dataset.pgm, i = pages().findIndex((p) => p.key === key);
+    StudioUI.menu(btn, [
+      { icon: "edit", label: "تغییر عنوان", act: "rename" },
+      { icon: "prev", label: "جابه‌جایی به راست", act: "left", disabled: i === 0 }, { icon: "next", label: "جابه‌جایی به چپ", act: "right", disabled: i === pages().length - 1 },
+      { sep: true }, { icon: "trash", label: "حذف صفحه", act: "del", danger: true }], async (act) => {
+      try {
+        if (act === "rename") {
+          const t = await Ui.prompt({ title: "عنوان صفحه", value: pages()[i].title, validate: (v) => (v.trim() && v.trim().length <= 80 ? "" : "عنوان ۱ تا ۸۰ نویسه است.") });
+          if (t) await run({ op: "page.set", key, title: t.trim() });
+        } else if (act === "left" || act === "right") await run({ op: "page.move", key, to: act === "left" ? i - 1 : i + 1 });
+        else if (act === "del") { if (await Ui.confirm({ title: "حذف صفحه", message: "صفحه و همه‌ی بلوک‌هایش حذف شود؟ با واگرد برمی‌گردد.", kind: "danger", confirmText: "حذف" })) await run({ op: "page.del", key }); }
+        await draw();
+      } catch (_) { /* پیام نمایش داده شد */ }
+    });
+  }
+
+  function defaults(kind) {
+    const t = tables()[0], d = { kind };
+    if (t && !["text", "sql", "handler", "import", "export"].includes(kind)) d.table = t.name;
+    if (kind === "kpi") d.agg = "count";
+    if (kind === "table") { d.limit = 20; d.desc = true; }
+    if (kind === "bars") { d.agg = "count"; const c = colsOf(t && t.name, ["text"])[0]; if (c) d.label = c.name; }
+    if (kind === "map" && t) {
+      const pt = colsOf(t.name, ["point"])[0];
+      if (pt) d.point = pt.name; else { const lat = colsOf(t.name, ["double"]).find((c) => /^lat/i.test(c.name)), lon = colsOf(t.name, ["double"]).find((c) => /^(lon|lng)/i.test(c.name)); if (lat && lon) { d.lat = lat.name; d.lon = lon.name; } }
+    }
+    if (kind === "text") d.text = "متن راهنما را اینجا بنویسید.";
+    if (kind === "sql") { d.display = "table"; d.sql = "select 1 as n"; }
+    if (kind === "handler") { d.display = "table"; d.handler = handlersOf("block")[0] || ""; }
+    if (kind === "import") { d.extensions = ".csv"; d.handler = handlersOf("importer")[0] || ""; }
+    if (kind === "export") { d.format = "csv"; d.handler = handlersOf("exporter")[0] || ""; }
+    d.title = KIND_LABEL[kind] || "";
+    return d;
+  }
+
+  async function addBlock(kind, at) {
+    if (!curPage()) return;
+    try {
+      const st = await run({ op: "block.add", page: pageKey, block: defaults(kind), at: at === undefined ? null : at });
+      const pg = st.spec.pages.find((p) => p.key === pageKey);
+      selId = pg.blocks[at === undefined || at === null ? pg.blocks.length - 1 : Math.min(at, pg.blocks.length - 1)].id;
+      await draw();
+    } catch (_) { /* پیام نمایش داده شد */ }
+  }
+
+  async function moveBlock(id, at) { try { await run({ op: "block.move", id, at }); await draw(); } catch (_) { /* */ } }
+
+  function blockMenu(btn, id) {
+    const i = blocks().findIndex((b) => b.id === id), others = pages().filter((p) => p.key !== pageKey);
+    StudioUI.menu(btn, [
+      { icon: "up", label: "یک جا بالاتر", act: "up", disabled: i === 0 }, { icon: "down", label: "یک جا پایین‌تر", act: "down", disabled: i === blocks().length - 1 },
+      { icon: "copy", label: "تکثیر", act: "dup" },
+      ...others.map((p) => ({ icon: "next", label: "انتقال به «" + p.title + "»", act: "pg:" + p.key })),
+      { sep: true }, { icon: "trash", label: "حذف", act: "del", danger: true }], async (act) => {
+      try {
+        if (act === "up") await run({ op: "block.move", id, at: i - 1 });
+        else if (act === "down") await run({ op: "block.move", id, at: i + 1 });
+        else if (act === "dup") await run({ op: "block.dup", id });
+        else if (act === "del") { await run({ op: "block.del", id }); if (selId === id) selId = ""; }
+        else if (act.startsWith("pg:")) { await run({ op: "block.move", id, page: act.slice(3) }); if (selId === id) selId = ""; }
+        await draw();
+      } catch (_) { /* */ }
+    });
+  }
+
+  // ---------------------------------------------------------------- ویژگی‌ها
+  const timers = {};
+  function setField(id, fields, redrawProps, delay = 0) {
+    clearTimeout(timers[id]);
+    const go = async () => {
+      try { await run({ op: "block.set", id, fields }, { silent: false }); await drawCanvas(); if (redrawProps) drawProps(); else refreshIssue(); } catch (_) { /* */ }
+    };
+    if (delay) timers[id] = setTimeout(go, delay); else go();
+  }
+
+  function refreshIssue() {
+    const box = root.querySelector("#pd-issues");
+    if (box && selId) box.innerHTML = issuesOf(selId).map((m) => `<div class="pd-issue">${ic("warn")}<span>${esc(m)}</span></div>`).join("");
+    syncBar();
+  }
+
+  const fld = (label, inner) => `<div class="pd-f"><span class="lbl">${label}</span>${inner}</div>`;
+  const chips = (name, opts, val, mono) => `<div class="pd-chips" data-single="${name}">` + opts.map(([v, l]) => `<button type="button" class="pd-chip${mono ? " mono" : ""}" data-v="${esc(v)}" aria-pressed="${String(v) === String(val ?? "")}">${esc(l)}</button>`).join("") + "</div>";
+  const multi = (name, opts, vals) => `<div class="pd-chips" data-multi="${name}">` + opts.map(([v, l]) => `<button type="button" class="pd-chip mono" data-v="${esc(v)}" aria-pressed="${(vals || []).includes(v)}">${esc(l)}</button>`).join("") + "</div>";
+  const text = (name, val, ltr, ph) => `<input type="text" data-text="${name}" value="${esc(val ?? "")}"${ltr ? ' class="ltr" dir="ltr"' : ""}${ph ? ` placeholder="${esc(ph)}"` : ""}>`;
+  const num = (name, val, min, max) => `<input type="number" data-num="${name}" value="${esc(val ?? "")}"${min !== undefined ? ` min="${min}"` : ""}${max !== undefined ? ` max="${max}"` : ""} dir="ltr">`;
+  const colOpts = (t, types, none) => (none ? [["", "هیچ"]] : []).concat(colsOf(t, types).map((c) => [c.name, c.name]));
+  const tableOpts = () => tables().map((t) => [t.name, t.name]);
+
+  function blockForm(b) {
+    const t = b.table, k = b.kind;
+    let h = "";
+    const needTable = ["kpi", "table", "bars", "map", "form", "ingest"].includes(k);
+    h += fld("عنوان", text("title", b.title));
+    if (needTable) h += tables().length ? fld("جدول", chips("table", tableOpts(), t, true)) : `<div class="pd-issue">${ic("info")}<span>اول در بخش «داده» یک جدول بسازید.</span></div>`;
+    if (k === "kpi") {
+      h += fld("محاسبه", chips("agg", AGGS, b.agg || "count"));
+      if ((b.agg || "count") !== "count") h += fld("ستون عددی", chips("column", colOpts(t, NUM), b.column, true));
+      else h += fld("شمارش یکتا بر پایه‌ی (اختیاری)", chips("distinct", colOpts(t, null, true), b.distinct || "", true));
+      h += fld("واحد", text("unit", b.unit));
+    }
+    if (k === "table") {
+      h += fld("ستون‌ها", multi("columns", colOpts(t), b.columns || colsOf(t).slice(0, 6).map((c) => c.name)));
+      h += fld("مرتب‌سازی بر پایه‌ی", chips("order_by", [["id", "id"]].concat(colOpts(t)), b.order_by || "id", true));
+      h += fld("جهت", chips("desc", [["1", "جدیدترین/بیشترین اول"], ["", "کمترین اول"]], b.desc === false ? "" : "1"));
+      h += fld("تعداد ردیف (۱ تا ۲۰۰)", num("limit", b.limit || 20, 1, 200));
+    }
+    if (k === "bars") {
+      h += fld("گروه‌بندی بر پایه‌ی", chips("label", colOpts(t), b.label, true));
+      h += fld("محاسبه", chips("agg", AGGS, b.agg || "count"));
+      if ((b.agg || "count") !== "count") h += fld("ستون عددی", chips("column", colOpts(t, NUM), b.column, true));
+    }
+    if (k === "map") {
+      h += fld("ستون نقطه", chips("point", colOpts(t, ["point"], true), b.point || "", true));
+      if (!b.point) h += fld("عرض", chips("lat", colOpts(t, ["double"]), b.lat, true)) + fld("طول", chips("lon", colOpts(t, ["double"]), b.lon, true));
+      h += fld("ویژگی‌های پنجره‌ی نقطه", multi("props", colOpts(t), b.props || []));
+      h += fld("فقط آخرین موقعیت هر (اختیاری)", chips("latest_by", colOpts(t, null, true), b.latest_by || "", true));
+      if (b.latest_by) h += fld("ستون زمان", chips("time_col", colOpts(t, TIME), b.time_col, true));
+    }
+    if (["kpi", "table", "bars", "map"].includes(k)) {
+      h += fld("فقط داده‌ی اخیر (اختیاری)", chips("since_col", colOpts(t, TIME, true), b.since_col || "", true));
+      if (b.since_col) h += fld("در چند دقیقه‌ی گذشته", num("since_minutes", b.since_minutes || 60, 1, 525600));
+    }
+    if (k === "text") h += fld("متن (بندها با خط خالی جدا می‌شوند)", `<textarea data-text="text">${esc(b.text || "")}</textarea>`);
+    if (k === "form" || k === "ingest") {
+      h += fld("ستون‌های قابل‌ثبت (خالی = همه)", multi("fields", colsOf(t).filter((c) => !c.auto_now).map((c) => [c.name, c.name]), b.fields || []));
+      if (k === "ingest") h += fld("حداکثر ردیف در هر درخواست", num("max_rows", b.max_rows || 100, 1, 1000)) + fld("حداکثر درخواست در دقیقه", num("rate", b.rate || 60, 1, 600));
+    }
+    if (k === "sql") {
+      h += fld("نمایش به‌صورت", chips("display", [["kpi", "شمارنده"], ["table", "جدول"], ["bars", "میله‌ای"], ["map", "نقشه"]], b.display || "table"));
+      h += fld("SQL فقط‌خواندنی", `<textarea class="ltr" dir="ltr" data-text="sql" spellcheck="false">${esc(b.sql || "")}</textarea>`);
+    }
+    if (k === "handler") {
+      h += handlersOf("block").length ? fld("handler", chips("handler", handlersOf("block").map((n) => [n, n]), b.handler, true)) : `<div class="pd-issue">${ic("info")}<span>handler بلوک در مرحله‌ی «کد» ساخته می‌شود.</span></div>`;
+      h += fld("نمایش به‌صورت", chips("display", [["kpi", "شمارنده"], ["table", "جدول"], ["bars", "میله‌ای"], ["map", "نقشه"]], b.display || "table"));
+    }
+    if (k === "import") h += fld("handler", chips("handler", handlersOf("importer").map((n) => [n, n]), b.handler, true)) + fld("پسوندهای مجاز", text("extensions", b.extensions, true, ".csv, .geojson"));
+    if (k === "export") h += fld("handler", chips("handler", handlersOf("exporter").map((n) => [n, n]), b.handler, true)) + fld("قالب", chips("format", [["csv", "CSV"], ["json", "JSON"], ["txt", "TXT"], ["geojson", "GeoJSON"]], b.format || "csv"));
+    if (["kpi", "table", "bars", "map"].includes(k)) h += fld("عرض", chips("width", WIDTHS, b.width || ""));
+    return h;
+  }
+
+  const RESET = { table: ["column", "distinct", "label", "point", "lat", "lon", "latest_by", "time_col", "since_col", "columns", "order_by", "props", "fields"] };
+
+  function drawProps() {
+    const el = root.querySelector("#pd-props");
+    if (!el) return;
+    const b = selBlock(), pg = curPage();
+    if (!pg) { el.innerHTML = `<p class="pd-hint">برای شروع یک صفحه بسازید.</p>`; return; }
+    if (!b) return drawPageProps(el, pg);
+    el.innerHTML = `<h3 class="pd-h">${ic("edit")}${esc(KIND_LABEL[b.kind] || b.kind)}</h3><div id="pd-issues"></div>${blockForm(b)}`;
+    refreshIssue();
+    el.querySelectorAll("[data-single]").forEach((box) => box.addEventListener("click", (e) => {
+      const c = e.target.closest(".pd-chip");
+      if (!c) return;
+      const name = box.dataset.single;
+      let v = c.dataset.v;
+      if (name === "desc") v = v === "1";
+      else if (name === "width" || /^(column|distinct|point|latest_by|since_col|time_col|order_by)$/.test(name)) v = v || null;
+      const f = { [name]: v };
+      if (name === "table") (RESET.table).forEach((x) => { f[x] = null; });
+      if (name === "since_col" && v) f.since_minutes = 60;
+      setField(b.id, f, true);
+    }));
+    el.querySelectorAll("[data-multi]").forEach((box) => box.addEventListener("click", (e) => {
+      const c = e.target.closest(".pd-chip");
+      if (!c) return;
+      const name = box.dataset.multi, cur = selBlock()[name] || (name === "columns" ? colsOf(b.table).slice(0, 6).map((x) => x.name) : []);
+      const next = cur.includes(c.dataset.v) ? cur.filter((x) => x !== c.dataset.v) : cur.concat(c.dataset.v);
+      setField(b.id, { [name]: next.length ? next : null }, true);
+    }));
+    el.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("input", () => setField(b.id, { [i.dataset.text]: i.value }, false, 450)));
+    el.querySelectorAll("[data-num]").forEach((i) => i.addEventListener("input", () => { if (i.value !== "") setField(b.id, { [i.dataset.num]: Number(i.value) }, false, 450); }));
+  }
+
+  function drawPageProps(el, pg) {
+    el.innerHTML = `<h3 class="pd-h">${ic("layers")}صفحه</h3>` +
+      fld("عنوان", text("title", pg.title)) + fld("توضیح کوتاه", text("subtitle", pg.subtitle)) +
+      fld("گروه منو", chips("group", GROUPS, pg.group || "data")) + fld("دسترسی لازم", chips("need", NEEDS, pg.need || "viewer")) +
+      fld("تازه‌سازی خودکار (ثانیه؛ ۰ = خاموش، ۵ تا ۳۶۰۰)", num("refresh", pg.refresh || 0, 0, 3600)) +
+      `<p class="pd-hint">صفحه‌ی دارای فرم یا دریافت داده خودکار «ویرایشگر» می‌شود. روی یک جزء بزنید تا ویژگی‌هایش را ببینید.</p>`;
+    const set = async (fields, redo) => { try { await run({ op: "page.set", key: pg.key, ...fields }); if (redo) { drawPages(); await drawCanvas(); } } catch (_) { /* */ } };
+    el.querySelectorAll("[data-single]").forEach((box) => box.addEventListener("click", (e) => { const c = e.target.closest(".pd-chip"); if (c) { set({ [box.dataset.single]: c.dataset.v }).then(drawProps); } }));
+    let t;
+    el.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { if (i.dataset.text !== "title" || i.value.trim()) set({ [i.dataset.text]: i.value }, true); }, 450); }));
+    el.querySelectorAll("[data-num]").forEach((i) => i.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { if (i.value !== "") set({ refresh: Number(i.value) }); }, 450); }));
+  }
+
+  // ---------------------------------------------------------------- بخش داده
+  function drawData(main) {
+    const pre = S.plugin_id + "_";
+    main.innerHTML = `<div class="pd-data" id="pd-data"></div>`;
+    const box = main.querySelector("#pd-data");
+    box.innerHTML = `<div class="pd-row"><h2 class="pd-h" style="margin:0">${ic("db")}جدول‌های پلاگین</h2><span class="pd-spacer"></span>
+      <button class="btn sm" type="button" id="pd-addt">${ic("plus")}<span>جدول تازه</span></button></div>
+      <p class="pd-hint">هسته جدول‌ها را هنگام نخستین استفاده در پایگاه هر مشتری می‌سازد؛ فقط افزودنی است (حذف یا تغییر نوع ستونِ موجود در پایگاه مشتری انجام نمی‌شود).</p>` +
+      (tables().length ? "" : `<div class="pd-empty">${ic("db")}<b>هنوز جدولی نیست</b><span>جدول‌هایی که فرم‌ها و نمودارها می‌خوانند و می‌نویسند.</span></div>`);
+    tables().forEach((t) => box.append(tableCard(t, pre)));
+    box.querySelector("#pd-addt").addEventListener("click", () => box.prepend(tableCard(null, pre)));
+    const issues = (S.analysis.issues || []).filter((i) => i.scope === "table");
+    if (issues.length) box.insertAdjacentHTML("afterbegin", issues.map((i) => `<div class="pd-issue">${ic("warn")}<span>${esc(i.message)}</span></div>`).join(""));
+  }
+
+  function colRow(c, i) {
+    const bounded = c.type === "double";
+    const kind = bounded && c.min === -90 && c.max === 90 ? "lat" : bounded && c.min === -180 && c.max === 180 ? "lon" : c.type;
+    return `<div class="pd-col" data-i="${i}">
+      <input type="text" class="ltr" dir="ltr" data-c="name" value="${esc(c.name || "")}" placeholder="نام ستون" aria-label="نام ستون" pattern="[a-z][a-z0-9_]*">
+      <select data-c="type" aria-label="نوع">${COLTYPES.map(([v, l]) => `<option value="${v}"${v === kind ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>
+      <label><input type="checkbox" data-c="required"${c.required ? " checked" : ""}>اجباری</label>
+      <label><input type="checkbox" data-c="auto_now"${c.auto_now ? " checked" : ""}>زمان خودکار</label>
+      <button type="button" class="pd-ib" data-c="del" aria-label="حذف ستون">${ic("trash")}</button></div>`;
+  }
+
+  function tableCard(t, pre) {
+    const isNew = !t, orig = t ? t.name : "";
+    const cur = t ? JSON.parse(JSON.stringify(t)) : { name: "", columns: [{ name: "", type: "text" }], indexes: [] };
+    const el = document.createElement("section");
+    el.className = "pd-card";
+    const used = (S.spec.pages || []).reduce((n, p) => n + (p.blocks || []).filter((b) => b.table === orig).length, 0);
+    const paint = () => {
+      el.innerHTML = `<div class="pd-row"><h3>${isNew ? "جدول تازه" : `<span class="pd-pre">${esc(cur.name)}</span>`}</h3><span class="pd-spacer"></span>
+        ${isNew ? "" : `<span class="pd-hint">${used ? "در " + FA(used) + " بلوک" : "بدون بلوک"}</span><button type="button" class="pd-ib" data-t="del" aria-label="حذف جدول">${ic("trash")}</button>`}</div>
+        <div class="pd-f" style="margin-top:12px"><span class="lbl">نام جدول</span><div class="pd-row" dir="ltr"><span class="pd-pre">${esc(pre)}</span>
+          <input type="text" class="ltr" dir="ltr" data-t="name" value="${esc(cur.name.startsWith(pre) ? cur.name.slice(pre.length) : cur.name)}" placeholder="points" style="max-width:240px"></div></div>
+        <div class="pd-cols">${cur.columns.map(colRow).join("")}</div>
+        <div class="pd-row"><button class="btn ghost sm" type="button" data-t="addcol">${ic("plus")}<span>ستون</span></button>
+          <span class="pd-spacer"></span><span class="pd-hint" data-t="msg"></span>
+          ${isNew ? `<button class="btn ghost sm" type="button" data-t="cancel">انصراف</button>` : ""}
+          <button class="btn sm" type="button" data-t="save">${ic("check")}<span>${isNew ? "افزودن جدول" : "ذخیره‌ی جدول"}</span></button></div>`;
+    };
+    const read = () => {
+      const suffix = el.querySelector("[data-t=name]").value.trim();
+      const cols = [...el.querySelectorAll(".pd-col")].map((r, i) => {
+        const g = (k) => r.querySelector(`[data-c=${k}]`);
+        const type = g("type").value, col = { name: g("name").value.trim(), type: type === "lat" || type === "lon" ? "double" : type };
+        if (type === "lat") { col.min = -90; col.max = 90; } else if (type === "lon") { col.min = -180; col.max = 180; }
+        if (g("required").checked) col.required = true;
+        if (g("auto_now").checked) col.auto_now = true;
+        const old = cur.columns[i] || {};
+        if (old.label) col.label = old.label;
+        return col;
+      }).filter((c) => c.name);
+      return { name: suffix.startsWith(pre) ? suffix : pre + suffix, columns: cols, indexes: cur.indexes || [] };
+    };
+    paint();
+    el.addEventListener("click", async (e) => {
+      const a = e.target.closest("[data-t],[data-c=del]");
+      if (!a) return;
+      if (a.dataset.c === "del") { const i = Number(a.closest(".pd-col").dataset.i), nxt = read(); nxt.columns.splice(i, 1); cur.name = nxt.name; cur.columns = nxt.columns; return paint(); }
+      const act = a.dataset.t;
+      if (act === "addcol") { const nxt = read(); cur.name = nxt.name; cur.columns = nxt.columns.concat({ name: "", type: "text" }); return paint(); }
+      if (act === "cancel") return el.remove();
+      if (act === "del") {
+        const ok = await Ui.confirm({ title: "حذف جدول", message: used ? `بلوک‌های وابسته (${FA(used)}) حذف نمی‌شوند و ایراد می‌گیرند. جدولِ ساخته‌شده در پایگاه مشتری دست‌نخورده می‌ماند.` : "جدول از تعریف پلاگین برداشته شود؟ با واگرد برمی‌گردد.", kind: "danger", confirmText: "حذف" });
+        if (!ok) return;
+        try { await run({ op: "table.del", name: orig }); await draw(); } catch (_) { /* */ }
+        return;
+      }
+      if (act === "save") {
+        const nt = read();
+        try { await run(isNew ? { op: "table.add", table: nt } : { op: "table.set", rename_from: orig, table: nt }); await draw(); } catch (err) { el.querySelector("[data-t=msg]").textContent = err.message; }
+      }
+    });
+    return el;
+  }
+
+  // ---------------------------------------------------------------- شروع
+  async function boot() {
+    shell();
+    setSave("", "در حال بارگذاری…");
+    try {
+      S = await call(API.state);
+    } catch (e) { root.querySelector("#pd-main").innerHTML = `<div class="pd-data"><div class="pd-issue">${ic("warn")}<span>${esc(e.message)}</span></div></div>`; return; }
+    hist = { ids: [S.revision], i: 0 };
+    const q = new URLSearchParams(location.search);
+    pageKey = q.get("page") || (pages()[0] || {}).key || "";
+    await draw();
+    setSave("ok", "ذخیره شد");
+  }
+  boot();
+})();

@@ -65,7 +65,10 @@ def _body(request) -> dict:
 @require_GET
 def state(request, pk):
     draft = _draft(request, pk)
-    return JsonResponse(_state(draft, _spec(draft)))
+    spec = _spec(draft)
+    if not PluginDraftRevision.objects.filter(draft=draft).exists():
+        _record(draft, spec, "آغاز", request.user)  # نقطه‌ی بازگشت اولیه
+    return JsonResponse(_state(draft, spec))
 
 
 @require_POST
@@ -88,15 +91,36 @@ def op(request, pk):
 
 @require_GET
 def preview(request, pk, page):
-    """HTML نمای نمونه‌ی یک صفحه (همان قالب صفحه‌ی مشتری)."""
+    """نمای نمونه‌ی یک صفحه: HTML هر بلوک جدا (برای بوم) و HTML کل صفحه؛ با همان قالب صفحه‌ی مشتری."""
     draft = _draft(request, pk)
     spec = _spec(draft)
     try:
         ctx = sampledata.preview(spec, page)
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=404)
-    html = render_to_string("kernel/_page_body.html", {**ctx, "SITE": {}, "blocks": ctx["all_blocks"]}, request=request)
-    return JsonResponse({"html": html, "actions": [{"kind": a["action"], "title": a["title"]} for a in ctx["actions"]], "sample": True})
+    items = []
+    for b in ctx["all_blocks"]:
+        if b["kind"] == "action":
+            items.append({"id": b["id"], "kind": b["action"], "action": True, "title": b["title"], "html": "", "error": ""})
+            continue
+        html = render_to_string("kernel/_page_body.html", {"blocks": [b], "param_errors": []}, request=request)
+        items.append({"id": b["id"], "kind": b["kind"], "action": False, "title": b["title"], "width": b["width"], "html": html,
+                      "error": b.get("error", ""), "placeholder": bool(b.get("placeholder"))})
+    return JsonResponse({"blocks": items, "sample": True})
+
+
+def designer(request, pk):
+    """صفحه‌ی استودیوی دیداری؛ همه‌ی کار با API همین ماژول انجام می‌شود."""
+    from django.shortcuts import render
+    from django.urls import reverse
+
+    draft = _draft(request, pk)
+    api = {n: reverse(f"admin:kernel_plugindraft_api_{n}", args=[draft.pk]) for n in ("state", "op", "revisions", "restore")}
+    api["preview"] = reverse("admin:kernel_plugindraft_api_preview", args=[draft.pk, "__PAGE__"])
+    return render(request, "admin/kernel/designer.html", {
+        "draft": draft, "api": api, "icons": wizard_admin.ICON_CHOICES, "col_types": wizard_admin.COL_TYPES,
+        "links": {"hub": reverse("admin:kernel_plugindraft_changelist"), "publish": reverse("admin:kernel_plugindraft_wizard", args=[draft.pk, 5]),
+                  "toml": reverse("admin:kernel_plugindraft_studio", args=[draft.pk]), "code": reverse("admin:kernel_plugindraft_wizard", args=[draft.pk, 3])}})
 
 
 @require_GET

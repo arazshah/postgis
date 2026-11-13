@@ -229,17 +229,27 @@ class ApiTests(TestCase):
             self.post("op", {"op": "meta.set", "summary": f"خ{i}"})
         self.assertEqual(PluginDraftRevision.objects.filter(draft=self.d).count(), PluginDraftRevision.KEEP)
 
-    def test_preview_html(self):
+    def test_preview_per_block(self):
         s, k = full_spec()
         self.d.wizard = s
         self.d.save()
-        r = self.client.get(reverse("admin:kernel_plugindraft_api_preview", args=[self.d.pk, k]))
-        j = r.json()
-        self.assertIn("پایش", j["html"] + "پایش")
-        self.assertIn("data-pk-map", j["html"])
-        self.assertIn("pk-bars", j["html"])
-        self.assertEqual(j["actions"], [{"kind": "form", "title": "ثبت"}])
+        j = self.client.get(reverse("admin:kernel_plugindraft_api_preview", args=[self.d.pk, k])).json()
+        by = {b["title"]: b for b in j["blocks"]}
+        self.assertEqual([b["id"] for b in j["blocks"]], [b["id"] for b in s["pages"][0]["blocks"]])
+        self.assertIn("data-pk-map", by["نقشه"]["html"])
+        self.assertIn("pk-bars", by["هر دستگاه"]["html"])
+        self.assertTrue(by["ثبت"]["action"] and by["ثبت"]["html"] == "")
+        self.assertTrue(by["پیشرفته"]["placeholder"])
         self.assertEqual(self.client.get(reverse("admin:kernel_plugindraft_api_preview", args=[self.d.pk, "zz"])).status_code, 404)
+
+    def test_designer_page_and_initial_snapshot(self):
+        r = self.client.get(reverse("admin:kernel_plugindraft_designer", args=[self.d.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'id="pd"')
+        self.assertEqual(PluginDraftRevision.objects.count(), 0)
+        self.client.get(reverse("admin:kernel_plugindraft_api_state", args=[self.d.pk]))
+        self.client.get(reverse("admin:kernel_plugindraft_api_state", args=[self.d.pk]))
+        self.assertEqual(PluginDraftRevision.objects.count(), 1)
 
     def test_permissions(self):
         self.client.logout()
