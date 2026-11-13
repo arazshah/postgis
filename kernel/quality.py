@@ -16,6 +16,11 @@ WRITING = ("form", "ingest", "records", "source")
 GRADES = ((90, "آماده‌ی فروش"), (70, "نزدیک به آماده"), (40, "نیازمند کار"), (0, "ناقص"))
 
 
+def _shown(b: dict) -> str:
+    """نوع نمایشی بلوک (بلوک SQL/خروجی کد به‌صورت جدول، شمارنده… نمایش داده می‌شود)."""
+    return (b.get("display") or "table") if b.get("kind") in ("sql", "handler") else b.get("kind", "")
+
+
 def _pages(spec):
     return spec.get("pages") or []
 
@@ -55,11 +60,11 @@ def evaluate(spec: dict, plugin_id: str) -> dict:
         f"{len(nosub)} صفحه توضیح یک‌خطی ندارد." if nosub else "", {"tab": "pages", "page": nosub[0]["key"] if nosub else ""})
 
     # ---- تجربه
-    nolist = [p for p in _pages(spec) if any(b.get("kind") == "form" for b in p.get("blocks") or []) and not any(b.get("kind") in ("records", "table") for b in p.get("blocks") or [])]
+    nolist = [p for p in _pages(spec) if any(b.get("kind") == "form" for b in p.get("blocks") or []) and not any(b.get("kind") == "records" or _shown(b) == "table" for b in p.get("blocks") or [])]
     add("form_list", "ux", "صفحه‌ی فرم، فهرست ثبت‌ها را هم نشان می‌دهد", not nolist, "warn",
         f"صفحه‌ی «{nolist[0]['title']}» فرم دارد ولی جدول یا ویرایش ردیف ندارد؛ کاربر نتیجه‌ی ثبتش را نمی‌بیند." if nolist else "", {"tab": "pages", "page": nolist[0]["key"] if nolist else ""})
     live = [p for p in _pages(spec) if not p.get("refresh") and any(b.get("kind") in ("ingest", "source") for b in p.get("blocks") or [])
-            and any(b.get("kind") in ("map", "kpi", "table", "bars") for b in p.get("blocks") or [])]
+            and any(_shown(b) in ("map", "kpi", "table", "bars") for b in p.get("blocks") or [])]
     add("live_refresh", "ux", "صفحه‌ی با داده‌ی زنده خودکار تازه می‌شود", not live, "warn",
         f"صفحه‌ی «{live[0]['title']}» داده‌ی زنده می‌گیرد ولی تازه‌سازی خودکار خاموش است." if live else "", {"tab": "pages", "page": live[0]["key"] if live else ""},
         [{"op": "page.set", "key": p["key"], "refresh": 15} for p in live])
@@ -102,6 +107,10 @@ def evaluate(spec: dict, plugin_id: str) -> dict:
     add("write_need", "safety", "صفحه‌ی نویسنده سطح دسترسی درست دارد", not writers, "info", f"صفحه‌ی «{writers[0]['title']}» می‌نویسد؛ سطح «بیننده» خودکار «ویرایشگر» می‌شود، صریح بنویسید." if writers else "",
         {"tab": "pages", "page": writers[0]["key"] if writers else ""}, [{"op": "page.set", "key": p["key"], "need": "editor"} for p in writers])
 
+    rawb = [(p, b) for p, b in _blocks(spec) if b.get("kind") == "raw"]
+    add("raw_blocks", "safety", "همه‌ی بلوک‌ها در استودیو ویرایش دیداری دارند", not rawb, "info",
+        f"{len(rawb)} بلوک «خام» (واردشده از پلاگین قبلی و نیافتنی در بلوک‌های دیداری) هست؛ همان‌طور که بود کار می‌کند ولی فقط با ویرایش TOML عوض می‌شود.",
+        {"tab": "pages", "page": rawb[0][0]["key"] if rawb else "", "block": rawb[0][1].get("id", "") if rawb else ""})
     counts = {"block": 0, "warn": 0, "info": 0}
     penalty = 0
     for c in checks:

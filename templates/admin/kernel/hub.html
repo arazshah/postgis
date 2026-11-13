@@ -32,7 +32,7 @@
       {% if c.description %}<p class="small" style="margin:0">{{ c.description }}</p>{% endif %}
       <div class="ph-st {{ c.status.0 }}">{{ c.status.1 }}</div>
       <div class="ph-st {{ c.health.0 }}" style="font-weight:500">{{ c.health.1 }}{% if c.grants %} · {{ c.grants }} مجوز{% endif %}</div>
-      {% if c.edit %}<div class="ph-act"><a href="{{ c.edit }}">وضعیت و مجوزها</a>{% if c.options %}<a href="{{ c.options }}">تنظیمات</a>{% endif %}</div>{% endif %}
+      {% if c.edit or c.studio %}<div class="ph-act">{% if c.edit %}<a href="{{ c.edit }}">وضعیت و مجوزها</a>{% endif %}{% if c.options %}<a href="{{ c.options }}">تنظیمات</a>{% endif %}{% if c.studio %}<a href="{{ c.studio.1 }}">{{ c.studio.0 }}</a>{% endif %}</div>{% endif %}
     </section>
     {% empty %}<p>پلاگین قابل مدیریتی نصب نیست.</p>{% endfor %}
   </div>
@@ -49,7 +49,7 @@
   <p>ساخت پلاگین تازه گام‌به‌گام: معرفی، داده (جدول‌ها)، صفحه‌ها با کاشی بلوک و پیش‌نمایش. SQL و جدول را هسته می‌سازد.</p>
   {% if wizard_url %}<p><a class="button default" href="{{ wizard_url }}">شروع ساخت پلاگین تازه</a></p>{% endif %}
   {% if drafts %}<h2>پیش‌نویس‌ها</h2>
-  <ul class="ph-list">{% for d in drafts %}<li><a href="{{ d.url }}">{{ d.name }}</a> <span class="help ltr">{{ d.id }}</span> <span class="help">{% if d.wizard %}استودیوی دیداری{% else %}TOML{% endif %}</span></li>{% endfor %}</ul>{% endif %}
+  <ul class="ph-list">{% for d in drafts %}<li><a href="{{ d.url }}">{{ d.name }}</a> <span class="help ltr">{{ d.id }}</span> <span class="help">{% if d.wizard %}استودیوی دیداری{% else %}TOML — ورود به استودیوی دیداری{% endif %}</span></li>{% endfor %}</ul>{% endif %}
   <h2>پلاگین‌های نمونه‌ی رایگان</h2>
   <form method="post" action="{% url 'plugin_sample' %}">{% csrf_token %}
     <p class="help">دو پلاگین آماده را می‌سازد و عمومی-رایگان منتشر می‌کند (در بخش رایگان بازار): <b>هواشناسی آنلاین</b> (Open-Meteo؛ ۲۰ متغیر، ۳۰ مدل، پیش‌بینی و تاریخچه) و <b>شناسنامه باغات</b> (محدوده‌ی باغ روی نقشه، ویرایش و حذف، گزارش PDF). هر دو نمونه‌ی ساخت پلاگین‌اند. راهنمای تست: <span class="ltr">docs/plugins/testing-guide.md</span>.</p>

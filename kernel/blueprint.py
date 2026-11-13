@@ -19,7 +19,7 @@ MAX_BLOCKS = 24  # سقف کیت صفحه (pagekit.parse_page)
 WIDTHS = ("full", "half", "third")
 GROUPS = ("data", "share", "manage")
 NEEDS = ("viewer", "editor", "owner")
-PAGE_FIELDS = ("title", "subtitle", "icon", "group", "need", "refresh", "params")
+PAGE_FIELDS = ("title", "subtitle", "icon", "group", "need", "refresh", "params", "order", "tables")
 BLOCK_STR_LIMIT = 4000
 ID_RE = re.compile(r"^[a-z][a-z0-9]{3,11}$")
 
@@ -112,8 +112,12 @@ def _page_fields(raw: dict) -> dict:
                     wizard.pagekit.parse_param(x)
                 except wizard.pagekit.SpecError as exc:
                     raise BlueprintError(f"فیلتر «{x.get('label') or x.get('name')}»: {exc}") from exc
-                if x["kind"] not in wizard.PARAM_BIND_KINDS:
-                    raise BlueprintError("نوع فیلتر «انتخابی» یا «متن» است.")
+        elif k == "order":
+            if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 10000:
+                raise BlueprintError("ترتیب عددی بین ۰ و ۱۰۰۰۰ است.")
+        elif k == "tables":
+            if not isinstance(v, list) or len(v) > 5 or not all(isinstance(x, str) for x in v):
+                raise BlueprintError("جدول‌های صفحه فهرست نام (حداکثر ۵) است.")
         elif k == "refresh":
             if isinstance(v, bool) or not isinstance(v, int) or not (v == 0 or 5 <= v <= 3600):
                 raise BlueprintError("تازه‌سازی صفر یا بین ۵ تا ۳۶۰۰ ثانیه است.")

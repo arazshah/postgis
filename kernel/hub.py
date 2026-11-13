@@ -14,7 +14,7 @@ from django.template.response import TemplateResponse
 from django.urls import NoReverseMatch, reverse
 
 from . import conf, pkg, stepup
-from .models import Entitlement, PluginDraft, PluginState, PluginTrip
+from .models import Entitlement, PluginDraft, PluginRelease, PluginState, PluginTrip
 from .plugins import registry
 
 TABS = (("all", "همه‌ی پلاگین‌ها"), ("create", "ساخت"), ("sales", "مشترک‌ها و فروش"), ("advanced", "پیشرفته"))
@@ -44,9 +44,18 @@ def cards() -> list[dict]:
     unseen = {}
     for t in PluginTrip.objects.filter(seen_at__isnull=True):
         unseen[t.plugin_id] = unseen.get(t.plugin_id, 0) + 1
+    active = dict(PluginRelease.objects.filter(status=PluginRelease.Status.ACTIVE).values_list("plugin_id", "pk"))
+    drafts = {d.plugin_id: d for d in PluginDraft.objects.all()}
     out = []
     for p in registry.plugins.values():
         st = states.get(p.id)
+        dr = drafts.get(p.id)
+        if dr is not None and dr.wizard:
+            studio = ("باز کردن در استودیو", _url("admin:kernel_plugindraft_designer", dr.pk))
+        elif p.id in active and not (dr is not None and not dr.wizard):
+            studio = ("ویرایش در استودیو", _url("admin:kernel_plugindraft_import") + f"?release={active[p.id]}")
+        else:
+            studio = None
         system = p.kind == "system"
         if p.id in registry.errors:
             health = ("bad", "خطای بارگذاری")
@@ -70,6 +79,7 @@ def cards() -> list[dict]:
             "delivery": "بسته‌ی بارگذاری‌شده" if p.id in pkg._loaded else ("ایمیج" if not system else ""),
             "status": status, "health": health, "grants": len(st.entitlements.all()) if st else 0,
             "edit": _url("admin:kernel_pluginstate_change", st.pk) if st and not system else "",
+            "studio": studio if not system else None,
             "options": _url("admin:kernel_pluginstate_options", st.pk) if st and conf.options(p.id) else "",
         })
     out.sort(key=lambda c: (c["system"], c["name"]))
@@ -112,7 +122,7 @@ def hub(request):
     elif tab == "create":
         ctx["studio_url"] = _url("admin:kernel_plugindraft_changelist")
         ctx["wizard_url"] = _url("admin:kernel_plugindraft_wizard_new")
-        ctx["drafts"] = [{"name": d.name, "id": d.plugin_id, "url": _url("admin:kernel_plugindraft_designer", d.pk) if d.wizard else _url("admin:kernel_plugindraft_studio", d.pk), "wizard": bool(d.wizard)} for d in PluginDraft.objects.all()[:30]]
+        ctx["drafts"] = [{"name": d.name, "id": d.plugin_id, "url": _url("admin:kernel_plugindraft_designer", d.pk) if d.wizard else _url("admin:kernel_plugindraft_import") + f"?draft={d.pk}", "wizard": bool(d.wizard)} for d in PluginDraft.objects.all()[:30]]
     elif tab == "sales":
         ctx.update(grants=recent_grants(), links=sales_links())
     else:

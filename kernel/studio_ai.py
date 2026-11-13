@@ -116,7 +116,7 @@ def context(spec: dict, plugin_id: str, *, page: str = "", selected: str = "", f
     """ساختار نقشه برای مدل: بدون منبع کد و بدون مقدار ردیف؛ متن‌ها پاک‌سازی‌شده."""
     code = {n: {"role": h.get("role"), "tables": h.get("tables") or []} for n, h in (spec.get("code") or {}).items()}
     pages = [{"key": p["key"], "title": p.get("title"), "need": p.get("need"), "params": p.get("params") or [],
-              "blocks": list(p.get("blocks") or [])} for p in spec.get("pages") or []]
+              "blocks": [({"id": b.get("id"), "kind": "raw", "part": b.get("part"), "title": b.get("title")} if b.get("kind") == "raw" else b) for b in p.get("blocks") or []]} for p in spec.get("pages") or []]
     issues = [{"scope": i["scope"], "page": i.get("page", ""), "block": i.get("block", ""), "handler": i.get("handler", ""), "message": i["message"]}
               for i in blueprint.analyze(spec, plugin_id)["issues"]]
     out = {"plugin_id": plugin_id, "intro": spec.get("intro") or {}, "tables": spec.get("tables") or [], "pages": pages, "code": code,

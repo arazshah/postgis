@@ -19,8 +19,8 @@
     ["کد و پیشرفته", [["handler", "خروجی کد", "bolt", "نتیجه‌ی handler"], ["import", "ورود فایل", "upload", "فایل ← جدول تازه"],
       ["export", "خروجی فایل", "download", "دکمه‌ی دانلود"], ["sql", "SQL پیشرفته", "code", "پرس‌وجوی فقط‌خواندنی"]]],
   ];
-  const ACT_ICON = { form: "edit", ingest: "satellite", records: "table", source: "cloud", report: "print", import: "upload", export: "download" };
-  const KIND_LABEL = {};
+  const ACT_ICON = { raw: "code", form: "edit", ingest: "satellite", records: "table", source: "cloud", report: "print", import: "upload", export: "download" };
+  const KIND_LABEL = { raw: "بلوک خام" };
   KINDS.forEach(([, items]) => items.forEach(([k, l]) => { KIND_LABEL[k] = l; }));
   const AGGS = [["count", "تعداد"], ["sum", "جمع"], ["avg", "میانگین"], ["min", "کمینه"], ["max", "بیشینه"]];
   const NUM = ["integer", "bigint", "double"], TIME = ["timestamptz", "date"];
@@ -382,7 +382,7 @@
     const i = blocks().findIndex((b) => b.id === id), others = pages().filter((p) => p.key !== pageKey);
     StudioUI.menu(btn, [
       { icon: "up", label: "یک جا بالاتر", act: "up", disabled: i === 0 }, { icon: "down", label: "یک جا پایین‌تر", act: "down", disabled: i === blocks().length - 1 },
-      { icon: "copy", label: "تکثیر", act: "dup" },
+      { icon: "copy", label: "تکثیر", act: "dup", disabled: blocks()[i] && blocks()[i].kind === "raw" },
       ...others.map((p) => ({ icon: "next", label: "انتقال به «" + p.title + "»", act: "pg:" + p.key })),
       { sep: true }, { icon: "trash", label: "حذف", act: "del", danger: true }], async (act) => {
       try {
@@ -427,7 +427,7 @@
 
   // ویرایشگر فهرست سطرها: cols = [[کلید، برچسب، ltr، گزینه‌ها?]]؛ سطر آرایه (کلید عددی) یا شیء
   function listEditor(name, rows, cols) {
-    const val = (r, k) => (Array.isArray(r) ? r[Number(k)] : r[k]) ?? "";
+    const val = (r, k) => { const v = (Array.isArray(r) ? r[Number(k)] : r[k]) ?? ""; return v === true ? "بله" : v; };
     return `<div class="pd-list" data-list="${name}">` + rows.map((r, i) => `<div class="pd-lrow" data-i="${i}">` + cols.map(([k, l, ltr, opts]) => opts
       ? `<select data-k="${k}" aria-label="${l}"><option value=""></option>${opts.map((o) => `<option value="${esc(o)}"${val(r, k) === o ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`
       : `<input type="text" data-k="${k}" value="${esc(val(r, k))}" placeholder="${l}" aria-label="${l}"${ltr ? ' class="ltr" dir="ltr"' : ""}>`).join("") +
@@ -494,9 +494,10 @@
       h += fld("قالب پاسخ", chips("layout", [["rows", "آرایه‌ی ردیف‌ها"], ["columns", "ستون‌ها (مثل Open-Meteo)"]], b.layout || "rows"));
       h += fld("مسیر داده در پاسخ (اختیاری)", text("rows_path", b.rows_path, true, "daily"));
       h += fld("پارامترهای درخواست (می‌تواند {ورودی}، {since}، {today} بیاورد)", listEditor("query", b.query || [], [["0", "نام", true], ["1", "مقدار", true]]));
-      h += fld("نگاشت پاسخ ← ستون جدول", listEditor("map", b.map || [], [["column", "ستون", true, colsOf(t).filter((c) => !["point", "line", "polygon", "multipolygon"].includes(c.type)).map((c) => c.name)], ["path", "مسیر در پاسخ", true]]));
+      h += fld("نگاشت پاسخ ← ستون جدول", listEditor("map", b.map || [], [["column", "ستون", true, colsOf(t).filter((c) => !["point", "line", "polygon", "multipolygon"].includes(c.type)).map((c) => c.name)], ["path", "مسیر در پاسخ", true], ["input", "یا از ورودی", true], ["optional", "اختیاری", false, ["بله"]]]));
       h += fld("ورودی‌های قابل‌تنظیم هر پایگاه (مثل عرض و طول)", listEditor("inputs", b.inputs || [], [["name", "نام", true], ["label", "برچسب"], ["kind", "نوع", false, ["number", "int", "text"]], ["min", "کمینه", true], ["max", "بیشینه", true]]));
       h += fld("ستون نشانگر «فقط تازه‌ها» (اختیاری)", chips("cursor", colOpts(t, null, true), b.cursor || "", true));
+      h += fld("حالت نوشتن", chips("mode", [["append", "فقط تازه‌ها را بیفزا"], ["replace", "پنجره‌ی هم‌پوشان را جایگزین کن"]], b.mode || "append"));
       h += fld("هر چند دقیقه (۱۵ تا ۱۴۴۰)", num("every_minutes", b.every_minutes || 180, 15, 1440)) + fld("بازه‌ی روزهای گذشته (۱ تا ۳۰)", num("since_days", b.since_days || 2, 1, 30));
       h += fld("کلید API (اختیاری؛ مقدارش را مدیر در پنل می‌گذارد)", chips("secret_kind", [["", "ندارد"], ["header", "هدر"], ["param", "پارامتر"]], b.secret_header ? "header" : b.secret_param ? "param" : "") + (b.secret_header || b.secret_param ? text("secret_name", b.secret_header || b.secret_param, true, "X-Api-Key") : ""));
       h += `<p class="pd-hint">میزبان باید در فهرست سفید «منابع بیرونی» پنل تأیید شود و سوئیچ آن روشن باشد؛ وگرنه واکشی انجام نمی‌شود.</p>`;
@@ -527,6 +528,14 @@
     const b = selBlock(), pg = curPage();
     if (!pg) { el.innerHTML = `<p class="pd-hint">برای شروع یک صفحه بسازید.</p>`; return; }
     if (!b) return drawPageProps(el, pg);
+    if (b.kind === "raw") {
+      el.innerHTML = `<h3 class="pd-h">${ic("code")}بلوک خام</h3><div id="pd-issues"></div>
+        <div class="pd-issue">${ic("info")}<span>این بلوک از پلاگین قبلی آمده و در بلوک‌های دیداری نمی‌گنجد؛ همان‌طور که بود کار می‌کند (با همان بررسی کیت) ولی در استودیو فقط‌خواندنی است. می‌توانید جابه‌جا یا حذفش کنید.</span></div>
+        <div class="pd-f"><span class="lbl">بخش</span><b>${esc(b.part)}${b.key ? ` — <span class="ltr" dir="ltr">${esc(b.key)}</span>` : ""}</b></div>
+        <div class="pd-f"><span class="lbl">مشخصات (فقط‌خواندنی)</span><pre class="pd-pre-block" dir="ltr">${esc(JSON.stringify(b.item, null, 2))}</pre></div>`;
+      refreshIssue();
+      return;
+    }
     el.innerHTML = `<h3 class="pd-h">${ic("edit")}${esc(KIND_LABEL[b.kind] || b.kind)}</h3><div id="pd-issues"></div>${blockForm(b)}`;
     refreshIssue();
     el.querySelectorAll("[data-single]").forEach((box) => box.addEventListener("click", (e) => {
@@ -567,29 +576,35 @@
     wireLists(el, b);
   }
 
-  function collectList(box) {
+  function collectList(box, existing) {
     const name = box.dataset.list;
-    return [...box.querySelectorAll(".pd-lrow")].map((r) => {
+    return [...box.querySelectorAll(".pd-lrow")].map((r, i) => {
       const g = (k) => (r.querySelector(`[data-k="${k}"]`) || {}).value || "";
       if (name === "query") return [g("0"), g("1")];
-      const o = { };
-      r.querySelectorAll("[data-k]").forEach((x) => { const v = x.value; if (v !== "") o[x.dataset.k] = ["min", "max"].includes(x.dataset.k) ? Number(v) : v; });
+      // کلیدهای نادیده‌ی سطر (مثل choices ورودی منبع واردشده) با ویرایش از بین نروند
+      const o = existing && existing[i] && typeof existing[i] === "object" && !Array.isArray(existing[i]) ? { ...existing[i] } : {};
+      r.querySelectorAll("[data-k]").forEach((x) => {
+        const k = x.dataset.k, v = x.value;
+        if (k === "optional") { if (v === "بله") o.optional = true; else delete o.optional; return; }
+        if (v === "") delete o[k]; else o[k] = ["min", "max"].includes(k) ? Number(v) : v;
+      });
       return o;
     });
   }
   function wireLists(el, b) {
     el.querySelectorAll("[data-list]").forEach((box) => {
       const name = box.dataset.list;
-      box.addEventListener("input", () => setField(b.id, { [name]: collectList(box) }, false, 500));
-      box.addEventListener("change", () => setField(b.id, { [name]: collectList(box) }, false, 200));
+      const cur = () => selBlock()[name] || [];
+      box.addEventListener("input", () => setField(b.id, { [name]: collectList(box, cur()) }, false, 500));
+      box.addEventListener("change", () => setField(b.id, { [name]: collectList(box, cur()) }, false, 200));
       box.addEventListener("click", (e) => {
         if (e.target.closest("[data-addrow]")) {
-          const rows = collectList(box);
+          const rows = collectList(box, cur());
           rows.push(name === "query" ? ["", ""] : {});
           return setField(b.id, { [name]: rows }, true);
         }
         const d = e.target.closest("[data-delrow]");
-        if (d) { const rows = collectList(box); rows.splice(Number(d.dataset.delrow.split(":")[1]), 1); setField(b.id, { [name]: rows }, true); }
+        if (d) { const rows = collectList(box, cur()); rows.splice(Number(d.dataset.delrow.split(":")[1]), 1); setField(b.id, { [name]: rows }, true); }
       });
     });
   }
@@ -1318,7 +1333,7 @@
   }
 
   // ---------------------------------------------------------------- بخش خودکارسازی (نمای کلی همه‌ی اجزای غیرنمایشی)
-  const AUTO_KINDS = ["source", "ingest", "report", "records", "form", "import", "export"];
+  const AUTO_KINDS = ["source", "ingest", "report", "records", "form", "import", "export", "raw"];
   function drawAuto(main) {
     const items = [];
     pages().forEach((p) => (p.blocks || []).forEach((b) => { if (AUTO_KINDS.includes(b.kind)) items.push({ p, b }); }));
