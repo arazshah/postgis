@@ -13,10 +13,13 @@
   const KINDS = [
     ["نمایش", [["kpi", "شمارنده", "k-kpi", "یک عدد درشت"], ["table", "جدول", "table", "آخرین ردیف‌ها"], ["bars", "نمودار میله‌ای", "k-bar", "مقایسه‌ی گروه‌ها"],
       ["map", "نقشه", "globe", "نقطه‌ها روی نقشه"], ["text", "متن", "info", "راهنما و توضیح"]]],
-    ["ورود داده", [["form", "فرم ثبت", "edit", "کاربر ردیف ثبت می‌کند"], ["ingest", "دریافت از دستگاه", "satellite", "دستگاه با توکن می‌فرستد"]]],
+    ["ورود و ویرایش داده", [["form", "فرم ثبت", "edit", "کاربر ردیف ثبت می‌کند"], ["records", "ویرایش ردیف‌ها", "table", "فهرست با ویرایش و حذف"],
+      ["ingest", "دریافت از دستگاه", "satellite", "دستگاه با توکن می‌فرستد"]]],
+    ["خودکارسازی و خروجی", [["source", "واکشی از API", "cloud", "ورود دوره‌ای از سرویس بیرونی"], ["report", "گزارش PDF", "print", "دکمه‌ی گزارش از بلوک‌های صفحه"]]],
     ["کد و پیشرفته", [["handler", "خروجی کد", "bolt", "نتیجه‌ی handler"], ["import", "ورود فایل", "upload", "فایل ← جدول تازه"],
       ["export", "خروجی فایل", "download", "دکمه‌ی دانلود"], ["sql", "SQL پیشرفته", "code", "پرس‌وجوی فقط‌خواندنی"]]],
   ];
+  const ACT_ICON = { form: "edit", ingest: "satellite", records: "table", source: "cloud", report: "print", import: "upload", export: "download" };
   const KIND_LABEL = {};
   KINDS.forEach(([, items]) => items.forEach(([k, l]) => { KIND_LABEL[k] = l; }));
   const AGGS = [["count", "تعداد"], ["sum", "جمع"], ["avg", "میانگین"], ["min", "کمینه"], ["max", "بیشینه"]];
@@ -137,7 +140,7 @@
     root.querySelector("#pd-redo").disabled = hist.i >= hist.ids.length - 1;
     const n = (S.analysis.issues || []).length;
     const nav = root.querySelector("#pd-nav");
-    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"]];
+    const tabs = [["pages", "صفحه‌ها", "layers"], ["data", "داده", "db"], ["auto", "خودکارسازی", "bolt"]];
     nav.innerHTML = tabs.map(([k, l, i]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${tab === k}">${ic(i)}<span>${l}</span>${k === "pages" && n ? `<span class="badge-n" title="ایراد">${FA(n)}</span>` : ""}</button>`).join("");
     nav.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; selId = ""; draw(); }));
   }
@@ -162,6 +165,7 @@
     syncBar();
     const main = root.querySelector("#pd-main");
     if (tab === "data") { main.innerHTML = ""; drawData(main); return; }
+    if (tab === "auto") { main.innerHTML = ""; drawAuto(main); return; }
     main.innerHTML = `
       <aside class="pd-pal" id="pd-pal" aria-label="اجزا"></aside>
       <section class="pd-center"><div class="pd-pages" id="pd-pages"></div><div class="pd-scroll" id="pd-scroll"></div></section>
@@ -220,7 +224,7 @@
     el.dataset.id = b.id;
     el.draggable = true;
     let body = "";
-    if (pv && pv.action) body = `<div class="pd-act">${ic(b.kind === "ingest" ? "satellite" : "edit")}<b>${esc(b.title || KIND_LABEL[b.kind])}</b><span class="pd-hint">${KIND_LABEL[b.kind]}</span></div>`;
+    if (pv && pv.action) body = `<div class="pd-act">${ic(ACT_ICON[b.kind] || "edit")}<b>${esc(b.title || KIND_LABEL[b.kind])}</b><span class="pd-hint">${KIND_LABEL[b.kind]}</span></div>`;
     else if (pv) body = pv.html;
     else body = `<div class="pd-act">${ic("warn")}<span>پیش‌نمایش در دسترس نیست.</span></div>`;
     if (["import", "export"].includes(b.kind)) body = `<div class="pd-act">${ic(b.kind === "import" ? "upload" : "download")}<b>${esc(b.title || KIND_LABEL[b.kind])}</b><span class="pd-hint">${KIND_LABEL[b.kind]}</span></div>`;
@@ -326,7 +330,7 @@
 
   function defaults(kind) {
     const t = tables()[0], d = { kind };
-    if (t && !["text", "sql", "handler", "import", "export"].includes(kind)) d.table = t.name;
+    if (t && !["text", "sql", "handler", "import", "export", "report"].includes(kind)) d.table = t.name;
     if (kind === "kpi") d.agg = "count";
     if (kind === "table") { d.limit = 20; d.desc = true; }
     if (kind === "bars") { d.agg = "count"; const c = colsOf(t && t.name, ["text"])[0]; if (c) d.label = c.name; }
@@ -335,6 +339,9 @@
       if (pt) d.point = pt.name; else { const lat = colsOf(t.name, ["double"]).find((c) => /^lat/i.test(c.name)), lon = colsOf(t.name, ["double"]).find((c) => /^(lon|lng)/i.test(c.name)); if (lat && lon) { d.lat = lat.name; d.lon = lon.name; } }
     }
     if (kind === "text") d.text = "متن راهنما را اینجا بنویسید.";
+    if (kind === "records") { d.can_delete = true; d.limit = 50; }
+    if (kind === "report") { d.button = "گزارش PDF"; d.blocks = []; }
+    if (kind === "source") { d.layout = "rows"; d.every_minutes = 180; d.since_days = 2; d.query = []; d.map = []; d.inputs = []; }
     if (kind === "sql") { d.display = "table"; d.sql = "select 1 as n"; }
     if (kind === "handler") { d.display = "table"; d.handler = handlersOf("block")[0] || ""; }
     if (kind === "import") { d.extensions = ".csv"; d.handler = handlersOf("importer")[0] || ""; }
@@ -397,10 +404,20 @@
   const colOpts = (t, types, none) => (none ? [["", "هیچ"]] : []).concat(colsOf(t, types).map((c) => [c.name, c.name]));
   const tableOpts = () => tables().map((t) => [t.name, t.name]);
 
+  // ویرایشگر فهرست سطرها: cols = [[کلید، برچسب، ltr، گزینه‌ها?]]؛ سطر آرایه (کلید عددی) یا شیء
+  function listEditor(name, rows, cols) {
+    const val = (r, k) => (Array.isArray(r) ? r[Number(k)] : r[k]) ?? "";
+    return `<div class="pd-list" data-list="${name}">` + rows.map((r, i) => `<div class="pd-lrow" data-i="${i}">` + cols.map(([k, l, ltr, opts]) => opts
+      ? `<select data-k="${k}" aria-label="${l}"><option value=""></option>${opts.map((o) => `<option value="${esc(o)}"${val(r, k) === o ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`
+      : `<input type="text" data-k="${k}" value="${esc(val(r, k))}" placeholder="${l}" aria-label="${l}"${ltr ? ' class="ltr" dir="ltr"' : ""}>`).join("") +
+      `<button type="button" class="pd-ib" data-delrow="${name}:${i}" aria-label="حذف سطر">${ic("trash")}</button></div>`).join("") +
+      `<button type="button" class="btn ghost sm" data-addrow="${name}">${ic("plus")}<span>سطر</span></button></div>`;
+  }
+
   function blockForm(b) {
     const t = b.table, k = b.kind;
     let h = "";
-    const needTable = ["kpi", "table", "bars", "map", "form", "ingest"].includes(k);
+    const needTable = ["kpi", "table", "bars", "map", "form", "ingest", "records", "source"].includes(k);
     h += fld("عنوان", text("title", b.title));
     if (needTable) h += tables().length ? fld("جدول", chips("table", tableOpts(), t, true)) : `<div class="pd-issue">${ic("info")}<span>اول در بخش «داده» یک جدول بسازید.</span></div>`;
     if (k === "kpi") {
@@ -429,9 +446,40 @@
     }
     if (["kpi", "table", "bars", "map"].includes(k)) {
       h += fld("فقط داده‌ی اخیر (اختیاری)", chips("since_col", colOpts(t, TIME, true), b.since_col || "", true));
-      if (b.since_col) h += fld("در چند دقیقه‌ی گذشته", num("since_minutes", b.since_minutes || 60, 1, 525600));
+      if (b.since_col) {
+        const rp = (curPage().params || []).filter((p) => p.kind === "choice");
+        if (rp.length) h += fld("بازه از", chips("since_param", [["", "عدد ثابت"]].concat(rp.map((p) => [p.name, "فیلتر «" + p.label + "»"])), b.since_param || ""));
+        if (!b.since_param) h += fld("در چند دقیقه‌ی گذشته", num("since_minutes", b.since_minutes || 60, 1, 525600));
+      }
+      (curPage().params || []).filter((p) => ["choice", "text"].includes(p.kind)).forEach((p) => {
+        const w = (b.where || []).find((x) => x.param === p.name);
+        h += fld("فیلتر «" + esc(p.label) + "» روی ستون", `<div class="pd-chips" data-where="${esc(p.name)}">` + colOpts(t, null, true).map(([v, l]) => `<button type="button" class="pd-chip mono" data-v="${esc(v)}" aria-pressed="${(w ? w.col : "") === v}">${esc(l)}</button>`).join("") + "</div>");
+      });
     }
     if (k === "text") h += fld("متن (بندها با خط خالی جدا می‌شوند)", `<textarea data-text="text">${esc(b.text || "")}</textarea>`);
+    if (k === "form") h += fld("متن دکمه", text("submit", b.submit, false, "ثبت")) + fld("راهنمای فرم", text("hint", b.hint));
+    if (k === "records") {
+      h += fld("ستون‌های قابل‌ویرایش (خالی = همه)", multi("fields", colsOf(t).filter((c) => !c.auto_now).map((c) => [c.name, c.name]), b.fields || []));
+      h += fld("ستون‌های فهرست (تا ۶)", multi("columns", colsOf(t).filter((c) => !["point", "line", "polygon", "multipolygon"].includes(c.type)).map((c) => [c.name, c.name]), b.columns || []));
+      h += fld("حذف ردیف", chips("can_delete", [["1", "مجاز"], ["", "غیرمجاز"]], b.can_delete === false ? "" : "1")) + fld("تعداد ردیف (۱ تا ۱۰۰)", num("limit", b.limit || 50, 1, 100));
+    }
+    if (k === "report") {
+      const disp = blocks().filter((x) => ["kpi", "table", "bars", "map", "text", "sql", "handler"].includes(x.kind));
+      h += disp.length ? fld("بلوک‌های گزارش (خالی = همه)", multi("blocks", disp.map((x) => [x.id, (x.title || KIND_LABEL[x.kind]).slice(0, 28)]), b.blocks || [])) : `<div class="pd-issue">${ic("info")}<span>اول بلوک نمایشی بیفزایید.</span></div>`;
+      h += fld("جهت صفحه", chips("landscape", [["", "عمودی"], ["1", "افقی"]], b.landscape ? "1" : "")) + fld("زیرعنوان", text("subtitle", b.subtitle)) + fld("متن دکمه", text("button", b.button, false, "گزارش PDF"));
+    }
+    if (k === "source") {
+      h += fld("نشانی https سرویس (بدون پارامتر)", text("url", b.url, true, "https://api.example.com/v1/data"));
+      h += fld("قالب پاسخ", chips("layout", [["rows", "آرایه‌ی ردیف‌ها"], ["columns", "ستون‌ها (مثل Open-Meteo)"]], b.layout || "rows"));
+      h += fld("مسیر داده در پاسخ (اختیاری)", text("rows_path", b.rows_path, true, "daily"));
+      h += fld("پارامترهای درخواست (می‌تواند {ورودی}، {since}، {today} بیاورد)", listEditor("query", b.query || [], [["0", "نام", true], ["1", "مقدار", true]]));
+      h += fld("نگاشت پاسخ ← ستون جدول", listEditor("map", b.map || [], [["column", "ستون", true, colsOf(t).filter((c) => !["point", "line", "polygon", "multipolygon"].includes(c.type)).map((c) => c.name)], ["path", "مسیر در پاسخ", true]]));
+      h += fld("ورودی‌های قابل‌تنظیم هر پایگاه (مثل عرض و طول)", listEditor("inputs", b.inputs || [], [["name", "نام", true], ["label", "برچسب"], ["kind", "نوع", false, ["number", "int", "text"]], ["min", "کمینه", true], ["max", "بیشینه", true]]));
+      h += fld("ستون نشانگر «فقط تازه‌ها» (اختیاری)", chips("cursor", colOpts(t, null, true), b.cursor || "", true));
+      h += fld("هر چند دقیقه (۱۵ تا ۱۴۴۰)", num("every_minutes", b.every_minutes || 180, 15, 1440)) + fld("بازه‌ی روزهای گذشته (۱ تا ۳۰)", num("since_days", b.since_days || 2, 1, 30));
+      h += fld("کلید API (اختیاری؛ مقدارش را مدیر در پنل می‌گذارد)", chips("secret_kind", [["", "ندارد"], ["header", "هدر"], ["param", "پارامتر"]], b.secret_header ? "header" : b.secret_param ? "param" : "") + (b.secret_header || b.secret_param ? text("secret_name", b.secret_header || b.secret_param, true, "X-Api-Key") : ""));
+      h += `<p class="pd-hint">میزبان باید در فهرست سفید «منابع بیرونی» پنل تأیید شود و سوئیچ آن روشن باشد؛ وگرنه واکشی انجام نمی‌شود.</p>`;
+    }
     if (k === "form" || k === "ingest") {
       h += fld("ستون‌های قابل‌ثبت (خالی = همه)", multi("fields", colsOf(t).filter((c) => !c.auto_now).map((c) => [c.name, c.name]), b.fields || []));
       if (k === "ingest") h += fld("حداکثر ردیف در هر درخواست", num("max_rows", b.max_rows || 100, 1, 1000)) + fld("حداکثر درخواست در دقیقه", num("rate", b.rate || 60, 1, 600));
@@ -465,8 +513,12 @@
       if (!c) return;
       const name = box.dataset.single;
       let v = c.dataset.v;
-      if (name === "desc") v = v === "1";
-      else if (name === "width" || /^(column|distinct|point|latest_by|since_col|time_col|order_by)$/.test(name)) v = v || null;
+      if (name === "desc" || name === "can_delete") v = v === "1";
+      else if (name === "landscape") v = v === "1";
+      else if (name === "secret_kind") {
+        const cur = selBlock(), nm = cur.secret_header || cur.secret_param || "";
+        return setField(b.id, { secret_header: v === "header" ? (nm || "X-Api-Key") : null, secret_param: v === "param" ? (nm || "key") : null }, true);
+      } else if (name === "width" || /^(since_param|cursor)$/.test(name) || /^(column|distinct|point|latest_by|since_col|time_col|order_by)$/.test(name)) v = v || null;
       const f = { [name]: v };
       if (name === "table") (RESET.table).forEach((x) => { f[x] = null; });
       if (name === "since_col" && v) f.since_minutes = 60;
@@ -479,8 +531,79 @@
       const next = cur.includes(c.dataset.v) ? cur.filter((x) => x !== c.dataset.v) : cur.concat(c.dataset.v);
       setField(b.id, { [name]: next.length ? next : null }, true);
     }));
-    el.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("input", () => setField(b.id, { [i.dataset.text]: i.value }, false, 450)));
+    el.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("input", () => {
+      if (i.dataset.text === "secret_name") { const cur = selBlock(); return setField(b.id, cur.secret_header !== undefined && cur.secret_header !== null ? { secret_header: i.value } : { secret_param: i.value }, false, 450); }
+      setField(b.id, { [i.dataset.text]: i.value }, false, 450);
+    }));
     el.querySelectorAll("[data-num]").forEach((i) => i.addEventListener("input", () => { if (i.value !== "") setField(b.id, { [i.dataset.num]: Number(i.value) }, false, 450); }));
+    el.querySelectorAll("[data-where]").forEach((box) => box.addEventListener("click", (e) => {
+      const c = e.target.closest(".pd-chip");
+      if (!c) return;
+      const rest = (selBlock().where || []).filter((x) => x.param !== box.dataset.where);
+      if (c.dataset.v) rest.push({ param: box.dataset.where, col: c.dataset.v });
+      setField(b.id, { where: rest.length ? rest : null }, true);
+    }));
+    wireLists(el, b);
+  }
+
+  function collectList(box) {
+    const name = box.dataset.list;
+    return [...box.querySelectorAll(".pd-lrow")].map((r) => {
+      const g = (k) => (r.querySelector(`[data-k="${k}"]`) || {}).value || "";
+      if (name === "query") return [g("0"), g("1")];
+      const o = { };
+      r.querySelectorAll("[data-k]").forEach((x) => { const v = x.value; if (v !== "") o[x.dataset.k] = ["min", "max"].includes(x.dataset.k) ? Number(v) : v; });
+      return o;
+    });
+  }
+  function wireLists(el, b) {
+    el.querySelectorAll("[data-list]").forEach((box) => {
+      const name = box.dataset.list;
+      box.addEventListener("input", () => setField(b.id, { [name]: collectList(box) }, false, 500));
+      box.addEventListener("change", () => setField(b.id, { [name]: collectList(box) }, false, 200));
+      box.addEventListener("click", (e) => {
+        if (e.target.closest("[data-addrow]")) {
+          const rows = collectList(box);
+          rows.push(name === "query" ? ["", ""] : {});
+          return setField(b.id, { [name]: rows }, true);
+        }
+        const d = e.target.closest("[data-delrow]");
+        if (d) { const rows = collectList(box); rows.splice(Number(d.dataset.delrow.split(":")[1]), 1); setField(b.id, { [name]: rows }, true); }
+      });
+    });
+  }
+
+  const RANGE_PRESET = { name: "hours", kind: "choice", label: "بازه‌ی زمانی", default: "60", choices: [["60", "یک ساعت"], ["360", "شش ساعت"], ["1440", "یک روز"], ["10080", "یک هفته"]] };
+  function paramsHtml(pg) {
+    return (pg.params || []).map((p, i) => `<div class="pd-card pd-pcard" data-pi="${i}">
+      <div class="pd-row"><b>${p.kind === "choice" ? "انتخابی" : "متنی"}</b><span class="pd-spacer"></span><button type="button" class="pd-ib" data-delp="${i}" aria-label="حذف فیلتر">${ic("trash")}</button></div>
+      <div class="pd-f"><span class="lbl">برچسب</span><input type="text" data-p="label" value="${esc(p.label || "")}"></div>
+      <div class="pd-f"><span class="lbl">نام لاتین</span><input type="text" class="ltr" dir="ltr" data-p="name" value="${esc(p.name || "")}" pattern="[a-z][a-z0-9_]*"></div>
+      ${p.kind === "choice" ? `<div class="pd-f"><span class="lbl">گزینه‌ها (هر خط «مقدار|برچسب»؛ برای بازه، مقدار = دقیقه)</span><textarea data-p="choices" class="ltr" dir="ltr">${esc((p.choices || []).map((c) => c[0] + "|" + c[1]).join("\n"))}</textarea></div>` : ""}
+      <div class="pd-f"><span class="lbl">مقدار پیش‌فرض</span><input type="text" class="ltr" dir="ltr" data-p="default" value="${esc(p.default || "")}"></div></div>`).join("");
+  }
+  function wireParams(el, pg, set) {
+    const box = el.querySelector("#pd-params");
+    const collect = () => [...box.querySelectorAll(".pd-pcard")].map((c, i) => {
+      const old = (pg.params || [])[i] || {}, g = (k) => (c.querySelector(`[data-p=${k}]`) || {}).value;
+      const o = { name: g("name").trim(), kind: old.kind, label: g("label").trim(), default: g("default").trim() };
+      if (old.kind === "choice") o.choices = (g("choices") || "").split("\n").map((l) => l.trim()).filter(Boolean).map((l) => { const [v, ...r] = l.split("|"); return [v.trim(), (r.join("|") || v).trim()]; });
+      return o;
+    });
+    let t;
+    box.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => set({ params: collect() }, true), 600); });
+    box.addEventListener("click", async (e) => {
+      const d = e.target.closest("[data-delp]");
+      if (d) { const ps = collect(); ps.splice(Number(d.dataset.delp), 1); await set({ params: ps }, true); drawProps(); }
+    });
+    el.querySelectorAll("[data-addp]").forEach((b) => b.addEventListener("click", async () => {
+      const ps = collect(), names = new Set(ps.map((p) => p.name));
+      let nm = b.dataset.addp === "range" ? "hours" : "q";
+      for (let i = 2; names.has(nm); i++) nm = (b.dataset.addp === "range" ? "hours" : "q") + i;
+      ps.push(b.dataset.addp === "range" ? { ...RANGE_PRESET, name: nm } : { name: nm, kind: "text", label: "جست‌وجو", default: "" });
+      await set({ params: ps }, true);
+      drawProps();
+    }));
   }
 
   function drawPageProps(el, pg) {
@@ -488,12 +611,35 @@
       fld("عنوان", text("title", pg.title)) + fld("توضیح کوتاه", text("subtitle", pg.subtitle)) +
       fld("گروه منو", chips("group", GROUPS, pg.group || "data")) + fld("دسترسی لازم", chips("need", NEEDS, pg.need || "viewer")) +
       fld("تازه‌سازی خودکار (ثانیه؛ ۰ = خاموش، ۵ تا ۳۶۰۰)", num("refresh", pg.refresh || 0, 0, 3600)) +
+      `<div class="pd-grp">فیلترهای بالای صفحه</div><div id="pd-params">${paramsHtml(pg)}</div>
+       <div class="pd-row"><button class="btn ghost sm" type="button" data-addp="range">${ic("clock")}<span>بازه‌ی زمانی</span></button>
+         <button class="btn ghost sm" type="button" data-addp="text">${ic("search")}<span>فیلتر متنی</span></button></div>
+       <p class="pd-hint">فیلتر را به بلوک‌ها وصل کنید: روی بلوک بزنید و «بازه از» یا «فیلتر روی ستون» را انتخاب کنید.</p>` +
       `<p class="pd-hint">صفحه‌ی دارای فرم یا دریافت داده خودکار «ویرایشگر» می‌شود. روی یک جزء بزنید تا ویژگی‌هایش را ببینید.</p>`;
     const set = async (fields, redo) => { try { await run({ op: "page.set", key: pg.key, ...fields }); if (redo) { drawPages(); await drawCanvas(); } } catch (_) { /* */ } };
     el.querySelectorAll("[data-single]").forEach((box) => box.addEventListener("click", (e) => { const c = e.target.closest(".pd-chip"); if (c) { set({ [box.dataset.single]: c.dataset.v }).then(drawProps); } }));
+    wireParams(el, pg, set);
     let t;
     el.querySelectorAll("[data-text]").forEach((i) => i.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { if (i.dataset.text !== "title" || i.value.trim()) set({ [i.dataset.text]: i.value }, true); }, 450); }));
     el.querySelectorAll("[data-num]").forEach((i) => i.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { if (i.value !== "") set({ refresh: Number(i.value) }); }, 450); }));
+  }
+
+  // ---------------------------------------------------------------- بخش خودکارسازی (نمای کلی همه‌ی اجزای غیرنمایشی)
+  const AUTO_KINDS = ["source", "ingest", "report", "records", "form", "import", "export"];
+  function drawAuto(main) {
+    const items = [];
+    pages().forEach((p) => (p.blocks || []).forEach((b) => { if (AUTO_KINDS.includes(b.kind)) items.push({ p, b }); }));
+    main.innerHTML = `<div class="pd-data" id="pd-auto"></div>`;
+    const box = main.querySelector("#pd-auto");
+    const NOTE = { source: "هسته به‌طور دوره‌ای از API واکشی می‌کند. میزبان باید در پنل (منابع بیرونی) تأیید شود.", ingest: "نشانی عمومی با توکن هر پایگاه؛ مالک پایگاه توکن می‌سازد.",
+      report: "دکمه‌ی گزارش PDF در بالای صفحه.", records: "فهرست با ویرایش و حذف ردیف.", form: "ثبت ردیف تازه.", import: "فایل کاربر ← جدول تازه (با کد).", export: "دکمه‌ی دانلود (با کد)." };
+    box.innerHTML = `<h2 class="pd-h" style="margin:0">${ic("bolt")}خودکارسازی، ورود و خروجی</h2>
+      <p class="pd-hint">همه‌ی اجزایی که داده می‌نویسند یا خروجی می‌سازند. برای افزودن، در بخش «صفحه‌ها» از گروه‌های «ورود و ویرایش داده» و «خودکارسازی و خروجی» بکشید.</p>` +
+      (items.length ? "" : `<div class="pd-empty">${ic("bolt")}<b>هنوز چیزی نیست</b><span>واکشی از API، دریافت از دستگاه یا گزارش PDF را به یک صفحه بیفزایید.</span></div>`) +
+      items.map(({ p, b }, i) => `<section class="pd-card"><div class="pd-row">${ic(ACT_ICON[b.kind] || "bolt")}<h3>${esc(b.title || KIND_LABEL[b.kind])}</h3><span class="pd-hint">${KIND_LABEL[b.kind]} · صفحه‌ی «${esc(p.title)}»${b.table ? " · " + esc(b.table) : ""}</span><span class="pd-spacer"></span>
+        ${issuesOf(b.id).length ? `<span class="badge-n" style="background:var(--red);color:#fff;border-radius:999px;padding:0 8px;font-size:11px">ایراد</span>` : ""}
+        <button class="btn ghost sm" type="button" data-open="${i}">${ic("edit")}<span>ویرایش</span></button></div><p class="pd-hint" style="margin:6px 0 0">${NOTE[b.kind] || ""}</p></section>`).join("");
+    box.querySelectorAll("[data-open]").forEach((x) => x.addEventListener("click", () => { const it = items[Number(x.dataset.open)]; pageKey = it.p.key; selId = it.b.id; tab = "pages"; draw(); }));
   }
 
   // ---------------------------------------------------------------- بخش داده
@@ -519,7 +665,9 @@
       <select data-c="type" aria-label="نوع">${COLTYPES.map(([v, l]) => `<option value="${v}"${v === kind ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>
       <label><input type="checkbox" data-c="required"${c.required ? " checked" : ""}>اجباری</label>
       <label><input type="checkbox" data-c="auto_now"${c.auto_now ? " checked" : ""}>زمان خودکار</label>
-      <button type="button" class="pd-ib" data-c="del" aria-label="حذف ستون">${ic("trash")}</button></div>`;
+      <button type="button" class="pd-ib" data-c="del" aria-label="حذف ستون">${ic("trash")}</button>
+      <div class="pd-col2"><input type="text" data-c="label" value="${esc(c.label || "")}" placeholder="برچسب فارسی (در فرم و جدول)" aria-label="برچسب فارسی">
+        ${c.type === "text" || !c.type ? `<input type="text" data-c="choices" value="${esc((c.choices || []).map((x) => x[0] + "=" + x[1]).join("، "))}" placeholder="گزینه‌ها: gandom=گندم، berenj=برنج (خالی = متن آزاد)" aria-label="گزینه‌ها" dir="auto">` : ""}</div></div>`;
   }
 
   function tableCard(t, pre) {
@@ -547,8 +695,10 @@
         if (type === "lat") { col.min = -90; col.max = 90; } else if (type === "lon") { col.min = -180; col.max = 180; }
         if (g("required").checked) col.required = true;
         if (g("auto_now").checked) col.auto_now = true;
-        const old = cur.columns[i] || {};
-        if (old.label) col.label = old.label;
+        const lab = (g("label") || {}).value;
+        if (lab && lab.trim()) col.label = lab.trim();
+        const chv = g("choices");
+        if (chv && chv.value.trim() && col.type === "text") col.choices = chv.value.split(/[،,\n]/).map((x) => x.trim()).filter(Boolean).map((x) => { const [v, ...r] = x.split("="); return [v.trim(), (r.join("=") || v).trim()]; });
         return col;
       }).filter((c) => c.name);
       return { name: suffix.startsWith(pre) ? suffix : pre + suffix, columns: cols, indexes: cur.indexes || [] };

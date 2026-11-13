@@ -84,7 +84,7 @@ class OpsTests(SimpleTestCase):
 
     def test_bad_blocks_rejected_structurally(self):
         s, k = with_page()
-        for blk in ({"kind": "nope"}, {"kind": "text", "width": "huge"}, "x", {"kind": "text", "a": {"b": {"c": {"d": {"e": 1}}}}}):
+        for blk in ({"kind": "nope"}, {"kind": "text", "width": "huge"}, "x", {"kind": "text", "a": {"b": {"c": {"d": {"e": {"f": {"g": 1}}}}}}}):
             with self.assertRaises(blueprint.BlueprintError):
                 blueprint.apply(s, PID, {"op": "block.add", "page": k, "block": blk})
         with self.assertRaises(blueprint.BlueprintError):

@@ -19,7 +19,7 @@ MAX_BLOCKS = 24  # سقف کیت صفحه (pagekit.parse_page)
 WIDTHS = ("full", "half", "third")
 GROUPS = ("data", "share", "manage")
 NEEDS = ("viewer", "editor", "owner")
-PAGE_FIELDS = ("title", "subtitle", "icon", "group", "need", "refresh")
+PAGE_FIELDS = ("title", "subtitle", "icon", "group", "need", "refresh", "params")
 BLOCK_STR_LIMIT = 4000
 ID_RE = re.compile(r"^[a-z][a-z0-9]{3,11}$")
 
@@ -64,7 +64,7 @@ def _find_block(spec: dict, bid: str) -> tuple[dict, int]:
 
 def _clean(v: Any, depth: int = 0) -> Any:
     """مقدار JSON ساده‌ی بلوک (متن کوتاه‌شده، فهرست و دیکشنری ساده)."""
-    if depth > 3:
+    if depth > 5:
         raise BlueprintError("ساختار بلوک بیش از حد تودرتو است.")
     if isinstance(v, str):
         return v[:BLOCK_STR_LIMIT]
@@ -98,7 +98,23 @@ def _page_fields(raw: dict) -> dict:
         if k not in raw:
             continue
         v = raw[k]
-        if k == "refresh":
+        if k == "params":
+            if not isinstance(v, list) or len(v) > wizard.MAX_PARAMS:
+                raise BlueprintError(f"حداکثر {wizard.MAX_PARAMS} فیلتر در هر صفحه.")
+            v = _clean(v)
+            if not all(isinstance(x, dict) for x in v):
+                raise BlueprintError("هر فیلتر یک شیء است.")
+            names = [x.get("name") for x in v]
+            if len(set(names)) != len(names):
+                raise BlueprintError("نام فیلترها باید یکتا باشد.")
+            for x in v:
+                try:
+                    wizard.pagekit.parse_param(x)
+                except wizard.pagekit.SpecError as exc:
+                    raise BlueprintError(f"فیلتر «{x.get('label') or x.get('name')}»: {exc}") from exc
+                if x["kind"] not in wizard.PARAM_BIND_KINDS:
+                    raise BlueprintError("نوع فیلتر «انتخابی» یا «متن» است.")
+        elif k == "refresh":
             if isinstance(v, bool) or not isinstance(v, int) or not (v == 0 or 5 <= v <= 3600):
                 raise BlueprintError("تازه‌سازی صفر یا بین ۵ تا ۳۶۰۰ ثانیه است.")
         else:
@@ -325,7 +341,7 @@ def analyze(spec: dict, plugin_id: str) -> dict:
             add("page", "صفحه دست‌کم یک بلوک نمایشی لازم دارد.", p["key"])
         for b in p.get("blocks") or []:
             try:
-                wizard.check_block(spec, b)
+                wizard.check_block(spec, b, p)
             except wizard.WizardError as exc:
                 add("block", str(exc), p["key"], b.get("id", ""))
     if not (spec.get("pages") or []):

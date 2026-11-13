@@ -16,17 +16,22 @@ from typing import Any
 from . import pagekit
 
 ID_RE = re.compile(r"^[a-z][a-z0-9_]{1,40}$")
+PARAM_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,30}$")
 IDENT_RE = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 DISPLAY = ("kpi", "table", "bars", "map", "text", "sql", "handler")
-ACTIONS = ("form", "ingest")
+ACTIONS = ("form", "ingest", "records")
 FILE_ACTIONS = ("import", "export")
-KINDS = DISPLAY + ACTIONS + FILE_ACTIONS
+EXTRA = ("report", "source")  # گزارش PDF و واکشی دوره‌ای از API بیرونی (ADR-0009)
+KINDS = DISPLAY + ACTIONS + FILE_ACTIONS + EXTRA
 HANDLER_DISPLAY = ("table", "kpi", "bars", "map")
 EXPORT_FORMATS = ("csv", "json", "txt", "geojson")
 AGGS = {"count": "count(*)", "sum": "sum({c})", "avg": "avg({c})", "min": "min({c})", "max": "max({c})"}
 NUMERIC = ("integer", "bigint", "double")
 MAX_PAGES, MAX_BLOCKS = 6, 12
 FIELD_KIND = {"text": "text", "integer": "int", "bigint": "int", "double": "number", "boolean": "bool", "date": "date"}
+GEOM_TYPES = ("point", "line", "polygon", "multipolygon")
+MAX_PARAMS = 6
+PARAM_BIND_KINDS = ("choice", "text")
 
 
 class WizardError(ValueError):
@@ -119,21 +124,41 @@ def q(name: str) -> str:
     return f'"{name}"'
 
 
-def _since(b: dict, t: dict) -> str:
-    col, mins = b.get("since_col") or "", b.get("since_minutes")
-    if not col:
-        return ""
-    _need_col(t, col, what="زمان", types=("timestamptz", "date"))
-    try:
-        n = int(mins)
-    except (TypeError, ValueError):
-        raise WizardError("بازه‌ی زمانی (دقیقه) عدد است.") from None
-    if not 1 <= n <= 525600:
-        raise WizardError("بازه‌ی زمانی بین ۱ دقیقه و یک سال باشد.")
-    return f" where {q(col)} > now() - interval '{n} minutes'"
+def _params_of(page: dict | None) -> dict[str, dict]:
+    return {p["name"]: p for p in (page or {}).get("params") or []}
 
 
-def block_sql(spec: dict, b: dict) -> tuple[str, dict]:
+def _where(b: dict, t: dict, page: dict | None) -> str:
+    """شرط‌های بلوک: بازه‌ی زمانی ثابت یا وابسته به فیلتر صفحه (`since_param`)، و فیلترهای برابری (`where`: [{param, col}]).
+    مقدار فیلتر همیشه با %(نام)s bind می‌شود؛ نام ستون فقط از جدول اعلام‌شده می‌آید."""
+    parts: list[str] = []
+    col, mins, sp = b.get("since_col") or "", b.get("since_minutes"), b.get("since_param") or ""
+    if col:
+        _need_col(t, col, what="زمان", types=("timestamptz", "date"))
+        if sp:
+            p = _params_of(page).get(sp)
+            if p is None or p["kind"] != "choice" or not all(str(c[0]).isdigit() for c in p.get("choices") or []):
+                raise WizardError("فیلتر بازه‌ی زمانی باید یکی از فیلترهای صفحه از نوع «انتخابی» با گزینه‌های عددی (دقیقه) باشد.")
+            parts.append(f"{q(col)} > now() - make_interval(mins => %({sp})s::int)")
+        else:
+            try:
+                n = int(mins)
+            except (TypeError, ValueError):
+                raise WizardError("بازه‌ی زمانی (دقیقه) عدد است.") from None
+            if not 1 <= n <= 525600:
+                raise WizardError("بازه‌ی زمانی بین ۱ دقیقه و یک سال باشد.")
+            parts.append(f"{q(col)} > now() - interval '{n} minutes'")
+    for w in b.get("where") or []:
+        pname, wcol = (w or {}).get("param", ""), (w or {}).get("col", "")
+        p = _params_of(page).get(pname)
+        if p is None or p["kind"] not in PARAM_BIND_KINDS or not PARAM_NAME_RE.fullmatch(pname):
+            raise WizardError(f"فیلتر «{pname}» در صفحه نیست (باید «متن» یا «انتخابی» باشد).")
+        _need_col(t, wcol, what="ستون فیلتر")
+        parts.append(f"({q(wcol)}::text = %({pname})s or %({pname})s = '')")
+    return (" where " + " and ".join(parts)) if parts else ""
+
+
+def block_sql(spec: dict, b: dict, page: dict | None = None) -> tuple[str, dict]:
     """بلوک نمایشی ← (SQL فقط‌خواندنی، فیلدهای اضافه‌ی بلوک مثل unit/columns). WizardError با پیام فارسی."""
     kind = b["kind"]
     if kind == "sql":
@@ -151,7 +176,7 @@ def block_sql(spec: dict, b: dict) -> tuple[str, dict]:
         if agg == "count" and b.get("distinct"):
             _need_col(t, b["distinct"], what="یکتا")
             expr = f"count(distinct {q(b['distinct'])})"
-        return f"select {expr} from {rel}{_since(b, t)}", {"unit": str(b.get("unit", ""))[:30]}
+        return f"select {expr} from {rel}{_where(b, t, page)}", {"unit": str(b.get("unit", ""))[:30]}
     if kind == "table":
         cols = b.get("columns") or [c["name"] for c in t["columns"]][:6]
         for c in cols:
@@ -163,7 +188,7 @@ def block_sql(spec: dict, b: dict) -> tuple[str, dict]:
         if not 1 <= limit <= 200:
             raise WizardError("تعداد ردیف بین ۱ و ۲۰۰ باشد.")
         direction = "desc" if b.get("desc", True) else "asc"
-        return (f"select {', '.join(q(c) for c in cols)} from {rel}{_since(b, t)} order by {q(order)} {direction} limit {limit}",
+        return (f"select {', '.join(q(c) for c in cols)} from {rel}{_where(b, t, page)} order by {q(order)} {direction} limit {limit}",
                 {"columns": [[c, c] for c in cols]})
     if kind == "bars":
         _need_col(t, b.get("label", ""), what="برچسب")
@@ -175,7 +200,7 @@ def block_sql(spec: dict, b: dict) -> tuple[str, dict]:
             _need_col(t, b.get("column", ""), what="مقدار", types=NUMERIC)
             val = val.format(c=q(b["column"]))
         lab = q(b["label"])
-        return f"select {lab}::text as label, {val} as value from {rel}{_since(b, t)} group by {lab} order by value desc limit 20", {}
+        return f"select {lab}::text as label, {val} as value from {rel}{_where(b, t, page)} group by {lab} order by value desc limit 20", {}
     if kind == "map":
         props = [c for c in (b.get("props") or []) if c]
         for c in props:
@@ -193,16 +218,32 @@ def block_sql(spec: dict, b: dict) -> tuple[str, dict]:
             _need_col(t, b["latest_by"], what="شناسه‌ی دستگاه")
             _need_col(t, b.get("time_col", ""), what="زمان", types=("timestamptz", "date"))
             order = f"{q(b['latest_by'])}, {q(b['time_col'])} desc"
-            return f"select distinct on ({q(b['latest_by'])}) {sel} from {rel}{_since(b, t)} order by {order}", {}
-        return f"select {sel} from {rel}{_since(b, t)} limit 2000", {}
+            return f"select distinct on ({q(b['latest_by'])}) {sel} from {rel}{_where(b, t, page)} order by {order}", {}
+        return f"select {sel} from {rel}{_where(b, t, page)} limit 2000", {}
     raise WizardError("نوع بلوک نامعتبر است.")
 
 
+def _choices(raw) -> list[list[str]]:
+    out = []
+    for c in raw or []:
+        if isinstance(c, (list, tuple)) and len(c) == 2:
+            out.append([str(c[0]).strip()[:60], str(c[1]).strip()[:60]])
+        elif isinstance(c, str) and c.strip():
+            out.append([c.strip()[:60], c.strip()[:60]])
+    return [c for c in out if c[0]]
+
+
 def _field_for(c: dict) -> dict:
+    if c["type"] in GEOM_TYPES:
+        return {"name": c["name"], "kind": "geometry", "geom": c["type"], "label": c.get("label") or c["name"], "required": bool(c.get("required"))}
     kind = FIELD_KIND.get(c["type"])
     if kind is None:
         raise WizardError(f"ستون «{c['name']}» از نوع {c['type']} در فرم/دریافت داده پشتیبانی نمی‌شود.")
     f = {"name": c["name"], "kind": kind, "label": c.get("label") or c["name"], "required": bool(c.get("required"))}
+    ch = _choices(c.get("choices"))
+    if c["type"] == "text" and ch:
+        f["kind"], f["choices"] = "choice", ch
+        return f
     for k in ("min", "max"):  # کران ستون (مثلاً عرض/طول جغرافیایی) در فرم و دریافت داده اعمال می‌شود
         if isinstance(c.get(k), (int, float)) and not isinstance(c.get(k), bool):
             f[k] = c[k]
@@ -212,7 +253,8 @@ def _field_for(c: dict) -> dict:
 
 
 def _action_columns(t: dict, b: dict) -> list[dict]:
-    names = b.get("fields") or [c["name"] for c in t["columns"] if not c.get("auto_now") and c["type"] in FIELD_KIND]
+    geom_ok = b.get("kind") in ("form", "records")
+    names = b.get("fields") or [c["name"] for c in t["columns"] if not c.get("auto_now") and (c["type"] in FIELD_KIND or geom_ok and c["type"] in GEOM_TYPES)]
     if not names:
         raise WizardError("دست‌کم یک ستونِ قابل‌نوشتن لازم است.")
     out = []
@@ -246,11 +288,82 @@ def _exts(raw) -> list[str]:
     return out
 
 
-def check_block(spec: dict, b: dict) -> None:
+def _records_item(spec: dict, b: dict, key: str) -> dict:
+    t = _need_table(spec, b)
+    flds = _action_columns(t, b)
+    plain = [f["name"] for f in flds if f["kind"] != "geometry"]
+    cols = [c for c in (b.get("columns") or plain[:4]) if c in plain]
+    if not cols:
+        raise WizardError("دست‌کم یک ستون غیرمکانی برای فهرست نمایش بدهید.")
+    return {"key": key, "title": b.get("title") or "ویرایش ردیف‌ها", "table": t["name"], "fields": flds, "columns": cols[:6],
+            "can_delete": b.get("can_delete", True) is not False, "limit": min(max(int(b.get("limit") or 50), 1), 100), "hint": str(b.get("hint", ""))[:240]}
+
+
+def _source_item(spec: dict, b: dict, key: str) -> dict:
+    t = _need_table(spec, b)
+    flds = []
+    for m in b.get("map") or []:
+        if not (m or {}).get("column"):
+            continue  # سطر خالی (تازه‌افزوده) نادیده گرفته می‌شود
+        c = _need_col(t, (m or {}).get("column", ""), what="ستون مقصد")
+        f = _field_for(c)
+        if f["kind"] == "geometry":
+            raise WizardError("ستون مکانی برای منبع بیرونی پشتیبانی نمی‌شود.")
+        path = str((m or {}).get("path") or c["name"]).strip()
+        flds.append({**f, "path": path})
+    if not flds:
+        raise WizardError("دست‌کم یک نگاشت «مسیر در پاسخ ← ستون» لازم است.")
+    q = b.get("query") or []
+    qd = dict(q) if isinstance(q, dict) else {str(k): str(v) for k, v in (x for x in q if isinstance(x, (list, tuple)) and len(x) == 2) if str(k).strip()}
+    item = {"key": key, "title": b.get("title") or "واکشی از API", "url": str(b.get("url", "")).strip(), "table": t["name"], "fields": flds,
+            "layout": b.get("layout") or "rows", "every_minutes": int(b.get("every_minutes") or 180), "since_days": int(b.get("since_days") or 2)}
+    for k in ("rows_path", "cursor", "hint", "secret_header", "secret_param"):
+        if str(b.get(k) or "").strip():
+            item[k] = str(b[k]).strip()
+    if qd:
+        item["query"] = qd
+    inputs = [i for i in b.get("inputs") or [] if isinstance(i, dict) and str(i.get("name", "")).strip()]
+    if inputs:
+        item["inputs"] = [{k: v for k, v in i.items() if v not in (None, "")} for i in inputs]
+    return item
+
+
+def _report_item(page: dict | None, b: dict, key: str) -> dict:
+    ids = [i for i in b.get("blocks") or [] if isinstance(i, str)]
+    out = {"key": key, "title": b.get("title") or "گزارش", "orientation": "landscape" if b.get("landscape") else "portrait",
+           "button": str(b.get("button") or "گزارش PDF")[:30]}
+    if str(b.get("subtitle") or "").strip():
+        out["subtitle"] = str(b["subtitle"]).strip()[:240]
+    if page is not None:
+        disp = [x["id"] for x in page.get("blocks") or [] if x.get("kind") in DISPLAY + ("handler",) and x.get("id")]
+        for i in ids:
+            if i not in disp:
+                raise WizardError("بلوک انتخاب‌شده برای گزارش در این صفحه نیست یا نمایشی نیست.")
+        out["blocks"] = [disp.index(i) + 1 for i in ids]
+    return out
+
+
+def _check_params(page: dict | None) -> None:
+    ps = (page or {}).get("params") or []
+    if len(ps) > MAX_PARAMS:
+        raise WizardError(f"حداکثر {MAX_PARAMS} فیلتر در هر صفحه.")
+    names = set()
+    for p in ps:
+        if not PARAM_NAME_RE.fullmatch(str(p.get("name", ""))) or p["name"] in names:
+            raise WizardError("نام فیلتر نامعتبر یا تکراری است.")
+        names.add(p["name"])
+        try:
+            pagekit.parse_param(p)
+        except pagekit.SpecError as exc:
+            raise WizardError(f"فیلتر «{p.get('label') or p['name']}»: {exc}") from exc
+
+
+def check_block(spec: dict, b: dict, page: dict | None = None) -> None:
     """یک بلوک را تنها (بدون نیاز به کامل‌بودن صفحه) می‌سنجد؛ WizardError با پیام فارسی."""
     kind = b.get("kind")
     if kind == "text":
         return
+    _check_params(page)
     if kind == "handler":
         handler_for(spec, b.get("handler", ""), "block")
         if b.get("display") not in HANDLER_DISPLAY:
@@ -265,12 +378,27 @@ def check_block(spec: dict, b: dict) -> None:
         if b.get("format", "csv") not in EXPORT_FORMATS:
             raise WizardError("قالب خروجی نامعتبر است.")
         return
+    if kind == "records":
+        try:
+            pagekit.parse_record(_records_item(spec, b, "rec1"))
+        except pagekit.SpecError as exc:
+            raise WizardError(str(exc)) from exc
+        return
     if kind in ACTIONS:
         if kind == "ingest" and b.get("handler"):
             handler_for(spec, b["handler"], "ingest")
         _action_columns(_need_table(spec, b), b)
         return
-    sql, _extra = block_sql(spec, b)
+    if kind == "source":
+        try:
+            pagekit.parse_source(_source_item(spec, b, "src1"))
+        except pagekit.SpecError as exc:
+            raise WizardError(str(exc)) from exc
+        return
+    if kind == "report":
+        _report_item(page, b, "rep1")
+        return
+    sql, _extra = block_sql(spec, b, page)
     if kind == "sql" and not sql:
         raise WizardError("SQL را بنویسید.")
 
@@ -284,9 +412,26 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
                            "order": int(page.get("order", 100))}
     if int(page.get("refresh", 0) or 0):
         out["refresh"] = int(page["refresh"])
+    _check_params(page)
+    if page.get("params"):
+        out["params"] = [{k: v for k, v in p.items() if v not in (None, "")} for p in page["params"]]
     blocks, forms, ingests, imports, exports, used = [], [], [], [], [], []
+    records, sources, reports, emitted = [], [], [], []
     for b in page.get("blocks") or []:
         kind = b["kind"]
+        if kind == "records":
+            item = _records_item(spec, b, f"rec{len(records) + 1}")
+            used.append(item["table"])
+            records.append(item)
+            continue
+        if kind == "source":
+            item = _source_item(spec, b, f"src{len(sources) + 1}")
+            used.append(item["table"])
+            sources.append(item)
+            continue
+        if kind == "report":
+            reports.append((b, f"rep{len(reports) + 1}"))
+            continue
         if kind == "import":
             imports.append({"key": f"imp{len(imports) + 1}", "title": b.get("title") or "ورود فایل", "handler": handler_for(spec, b.get("handler", ""), "importer"),
                             "extensions": _exts(b.get("extensions"))})
@@ -301,7 +446,11 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
             flds = _action_columns(t, b)
             key = f"{kind}{len(forms) + len(ingests) + 1}"
             if kind == "form":
-                forms.append({"key": key, "title": b.get("title") or "ثبت", "table": t["name"], "fields": flds})
+                form = {"key": key, "title": b.get("title") or "ثبت", "table": t["name"], "fields": flds}
+                for k, lim in (("submit", 30), ("hint", 240), ("success", 120)):
+                    if str(b.get(k) or "").strip():
+                        form[k] = str(b[k]).strip()[:lim]
+                forms.append(form)
             else:
                 ing = {"key": key, "title": b.get("title") or "دریافت داده‌ی دستگاه", "table": t["name"], "fields": flds,
                        "max_rows": int(b.get("max_rows") or 100), "rate": int(b.get("rate") or 60)}
@@ -321,12 +470,13 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
             if b.get("width") in ("full", "half", "third"):
                 item["width"] = b["width"]
             blocks.append(item)
+            emitted.append(b.get("id"))
             continue
         item: dict[str, Any] = {"kind": kind, "title": b.get("title", "")}
         if kind == "text":
             item["text"] = str(b.get("text", ""))
         else:
-            sql, extra = block_sql(spec, b)
+            sql, extra = block_sql(spec, b, page)
             item["sql"] = sql
             item.update({k: v for k, v in extra.items() if v})
             display = b.get("display") if kind == "sql" else kind
@@ -336,6 +486,7 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
         if b.get("width") in ("full", "half", "third"):
             item["width"] = b["width"]
         blocks.append(item)
+        emitted.append(b.get("id"))
     if not blocks:
         raise WizardError(f"صفحه‌ی «{page['title']}» دست‌کم یک بلوک نمایشی (شمارنده، جدول، نمودار، نقشه یا متن) لازم دارد.")
     out["blocks"] = blocks
@@ -347,9 +498,16 @@ def build_page(spec: dict, plugin_id: str, page: dict) -> dict:
         out["imports"] = imports
     if exports:
         out["exports"] = exports
+    if records:
+        out["records"] = records
+    if sources:
+        out["sources"] = sources
+    if reports:
+        shown = {"blocks": [{"id": i, "kind": "kpi"} for i in emitted if i]}
+        out["reports"] = [_report_item(shown, b, key) for b, key in reports]
     if used:
         out["tables"] = [tmap[n] for n in dict.fromkeys(used)]
-    if (forms or ingests or imports) and out["need"] == "viewer":
+    if (forms or ingests or imports or records or sources) and out["need"] == "viewer":
         out["need"] = "editor"
     return out
 

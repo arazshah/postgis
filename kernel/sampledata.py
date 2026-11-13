@@ -76,8 +76,24 @@ def rows(table: dict, n: int = N_ROWS, seed: int = 7) -> list[dict]:
     return out
 
 
-def _since(data: list[dict], b: dict) -> list[dict]:
+def _param_default(page: dict | None, name: str) -> str:
+    for p in (page or {}).get("params") or []:
+        if p.get("name") == name:
+            if str(p.get("default") or "") != "":
+                return str(p["default"])
+            return ""
+    return ""
+
+
+def _since(data: list[dict], b: dict, page: dict | None = None) -> list[dict]:
+    """بازه‌ی زمانی بلوک (ثابت یا از پیش‌فرض فیلتر صفحه) و فیلترهای برابری با مقدار پیش‌فرض فیلتر."""
+    for w in b.get("where") or []:
+        v = _param_default(page, (w or {}).get("param", ""))
+        if v != "":
+            data = [r for r in data if str(r.get((w or {}).get("col"))) == v]
     col, mins = b.get("since_col"), b.get("since_minutes")
+    if b.get("since_param"):
+        mins = _param_default(page, b["since_param"]) or next((str(p["choices"][0][0]) for p in (page or {}).get("params") or [] if p.get("name") == b["since_param"] and p.get("choices")), None)
     if not col or not mins:
         return data
     try:
@@ -115,14 +131,14 @@ def _base(b: dict, default_width: str = "full") -> dict:
     return {"kind": b["kind"], "title": b.get("title", ""), "width": _width(b, default_width), "hint": "", "error": "", "id": b.get("id", "")}
 
 
-def render_block(spec: dict, b: dict, data: dict[str, list[dict]]) -> dict:
+def render_block(spec: dict, b: dict, data: dict[str, list[dict]], page: dict | None = None) -> dict:
     """بلوک نقشه ← مدل نمایش (همان کلیدهای pagekit.render_block). ایراد بلوک = پیام خطا در همان بلوک، نه استثنا."""
     kind = b.get("kind")
     if kind == "text":
         out = _base(b)
         out["paras"] = [p.strip() for p in str(b.get("text", "")).split("\n\n") if p.strip()]
         return out
-    if kind in wizard.ACTIONS or kind in wizard.FILE_ACTIONS:
+    if kind in wizard.ACTIONS or kind in wizard.FILE_ACTIONS or kind in wizard.EXTRA:
         return {**_base(b), "kind": "action", "action": kind, "error": ""}
     if kind in ("sql", "handler"):
         shown = b.get("display")
@@ -132,12 +148,12 @@ def render_block(spec: dict, b: dict, data: dict[str, list[dict]]) -> dict:
         return out
     out = _base(b, "third" if kind == "kpi" else "full")
     try:
-        wizard.check_block(spec, b)
+        wizard.check_block(spec, b, page)
         t = wizard.table_map(spec)[b["table"]]
     except (wizard.WizardError, KeyError) as exc:
         out["error"] = str(exc) if isinstance(exc, wizard.WizardError) else "جدول بلوک را انتخاب کنید."
         return out
-    d = _since(data.get(t["name"]) or [], b)
+    d = _since(data.get(t["name"]) or [], b, page)
     if kind == "kpi":
         if b.get("agg", "count") == "count" and b.get("distinct"):
             v = len({r.get(b["distinct"]) for r in d})
@@ -185,6 +201,6 @@ def preview(spec: dict, page_key: str, seed: int = 7) -> dict:
     if page is None:
         raise ValueError("صفحه‌ای با این کلید نیست.")
     data = {t["name"]: rows(t, seed=seed) for t in spec.get("tables") or [] if t.get("name") and t.get("columns")}
-    blocks = [render_block(spec, b, data) for b in page.get("blocks") or []]
+    blocks = [render_block(spec, b, data, page) for b in page.get("blocks") or []]
     return {"page": page, "blocks": [b for b in blocks if b["kind"] != "action"], "actions": [b for b in blocks if b["kind"] == "action"],
             "all_blocks": blocks, "param_errors": [], "sample": True, "has_map": any(b["kind"] == "map" for b in blocks)}
