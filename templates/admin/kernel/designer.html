@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}استودیوی پلاگین — {{ draft.name }}{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+{% block body_class %}is-studio pd-page{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
+<link rel="stylesheet" href="{% static 'css/page-kit.css' %}">
+<link rel="stylesheet" href="{% static 'css/map-studio.css' %}">
+<link rel="stylesheet" href="{% static 'css/plugin-designer.css' %}">
+{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
+<div class="pd" id="pd">
+  {% csrf_token %}
+  <noscript><p class="msg warning">استودیوی دیداری به جاوااسکریپت نیاز دارد.</p></noscript>
+</div>
+{{ api|json_script:"pd-api" }}
+{{ icons|json_script:"pd-icons" }}
+{{ col_types|json_script:"pd-coltypes" }}
+{{ links|json_script:"pd-links" }}
+{{ codeinfo|json_script:"pd-code" }}
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
+<script src="{% static 'js/studio-ui.js' %}"></script>
+<script src="{% static 'js/plugin-designer.js' %}" defer></script>
+{% endblock %}

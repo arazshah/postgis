@@ -8,9 +8,10 @@
 from __future__ import annotations
 
 import re
+import tomllib
 
 from .runner import scan
-from .wizard import IDENT_RE, WizardError, columns_of, table_map
+from .wizard import IDENT_RE, WizardError, _key, _val, columns_of, table_map
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,30}$")
 ROLES = ("block", "importer", "exporter", "ingest", "alert")
@@ -277,3 +278,118 @@ def validate_code(spec: dict) -> None:
             e = h.get("every")
             if not isinstance(e, int) or isinstance(e, bool) or not 5 <= e <= 1440:
                 raise WizardError(f"فاصله‌ی هشدار «{name}» بین ۵ و ۱۴۴۰ دقیقه باشد.")
+
+
+# ---------------------------------------------------------------------- آزمون ساخت‌یافته ← TOML آزمون (kernel.pkgtest)
+MAX_CASES, MAX_SQL_MOCKS, MAX_MOCK_ROWS, MAX_FILE_TEXT = 10, 6, 200, 100_000
+EXPECT_INT = ("rows_count", "alerts_count")
+EXPECT_STR = ("text_contains", "error_contains")
+SCALAR = (str, int, float, bool, type(None))
+
+
+def _json_ok(v, depth=0) -> bool:
+    if depth > 6:
+        return False
+    if isinstance(v, SCALAR):
+        return True
+    if isinstance(v, list):
+        return len(v) <= 500 and all(_json_ok(x, depth + 1) for x in v)
+    if isinstance(v, dict):
+        return len(v) <= 100 and all(isinstance(k, str) and _json_ok(x, depth + 1) for k, x in v.items())
+    return False
+
+
+def normalize_cases(cases) -> list[dict]:
+    """موردهای آزمون ساخت‌یافته را می‌سنجد و پاک‌سازی‌شده برمی‌گرداند؛ WizardError با پیام فارسی."""
+    if not isinstance(cases, list) or not cases:
+        raise WizardError("دست‌کم یک مورد آزمون لازم است.")
+    if len(cases) > MAX_CASES:
+        raise WizardError(f"حداکثر {MAX_CASES} مورد آزمون.")
+    out = []
+    for i, c in enumerate(cases, 1):
+        if not isinstance(c, dict):
+            raise WizardError(f"مورد {i} نامعتبر است.")
+        name = str(c.get("name") or f"مورد {i}").strip()[:80]
+        item: dict = {"name": name}
+        params = c.get("params")
+        if params not in (None, {}, ""):
+            if not isinstance(params, dict) or not _json_ok(params):
+                raise WizardError(f"«{name}»: ورودی باید یک شیء JSON ساده باشد.")
+            item["params"] = params
+        file = c.get("file")
+        if file not in (None, ""):
+            if not isinstance(file, str) or len(file) > MAX_FILE_TEXT:
+                raise WizardError(f"«{name}»: فایل نمونه متن حداکثر {MAX_FILE_TEXT:,} نویسه است.")
+            item["file"] = file
+        sqls = []
+        for m in c.get("sql") or []:
+            if not isinstance(m, dict) or not str(m.get("match", "")).strip():
+                raise WizardError(f"«{name}»: هر پاسخ ساختگی SQL باید عبارت تطبیق داشته باشد.")
+            cols, rows = m.get("columns") or [], m.get("rows") or []
+            if not isinstance(cols, list) or not all(isinstance(x, str) and x for x in cols) or not isinstance(rows, list):
+                raise WizardError(f"«{name}»: ستون‌ها و ردیف‌های پاسخ ساختگی نامعتبر است.")
+            if len(rows) > MAX_MOCK_ROWS or not all(isinstance(r, list) and len(r) == len(cols) and all(isinstance(x, SCALAR) for x in r) for r in rows):
+                raise WizardError(f"«{name}»: هر ردیف ساختگی باید به‌اندازه‌ی ستون‌ها مقدار ساده داشته باشد (حداکثر {MAX_MOCK_ROWS} ردیف).")
+            sqls.append({"match": str(m["match"]).strip()[:200], "columns": cols, "rows": rows})
+        if len(sqls) > MAX_SQL_MOCKS:
+            raise WizardError(f"«{name}»: حداکثر {MAX_SQL_MOCKS} پاسخ ساختگی SQL.")
+        if sqls:
+            item["sql"] = sqls
+        exp = c.get("expect")
+        if not isinstance(exp, dict) or len(exp) != 1:
+            raise WizardError(f"«{name}»: دقیقاً یک انتظار انتخاب کنید.")
+        (k, v), = exp.items()
+        if k in EXPECT_INT:
+            if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 100000:
+                raise WizardError(f"«{name}»: مقدار انتظار عدد صحیح نامنفی است.")
+        elif k in EXPECT_STR:
+            if not isinstance(v, str) or not v.strip():
+                raise WizardError(f"«{name}»: متن انتظار را بنویسید.")
+        elif k == "equals":
+            if not isinstance(v, (dict, list)) or not _json_ok(v):
+                raise WizardError(f"«{name}»: «برابر با» یک شیء یا فهرست JSON ساده است.")
+        else:
+            raise WizardError(f"«{name}»: نوع انتظار ناشناخته است.")
+        item["expect"] = {k: v}
+        out.append(item)
+    return out
+
+
+def cases_toml(cases) -> str:
+    """موردهای ساخت‌یافته ← متن `tests/<handler>.toml`؛ خروجی همیشه از pkgtest.parse می‌گذرد."""
+    from . import pkgtest
+
+    norm = normalize_cases(cases)
+    lines: list[str] = []
+    for c in norm:
+        lines += ["[[cases]]", f"name = {_val(c['name'])}"]
+        if "params" in c:
+            lines.append(f"params = {_val(c['params'])}")
+        if "file" in c:
+            lines.append(f"file = {_val(c['file'])}")
+        for m in c.get("sql", []):
+            lines += ["[[cases.sql]]", f"match = {_val(m['match'])}", f"columns = {_val(m['columns'])}", f"rows = {_val(m['rows'])}"]
+        lines.append("[cases.expect]")
+        (k, v), = c["expect"].items()
+        lines += [f"{_key(k)} = {_val(v)}", ""]
+    text = "\n".join(lines)
+    try:
+        pkgtest.parse(text, "draft")
+    except pkgtest.TestSpecError as exc:
+        raise WizardError(f"آزمون: {exc}") from exc
+    return text
+
+
+def cases_from_toml(text: str) -> list[dict]:
+    """متن آزمون (قالب یا دستی) ← موردهای ساخت‌یافته؛ [] اگر نخوانده شد یا از قالب ساخت‌یافته بیرون است (مثلاً چند انتظار)."""
+    try:
+        raw = tomllib.loads(text or "").get("cases") or []
+        out = []
+        for c in raw:
+            exp = c.get("expect") or {}
+            if len(exp) != 1:
+                return []
+            out.append({k: v for k, v in {"name": c.get("name"), "params": c.get("params"), "file": c.get("file"), "sql": c.get("sql"), "expect": exp}.items() if v is not None})
+        return normalize_cases(out)
+    except (tomllib.TOMLDecodeError, WizardError, AttributeError, TypeError):
+        return []

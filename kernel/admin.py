@@ -403,9 +403,17 @@ class PluginDraftAdmin(admin.ModelAdmin):
         from django.urls import path
 
         wrap = self.admin_site.admin_view
-        from . import wizard_admin
+        from . import studio_api, wizard_admin
 
-        return [path("wizard/", wrap(wizard_admin.view), name="kernel_plugindraft_wizard_new"),
+        return [path("<int:pk>/designer/", wrap(studio_api.designer), name="kernel_plugindraft_designer"),
+                path("<int:pk>/designer/api/state/", wrap(studio_api.state), name="kernel_plugindraft_api_state"),
+                path("<int:pk>/designer/api/op/", wrap(studio_api.op), name="kernel_plugindraft_api_op"),
+                path("<int:pk>/designer/api/preview/<str:page>/", wrap(studio_api.preview), name="kernel_plugindraft_api_preview"),
+                path("<int:pk>/designer/api/revisions/", wrap(studio_api.revisions), name="kernel_plugindraft_api_revisions"),
+                path("<int:pk>/designer/api/assistant/", wrap(studio_api.assistant), name="kernel_plugindraft_api_assistant"),
+                path("<int:pk>/designer/api/run/", wrap(studio_api.run), name="kernel_plugindraft_api_run"),
+                path("<int:pk>/designer/api/restore/", wrap(studio_api.restore), name="kernel_plugindraft_api_restore"),
+                path("wizard/", wrap(wizard_admin.view), name="kernel_plugindraft_wizard_new"),
                 path("<int:pk>/wizard/<int:step>/", wrap(wizard_admin.view), name="kernel_plugindraft_wizard"),
                 path("studio/new/", wrap(self.studio_view), name="kernel_plugindraft_new"),
                 path("<int:pk>/studio/", wrap(self.studio_view), name="kernel_plugindraft_studio"),

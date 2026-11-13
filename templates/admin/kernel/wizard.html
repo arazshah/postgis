@@ -31,6 +31,7 @@
 </style>{% endblock %}
 {% block content %}
 <div id="content-main" class="ap-flat">
+  {% if draft %}<p class="wz-muted"><a class="button default" href="{% url 'admin:kernel_plugindraft_designer' draft.pk %}">باز کردن در استودیوی دیداری</a> — ساخت صفحه با کشیدن و رها کردن و پیش‌نمایش زنده.</p>{% endif %}
   <ol class="wz-steps" aria-label="مرحله‌های ساخت">
     {% for n, label in steps %}<li class="{% if n == step %}on{% endif %}">{% if draft %}<a href="{% url 'admin:kernel_plugindraft_wizard' draft.pk n %}"><b>{{ n }}</b>{{ label }}</a>{% else %}<span><b>{{ n }}</b>{{ label }}</span>{% endif %}</li>{% endfor %}
   </ol>

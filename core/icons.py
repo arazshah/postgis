@@ -3,6 +3,9 @@
 """
 
 ICONS: dict[str, str] = {
+    'undo': '<path d="M9 7 4 12l5 5"/><path d="M4 12h9a6 6 0 0 1 0 6h-3"/>',
+    'redo': '<path d="m15 7 5 5-5 5"/><path d="M20 12h-9a6 6 0 0 0 0 6h3"/>',
+    'desktop': '<path d="M3 4h18v12H3z"/><path d="M8 21h8"/><path d="M12 16v5"/>',
     'phone': '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
     'mail': '<path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/>',
     'bell': '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/>',
