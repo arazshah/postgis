@@ -4,7 +4,10 @@ from kernel import settings as site_settings
 from kernel.showcase import Showcase
 from kernel.showcase import add as _showcase
 
+from . import sources as _sources
+
 plugin = plugins.register("satellite", "تصویر ماهواره‌ای", kind="feature", requires=("databases", "enterprise", "jobs"))
+_sources.declare(plugin.id)
 
 jobs.register_kind("satellite", "دریافت تصویر ماهواره‌ای", "satellite.jobs.do_satellite", plugin=plugin.id,
                    destination="satellite:index")
@@ -19,6 +22,10 @@ site_settings.tab("sat", "ماهواره", "satellite", plugin=plugin.id, order=
 site_settings.section("satgate", "sat", "دروازه‌ی ماهواره (دریافت تصویر ماهواره‌ای)", plugin=plugin.id, order=90,
                       fields=("satgate_status", "satgate_url", "satgate_secret", "generate_satgate_secret", "clear_satgate_secret", "satgate_tools"),
                       description="کار سنگین تصویر ماهواره‌ای روی یک سرور کوچک خارج از ایران (دروازه) انجام می‌شود؛ راه‌اندازی آن در satgate/README.md آمده است. نشانی و کلید را اینجا بدهید، ذخیره کنید و «آزمایش اتصال» را بزنید. نیازی به تغییر متغیرهای Coolify یا اجرای دوباره‌ی سرویس نیست.")
+site_settings.section("satsources", "sat", "منابع ماهواره", plugin=plugin.id, order=95, fields=("satsources_link",),
+                      description="هر تأمین‌کننده (کلید و نشانی) و هر ماهواره یا لایه‌ی آماده (روشن، هزینه از سهمیه‌ی مشترک، سقف مساحت) از یک صفحه.")
+site_settings.display("satsources_link", "منابع ماهواره", "satellite.settings_admin.sources_link", plugin=plugin.id)
+site_settings.tool("satsources", "satellite-sources/", "satellite.settings_admin.sources_view", plugin=plugin.id)
 site_settings.display("satgate_status", "وضعیت دروازه", "satellite.settings_admin.satgate_status", plugin=plugin.id)
 site_settings.display("satgate_tools", "ابزار دروازه", "satellite.settings_admin.satgate_tools", plugin=plugin.id)
 site_settings.tool("satgatetest", "satgate-test/", "satellite.settings_admin.satgate_test_view", plugin=plugin.id)

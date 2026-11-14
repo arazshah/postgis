@@ -17,6 +17,8 @@ def validate(body: dict, max_km2: float) -> tuple[dict | None, str]:
     mission, index = str(body.get("mission") or "sentinel2"), str(body.get("index") or "")
     if mission not in MISSIONS:
         return None, "ماهواره‌ی ناشناخته است."
+    if MISSIONS[mission].kind != "optical":
+        return None, "شاخص طیفی فقط روی تصویر چندطیفی محاسبه می‌شود، نه رادار یا لایه‌ی آماده."
     if index not in INDICES:
         return None, "شاخص ناشناخته است."
     feats = body.get("features")
@@ -43,7 +45,8 @@ def validate(body: dict, max_km2: float) -> tuple[dict | None, str]:
     if start > end or (end - start).days > 400:
         return None, "بازه‌ی تاریخ باید بین یک روز تا ۴۰۰ روز باشد."
     return {"mission": mission, "index": index, "features": clean, "bbox": bbox, "start": start.isoformat(),
-            "end": end.isoformat(), "max_cloud": cloud, "max_scenes": n, "mask": bool(body.get("mask", True))}, ""
+            "end": end.isoformat(), "max_cloud": cloud, "max_scenes": n,
+            "mask": bool(body.get("mask", True)) and MISSIONS[mission].has_mask}, ""
 
 
 def run_zonal(p: dict, fetch=stac.fetch_json, sign_for=None) -> dict:
@@ -60,12 +63,13 @@ def run_zonal(p: dict, fetch=stac.fetch_json, sign_for=None) -> dict:
         raise ProcessError("محدوده بیش از سقف پردازش است.")
     labels = feature_labels(p["features"], (grid["height"], grid["width"]), grid["transform"], grid["crs"])
     bands = index_bands(p["index"])
-    sign = sign_for(m.collection) if sign_for else None
     rows, scenes, skipped = [], [], []
     for sc in chosen:
         try:
-            item = stac.get_item(m.collection, sc["id"], fetch)
-            refl = scene_refl(item, p["mission"], bands, grid, sign, p["mask"])
+            src = m.source(sc.get("source") or None) or m.primary
+            item = stac.get_item(src.collection, sc["id"], fetch, src.provider)
+            sign = sign_for(src.collection) if sign_for else None
+            refl = scene_refl(item, p["mission"], bands, grid, sign, p["mask"], src)
             values = index_array(refl, p["index"])
             st = zonal_stats(labels, values, len(p["features"]))
         except (ProcessError, stac.StacError, ZonalError) as exc:

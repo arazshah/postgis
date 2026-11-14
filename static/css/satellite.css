@@ -130,3 +130,8 @@ dialog.sat-chart{width:min(960px,calc(100vw - 32px))}
 .sat-an .sat-row{align-items:center}
 .sat-an .sat-row h2{flex:1}
 @media (max-width:640px){.sat-two{grid-template-columns:1fr}.sat-chart-box{height:300px}}
+
+/* گروه‌بندی ماهواره‌ها و برچسب هزینه */
+.sat-grp{grid-column:1/-1;font-size:12px;font-weight:600;color:var(--ink-3);margin-top:6px}
+.sat-grp:first-child{margin-top:0}
+.sat-prod .cost{display:inline-block;margin-inline-start:6px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:600;background:var(--ochre-soft,var(--teal-soft));color:var(--ink-2,inherit)}

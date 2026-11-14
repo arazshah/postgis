@@ -757,13 +757,19 @@ class AppTests(unittest.TestCase):
 
     def test_missions_endpoint_reports_each_satellite_and_caches(self):
         n = []
+        names = {a for m in spec.MISSIONS.values() for s_ in m.sources for a in (*s_.assets.values(), s_.mask_asset, s_.asset) if a}
+        feature = {"id": "X", "assets": {a: {"href": "https://x.example/" + a} for a in names}}
 
         def fetch(url, body=None, timeout=30):
             n.append(url)
             if "planetarycomputer" in url:
                 raise stac.StacError("به کاتالوگ تصویر وصل نشدیم.")
-            return {"features": []}
+            return {"features": [feature]}
         self.gw.fetch = fetch
+        from unittest import mock
+        patcher = mock.patch.object(stac, "_read_head", lambda href: b"x")
+        patcher.start()
+        self.addCleanup(patcher.stop)
         j = json.loads(self.call("GET", "/v1/missions")["body"])["missions"]
         self.assertTrue(j["sentinel2"]["ok"])
         self.assertFalse(j["landsat"]["ok"])

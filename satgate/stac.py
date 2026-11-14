@@ -2,21 +2,17 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
-from .spec import COLLECTION_DEM, COLLECTION_LANDSAT, COLLECTION_S2, MISSIONS, satellite_of, valid_bbox
+from .runtime import RUNTIME
+from .spec import COLLECTION_S2, MISSIONS, PROVIDERS, Mission, Source, satellite_of, valid_bbox
 
-STAC_URL = os.environ.get("SATGATE_STAC_URL", "https://earth-search.aws.element84.com/v1").rstrip("/")
-# Landsat Collection 2 Level-2 از Microsoft Planetary Computer: کاتالوگ آزاد، فایل‌ها با توکن رایگان و بدون حساب
-LANDSAT_STAC_URL = os.environ.get("SATGATE_LANDSAT_STAC_URL", "https://planetarycomputer.microsoft.com/api/stac/v1").rstrip("/")
-LANDSAT_TOKEN_URL = os.environ.get("SATGATE_LANDSAT_TOKEN_URL",
-                                   "https://planetarycomputer.microsoft.com/api/sas/v1/token/landsat-c2-l2")
-STAC_BY_COLLECTION = {COLLECTION_S2: STAC_URL, COLLECTION_DEM: STAC_URL, COLLECTION_LANDSAT: LANDSAT_STAC_URL}
-SIGNED_HOST = ".blob.core.windows.net"
+# نشانی پیش‌فرض کاتالوگ‌ها (پنل می‌تواند عوض کند؛ runtime.provider_url مرجع است)؛ برای سازگاری با کد قدیمی می‌ماند
+STAC_URL = RUNTIME.provider_url("earthsearch")
+LANDSAT_STAC_URL = RUNTIME.provider_url("planetary")
 UA = "postgis.ir satgate"
 
 
@@ -100,40 +96,105 @@ def thumb_asset(item: dict) -> dict | None:
     return None
 
 
-def _scene(it: dict, bbox, default_collection: str = COLLECTION_S2) -> dict:
+def _scene(it: dict, bbox, default_collection: str = COLLECTION_S2, source: str = "") -> dict:
     p = it.get("properties", {})
     sat, agency = satellite_of(it["id"])
-    return {"id": it["id"], "collection": it.get("collection", default_collection), "datetime": p.get("datetime", ""),
-            "satellite": sat, "agency": agency, "gsd": p.get("gsd"),
+    return {"id": it["id"], "collection": it.get("collection", default_collection), "source": source,
+            "datetime": p.get("datetime", ""), "satellite": sat, "agency": agency, "gsd": p.get("gsd"),
             "cloud": round(float(p.get("eo:cloud_cover", 0) or 0), 1), "tile": p.get("grid:code") or p.get("s2:mgrs_tile", ""),
             "coverage": coverage(it.get("geometry"), bbox), "thumb": thumb_asset(it) is not None}
 
 
+def ordered_sources(m: Mission, source: str | None = None) -> list[Source]:
+    """منبع‌های قابل‌استفاده‌ی یک ماهواره: اگر source داده شده فقط همان، وگرنه به ترتیب اولویت و فقط تأمین‌کننده‌ی روشن."""
+    if source:
+        s = m.source(source)
+        return [s] if s else []
+    srcs = RUNTIME.sources(m.key)
+    return srcs
+
+
+def _search_one(src: Source, m: Mission, bbox, start: str, end: str, max_cloud: float, limit: int, fetch) -> list[dict]:
+    query: dict = {}
+    if m.kind == "optical":
+        query["eo:cloud_cover"] = {"lte": float(max_cloud)}
+    if src.platforms:
+        query["platform"] = {"in": list(src.platforms)}
+    body = {"collections": [src.collection], "bbox": [float(v) for v in bbox], "limit": min(int(limit), 50),
+            "datetime": f"{start}T00:00:00Z/{end}T23:59:59Z",
+            "sortby": [{"field": "properties.datetime", "direction": "desc"}]}
+    if query:
+        body["query"] = query
+    res = fetch(f"{RUNTIME.provider_url(src.provider)}/search", body)
+    return [_scene(it, bbox, src.collection, src.provider) for it in res.get("features", [])]
+
+
 def search(bbox, start: str, end: str, max_cloud: float = 30, limit: int = 24, fetch=fetch_json,
-           mission: str = "sentinel2") -> list[dict]:
+           mission: str = "sentinel2", source: str | None = None) -> list[dict]:
+    """جست‌وجوی تصویر. اگر تأمین‌کننده‌ی اول خطا بدهد یا چیزی نداشته باشد، تأمین‌کننده‌ی بعدیِ همان ماهواره امتحان می‌شود."""
     if not valid_bbox(bbox):
         raise StacError("محدوده نامعتبر است.")
     m = MISSIONS.get(mission)
-    if m is None:
+    if m is None or m.kind == "layer":
         raise StacError("ماهواره‌ی نامعتبر است.")
-    query = {"eo:cloud_cover": {"lte": float(max_cloud)}}
-    if m.platforms:
-        query["platform"] = {"in": list(m.platforms)}
-    body = {"collections": [m.collection], "bbox": [float(v) for v in bbox], "limit": min(int(limit), 50),
-            "datetime": f"{start}T00:00:00Z/{end}T23:59:59Z", "query": query,
-            "sortby": [{"field": "properties.datetime", "direction": "desc"}]}
-    res = fetch(f"{STAC_BY_COLLECTION[m.collection]}/search", body)
-    scenes = [_scene(it, bbox, m.collection) for it in res.get("features", [])]
+    srcs = ordered_sources(m, source)
+    if not srcs:
+        raise StacError("این ماهواره الان فعال نیست.")
+    scenes, last = [], None
+    for src in srcs:
+        try:
+            scenes = _search_one(src, m, bbox, start, end, max_cloud, limit, fetch)
+        except StacError as exc:
+            last = exc
+            continue
+        last = None
+        if scenes:
+            break
+    if last is not None and not scenes:
+        raise last
     # تصویری که بخش بزرگی از منطقه را نمی‌پوشاند آخر فهرست می‌آید
     scenes.sort(key=lambda s: (s["coverage"] < 95, -int(s["datetime"][:10].replace("-", "") or 0), s["cloud"]))
     return scenes
 
 
-def get_item(collection: str, item_id: str, fetch=fetch_json) -> dict:
-    return fetch(f"{STAC_BY_COLLECTION.get(collection, STAC_URL)}/collections/{collection}/items/{item_id}")
+def _provider_of(collection: str, provider: str | None = None) -> str:
+    """تأمین‌کننده‌ی یک مجموعه؛ اگر نگفته باشند اولین منبعی که آن را دارد (برای S2 همان Earth Search)."""
+    if provider and provider in PROVIDERS:
+        return provider
+    for m in MISSIONS.values():
+        for s in m.sources:
+            if s.collection == collection:
+                return s.provider
+    return "earthsearch"
 
 
-# ------------------------------------------------------------------ توکن خواندن فایل (Landsat روی Azure)
+def get_item(collection: str, item_id: str, fetch=fetch_json, provider: str | None = None) -> dict:
+    return fetch(f"{RUNTIME.provider_url(_provider_of(collection, provider))}/collections/{collection}/items/{item_id}")
+
+
+def layer_items(m: Mission, bbox, fetch=fetch_json, source: str | None = None) -> tuple[Source, list[dict]]:
+    """کاشی‌های یک لایه‌ی آماده (ارتفاع، پوشش زمین، آب) با جایگزینی تأمین‌کننده؛ (منبع، فهرست آیتم)."""
+    srcs = ordered_sources(m, source)
+    if not srcs:
+        raise StacError("این لایه الان فعال نیست.")
+    last = None
+    for src in srcs:
+        body = {"collections": [src.collection], "bbox": [float(v) for v in bbox], "limit": 24}
+        if src.datetime:
+            body["datetime"] = src.datetime
+        try:
+            items = fetch(f"{RUNTIME.provider_url(src.provider)}/search", body).get("features", [])
+        except StacError as exc:
+            last = exc
+            continue
+        if items:
+            return src, items
+    if last is not None:
+        raise last
+    return srcs[0], []
+
+
+# ------------------------------------------------------------------ توکن خواندن فایل (Azure؛ Planetary Computer)
 _TOKENS: dict[str, tuple[str, float]] = {}
 
 
@@ -142,10 +203,10 @@ def _token(collection: str, fetch=fetch_json) -> str:
     tok, until = _TOKENS.get(collection, ("", 0.0))
     if tok and until > time.time():
         return tok
-    data = fetch(LANDSAT_TOKEN_URL)
+    data = fetch(PROVIDERS["planetary"].token_url.format(collection=collection))
     tok = str(data.get("token", ""))
     if not tok:
-        raise StacError("توکن خواندن تصویر Landsat گرفته نشد.")
+        raise StacError("توکن خواندن تصویر گرفته نشد.")
     ttl = 600.0
     try:
         from datetime import datetime
@@ -156,34 +217,80 @@ def _token(collection: str, fetch=fetch_json) -> str:
     return tok
 
 
+def _hosted_by(collection: str, provider: str) -> bool:
+    return any(s.provider == provider and s.collection == collection for m in MISSIONS.values() for s in m.sources)
+
+
 def sign_href(collection: str, href: str, fetch=fetch_json) -> str:
-    """آدرس فایل را در صورت نیاز با توکن می‌خواند (فقط Landsat روی Azure)."""
+    """آدرس فایل را در صورت نیاز با توکن می‌خواند (فقط فایل‌های Azure از مجموعه‌ای که Planetary Computer دارد)."""
     host = urlparse(href).hostname or ""
-    if collection == COLLECTION_LANDSAT and host.endswith(SIGNED_HOST):
-        return href + ("&" if "?" in href else "?") + _token(collection, fetch)
+    for p in PROVIDERS.values():
+        if p.token_url and host.endswith(p.signed_host) and _hosted_by(collection, p.key):
+            return href + ("&" if "?" in href else "?") + _token(collection, fetch)
     return href
 
 
 # ------------------------------------------------------------------ بررسی در دسترس بودن هر ماهواره
-def check_mission(key: str, fetch=fetch_json, open_url=None) -> dict:
-    """آیا دروازه واقعاً به کاتالوگ و داده‌ی این ماهواره می‌رسد؟ {ok, ms, error}."""
-    m = MISSIONS[key]
+TEHRAN = [51.3, 35.7, 51.4, 35.8]
+
+
+def _missing_assets(item: dict, m: Mission, src: Source) -> list[str]:
+    """داراییِ لازم که در نمونه نیست (نام باندها در هر کاتالوگ فرق دارد؛ این بررسی ناهماهنگی نام را پیش از سفارش کاربر نشان می‌دهد)."""
+    have = item.get("assets", {})
+    need = [src.asset] if m.kind == "layer" else list(dict.fromkeys(src.assets.values()))
+    if src.mask_asset and m.kind == "optical":
+        need.append(src.mask_asset)
+    return [n for n in need if n not in have]
+
+
+def check_source(m: Mission, src: Source, fetch=fetch_json, open_url=None, strict: bool = False) -> dict:
+    """آیا دروازه واقعاً به کاتالوگ و داده‌ی این منبع می‌رسد؟ {ok, ms, error}."""
     t = time.monotonic()
     try:
         from datetime import date, timedelta
-        end = date.today()
-        res = fetch(f"{STAC_BY_COLLECTION[m.collection]}/search", {
-            "collections": [m.collection], "limit": 1, "bbox": [51.3, 35.7, 51.4, 35.8],
-            "datetime": f"{(end - timedelta(days=120)).isoformat()}T00:00:00Z/{end.isoformat()}T23:59:59Z"})
+        body = {"collections": [src.collection], "limit": 1, "bbox": TEHRAN}
+        if m.kind == "layer":
+            if src.datetime:
+                body["datetime"] = src.datetime
+        else:
+            end = date.today()
+            days = 400 if m.kind == "sar" else 120      # رادار در برخی کاتالوگ‌ها کم‌پوشش‌تر است
+            body["datetime"] = f"{(end - timedelta(days=days)).isoformat()}T00:00:00Z/{end.isoformat()}T23:59:59Z"
+        res = fetch(f"{RUNTIME.provider_url(src.provider)}/search", body)
         feat = (res.get("features") or [None])[0]
-        href = (thumb_asset(feat or {}) or {}).get("href", "")
-        if href:
-            data = (open_url or _read_head)(sign_href(m.collection, href, fetch))
-            if not data:
-                raise StacError("فایل تصویر خوانده نشد.")
+        if feat is None and strict:
+            raise StacError("کاتالوگ برای نمونه‌ی آزمون (تهران) چیزی برنگرداند.")
+        if feat is not None:
+            if strict:
+                miss = _missing_assets(feat, m, src)
+                if miss:
+                    raise StacError("داراییِ لازم در کاتالوگ نیست: " + "، ".join(miss))
+            href = (thumb_asset(feat) or {}).get("href", "")
+            if not href and strict:
+                key = src.asset or next(iter(src.assets.values()), "")
+                href = (feat.get("assets", {}).get(key) or {}).get("href", "")
+            if href:
+                data = (open_url or _read_head)(sign_href(src.collection, href, fetch))
+                if not data:
+                    raise StacError("فایل تصویر خوانده نشد.")
         return {"ok": True, "ms": int((time.monotonic() - t) * 1000)}
     except (StacError, OSError) as exc:
         return {"ok": False, "ms": int((time.monotonic() - t) * 1000), "error": str(exc)[:160]}
+
+
+def check_mission(key: str, fetch=fetch_json, open_url=None, strict: bool = False) -> dict:
+    """وضعیت یک ماهواره: ok اگر دست‌کم یکی از منبع‌های فعالش کار کند؛ sources نتیجه‌ی هر تأمین‌کننده است."""
+    m = MISSIONS[key]
+    t = time.monotonic()
+    srcs = ordered_sources(m)
+    if not srcs:
+        return {"ok": False, "ms": 0, "error": "از پنل خاموش است یا تأمین‌کننده‌ی فعالی ندارد.", "disabled": True, "sources": {}}
+    per = {s.provider: check_source(m, s, fetch, open_url, strict) for s in srcs}
+    good = next((r for r in per.values() if r["ok"]), None)
+    if good:
+        return {"ok": True, "ms": good["ms"], "sources": per}
+    first = next(iter(per.values()))
+    return {"ok": False, "ms": int((time.monotonic() - t) * 1000), "error": first.get("error", ""), "sources": per}
 
 
 def _read_head(href: str) -> bytes:
@@ -195,8 +302,3 @@ def _read_head(href: str) -> bytes:
         raise StacError(f"دسترسی به فایل تصویر رد شد ({exc.code}).") from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise StacError("به فایل تصویر وصل نشدیم.") from exc
-
-
-def dem_items(bbox, fetch=fetch_json) -> list[dict]:
-    res = fetch(f"{STAC_URL}/search", {"collections": [COLLECTION_DEM], "bbox": [float(v) for v in bbox], "limit": 16})
-    return res.get("features", [])

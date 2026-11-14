@@ -13,9 +13,9 @@ from satgate import protocol
 
 
 class GatewayError(Exception):
-    def __init__(self, message: str, status: int | None = None):
+    def __init__(self, message: str, status: int | None = None, reason: str = ""):
         super().__init__(message)
-        self.status = status
+        self.status, self.reason = status, reason
 
 
 _FA = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
@@ -71,12 +71,16 @@ def _open(method: str, path: str, body: bytes = b"", timeout: int | None = None)
         msg = info.get("error", "") if isinstance(info, dict) else ""
         if exc.code == 401:
             msg = reject_message(info if isinstance(info, dict) else {})
-        raise GatewayError(msg or f"دروازه‌ی ماهواره پاسخ {exc.code} داد.", exc.code) from exc
+        raise GatewayError(msg or f"دروازه‌ی ماهواره پاسخ {exc.code} داد.", exc.code,
+                           str(info.get("reason", "")) if isinstance(info, dict) else "") from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise GatewayError("دروازه‌ی ماهواره موقتاً در دسترس نیست؛ کمی بعد دوباره امتحان کنید.") from exc
 
 
-def call(method: str, path: str, data: dict | None = None, timeout: int | None = None) -> dict:
+CFG_PATHS = ("/v1/search", "/v1/jobs", "/v1/analyze")   # این درخواست‌ها چکیده‌ی پیکربندی را می‌برند
+
+
+def _call(method: str, path: str, data: dict | None, timeout: int | None) -> dict:
     body = json.dumps(data, ensure_ascii=False).encode() if data is not None else b""
     with _open(method, path, body, timeout) as r:
         try:
@@ -85,8 +89,26 @@ def call(method: str, path: str, data: dict | None = None, timeout: int | None =
             raise GatewayError("پاسخ دروازه خوانا نبود.") from exc
 
 
-def thumb(collection: str, item_id: str) -> bytes:
-    with _open("GET", f"/v1/thumb/{collection}/{item_id}.jpg") as r:
+def call(method: str, path: str, data: dict | None = None, timeout: int | None = None, cfg: bool = True) -> dict:
+    """درخواست امضاشده. جست‌وجو و کار چکیده‌ی پیکربندی را می‌برند؛ اگر دروازه پیکربندی دیگری داشت (۴۰۹)
+    پنل آن را می‌فرستد و یک بار دوباره امتحان می‌کند."""
+    if not (cfg and method == "POST" and path in CFG_PATHS and isinstance(data, dict)):
+        return _call(method, path, data, timeout)
+    from . import sources
+
+    try:
+        return _call(method, path, {**data, "cfg": sources.config_hash()}, timeout)
+    except GatewayError as exc:
+        if exc.status != 409 or exc.reason != "config":
+            raise
+    ok, msg = sources.push()
+    if not ok:
+        raise GatewayError("پیکربندی دروازه به‌روز نشد: " + msg)
+    return _call(method, path, {**data, "cfg": sources.config_hash()}, timeout)
+
+
+def thumb(collection: str, item_id: str, source: str = "") -> bytes:
+    with _open("GET", f"/v1/thumb/{collection}/{item_id}.jpg" + (f"?src={source}" if source else "")) as r:
         return r.read(2_000_000)
 
 

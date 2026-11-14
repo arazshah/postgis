@@ -31,6 +31,7 @@ class SatRequest(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     mission = models.CharField("ماهواره", max_length=12, default="sentinel2")
     mask = models.BooleanField("حذف ابر و سایه", default=False)
+    credit_cost = models.PositiveSmallIntegerField("هزینه از سهمیه", default=1, help_text="وزن ماهواره در زمان سفارش")
     composite = models.JSONField("ترکیب بی‌ابر (بازه و سقف‌ها)", null=True, blank=True, default=None)
     product = models.CharField("محصول", max_length=20, choices=PRODUCT_CHOICES)
     scene_id = models.CharField("شناسه‌ی تصویر", max_length=120, blank=True)

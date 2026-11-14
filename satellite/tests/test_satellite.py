@@ -693,14 +693,16 @@ class ProbeTests(TestCase):
     def test_all_steps_pass(self):
         health = mock.MagicMock()
         health.__enter__.return_value.read.return_value = b'{"ok": true, "version": "1.0", "configured": true}'
-        replies = [{"ok": True, "stac_ms": 120, "data_ms": 300},
-                   {"missions": {"sentinel2": {"ok": True, "ms": 90}, "landsat": {"ok": True, "ms": 210}}},
+        from satgate.spec import MISSIONS
+        live = {k: {"ok": True, "ms": 90 + i, "sources": {m.primary.provider: {"ok": True}}} for i, (k, m) in enumerate(MISSIONS.items())}
+        replies = [{"ok": True, "stac_ms": 120, "data_ms": 300}, {"missions": live},
                    {"scenes": [{"id": "S2A_X_1", "collection": "sentinel-2-l2a"}]}]
         with mock.patch("urllib.request.urlopen", return_value=health), mock.patch("satellite.client.call", side_effect=replies), \
+                mock.patch("satellite.sources.push", return_value=(True, "پیکربندی به دروازه رسید.")), \
                 mock.patch("satellite.client.thumb", return_value=b"x" * 20000):
             steps = probe.run()
         self.assertTrue(all(ok for ok, _ in steps), steps)
-        self.assertEqual(len(steps), 7)
+        self.assertEqual(len(steps), 6 + len(MISSIONS))
         self.assertTrue(any("Landsat 8/9: در دسترس" in t for _, t in steps))
 
 

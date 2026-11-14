@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from databases.models import Plan, UserDatabase
@@ -16,7 +17,7 @@ from enterprise.models import Raster
 from jobs.models import Job
 from satgate import spec
 
-from . import client
+from . import client, sources
 from .models import SatRequest
 
 PERIOD = timedelta(days=30)
@@ -25,12 +26,6 @@ SEARCH_MAX_DAYS = 400
 MAX_ACTIVE = 2          # هم‌زمان برای هر پایگاه داده
 SCENE_RE = re.compile(r"^[A-Za-z0-9_\-]{5,100}$")
 MB = 1024 * 1024
-ATTRIBUTION = {
-    "sentinel-2-l2a": "Contains modified Copernicus Sentinel data (ESA)",
-    "landsat-c2-l2": "Landsat-8/9 Collection 2 Level-2 image courtesy of the U.S. Geological Survey",
-    "cop-dem-glo-30": "Copernicus DEM GLO-30 © DLR e.V. / Airbus Defence and Space, provided under COPERNICUS by the EU and ESA",
-}
-
 
 class SatError(Exception):
     def __init__(self, message: str, code: str = "error", extra: dict | None = None):
@@ -54,7 +49,7 @@ def credits(db: UserDatabase) -> dict:
     cap = db.plan.sat_credits if db.plan_id else 0
     since = timezone.now() - PERIOD
     qs = SatRequest.objects.filter(database=db, charged=True, created_at__gte=since).order_by("created_at")
-    used = qs.count()
+    used = qs.aggregate(n=Sum("credit_cost"))["n"] or 0     # هر دریافت به اندازه‌ی وزن ماهواره‌اش از سهمیه‌ی مشترک کم می‌کند
     first = qs.first()
     return {"cap": cap, "used": used, "left": max(cap - used, 0),
             "resets_at": (first.created_at + PERIOD) if first and used >= cap else None}
@@ -70,19 +65,19 @@ def status(db: UserDatabase) -> dict:
     return {"credits": credits(db), "space": space(db), "max_km2": db.plan.sat_max_km2 if db.plan_id else 0}
 
 
-def plan_hint(db: UserDatabase, km2: float, est: int, need_credit: bool) -> dict | None:
+def plan_hint(db: UserDatabase, km2: float, est: int, need_credit: bool, mission: str = "") -> dict | None:
     """ارزان‌ترین پلن عمومی که این درخواست در آن جا می‌شود؛ برای نمایش «چه چیزی با ارتقا عوض می‌شود»."""
     cr, sp = credits(db), space(db)
     for p in Plan.objects.filter(is_public=True).exclude(pk=db.plan_id).order_by("price_toman", "order"):
         if (p.sat_max_km2 >= km2 and p.raster_mb * MB - sp["used"] >= est and p.sat_credits > cr["used"]
-                and p.sat_credits >= (1 if need_credit else 0)):
+                and p.sat_credits >= (1 if need_credit else 0) and (not mission or sources.plan_allows(p, mission))):
             return {"name": p.name, "price_toman": p.price_toman, "raster_mb": p.raster_mb, "sat_credits": p.sat_credits,
                     "sat_max_km2": p.sat_max_km2}
     return None
 
 
 def _mission(product: str, mission) -> str:
-    """ماهواره‌ی معتبر؛ DEM مستقل از ماهواره است."""
+    """ماهواره‌ی معتبر؛ محصول «dem» (رابط قدیمی) همیشه ارتفاع Copernicus است."""
     if product == "dem":
         return spec.DEM_MISSION
     mission = str(mission or "sentinel2")
@@ -93,17 +88,25 @@ def _mission(product: str, mission) -> str:
 
 def quote(db: UserDatabase, bbox, product: str, mission: str = "sentinel2") -> dict:
     """برآورد حجم و بررسی همه‌ی محدودیت‌ها؛ هر مانع دلیل فارسی و راه‌حل دارد (نه فقط دکمه‌ی غیرفعال)."""
-    if not isinstance(product, str) or spec.get_product(spec.DEM_MISSION if product == "dem" else "sentinel2", product) is None:
-        raise SatError("محصول انتخاب‌شده را نمی‌شناسیم.", "product")
     mission = _mission(product, mission)
+    if not isinstance(product, str) or spec.get_product(mission, product) is None:
+        raise SatError("محصول انتخاب‌شده را نمی‌شناسیم.", "product")
+    m = spec.MISSIONS[mission]
     if not spec.valid_bbox(bbox):
         raise SatError("محدوده نامعتبر است؛ دوباره روی نقشه بکشید.", "bbox")
     bbox = [round(float(v), 5) for v in bbox]
     km2, est = spec.area_km2(bbox), spec.estimate_bytes(bbox, product, mission)
+    cost = sources.weight(mission)
     st = status(db)
     cap_km2, blockers = st["max_km2"], []
+    if sources.max_km2(mission):
+        cap_km2 = min(cap_km2, sources.max_km2(mission)) if cap_km2 else 0
     if db.status != UserDatabase.Status.ACTIVE:
         blockers.append({"code": "inactive", "message": "پایگاه داده فعال نیست؛ اول آن را فعال یا تمدید کنید.", "fix": []})
+    if not sources.mission_enabled(mission):
+        blockers.append({"code": "mission_off", "message": f"{m.title} فعلاً در دسترس نیست.", "fix": []})
+    elif db.plan_id and not sources.plan_allows(db.plan, mission):
+        blockers.append({"code": "mission_plan", "message": f"{m.title} در پلن فعلی شما نیست.", "fix": ["upgrade"]})
     if not st["credits"]["cap"] or not st["space"]["cap"]:
         blockers.append({"code": "no_service", "message": "این سرویس در پلن فعلی شما فعال نیست.", "fix": ["upgrade"]})
     else:
@@ -114,15 +117,17 @@ def quote(db: UserDatabase, bbox, product: str, mission: str = "sentinel2") -> d
             blockers.append({"code": "space", "fix": ["shrink", "product", "free", "upgrade"],
                              "message": f"این تصویر حدود {fmt_size(est)} می‌شود و فقط {fmt_size(st['space']['left'])} از "
                                         f"{fmt_size(st['space']['cap'])} فضای رستر شما خالی است."})
-        if st["credits"]["left"] <= 0:
+        if st["credits"]["left"] < cost:
             when = st["credits"]["resets_at"]
             blockers.append({"code": "credits", "fix": ["wait", "upgrade"],
-                             "message": f"اعتبار دریافت تصویر این ماه ({fa(st['credits']['cap'])} بار) تمام شده است."
+                             "message": (f"اعتبار دریافت تصویر این ماه ({fa(st['credits']['cap'])} واحد) تمام شده است."
+                                         if cost == 1 else
+                                         f"این دریافت {fa(cost)} واحد از اعتبار ماهانه می‌خواهد و {fa(st['credits']['left'])} واحد مانده است.")
                                         + (f" اعتبار از {fa((when - timezone.now()).days + 1)} روز دیگر آزاد می‌شود." if when else "")})
     out = {"bbox": bbox, "area_km2": round(km2, 1), "est_bytes": est, "est_text": fmt_size(est), "status": st,
-           "blockers": blockers, "ok": not blockers}
+           "cost": cost, "mission": mission, "blockers": blockers, "ok": not blockers}
     if any(b["fix"] and "upgrade" in b["fix"] for b in blockers):
-        out["upgrade"] = plan_hint(db, km2, est, st["credits"]["left"] <= 0)
+        out["upgrade"] = plan_hint(db, km2, est, st["credits"]["left"] < cost, mission)
         out["current"] = {"name": db.plan.name, "raster_mb": db.plan.raster_mb, "sat_credits": db.plan.sat_credits,
                           "sat_max_km2": db.plan.sat_max_km2}
     return out
@@ -149,6 +154,10 @@ def search(db: UserDatabase, user, data: dict) -> list[dict]:
     except (TypeError, ValueError) as exc:
         raise SatError("درصد ابر نامعتبر است.", "cloud") from exc
     mission = _mission("imagery", data.get("mission"))
+    if spec.MISSIONS[mission].kind == "layer":
+        raise SatError("این لایه انتخاب تصویر ندارد؛ مستقیم سفارش بدهید.", "mission")
+    if not sources.mission_enabled(mission) or not sources.plan_allows(db.plan, mission):
+        raise SatError("این ماهواره برای شما در دسترس نیست.", "mission")
     key = f"satsearch:{user.pk}"
     n = cache.get(key, 0)
     if n >= 40:
@@ -190,10 +199,14 @@ def order(db: UserDatabase, user, data: dict) -> SatRequest:
     q = quote(db, data.get("bbox"), product, mission)
     p = spec.get_product(mission, product)
     composite = _composite(data, p)
-    mask = bool(data.get("mask")) and p.needs_scene
+    m = spec.MISSIONS[mission]
+    source = str(data.get("source") or "")
+    if source and m.source(source) is None:
+        raise SatError("تأمین‌کننده‌ی تصویر نامعتبر است.", "source")
+    mask = bool(data.get("mask")) and p.needs_scene and m.has_mask      # رادار و L1C ماسک ابر ندارند
     scene = str(data.get("scene") or "").strip()
     if composite:
-        mask = bool(data.get("mask", True))
+        mask = bool(data.get("mask", True)) and m.has_mask
         scene = ""
     elif p.needs_scene and not SCENE_RE.match(scene):
         raise SatError("اول یکی از تصویرها را انتخاب کنید یا «ترکیب بی‌ابر» را بزنید.", "scene")
@@ -210,13 +223,14 @@ def order(db: UserDatabase, user, data: dict) -> SatRequest:
             raise SatError(f"حداکثر {fa(MAX_ACTIVE)} دریافت هم‌زمان ممکن است؛ تا تمام شدن قبلی‌ها صبر کنید.", "busy")
         req = SatRequest.objects.create(
             database=db, user=user, mission=mission, product=product, mask=mask, composite=composite,
+            credit_cost=q["cost"],
             scene_id=("composite:" + mission) if composite else (scene if p.needs_scene else p.collection),
             scene_date=(composite["end"] if composite else str(data.get("scene_date") or "")[:25]), cloud=_num(data.get("cloud")), bbox=q["bbox"],
             area_km2=q["area_km2"], est_bytes=q["est_bytes"])
     try:
         client.call("POST", "/v1/jobs", {"id": req.token, "product": product, "mission": mission, "scene": scene, "bbox": q["bbox"],
                                          "mask": mask, "composite": composite,
-                                         "max_km2": db.plan.sat_max_km2})
+                                         "source": source, "max_km2": min(db.plan.sat_max_km2, sources.max_km2(mission) or db.plan.sat_max_km2)})
     except client.GatewayError as exc:
         _fail(req, str(exc))
         raise SatError(str(exc), "gateway") from exc
@@ -306,11 +320,10 @@ def ingest(job: Job) -> str:
         raise ent.EnterpriseError("فضای رستر کافی نیست.")
     raster = Raster.objects.create(
         database=db, title=req.title[:120], original_name=f"{req.product}.tif", created_by=req.user,
-        meta={"source": {"sentinel-2-l2a": "sentinel-2", "landsat-c2-l2": "landsat"}.get(p.collection, "copernicus-dem"),
-              "mission": req.mission, "product": req.product, "mask": req.mask, "composite": req.composite,
+        meta={"source": spec.MISSIONS[req.mission].collection, "mission": req.mission, "product": req.product, "mask": req.mask, "composite": req.composite,
               "used": (req.remote or {}).get("used"),
               "scene": req.scene_id, "datetime": req.scene_date, "cloud": req.cloud, "bbox": req.bbox,
-              "attribution": ATTRIBUTION[p.collection]})
+              "attribution": spec.MISSIONS[req.mission].attribution, "license": spec.MISSIONS[req.mission].license})
     try:
         dest = ent.raster_upload_path(raster)
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -346,9 +359,9 @@ def delete_request(req: SatRequest) -> None:
 
 
 # ---------------------------------------------------------------------- ماهواره‌های در دسترس
-def missions(force: bool = False) -> list[dict]:
-    """فهرست ماهواره‌ها با وضعیت «در دسترس»؛ فقط آن‌هایی که دروازه واقعاً به‌شان می‌رسد فعال‌اند.
-    Sentinel-2 همیشه پیش‌فرض است؛ دروازه‌ی قدیمی بدون /v1/missions فقط Sentinel-2 را می‌دهد."""
+def missions(db: UserDatabase | None = None, force: bool = False) -> list[dict]:
+    """فهرست ماهواره‌ها و لایه‌های آماده با وضعیت «در دسترس»؛ فقط آن‌هایی که دروازه واقعاً به‌شان می‌رسد فعال‌اند.
+    موردی که مدیر در پنل خاموش کرده نمی‌آید. دروازه‌ی قدیمی بدون /v1/missions فقط Sentinel-2 و ارتفاع را می‌دهد."""
     key = "satmissions"
     live = None if force else cache.get(key)
     if live is None:
@@ -358,11 +371,19 @@ def missions(force: bool = False) -> list[dict]:
             live = {"_error": str(exc)} if exc.status != 404 else {}
         cache.set(key, live, 300)
     out = []
+    plan = db.plan if db is not None and db.plan_id else None
     for m in spec.MISSIONS.values():
+        if not sources.mission_enabled(m.key):
+            continue
         st = live.get(m.key)
-        known = m.key == "sentinel2" and not isinstance(st, dict)
+        known = m.key in ("sentinel2", spec.DEM_MISSION) and not isinstance(st, dict)
         ok = bool(st.get("ok")) if isinstance(st, dict) else known
         out.append({"key": m.key, "title": m.title, "agency": m.agency, "res": m.res_m, "revisit": m.revisit,
-                    "since": m.since, "hint": m.hint, "available": ok,
+                    "since": m.since, "hint": m.hint, "kind": m.kind, "group": m.group, "cost": sources.weight(m.key),
+                    "mask": m.has_mask, "license": m.license, "available": ok,
+                    "allowed": sources.plan_allows(plan, m.key) if plan is not None else True,
+                    "providers": [{"key": s.provider, "title": spec.PROVIDERS[s.provider].title,
+                                   "ok": bool(((st or {}).get("sources") or {}).get(s.provider, {}).get("ok"))}
+                                  for s in m.sources] if isinstance(st, dict) else [],
                     "error": "" if ok else (st or {}).get("error", "") if isinstance(st, dict) else live.get("_error", "")})
     return out
