@@ -223,3 +223,25 @@ class RouteDefTests(TestCase):
             used = set(__import__("re").findall(r"#([A-Z_]+)#", d.template))
             self.assertEqual(used, set(d.params), d.key)
             self.assertIn("#STOP#", d.template)
+
+
+class SettingsReachableTests(TestCase):
+    def test_system_plugin_options_page_is_reachable_from_hub(self):
+        from kernel import hub
+        from kernel.admin import sync_states
+        from kernel.models import PluginState
+
+        sync_states()
+        st = PluginState.objects.get(plugin_id="winback")
+        card = next(c for c in hub.cards() if c["id"] == "winback")
+        self.assertTrue(card["options"])
+        admin = User.objects.create_superuser(username="adm", password="x")
+        self.client.force_login(admin)
+        r = self.client.get(reverse("admin:kernel_pluginstate_options", args=[st.pk]))
+        self.assertContains(r, "ساخت فهرست و ارسال پیام بازگشت")
+        r = self.client.post(reverse("admin:kernel_pluginstate_options", args=[st.pk]), {"enabled": "on", "control_percent": 10, "max_batch": 300,
+                                                                                         "coupon_hours": 72, "ref_kind": "trial", "ref_days": 14,
+                                                                                         "ref_percent": 20, "ref_cap": 10})
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(services.switch_on())
+        self.addCleanup(conf.clear, "winback", "enabled")

@@ -1,6 +1,6 @@
 {% extends "admin/base_site.html" %}
 {% block content %}
-{% if not switch_on %}<p class="errornote">سوئیچ کلی «ساخت فهرست و ارسال» در تنظیمات پلاگین خاموش است؛ پیام زمان‌بندی می‌شود ولی تا روشن‌شدن نمی‌رود.</p>{% endif %}
+{% if not switch_on %}<p class="errornote">سوئیچ کلی «ساخت فهرست و ارسال» خاموش است؛ پیام زمان‌بندی می‌شود ولی تا روشن‌شدن نمی‌رود. از «پلاگین‌ها ← پلاگین‌های سیستمی ← بازگشت کاربران ← تنظیمات» روشنش کنید.</p>{% endif %}
 <div id="content-main" class="ap-flat">
 <form method="post">{% csrf_token %}
   <fieldset class="module aligned">
