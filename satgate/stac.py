@@ -8,7 +8,7 @@ import urllib.request
 from urllib.parse import urlparse
 
 from .runtime import RUNTIME
-from .spec import COLLECTION_S2, MISSIONS, PROVIDERS, Mission, Source, satellite_of, valid_bbox
+from .spec import COLLECTION_S2, MISSIONS, PROVIDERS, Mission, Source, https_href, satellite_of, valid_bbox
 
 # نشانی پیش‌فرض کاتالوگ‌ها (پنل می‌تواند عوض کند؛ runtime.provider_url مرجع است)؛ برای سازگاری با کد قدیمی می‌ماند
 STAC_URL = RUNTIME.provider_url("earthsearch")
@@ -294,7 +294,7 @@ def check_mission(key: str, fetch=fetch_json, open_url=None, strict: bool = Fals
 
 
 def _read_head(href: str) -> bytes:
-    req = urllib.request.Request(href, headers={"User-Agent": UA})
+    req = urllib.request.Request(https_href(href), headers={"User-Agent": UA})
     try:
         with urllib.request.urlopen(req, timeout=20) as r:  # noqa: S310 فقط https
             return r.read(100_000)

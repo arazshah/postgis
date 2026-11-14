@@ -703,6 +703,20 @@ class ProbeTests(TestCase):
             steps = probe.run()
         self.assertTrue(all(ok for ok, _ in steps), steps)
         self.assertEqual(len(steps), 6 + len(MISSIONS))
+
+    def test_unhealthy_provider_shows_its_reason(self):
+        from satgate.spec import MISSIONS
+        health = mock.MagicMock()
+        health.__enter__.return_value.read.return_value = b'{"ok": true, "version": "1.3", "configured": true}'
+        live = {k: {"ok": True, "ms": 5, "sources": {s.provider: {"ok": True} for s in m.sources}} for k, m in MISSIONS.items()}
+        live["dem"]["sources"]["earthsearch"] = {"ok": False, "error": "دسترسی به فایل تصویر رد شد (403)."}
+        replies = [{"ok": True}, {"missions": live}, {"scenes": []}]
+        with mock.patch("urllib.request.urlopen", return_value=health), mock.patch("satellite.client.call", side_effect=replies), \
+                mock.patch("satellite.sources.push", return_value=(True, "پیکربندی به دروازه رسید.")):
+            steps = probe.run()
+        line = next(t for _, t in steps if t.startswith("ارتفاع Copernicus (۳۰ متر)"))
+        self.assertIn("ناسالم (دسترسی به فایل تصویر رد شد (403).", line)
+        self.assertIn("Planetary Computer (مایکروسافت): سالم", line)
         self.assertTrue(any("Landsat 8/9: در دسترس" in t for _, t in steps))
 
 
