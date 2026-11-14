@@ -132,7 +132,7 @@ class ProfileTests(RefBase):
         self.client.force_login(self.ref)
         r = self.client.get(reverse("accounts:profile"))
         self.assertContains(r, f"/r/invite/{self.code}/")
-        self.assertContains(r, "۲۵٪" if "۲۵٪" in r.content.decode() else "25٪")
+        self.assertContains(r, "۲۵٪")
 
     def test_disabled_shows_notice_without_code(self):
         conf.set_value("winback", "ref_enabled", False)
