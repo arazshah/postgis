@@ -64,16 +64,18 @@ class RouteAdmin(admin.ModelAdmin):
     @admin.display(description="متن قالب برای ساخت در sms.ir")
     def template_text(self, obj):
         d = routes.DEFS[obj.key]
-        return format_html("<pre dir='rtl' style='white-space:pre-wrap'>{}</pre><small>حدود {} بخش پیامک</small>",
-                           d.template, routes.segments(routes.render(d.template, {"NAME": "علی", "LINK": "https://postgis.ir/r/Ab3xK9aQ/",
-                                                                                  "STOP": "https://postgis.ir/r/Ab3xK9aQ/stop/", "DB": "پایگاه من", "DAYS": "45", "AMOUNT": "490,000"})))
+        text = d.text("A")
+        demo = {"NAME": "علی", "LINK": "Ab3xK9aQ", "STOP": "Ab3xK9aQ", "DB": "پایگاه من", "DAYS": "45", "AMOUNT": "490,000",
+                "FEATURE": "نقشه‌ی حرارتی"}
+        return format_html("<pre dir='rtl' style='white-space:pre-wrap'>{}</pre><small>حدود {} بخش پیامک؛ دامنه‌ی لینک ثابت و فقط انتهایش متغیر است (شرط sms.ir)</small>",
+                           text, routes.segments(routes.render(text, demo)))
 
     @admin.display(description="متن قالب نسخه‌ی B (اختیاری)")
     def template_text_b(self, obj):
         d = routes.DEFS[obj.key]
         if not d.variant_b:
             return "—"
-        return format_html("<pre dir='rtl' style='white-space:pre-wrap'>{}</pre>", d.variant_b)
+        return format_html("<pre dir='rtl' style='white-space:pre-wrap'>{}</pre>", d.text("B"))
 
     @admin.display(description="آزمون A/B")
     def ab(self, obj):

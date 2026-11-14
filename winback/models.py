@@ -4,9 +4,12 @@ import secrets
 from django.conf import settings
 from django.db import models
 
+_ALNUM = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
 
 def new_code() -> str:
-    return secrets.token_urlsafe(6)
+    """کد کوتاه فقط حرف و عدد (بدون - و _ و حروف مبهم) تا در انتهای لینک قالب پیامک امن باشد."""
+    return "".join(secrets.choice(_ALNUM) for _ in range(8))
 
 
 class Route(models.Model):
