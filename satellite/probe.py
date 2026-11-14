@@ -60,6 +60,9 @@ def run() -> list[tuple[bool, str]]:
             if not sources.mission_enabled(key):
                 continue
             st = ms.get(key) or {}
+            if st.get("disabled"):          # کلید تأمین‌کننده نیست یا همه‌ی تأمین‌کننده‌هایش خاموش‌اند؛ خرابی نیست
+                out.append((True, f"{m.title}: غیرفعال (کلید تأمین‌کننده در پنل وارد نشده یا تأمین‌کننده خاموش است)."))
+                continue
             per = "، ".join(f"{PROVIDERS[k].title}: " + ("سالم" if r.get("ok") else f"ناسالم ({(r.get('error') or 'بدون پیام')[:70]})")
                            for k, r in (st.get("sources") or {}).items())
             out.append((bool(st.get("ok")), f"{m.title}: " + (f"در دسترس ({st.get('ms')} میلی‌ثانیه)" if st.get("ok") else

@@ -30,6 +30,14 @@ class Provider:
     implemented: bool = True         # False: اعتبارنامه ذخیره می‌شود ولی منبعی به آن وصل نیست (گام بعد)
     signup: str = ""
     hosts: tuple[str, ...] = ()      # میزبان‌هایی که فایروال خروجی دروازه باید باز کند
+    needs: tuple[tuple[str, ...], ...] = ()   # گروه‌های جایگزینِ فیلدهای لازم؛ مثلاً (("token",), ("user", "password"))
+
+    def ready(self, cred: dict | None) -> bool:
+        """آیا اعتبارنامه‌ی داده‌شده برای کار کردن این تأمین‌کننده کافی است؟ (بدون حساب: همیشه)"""
+        if not self.account:
+            return True
+        groups = self.needs or (tuple(c[0] for c in self.creds),)
+        return any(all((cred or {}).get(f) for f in g) for g in groups)
 
 
 PROVIDERS: dict[str, Provider] = {p.key: p for p in (
@@ -41,12 +49,13 @@ PROVIDERS: dict[str, Provider] = {p.key: p for p in (
              account=True, creds=(("s3_access", "شناسه‌ی دسترسی S3", False), ("s3_secret", "کلید محرمانه‌ی S3", True)),
              implemented=False, signup="https://eodata-s3keysmanager.dataspace.copernicus.eu",
              hosts=("stac.dataspace.copernicus.eu", "eodata.dataspace.copernicus.eu", "identity.dataspace.copernicus.eu")),
-    Provider("earthdata", "NASA Earthdata", "EMIT، ECOSTRESS، VIIRS، HLS و InSAR؛ حساب رایگان", "https://cmr.earthdata.nasa.gov/stac",
-             account=True, creds=(("user", "نام کاربری", False), ("password", "رمز عبور", True), ("token", "توکن (اختیاری)", True)),
-             implemented=False, signup="https://urs.earthdata.nasa.gov/users/new",
+    Provider("earthdata", "NASA Earthdata", "HLS (Landsat و Sentinel-2 هماهنگ‌شده)؛ حساب رایگان", "https://cmr.earthdata.nasa.gov/stac/LPCLOUD",
+             account=True, creds=(("token", "توکن (پیشنهادی؛ ۶۰ روز اعتبار)", True), ("user", "نام کاربری (به‌جای توکن)", False),
+                                  ("password", "رمز عبور (به‌جای توکن)", True)),
+             needs=(("token",), ("user", "password")), signup="https://urs.earthdata.nasa.gov/users/new",
              hosts=("cmr.earthdata.nasa.gov", "urs.earthdata.nasa.gov", "data.lpdaac.earthdatacloud.nasa.gov", "hyp3-api.asf.alaska.edu")),
-    Provider("opentopography", "OpenTopography", "DEMهای جهانی؛ کلید API رایگان", "https://portal.opentopography.org/API",
-             account=True, creds=(("api_key", "کلید API", True),), implemented=False,
+    Provider("opentopography", "OpenTopography", "SRTM، ارتفاع و عمق دریا (SRTM15+) و پشتیبان DEMها؛ کلید API رایگان",
+             "https://portal.opentopography.org/API", account=True, creds=(("api_key", "کلید API", True),),
              signup="https://portal.opentopography.org/newUser", hosts=("portal.opentopography.org",)),
     Provider("jaxa", "JAXA G-Portal", "ALOS-2 ScanSAR؛ حساب رایگان", "", account=True,
              creds=(("user", "نام کاربری", False), ("password", "رمز عبور", True)), implemented=False,
@@ -66,6 +75,7 @@ class Source:
     platforms: tuple = ()                         # فیلتر platform در جست‌وجو (خالی = همه)
     asset: str = ""                               # لایه‌های آماده: نام تنها دارایی
     datetime: str = ""                            # لایه‌های آماده: بازه‌ی ثابت (مثلاً نسخه‌ی ۲۰۲۱ پوشش زمین)
+    api: str = ""                                 # منبعی که کاتالوگ STAC ندارد و خروجی را مستقیم از API می‌دهد (opentopography)
 
 
 @dataclass(frozen=True)
@@ -129,6 +139,10 @@ _S2_ES = {"red": "red", "green": "green", "blue": "blue", "nir": "nir", "rededge
 _S2_PC = {"red": "B04", "green": "B03", "blue": "B02", "nir": "B08", "rededge1": "B05", "rededge2": "B06",
           "rededge3": "B07", "nir08": "B8A", "swir16": "B11", "swir22": "B12"}
 _LS = {"red": "red", "green": "green", "blue": "blue", "nir": "nir08", "swir16": "swir16", "swir22": "swir22"}
+_HLS_S = {"red": "B04", "green": "B03", "blue": "B02", "nir": "B8A", "swir16": "B11", "swir22": "B12"}
+_HLS_L = {"red": "B04", "green": "B03", "blue": "B02", "nir": "B05", "swir16": "B06", "swir22": "B07"}
+_HLS = "Harmonized Landsat Sentinel-2 (HLS) v2.0, NASA LP DAAC"
+_OT = "via OpenTopography (opentopography.org)"
 _ESA = "Contains modified Copernicus Sentinel data (ESA)"
 _LANDSAT = "Landsat Collection 2 Level-2 image courtesy of the U.S. Geological Survey"
 _DEM = "Copernicus DEM © DLR e.V. / Airbus Defence and Space, provided under COPERNICUS by the EU and ESA"
@@ -155,6 +169,12 @@ MISSIONS: dict[str, Mission] = {m.key: m for m in (
             "آرشیو ۴۰ ساله برای تغییر شهر، دریاچه و جنگل (Landsat 7 بعد از ۲۰۰۳ خط‌خوردگی دارد)",
             (Source("planetary", COLLECTION_LANDSAT, _LS, "qa_pixel", 0.0000275, -0.2, ("landsat-4", "landsat-5", "landsat-7")),),
             attribution=_LANDSAT, license="دامنه‌ی عمومی (USGS)"),
+    Mission("hls_s30", "HLS Sentinel-2 (هماهنگ‌شده)", "NASA / USGS", 30, "هر ۵ روز", "۲۰۱۵",
+            "Sentinel-2 با تصحیح جوی و هندسه‌ی هماهنگ با Landsat؛ ۳۰ متر. نیاز به حساب Earthdata",
+            (Source("earthdata", "HLSS30.v2.0", _HLS_S, "Fmask", 0.0001, 0.0),), attribution=_HLS, license="دامنه‌ی عمومی (NASA)"),
+    Mission("hls_l30", "HLS Landsat (هماهنگ‌شده)", "NASA / USGS", 30, "هر ۸ روز", "۲۰۱۳",
+            "Landsat 8/9 با تصحیح جوی و هندسه‌ی هماهنگ با Sentinel-2؛ ۳۰ متر. نیاز به حساب Earthdata",
+            (Source("earthdata", "HLSL30.v2.0", _HLS_L, "Fmask", 0.0001, 0.0),), attribution=_HLS, license="دامنه‌ی عمومی (NASA)"),
     # ---------------------------------------------------------------- رادار
     Mission("s1_rtc", "Sentinel-1 رادار (RTC)", "ESA / Copernicus", 10, "هر ۶ تا ۱۲ روز", "۲۰۱۴",
             "رادار از ابر و شب عبور می‌کند؛ سیل، رطوبت، ساختار و پایش در هوای ابری",
@@ -163,17 +183,27 @@ MISSIONS: dict[str, Mission] = {m.key: m for m in (
             weight=2),
     # ---------------------------------------------------------------- ارتفاع (لایه‌ی آماده)
     Mission("dem", "ارتفاع Copernicus (۳۰ متر)", "ESA / Copernicus", 30, "ایستا", "۲۰۱۱", "مدل رقومی ارتفاع Copernicus با دقت ۳۰ متر",
-            (Source("earthsearch", COLLECTION_DEM, asset="data"), Source("planetary", COLLECTION_DEM, asset="data")),
+            (Source("earthsearch", COLLECTION_DEM, asset="data"), Source("planetary", COLLECTION_DEM, asset="data"),
+             Source("opentopography", "COP30", api="opentopography")),
             kind="layer", group="elevation", attribution=_DEM, license="Copernicus DEM (استفاده‌ی آزاد با ذکر منبع)"),
     Mission("dem90", "ارتفاع Copernicus (۹۰ متر)", "ESA / Copernicus", 90, "ایستا", "۲۰۱۱", "برای محدوده‌های بزرگ؛ حجم کم",
-            (Source("earthsearch", "cop-dem-glo-90", asset="data"), Source("planetary", "cop-dem-glo-90", asset="data")),
+            (Source("earthsearch", "cop-dem-glo-90", asset="data"), Source("planetary", "cop-dem-glo-90", asset="data"),
+             Source("opentopography", "COP90", api="opentopography")),
             kind="layer", group="elevation", attribution=_DEM, license="Copernicus DEM (استفاده‌ی آزاد با ذکر منبع)"),
     Mission("nasadem", "NASADEM (۳۰ متر)", "NASA / USGS", 30, "ایستا", "۲۰۰۰", "SRTM بازپردازش‌شده با خلأهای کمتر",
-            (Source("planetary", "nasadem", asset="elevation"),), kind="layer", group="elevation",
+            (Source("planetary", "nasadem", asset="elevation"), Source("opentopography", "NASADEM", api="opentopography")),
+            kind="layer", group="elevation",
             attribution="NASADEM, NASA JPL / USGS", license="دامنه‌ی عمومی"),
     Mission("alosdem", "ALOS AW3D30 (۳۰ متر)", "JAXA", 30, "ایستا", "۲۰۰۶", "مدل ارتفاعی ژاپنی؛ مقایسه با Copernicus در زمین‌های سخت",
-            (Source("planetary", "alos-dem", asset="data"),), kind="layer", group="elevation",
+            (Source("planetary", "alos-dem", asset="data"), Source("opentopography", "AW3D30", api="opentopography")),
+            kind="layer", group="elevation",
             attribution="ALOS World 3D-30m © JAXA", license="استفاده‌ی آزاد با ذکر منبع (JAXA)"),
+    Mission("srtm30", "SRTM (۳۰ متر)", "NASA / USGS", 30, "ایستا", "۲۰۰۰", "ارتفاع SRTM اصلی (۱ ثانیه‌ی قوسی)؛ برای مقایسه با Copernicus و NASADEM. نیاز به کلید OpenTopography",
+            (Source("opentopography", "SRTMGL1", api="opentopography"),), kind="layer", group="elevation",
+            attribution="SRTM, NASA / USGS; " + _OT, license="دامنه‌ی عمومی"),
+    Mission("bathy", "ارتفاع و عمق دریا SRTM15+ (۵۰۰ متر)", "UCSD / SIO", 450, "ایستا", "۲۰۱۹", "خشکی و کف دریا و دریاچه‌ها (عمق منفی)؛ وضوح کم برای محدوده‌ی بزرگ. نیاز به کلید OpenTopography",
+            (Source("opentopography", "SRTM15Plus", api="opentopography"),), kind="layer", group="elevation",
+            attribution="SRTM15+V2.1, Tozer et al. (2019), Scripps Institution of Oceanography; " + _OT, license="استفاده‌ی آزاد با ذکر منبع"),
     # ---------------------------------------------------------------- لایه‌های موضوعی آماده
     Mission("worldcover", "پوشش زمین ESA WorldCover", "ESA", 10, "سالانه", "۲۰۲۱", "۱۱ کلاس کاربری (شهر، کشاورزی، جنگل، آب و…) با وضوح ۱۰ متر",
             (Source("planetary", "esa-worldcover", asset="map", datetime="2021-01-01T00:00:00Z/2021-12-31T23:59:59Z"),),
@@ -256,11 +286,15 @@ PRODUCTS_BY_MISSION: dict[str, dict[str, Product]] = {
     "s2_l1c": _imagery("s2_l1c", ("red", "green", "blue", "nir", "rededge1", "rededge2", "rededge3", "nir08", "swir16", "swir22")),
     "landsat": _imagery("landsat", ("red", "green", "blue", "nir", "swir16", "swir22")),
     "landsat_old": _imagery("landsat_old", ("red", "green", "blue", "nir", "swir16", "swir22")),
+    "hls_s30": _imagery("hls_s30", ("red", "green", "blue", "nir", "swir16", "swir22")),
+    "hls_l30": _imagery("hls_l30", ("red", "green", "blue", "nir", "swir16", "swir22")),
     "s1_rtc": _radar("s1_rtc"),
     "dem": {"dem": DEM_PRODUCT},
     "dem90": _layer("dem90", "float32", -9999, "terrain", 4 * 0.5),
     "nasadem": _layer("nasadem", "float32", -9999, "terrain", 4 * 0.5),
     "alosdem": _layer("alosdem", "float32", -9999, "terrain", 4 * 0.5),
+    "srtm30": _layer("srtm30", "float32", -9999, "terrain", 4 * 0.5),
+    "bathy": _layer("bathy", "float32", -9999, "terrain", 4 * 0.5),
     "worldcover": _layer("worldcover", "uint8", 0, "spectral", 0.15),
     "water": _layer("water", "uint8", 255, "blues", 0.2),
 }
@@ -284,6 +318,8 @@ MIN_BYTES = 200_000
 
 
 _SAT_PATTERNS = (
+    (re.compile(r"^HLS\.S30\."), lambda m: ("HLS Sentinel-2", "NASA / USGS")),
+    (re.compile(r"^HLS\.L30\."), lambda m: ("HLS Landsat", "NASA / USGS")),
     (re.compile(r"^S2([ABC])_"), lambda m: (f"Sentinel-2{m.group(1)}", "ESA / Copernicus")),
     (re.compile(r"^S1([ABC])_"), lambda m: (f"Sentinel-1{m.group(1)}", "ESA / Copernicus")),
     (re.compile(r"^L([CEOT])0?([4-9])_"), lambda m: (f"Landsat {m.group(2)}", "USGS / NASA")),

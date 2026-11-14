@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
+from . import auth, otapi
 from .runtime import RUNTIME
 from .spec import COLLECTION_S2, MISSIONS, PROVIDERS, Mission, Source, https_href, satellite_of, valid_bbox
 
@@ -174,7 +175,7 @@ def get_item(collection: str, item_id: str, fetch=fetch_json, provider: str | No
 
 def layer_items(m: Mission, bbox, fetch=fetch_json, source: str | None = None) -> tuple[Source, list[dict]]:
     """کاشی‌های یک لایه‌ی آماده (ارتفاع، پوشش زمین، آب) با جایگزینی تأمین‌کننده؛ (منبع، فهرست آیتم)."""
-    srcs = ordered_sources(m, source)
+    srcs = [s_ for s_ in ordered_sources(m, source) if not s_.api]         # منبع API کاشی STAC ندارد
     if not srcs:
         raise StacError("این لایه الان فعال نیست.")
     last = None
@@ -222,8 +223,13 @@ def _hosted_by(collection: str, provider: str) -> bool:
 
 
 def sign_href(collection: str, href: str, fetch=fetch_json) -> str:
-    """آدرس فایل را در صورت نیاز با توکن می‌خواند (فقط فایل‌های Azure از مجموعه‌ای که Planetary Computer دارد)."""
+    """آدرس فایل را در صورت نیاز با توکن می‌خواند: فایل‌های Azure (Planetary Computer) و فایل‌های Earthdata (نشانی امضاشده)."""
     host = urlparse(href).hostname or ""
+    if host == auth.EDL_HOST:
+        try:
+            return auth.resolve_edl(href)
+        except auth.AuthError as exc:
+            raise StacError(str(exc)) from exc
     for p in PROVIDERS.values():
         if p.token_url and host.endswith(p.signed_host) and _hosted_by(collection, p.key):
             return href + ("&" if "?" in href else "?") + _token(collection, fetch)
@@ -246,6 +252,15 @@ def _missing_assets(item: dict, m: Mission, src: Source) -> list[str]:
 def check_source(m: Mission, src: Source, fetch=fetch_json, open_url=None, strict: bool = False) -> dict:
     """آیا دروازه واقعاً به کاتالوگ و داده‌ی این منبع می‌رسد؟ {ok, ms, error}."""
     t = time.monotonic()
+    if src.api == "opentopography":
+        try:
+            n = otapi.probe(src.collection, RUNTIME.cred("opentopography", "api_key"), RUNTIME.provider_url("opentopography"),
+                            open_url)
+            if not n:
+                raise otapi.OTError("پاسخ خالی بود.")
+            return {"ok": True, "ms": int((time.monotonic() - t) * 1000)}
+        except otapi.OTError as exc:
+            return {"ok": False, "ms": int((time.monotonic() - t) * 1000), "error": str(exc)[:160]}
     try:
         from datetime import date, timedelta
         body = {"collections": [src.collection], "limit": 1, "bbox": TEHRAN}

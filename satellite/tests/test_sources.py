@@ -349,6 +349,18 @@ class AdminPageTests(_Base):
         self.assertEqual(v["prov_planetary_url"], "https://pc.example.org/api")
         self.assertFalse(sources.mission_enabled("landsat"))
 
+    def test_provider_card_says_key_needed_until_credentials_are_set(self):
+        r = self.client.get(self.url)
+        by = {p["key"]: p for p in r.context["providers"]}
+        self.assertEqual((by["earthdata"]["status"], by["opentopography"]["status"]), ("کلید لازم", "کلید لازم"))
+        self.assertEqual((by["earthsearch"]["status"], by["copernicus"]["status"]), ("روشن", "گام بعد"))
+        self.client.post(self.url, self.form(prov_earthdata_user="me"), follow=True)               # نام کاربری بدون رمز: هنوز کافی نیست
+        by = {p["key"]: p for p in self.client.get(self.url).context["providers"]}
+        self.assertEqual(by["earthdata"]["status"], "کلید لازم")
+        self.client.post(self.url, self.form(prov_earthdata_password="pw", prov_opentopography_api_key="K"), follow=True)
+        by = {p["key"]: p for p in self.client.get(self.url).context["providers"]}
+        self.assertEqual((by["earthdata"]["status"], by["opentopography"]["status"]), ("روشن", "روشن"))
+
     def test_bad_values_are_reported_and_not_pushed(self):
         r = self.client.post(self.url, self.form(m_landsat_weight="99", prov_earthsearch_url="http://insecure.example.org"), follow=True)
         self.assertContains(r, "https")

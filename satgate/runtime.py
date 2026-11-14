@@ -100,8 +100,8 @@ class Runtime:
         p = self._prov(key)
         if not p.get("enabled", True):
             return False
-        # تأمین‌کننده‌ی حساب‌دار تا اعتبارنامه نرسیده کار نمی‌کند
-        return not spec.account or bool(p.get("cred"))
+        # تأمین‌کننده‌ی حساب‌دار تا اعتبارنامه‌ی کافی نرسیده کار نمی‌کند (مثلاً نام کاربری بدون رمز کافی نیست)
+        return spec.ready(p.get("cred"))
 
     def provider_url(self, key: str) -> str:
         spec = PROVIDERS[key]

@@ -79,10 +79,13 @@ def _provider_cards(v: dict) -> list[dict]:
     cards = []
     for p in spec.PROVIDERS.values():
         st = sources.provider_state(p.key)
+        ready = p.ready({n: "x" for n in st["creds"]})
         if not p.implemented:
             status, badge = "گام بعد", "warn"
         elif not st["enabled"]:
             status, badge = "خاموش", "bad"
+        elif not ready:
+            status, badge = "کلید لازم", "warn"
         else:
             status, badge = "روشن", "ok"
         creds = [{"name": n, "label": label, "secret": secret, "is_set": n in st["creds"],
