@@ -59,10 +59,13 @@ def attach(sender=None, request=None, user=None, **_) -> None:
     Referral.objects.get_or_create(referred=user, defaults={"referrer": ic.user})
 
 
+_FA = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
+
 def reward_text() -> str:
-    kind, days = conf.get(PLUGIN, "ref_kind"), conf.get(PLUGIN, "ref_days")
+    kind, days = conf.get(PLUGIN, "ref_kind"), str(conf.get(PLUGIN, "ref_days")).translate(_FA)
     if kind == Route.Gift.COUPON:
-        return f"{conf.get(PLUGIN, 'ref_percent')}٪ تخفیف روی خرید بعدی"
+        return f"{str(conf.get(PLUGIN, 'ref_percent')).translate(_FA)}٪ تخفیف روی خرید بعدی"
     if kind == Route.Gift.EXTEND:
         return f"{days} روز تمدید رایگان پایگاه"
     p = registry.plugins.get(conf.get(PLUGIN, "ref_plugin") or "")

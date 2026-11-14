@@ -120,7 +120,9 @@ def manual_estimate(route: Route, fixed: dict, limit: int, now=None) -> dict:
     rows = _collect(d, now, limit)
     today = now.astimezone(timing.TZ).date()
     control = sum(1 for r in rows if _is_control(r[0], d.key, today))
-    sample = routes.render(d.text("A"), {**{p: f"‹{p}›" for p in d.params}, **{k: v for k, v in fixed.items()}})
+    demo = {"NAME": "علی", "LINK": link_for("Ab3xK9aQ"), "STOP": link_for("Ab3xK9aQ", stop=True), "DB": "پایگاه من",
+            "DAYS": "45", "AMOUNT": "490,000"}
+    sample = routes.render(d.text("A"), {**demo, **fixed})
     real = len(rows) - control
     return {"rows": rows, "count": len(rows), "control": control, "real": real, "segments": real * routes.segments(sample),
             "sample": sample}
