@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.http import Http404
 from django.urls import include, path
 
 from accounts.admin_2fa import twofa as admin_2fa
@@ -8,6 +9,20 @@ from core.admin_search import search as admin_search
 from kernel import geocode_admin as kernel_geocode_admin
 from kernel import hub as kernel_hub
 from kernel import routes as kernel_routes
+
+
+def _r_short(request, code):
+    """`/r/<کد>/` دو کاربرد دارد: لینک کوتاه پیامک بازگشت (winback؛ قالب لینک پیامک ثابت است) و نمای رستر
+    (`enterprise:raster_view`). الگوی فراگیر winback قبلاً نمای رستر را می‌پوشاند (۴۰۴)؛ اول کد پیامک امتحان می‌شود،
+    اگر کد پیامکی نبود، رستر."""
+    from enterprise import views as enterprise_views
+    from winback import views as winback_views
+
+    try:
+        return winback_views.go(request, code)
+    except Http404:
+        return enterprise_views.raster_view(request, code)
+
 
 # پنل مدیریت جدا از حساب کاربران: ورود با نام کاربری و رمز عبور
 admin.site.login_form = LockoutAdminAuthenticationForm
@@ -42,6 +57,7 @@ urlpatterns = [
     path("support/", include("support.urls")),
     path("class/", include("classroom.urls")),
     path("go/", include("analytics.urls")),
+    path("r/<str:code>/", _r_short, name="r_short"),       # پیش از winback.urls: فقط مسیر تک‌بخشی را می‌گیرد
     path("r/", include("winback.urls")),
     path("assistant/", include("assistant.urls")),
     path("", include("kb.urls")),
