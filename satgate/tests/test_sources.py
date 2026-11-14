@@ -984,6 +984,44 @@ class OpenTopographyTests(Base):
             otapi.fetch_geotiff("COP30", BBOX, "SECRETKEY", "https://x.example/API", self.root / "e.tif", down)
         self.assertNotIn("SECRETKEY", str(e.exception))
 
+    def test_coarse_datasets_get_a_minimum_window_and_fine_ones_do_not(self):
+        calls = []
+        tiny = [51.30, 35.70, 51.31, 35.71]
+        otapi.fetch_geotiff("SRTM15Plus", tiny, "K", "https://x.example/API", self.root / "c.tif", self.fake(tiff_bytes(), calls))
+        otapi.fetch_geotiff("SRTMGL1", tiny, "K", "https://x.example/API", self.root / "f.tif", self.fake(tiff_bytes(), calls))
+        self.assertIn("west=51.255000", calls[0])                       # ۰٫۱ درجه، متقارن اطراف مرکز
+        self.assertIn("east=51.355000", calls[0])
+        self.assertIn("south=35.655000", calls[0])
+        self.assertIn("north=35.755000", calls[0])
+        self.assertIn("west=51.300000", calls[1])                       # ۳۰ متری دست‌نخورده
+        self.assertEqual(otapi.padded("SRTM15Plus", [50.0, 30.0, 52.0, 32.0]), [50.0, 30.0, 52.0, 32.0])    # بزرگ‌تر از کمینه: همان
+
+    def test_bad_request_shows_the_servers_reason_without_the_key(self):
+        import urllib.error
+
+        def opener(req, timeout=0):
+            raise urllib.error.HTTPError(req.full_url, 400, "x", {}, io.BytesIO(b"Error 400: bounding box too small API_Key=SECRETKEY"))
+        with self.assertRaises(otapi.OTError) as e:
+            otapi.fetch_geotiff("SRTM15Plus", BBOX, "SECRETKEY", "https://x.example/API", self.root / "e.tif", opener)
+        self.assertIn("bounding box too small", str(e.exception))
+        self.assertNotIn("SECRETKEY", str(e.exception))
+        self.assertIn("رد کرد", str(e.exception))
+
+    def test_padded_download_is_cropped_back_to_the_requested_box(self):
+        raw = self.root / "wide.tif"
+        raw.write_bytes(tiff_bytes(-300, size=100))                       # ۱۰۰×۱۰۰ سلول ۰٫۰۰۱ درجه از 51.29,35.72
+        out = process.build_layer_from_file(raw, "bathy", self.root / "crop.tif", [51.30, 35.70, 51.33, 35.71])
+        with rasterio.open(out) as ds:
+            self.assertEqual((ds.width, ds.height), (30, 10))
+            self.assertAlmostEqual(ds.bounds.left, 51.30, places=3)
+            self.assertAlmostEqual(ds.bounds.top, 35.71, places=3)
+        tiny = process.build_layer_from_file(raw, "bathy", self.root / "tiny.tif", [51.3000, 35.7000, 51.3004, 35.7004])
+        with rasterio.open(tiny) as ds:
+            self.assertEqual((ds.width, ds.height), (100, 100))            # برش کمتر از ۲×۲ پیکسل: همان کامل
+        far = process.build_layer_from_file(raw, "bathy", self.root / "far.tif", [10, 10, 11, 11])             # بیرون از داده: همان کامل
+        with rasterio.open(far) as ds:
+            self.assertEqual((ds.width, ds.height), (100, 100))
+
     def test_size_cap(self):
         with self.assertRaises(otapi.OTError):
             otapi.fetch_geotiff("COP30", BBOX, "K", "https://x.example/API", self.root / "big.tif", self.fake(tiff_bytes(size=200)), max_bytes=500)

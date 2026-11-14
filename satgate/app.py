@@ -229,7 +229,7 @@ class Gateway:
                     try:
                         otapi.fetch_geotiff(src.collection, job["bbox"], RUNTIME.cred("opentopography", "api_key"),
                                             RUNTIME.provider_url("opentopography"), raw)
-                        build_layer_from_file(raw, mission, part)
+                        build_layer_from_file(raw, mission, part, job["bbox"])
                     finally:
                         raw.unlink(missing_ok=True)
                 else:
