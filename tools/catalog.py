@@ -31,5 +31,5 @@ def __getattr__(name):  # سازگاری با مصرف‌کننده‌های ق�
 
 def category_groups():
     tools = sdk.all_tools()
-    return [{"key": c.key, "title": c.title, "hint": c.hint, "tools": [t for t in tools if t.category == c.key]}
+    return [{"key": c.key, "title": c.title, "hint": c.hint, "icon": c.icon, "tools": [t for t in tools if t.category == c.key]}
             for c in sdk.categories() if any(t.category == c.key for t in tools)]

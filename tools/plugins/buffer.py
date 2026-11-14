@@ -7,6 +7,7 @@ from tools.sdk import Param, ToolPlugin
 @sdk.register
 class Buffer(ToolPlugin):
     key, order, category, icon = "buffer", 10, "proximity", "t-buffer"
+    popular = True
     title = "حریم (بافر)"
     description = "دور هر عارضه حریمی به فاصله دلخواه می‌کشد؛ مثلاً حریم ۵۰۰ متری ایستگاه‌ها."
     inputs, output = ("هر لایه",), "چندضلعی حریم"
@@ -14,7 +15,7 @@ class Buffer(ToolPlugin):
     columns = ("ستون‌های لایه ورودی", "geom")
     params = (
         Param("layer", "layer", "لایه ورودی"),
-        Param("distance", "number", "فاصله (متر)", "فاصلهٔ حریم از هر عارضه", "500"),
+        Param("distance", "number", "فاصله‌ی حریم", "فاصله‌ی حریم از هر عارضه", "500", unit="متر"),
         Param("dissolve", "bool", "همه حریم‌ها یکی شوند", "به‌جای یک حریم برای هر عارضه، یک چندضلعی واحد", required=False),
     )
 

@@ -6,7 +6,8 @@ from tools.sdk import Param, ToolError, ToolPlugin
 
 @sdk.register
 class Nearest(ToolPlugin):
-    key, order, category, icon = "nearest", 20, "proximity", "t-nearest"
+    key, order, category, icon = "nearest", 30, "proximity", "t-nearest"
+    popular = True
     title = "نزدیک‌ترین عارضه"
     description = "برای هر عارضه، نزدیک‌ترین عارضه لایه دیگر و فاصله‌اش به متر."
     inputs, output = ("لایه مبدأ", "لایه هدف"), "همان عارضه‌ها + فاصله"

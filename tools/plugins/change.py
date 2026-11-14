@@ -6,7 +6,8 @@ from tools.sdk import Param, ToolError, ToolPlugin
 
 @sdk.register
 class Change(ToolPlugin):
-    key, order, category, icon = "change", 60, "overlay", "t-change"
+    key, order, category, icon = "change", 80, "overlay", "t-change"
+    level = "mid"
     title = "تغییر بین دو نسخه"
     description = "دو نسخه‌ی یک لایه چندضلعی (مثلاً کاربری ۱۴۰۰ و ۱۴۰۵) را برش می‌دهد و مساحت هر «از ← به» را می‌دهد."
     inputs, output = ("نسخهٔ قدیم", "نسخهٔ جدید"), "مساحت هر «از ← به»"

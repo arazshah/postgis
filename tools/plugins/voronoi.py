@@ -8,7 +8,8 @@ CAP = 5000
 
 @sdk.register
 class Voronoi(ToolPlugin):
-    key, order, category, icon = "voronoi", 90, "proximity", "t-voronoi"
+    key, order, category, icon = "voronoi", 70, "proximity", "t-voronoi"
+    level = "mid"
     title = "حوزه نفوذ (تیسن)"
     description = "هر نقطه از محدوده را به نزدیک‌ترین مرکز نسبت می‌دهد؛ برای حوزه‌ی خدمات کلانتری‌ها یا شعبه‌ها."
     inputs, output = ("لایه نقطه‌ای", "مرز (اختیاری)"), "حوزه نفوذ هر نقطه"

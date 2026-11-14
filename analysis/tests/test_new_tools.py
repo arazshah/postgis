@@ -184,6 +184,64 @@ class RealPostgisTests(unittest.TestCase):
         a = self.run_tool("measure", layer="public.zone", other="public.zone", mode="area")
         self.assertEqual(float(a[0][0]["share_pct"]), 100.0)
 
+    def test_toolbox_geometry_overlay_and_proximity_tools(self):
+        rings = self.run_tool("ringbuf", layer="public.schools", distance="200", rings="3")
+        self.assertEqual(len(rings), 120)
+        self.assertTrue(all(r[1] == "POLYGON" for r in rings))
+        knn = self.run_tool("knn", layer="public.schools", other="public.clinics", k="1", label="name")
+        self.assertEqual(len(knn), 40)
+        self.assertTrue(all(r[0]["rank"] == 1 and r[0]["nearest_name"] == "c1" and r[1] == "LINESTRING" for r in knn))
+        self.assertTrue(self.run_tool("nearlines", layer="public.schools", other="public.clinics", distance="1000"))
+        inter = self.run_tool("intersect", layer="public.zone", other="public.zone")
+        self.assertEqual(len(inter), 1)
+        self.assertEqual([r[0]["part"] for r in self.run_tool("union", layer="public.zone", other="public.zone")], ["both"])
+        self.assertEqual(self.run_tool("symdiff", layer="public.zone", other="public.zone"), [])
+        joined = self.run_tool("spatialjoin", layer="public.schools", other="public.zone")
+        self.assertTrue(joined and all(r[0]["j_name"] == "z" for r in joined))
+        self.assertEqual(len(self.run_tool("hull", layer="public.schools")), 1)
+        self.assertEqual(len(self.run_tool("dissolve", layer="public.schools")), 1)
+        self.assertEqual({r[1] for r in self.run_tool("centroid", layer="public.zone")}, {"POINT"})
+        self.assertEqual(len(self.run_tool("explode", layer="public.zone")), 1)
+        self.assertEqual({r[1] for r in self.run_tool("polyline", layer="public.zone")}, {"LINESTRING"})
+
+    def test_toolbox_measure_linear_and_density_tools(self):
+        z = self.run_tool("geomstats", layer="public.zone")[0][0]
+        self.assertGreater(float(z["area_ha"]), 1000)
+        self.assertGreater(float(z["length_m"]), 1000)
+        cf = self.run_tool("compact", layer="public.zone")[0][0]
+        self.assertGreater(float(cf["compactness"]), 0.5)
+        b = self.run_tool("bearing", layer="public.roads")[0][0]
+        self.assertEqual(b["direction"], "E")
+        self.assertAlmostEqual(float(b["sinuosity"]), 1.0, places=2)
+        pts = self.run_tool("linepoints", layer="public.roads", distance="1000")
+        self.assertTrue(8 <= len(pts) <= 12)
+        seg = self.run_tool("linesplit", layer="public.roads", distance="3000")
+        self.assertTrue(3 <= len(seg) <= 5)
+        self.assertEqual(len(self.run_tool("endpoints", layer="public.roads")), 2)
+        net = self.run_tool("fishnet", layer="public.schools", size="300")
+        self.assertEqual(sum(r[0]["count"] for r in net), 40)
+        rnd = self.run_tool("randompts", layer="public.zone", count="7", seed="3")
+        self.assertEqual(len(rnd), 7)
+        self.assertEqual(self.run_tool("randompts", layer="public.zone", count="7", seed="3")[0][1], "POINT")
+        c = self.run_tool("coords", layer="public.schools")[0][0]
+        self.assertEqual(c["utm_zone"], 39)
+
+    def test_toolbox_stats_and_quality_tools(self):
+        mc = self.run_tool("meancenter", layer="public.schools")
+        self.assertEqual((len(mc), mc[0][0]["n"]), (1, 40))
+        self.assertEqual(len(self.run_tool("sdellipse", layer="public.schools")), 1)
+        self.assertEqual(len(self.run_tool("hotspot", layer="public.schools", value="gid", distance="1500")), 40)
+        km = self.run_tool("kmeans", layer="public.schools", k="4")
+        self.assertEqual({r[0]["cluster_id"] for r in km}, {1, 2, 3, 4})
+        self.assertEqual(len(self.run_tool("makevalid", layer="public.zone")), 1)
+        self.assertEqual(self.run_tool("makevalid", layer="public.zone", only_invalid="on"), [])
+        self.assertEqual(len(self.run_tool("dedupe", layer="public.schools")), 40)
+        snapped = self.run_tool("snap", layer="public.schools", other="public.roads", distance="5000")
+        self.assertEqual(len(snapped), 40)
+        self.assertTrue(all(r[0]["snapped"] for r in snapped))
+        self.assertEqual(self.run_tool("selfoverlap", layer="public.zone"), [])
+        self.assertEqual(self.run_tool("linecross", layer="public.roads"), [])  # یک خط با خودش تقاطعی ندارد
+
     def test_network_tools(self):
         r = self.run_tool("route", lon="51.29", lat="35.69", lon2="51.34", lat2="35.74")
         self.assertEqual(r[0][1], "MULTILINESTRING")
@@ -191,6 +249,9 @@ class RealPostgisTests(unittest.TestCase):
         n = self.run_tool("netnearest", layer="public.schools", other="public.clinics", label="name", distance="50000")
         self.assertEqual(len(n), 40)
         self.assertTrue(all(x[0]["nearest_name"] == "c1" and x[0]["network_m"] >= 0 for x in n))
+        od = self.run_tool("odmatrix", layer="public.schools", other="public.clinics", distance="50000")
+        self.assertEqual(len(od), 40)
+        self.assertTrue(all(x[0]["network_m"] >= 0.5 * x[0]["straight_m"] and x[1] == "LINESTRING" for x in od))
         c = self.run_tool("coverage", layer="public.clinics", distance="600")
         self.assertEqual(len(c), 1)
         self.assertEqual(c[0][1], "POLYGON")

@@ -2,37 +2,31 @@
 {% block title %}{{ info.title }} — {{ db.db_name }} — {{ SITE_NAME }}{% endblock %}
 {% block head %}<link rel="stylesheet" href="{% static 'css/analysis.css' %}">{% endblock %}
 {% block ws %}
-<div class="page-head"><div class="tl-hero"><span class="tl-ico">{% icon info.icon 30 %}</span><div><h1>{{ info.title }}</h1><p class="muted page-sub">{{ info.description }}</p></div></div>
-  <div class="page-acts"><a class="btn ghost" href="{% url 'tools:page' db.pk %}">{% icon "toolbox" 18 %}همهٔ ابزارها</a></div></div>
+<div class="page-head"><div class="tl-hero"><span class="tl-ico">{% icon info.icon 30 %}</span><div><h1>{{ info.title }}</h1><p class="muted page-sub">{{ info.description }}</p>
+  <p class="tl-tags">{% if category %}<span class="tl-tag">{% icon category.icon 14 %}{{ category.title }}</span>{% endif %}{% if level %}<span class="tl-tag tl-tag-{{ info.level }}">سطح {{ level }}</span>{% endif %}</p></div></div>
+  <div class="page-acts"><a class="btn ghost" href="{% url 'tools:page' db.pk %}">{% icon "toolbox" 18 %}همه‌ی ابزارها</a></div></div>
 
 <div class="tl-layout">
   <section class="card tl-form-card" aria-label="{{ info.title }}">
     {% if blocked %}
-    <div class="msg warning">{{ blocked }}.{% if info.needs_routing %} <a href="{% url 'iranmap:ready' db.pk %}">شبکهٔ مسیریابی یک شهر را از «داده آماده ایران» بگیرید.</a>{% else %} <a href="{% url 'databases:import' db.pk %}">یک لایه وارد کنید</a> یا از «داده آماده ایران» بگیرید.{% endif %}</div>
+    <div class="msg warning">{{ blocked }}.{% if info.needs_routing %} <a href="{% url 'iranmap:ready' db.pk %}">شبکه‌ی مسیریابی یک شهر را از «داده آماده ایران» بگیرید.</a>{% else %} <a href="{% url 'databases:import' db.pk %}">یک لایه وارد کنید</a> یا از «داده آماده ایران» بگیرید.{% endif %}</div>
     {% endif %}
     <form method="post" class="tl-form">{% csrf_token %}
-      <div class="tl-fields">
-      {% for f in fields %}{% with p=f.p %}
-        {% if p.kind == 'bool' %}
-        <div class="tl-field"><label class="check small"><input type="checkbox" name="{{ p.name }}" {% if f.checked %}checked{% endif %}><span>{{ p.label }}</span></label>{% if p.help %}<span class="help">{{ p.help }}</span>{% endif %}</div>
-        {% elif p.kind == 'choice' %}
-        <div class="tl-field"><span class="lbl" id="{{ f.id }}-l">{{ p.label }}</span>
-          <div class="tl-choice" role="radiogroup" aria-labelledby="{{ f.id }}-l">{% for val, text in p.choices %}<label><input type="radio" name="{{ p.name }}" value="{{ val }}" {% if f.value == val %}checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</div></div>
-        {% elif p.kind == 'layer' %}
-        <div class="tl-field"><label for="{{ f.id }}">{{ p.label }}{% if p.required %} <span class="req" aria-hidden="true">*</span>{% endif %}</label>
-          <select id="{{ f.id }}" name="{{ p.name }}" {% if p.required %}required{% endif %}>{% if not p.required %}<option value="">{{ p.empty|default:"هیچ‌کدام" }}</option>{% endif %}{% for o in f.options %}<option value="{{ o.value }}" {% if f.value == o.value %}selected{% endif %}>{{ o.label }}{% if o.type %} ({{ o.type }}){% endif %}</option>{% empty %}<option value="">لایه مناسب نیست</option>{% endfor %}</select>
-          {% if p.help %}<span class="help">{{ p.help }}</span>{% endif %}</div>
+      {% for sec in sections %}
+        {% if sec.key == 'advanced' %}
+        <details class="tl-adv"><summary>{{ sec.title }}</summary><div class="tl-fields">{% for f in sec.fields %}{% include "tools/_field.html" %}{% endfor %}</div></details>
         {% else %}
-        <div class="tl-field"><label for="{{ f.id }}">{{ p.label }}{% if p.required %} <span class="req" aria-hidden="true">*</span>{% endif %}</label>
-          <input id="{{ f.id }}" type="text" name="{{ p.name }}" value="{{ f.value }}" {% if p.required %}required{% endif %} {% if p.kind == 'number' %}inputmode="decimal" dir="ltr"{% else %}class="ltr" dir="ltr"{% endif %} placeholder="{{ p.placeholder }}" autocomplete="off">
-          {% if p.help %}<span class="help">{{ p.help }}</span>{% endif %}</div>
+        <fieldset class="tl-sec"><legend><b>{{ forloop.counter|fanum }}</b>{{ sec.title }}</legend><div class="tl-fields">{% for f in sec.fields %}{% include "tools/_field.html" %}{% endfor %}</div></fieldset>
         {% endif %}
-      {% endwith %}{% endfor %}
-        <div class="tl-field"><label for="f-output">نام جدول خروجی <span class="req" aria-hidden="true">*</span></label>
-          <input id="f-output" type="text" name="output" class="ltr" dir="ltr" required pattern="[a-z_][a-z0-9_]*" value="{{ out_value }}" autocomplete="off">
-          <span class="help">حروف کوچک انگلیسی، عدد و _</span></div>
-      </div>
-      <div class="tl-opts"><label class="check small"><input type="checkbox" name="replace" {% if replace %}checked{% endif %}><span>اگر جدولی با این نام هست، جایگزین شود</span></label></div>
+      {% endfor %}
+      <fieldset class="tl-sec"><legend><b>{{ sections|length|add:1|fanum }}</b>خروجی</legend>
+        <div class="tl-fields">
+          <div class="tl-field tl-wide"><label for="f-output">نام جدول خروجی <span class="req" aria-hidden="true">*</span></label>
+            <input id="f-output" type="text" name="output" class="ltr" dir="ltr" required pattern="[a-z_][a-z0-9_]*" value="{{ out_value }}" autocomplete="off" data-tool="{{ info.key }}"{% if touched %} data-touched="1"{% endif %}>
+            <span class="help">حروف کوچک انگلیسی، عدد و _ ؛ با تغییر لایه، نام پیشنهادی خودکار ساخته می‌شود.</span></div>
+          <div class="tl-field tl-bool"><label class="check small"><input type="checkbox" name="replace" {% if replace %}checked{% endif %}><span>اگر جدولی با این نام هست، جایگزین شود</span></label></div>
+        </div>
+      </fieldset>
       <div class="tl-run">
         <button class="btn" type="submit" {% if blocked or active %}disabled{% endif %}>{% icon "play" 18 %}اجرای تحلیل</button>
         <span class="small muted">{% if active %}یک تحلیل در حال اجراست؛ بعد از تمام شدن می‌توانید دوباره اجرا کنید.{% else %}در پس‌زمینه اجرا می‌شود؛ پایان آن اعلام می‌شود و می‌توانید کار دیگری بکنید.{% endif %}</span>
@@ -43,11 +37,11 @@
   <aside class="card tl-aside" aria-label="راهنمای ابزار">
     <h2>این ابزار چه می‌کند</h2>
     <dl>
-      <div><dt>ورودی</dt><dd>{{ info.inputs|join:" + " }}</dd></div>
+      <div><dt>ورودی</dt><dd class="tl-io-l">{% for x in info.inputs %}<span class="tl-chip">{{ x }}</span>{% endfor %}</dd></div>
       <div><dt>خروجی</dt><dd>{{ info.output }}</dd></div>
       <div><dt>مثال کاربردی</dt><dd>{{ info.example }}</dd></div>
       <div><dt>ستون‌های جدول نتیجه</dt><dd><div class="tl-cols">{% for c in info.columns %}<code>{{ c }}</code>{% endfor %}</div></dd></div>
-      <div><dt>یادآوری</dt><dd>فاصله‌ها به متر و روی کرهٔ زمین (WGS84) حساب می‌شود؛ پس سیستم مختصات لایه‌ها فرقی ندارد.</dd></div>
+      <div><dt>یادآوری</dt><dd>فاصله‌ها به متر و روی کره‌ی زمین (WGS84) حساب می‌شود؛ پس سیستم مختصات لایه‌ها فرقی ندارد.</dd></div>
     </dl>
   </aside>
 </div>
@@ -55,3 +49,4 @@
 <div class="an-head" id="history"><h3>اجراهای قبلی این ابزار</h3></div>
 {% include "analysis/_history.html" %}
 {% endblock %}
+{% block ws_scripts %}<script src="{% static 'js/tools.js' %}" defer></script>{% endblock %}

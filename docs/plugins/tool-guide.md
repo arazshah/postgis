@@ -33,9 +33,11 @@ class Centroid(ToolPlugin):
 | جزء | توضیح |
 |---|---|
 | `key` | یکتا، حروف کوچک لاتین، حداکثر ۲۰ نویسه |
-| `category` | یکی از دسته‌های ثبت‌شده (`sdk.category(...)`)؛ دسته‌ی تازه را در `plugin.py` اپ خود ثبت کنید |
+| `category` | یکی از ۹ دسته‌ی ثبت‌شده: `proximity`، `overlay`، `geometry`، `measure`، `linear`، `aggregate`، `stats`، `quality`، `network` (`sdk.category(..., icon=...)`)؛ دسته‌ی تازه را در `plugin.py` اپ خود ثبت کنید |
 | `icon` | نام آیکون در `core/icons.py` (و `static/js/studio-ui.js`)؛ ایموجی ممنوع |
-| `params` | فیلدهای فرم: `layer` (با `geom="point|line|polygon"`)، `number`، `text`، `choice` (چیپ)، `bool` |
+| `params` | فیلدهای فرم: `layer` (با `geom="point|line|polygon"`)، `number`، `text`، `choice` (چیپ)، `bool`؛ اختیاری: `unit="متر"` (برچسب واحد کنار عدد؛ واحد را در `label` ننویسید)، `group="input|settings|advanced"` (بخش فرم؛ پیش‌فرض: لایه ← ورودی، بقیه ← تنظیمات)، `wide=True` |
+| `level` | `basic` (پیش‌فرض)، `mid` یا `adv`؛ برای فیلتر سطح در گالری |
+| `popular` | `True` = در نوار «پرکاربردها»ی گالری بیاید |
 | `build(ctx)` | فقط **SELECT نتیجه** با ستون `geom`؛ باید `psycopg.sql.Composable` باشد (رشته‌ی خام رد می‌شود) |
 | `summary_extra(params)` | اختیاری: تکه‌های ویژه‌ی خلاصه‌ی تاریخچه |
 | `after_create(conn, target)` | اختیاری: بررسی پس از ساخت جدول در همان تراکنش |
@@ -43,6 +45,8 @@ class Centroid(ToolPlugin):
 | `needs_routing` | ابزار شبکه‌ی معابر (`routing.ways`) می‌خواهد؛ در `build` هم `ctx.need_routing()` را صدا بزنید |
 
 موتور (`tools/engine.py`) بقیه را یکسان انجام می‌دهد: اجرای SELECT با **نقش خود مشتری** و مهلت ۳ دقیقه، تنظیم نوع هندسه و SRID 4326، کلید `gid`، نمایه‌ی GiST، `ANALYZE` و واگذاری مالکیت.
+
+کمک‌ها: `ctx.column(name, t)` (ستون انتخابی کاربر؛ نام نامعتبر = ToolError)، `ctx.choice(name, allowed, default)` و در `tools/plugins/_common.py`: `unary` (SELECT استاندارد تک‌لایه)، `num_col`، `deg_per_m`. تعداد ابزارها در آزمون `test_toolbox_has_fifty_tools…` قفل است؛ با افزودن ابزار آن را به‌روز کنید.
 
 ## قواعد امنیتی (الزامی)
 - نام جدول و ستون فقط با `sql.Identifier`؛ مقدار فقط با `sql.Literal`. هرگز f-string یا الحاق رشته با ورودی کاربر.

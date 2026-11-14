@@ -6,7 +6,8 @@ from tools.sdk import Param, ToolPlugin
 
 @sdk.register
 class Hexbin(ToolPlugin):
-    key, order, category, icon = "hexbin", 40, "aggregate", "t-hexbin"
+    key, order, category, icon = "hexbin", 20, "aggregate", "t-hexbin"
+    popular = True
     title = "نقشه تراکم شش‌ضلعی"
     description = "شبکه شش‌ضلعی روی نقطه‌ها و تعداد هر خانه؛ برای نقشه حرارتی."
     inputs, output = ("لایه نقطه‌ای",), "شبکه شش‌ضلعی + تعداد"
@@ -15,7 +16,7 @@ class Hexbin(ToolPlugin):
     chart_hint = {"kind": "hist", "field": "count"}
     params = (
         Param("layer", "layer", "لایه نقطه‌ای", geom="point"),
-        Param("size", "number", "اندازهٔ هر خانه (متر)", "ضلع تقریبی هر شش‌ضلعی", "500"),
+        Param("size", "number", "اندازه‌ی هر خانه", "ضلع تقریبی هر شش‌ضلعی", "500", unit="متر"),
     )
 
     def build(self, ctx):

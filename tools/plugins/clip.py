@@ -8,7 +8,8 @@ from ._overlay import mask_sql
 
 @sdk.register
 class Clip(ToolPlugin):
-    key, order, category, icon = "clip", 120, "overlay", "t-clip"
+    key, order, category, icon = "clip", 10, "overlay", "t-clip"
+    popular = True
     title = "برش با مرز"
     description = "هر لایه‌ای را با یک مرز چندضلعی می‌بُرد و فقط بخش داخل مرز را نگه می‌دارد."
     inputs, output = ("هر لایه", "مرز چندضلعی"), "بخش داخل مرز"

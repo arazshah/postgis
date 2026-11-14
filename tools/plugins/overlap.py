@@ -6,7 +6,8 @@ from tools.sdk import Param, ToolError, ToolPlugin
 
 @sdk.register
 class Overlap(ToolPlugin):
-    key, order, category, icon = "overlap", 50, "overlay", "t-overlap"
+    key, order, category, icon = "overlap", 70, "overlay", "t-overlap"
+    level = "mid"
     title = "سهم همپوشانی"
     description = "سهم هر دسته (مثلاً کاربری زمین) از مساحت هر چندضلعی (مثلاً محله) با برش دو لایه چندضلعی."
     inputs, output = ("چندضلعی منطقه", "چندضلعی دسته‌دار"), "سهم هر دسته در هر منطقه"

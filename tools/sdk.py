@@ -37,6 +37,9 @@ class Param:
     geom: str = ""  # layer: point | line | polygon | "" (هر نوع)
     choices: tuple[tuple[str, str], ...] = ()
     empty: str = ""  # layer اختیاری: متن گزینهٔ «انتخاب نشده»
+    unit: str = ""  # برچسب واحد کنار فیلد عدد (مثلاً «متر»)
+    group: str = ""  # input | settings | advanced؛ خالی = از نوع فیلد حدس زده می‌شود (لایه ← ورودی، بقیه ← تنظیمات)
+    wide: bool = False  # فیلد تمام‌عرض فرم
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,7 @@ class Category:
     key: str
     title: str
     hint: str
+    icon: str = "toolbox"
 
 
 class ToolPlugin:
@@ -61,6 +65,8 @@ class ToolPlugin:
     needs_routing: bool = False
     chart_hint: dict | None = None  # پیشنهاد نمودار برای جدول نتیجه (تاریخچه)
     order: int = 100  # ترتیب در گالری
+    level: str = "basic"  # basic | mid | adv: سطح تخصص برای فیلتر گالری
+    popular: bool = False  # در نوار «پرکاربردها» بیاید
     plugin: str = "tools"
 
     def build(self, ctx: Context):
@@ -100,8 +106,11 @@ def register(cls: type[ToolPlugin]) -> type[ToolPlugin]:
     return cls
 
 
-def category(key: str, title: str, hint: str, *, order: int, plugin: str = "tools") -> None:
-    registry.add(CATEGORY, key, Category(key, title, hint), plugin=plugin, order=order)
+LEVELS = (("basic", "مقدماتی"), ("mid", "متوسط"), ("adv", "پیشرفته"))
+
+
+def category(key: str, title: str, hint: str, *, order: int, icon: str = "toolbox", plugin: str = "tools") -> None:
+    registry.add(CATEGORY, key, Category(key, title, hint, icon), plugin=plugin, order=order)
 
 
 def all_tools() -> list[ToolPlugin]:
@@ -143,6 +152,22 @@ class Context:
     def guard(self, t, col: str, cap: int, msg: str) -> None:
         self.guards.append((sql.SQL("SELECT count(*) FROM (SELECT 1 FROM {} WHERE {} IS NOT NULL LIMIT {}) x").format(
             sql.Identifier(t.schema, t.name), sql.Identifier(col), sql.Literal(cap + 1)), cap, msg))
+
+    def column(self, name_key: str, t, *, required: bool = False, spatial: bool = False) -> str:
+        """ستون انتخابی کاربر از جدول `t` (فقط از ستون‌های واقعی؛ نام نامعتبر = ToolError). خالی و اختیاری = ""."""
+        name = (self.params.get(name_key) or "").strip()
+        if not name:
+            if required:
+                raise ToolError("ستون را مشخص کنید.")
+            return ""
+        ok = {c["name"] for c in self.ex.columns(t) if spatial or not c["spatial"]}
+        if name not in ok:
+            raise ToolError(f"ستون «{name}» در لایه {t.name} نیست.")
+        return name
+
+    def choice(self, name_key: str, allowed: tuple[str, ...], default: str) -> str:
+        v = (self.params.get(name_key) or default).strip()
+        return v if v in allowed else default
 
     def need_routing(self) -> None:
         if "routing.ways" not in self.tables:

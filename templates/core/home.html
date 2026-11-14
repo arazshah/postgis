@@ -116,6 +116,32 @@ WHERE ST_DWithin(
   </div>
 </section>
 
+{# ───────────── جعبه‌ابزار تحلیل ───────────── #}
+{% if toolbox %}<section class="section alt cv" id="toolbox" aria-labelledby="toolbox-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">جعبه‌ابزار تحلیل مکانی</p>
+      <h2 id="toolbox-h">{{ toolbox.count|fanum }} ابزار تخصصی برای هر نیاز مکانی</h2>
+      <p class="muted">از اندازه‌گیری و حریم‌سازی تا ترکیب لایه‌ها، آمار مکانی، پاک‌سازی داده و تحلیل شبکه‌ی معابر؛ هر ابزار با یک فرم ساده اجرا می‌شود و نتیجه‌اش جدولی مکانی در پایگاه داده‌ی خود شماست. چه تازه‌کار باشید و چه متخصص تحلیل مکانی، ابزار مناسب را در دسته‌بندی منظم جعبه‌ابزار می‌یابید، بی‌آن‌که نیازی به نوشتن SQL باشد.</p>
+    </div>
+    <ul class="tbx-cats" aria-label="دسته‌های جعبه‌ابزار">
+      {% for c in toolbox.categories %}<li class="tbx-cat">
+        <span class="tbx-ico">{% icon c.icon 22 %}</span>
+        <div><h3>{{ c.title }}</h3><p>{{ c.hint }}</p></div>
+        <b class="tbx-n">{{ c.count|fanum }} ابزار</b>
+      </li>{% endfor %}
+    </ul>
+    {% if toolbox.examples %}<ul class="who-links" aria-label="نمونه‌ای از ابزارهای پرکاربرد">
+      {% for t in toolbox.examples %}<li><span class="tbx-ex">{{ t }}</span></li>{% endfor %}
+    </ul>{% endif %}
+    <ul class="tbx-facts">
+      <li><b>بدون کدنویسی</b><span>فرم ساده، اجرا در پس‌زمینه و اعلام پایان کار</span></li>
+      <li><b>نتیجه‌ی قابل‌اتکا</b><span>SQL هر ابزار با آزمون خودکار قفل شده و نتیجه‌ی آن تکرارپذیر است</span></li>
+      <li><b>از مبتدی تا متخصص</b><span>ابزارهای مقدماتی، متوسط و پیشرفته با فیلتر سطح</span></li>
+    </ul>
+  </div>
+</section>{% endif %}
+
 {# ───────────── بازارچه پلاگین ───────────── #}
 {% if market_picks %}<section class="section cv" id="plugins" aria-labelledby="plugins-h">
   <div class="wrap">
