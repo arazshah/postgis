@@ -1,0 +1,26 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+{% if not switch_on %}<p class="errornote">سوئیچ کلی «ساخت فهرست و ارسال» در تنظیمات پلاگین خاموش است؛ پیام زمان‌بندی می‌شود ولی تا روشن‌شدن نمی‌رود.</p>{% endif %}
+<form method="post">{% csrf_token %}
+  <fieldset class="module aligned">
+    <div class="form-row"><label>مسیر / مخاطب:</label>
+      {% for r in routes %}<label style="display:block;margin:4px 0"><input type="radio" name="route" value="{{ r.key }}" {% if form.route == r.key %}checked{% endif %}>
+        <b>{{ r }}</b>{% if not r.template_id or not r.enabled %} <small>(بدون قالب یا خاموش)</small>{% endif %}
+        <br><small>{% for k, d in defs.items %}{% if k == r.key %}{{ d.goal }}{% endif %}{% endfor %}</small></label>{% endfor %}
+    </div>
+    <div class="form-row"><label for="x-extra">نام قابلیت (فقط برای «خبر قابلیت تازه»، تا ۲۵ نویسه):</label>
+      <input id="x-extra" name="extra" maxlength="25" value="{{ form.extra }}"></div>
+    <div class="form-row"><label for="x-limit">سقف گیرنده:</label>
+      <input id="x-limit" type="number" name="limit" min="1" max="2000" value="{{ form.limit|default:200 }}"></div>
+  </fieldset>
+  <div class="submit-row"><button class="default" name="do" value="preview" type="submit">پیش‌نمایش</button></div>
+  {% if est %}
+  <fieldset class="module">
+    <h2>پیش‌نمایش</h2>
+    <p>گیرنده‌ی واجد شرایط (بعد از رضایت و سقف دفعات): <b>{{ est.count }}</b> — گروه کنترل: {{ est.control }} — پیامک واقعی: <b>{{ est.real }}</b> — حدود <b>{{ est.segments }}</b> بخش پیامک.</p>
+    <p dir="rtl"><b>نمونه:</b> {{ est.sample }}</p>
+    {% if est.real %}<div class="submit-row"><button name="do" value="send" type="submit" onclick="return confirm('{{ est.real }} پیام زمان‌بندی شود؟')">تأیید و زمان‌بندی (تأیید تازه)</button></div>{% endif %}
+  </fieldset>
+  {% endif %}
+</form>
+{% endblock %}

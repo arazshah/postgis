@@ -18,7 +18,7 @@ from django.utils import timezone
 from kernel import conf, entitlements
 
 from . import routes, timing
-from .models import Batch, Message, Preference, Route
+from .models import Batch, Coupon, Message, Preference, Route
 
 log = logging.getLogger(__name__)
 PLUGIN = "winback"
@@ -67,8 +67,36 @@ def _eligible(user, d: routes.RouteDef, now) -> bool:
     return not busy and not recent
 
 
+def _collect(d: routes.RouteDef, now, cap: int) -> list:
+    rows = []
+    for user, extra, dest, db_id in d.pick(now):
+        if _eligible(user, d, now):
+            rows.append((user, extra, dest, db_id))
+        if len(rows) >= cap:
+            break
+    return rows
+
+
+def _variant(user, key: str, route: Route) -> str:
+    """نصف‌نصف و ثابت برای هر کاربر؛ بدون قالب B همیشه A."""
+    if not route.template_id_b or not routes.DEFS[key].variant_b:
+        return "A"
+    return "B" if hashlib.sha256(f"ab:{user.pk}:{key}".encode()).digest()[0] % 2 else "A"
+
+
+def _make_batch(route: Route, d: routes.RouteDef, rows: list, today, fixed: dict | None = None) -> Batch:
+    with transaction.atomic():
+        batch = Batch.objects.create(route=route)
+        Message.objects.bulk_create([
+            Message(batch=batch, user=u, route_key=d.key, phone=u.phone, dest=dest, variant=_variant(u, d.key, route),
+                    params={**extra, "NAME": routes.first_name(u), **(fixed or {}), **({"_db": db_id} if db_id else {})},
+                    status=Message.Status.CONTROL if _is_control(u, d.key, today) else Message.Status.PENDING)
+            for u, extra, dest, db_id in rows])
+    return batch
+
+
 def plan_batches(now=None) -> list[Batch]:
-    """برای هر مسیر روشن (با قالب) حداکثر یک دسته‌ی منتظر تأیید در روز می‌سازد."""
+    """برای هر مسیر روشن (با قالب) حداکثر یک دسته‌ی منتظر تأیید در روز می‌سازد (مسیرهای فقط‌دستی را نه)."""
     now = now or timezone.now()
     sync_routes()
     cap = int(conf.get(PLUGIN, "max_batch") or 300)
@@ -76,26 +104,37 @@ def plan_batches(now=None) -> list[Batch]:
     made = []
     for route in Route.objects.filter(enabled=True).exclude(template_id=""):
         d = routes.DEFS.get(route.key)
-        if d is None or route.batches.filter(status=Batch.Status.PENDING).exists() or \
+        if d is None or d.manual_only or route.batches.filter(status=Batch.Status.PENDING).exists() or \
                 route.batches.filter(created_at__date=today).exists():
             continue
-        rows = []
-        for user, extra, dest, db_id in d.pick(now):
-            if _eligible(user, d, now):
-                rows.append((user, extra, dest, db_id))
-            if len(rows) >= cap:
-                break
-        if not rows:
-            continue
-        with transaction.atomic():
-            batch = Batch.objects.create(route=route)
-            Message.objects.bulk_create([
-                Message(batch=batch, user=u, route_key=d.key, phone=u.phone, dest=dest,
-                        params={**extra, "NAME": routes.first_name(u), **({"_db": db_id} if db_id else {})},
-                        status=Message.Status.CONTROL if _is_control(u, d.key, today) else Message.Status.PENDING)
-                for u, extra, dest, db_id in rows])
-        made.append(batch)
+        rows = _collect(d, now, cap)
+        if rows:
+            made.append(_make_batch(route, d, rows, today))
     return made
+
+
+def manual_estimate(route: Route, fixed: dict, limit: int, now=None) -> dict:
+    """پیش‌نمایش ارسال دستی بدون ساخت چیزی: تعداد، کنترل، بخش پیامک و نمونه."""
+    now = now or timezone.now()
+    d = routes.DEFS[route.key]
+    rows = _collect(d, now, limit)
+    today = now.astimezone(timing.TZ).date()
+    control = sum(1 for r in rows if _is_control(r[0], d.key, today))
+    sample = routes.render(d.text("A"), {**{p: f"‹{p}›" for p in d.params}, **{k: v for k, v in fixed.items()}})
+    real = len(rows) - control
+    return {"rows": rows, "count": len(rows), "control": control, "real": real, "segments": real * routes.segments(sample),
+            "sample": sample}
+
+
+def manual_send(route: Route, fixed: dict, limit: int, admin_user, now=None) -> tuple[Batch | None, int]:
+    """ساخت و تأیید یک‌جای دسته‌ی دستی (فراخوان باید stepup را گذرانده باشد). همان قاعده‌های رضایت/سقف/کنترل/زمان."""
+    now = now or timezone.now()
+    d = routes.DEFS[route.key]
+    rows = _collect(d, now, limit)
+    if not rows:
+        return None, 0
+    batch = _make_batch(route, d, rows, now.astimezone(timing.TZ).date(), fixed)
+    return batch, approve(batch, admin_user, now)
 
 
 def link_for(code: str, stop: bool = False) -> str:
@@ -103,13 +142,16 @@ def link_for(code: str, stop: bool = False) -> str:
 
 
 def sms_params(msg: Message) -> dict[str, str]:
-    return {**{k: v for k, v in msg.params.items() if not k.startswith("_")},
+    """فقط پارامترهایی که در متن همان نسخه‌ی قالب هست (قالب sms.ir پارامتر اضافه را ممکن است نپذیرد)."""
+    allp = {**{k: v for k, v in msg.params.items() if not k.startswith("_")},
             "LINK": link_for(msg.code), "STOP": link_for(msg.code, stop=True)}
+    text = routes.DEFS[msg.route_key].text(msg.variant)
+    return {k: v for k, v in allp.items() if f"#{k}#" in text}
 
 
 def preview(msg: Message) -> str:
     d = routes.DEFS[msg.route_key]
-    return routes.render(d.template, sms_params(msg))
+    return routes.render(d.text(msg.variant), sms_params(msg))
 
 
 @transaction.atomic
@@ -159,7 +201,8 @@ def send_due(now=None) -> dict:
         return out
     for m in due:
         route = m.batch.route
-        if not route.enabled or not route.template_id or m.batch.status != Batch.Status.APPROVED:
+        tid = route.template_id_b if m.variant == "B" and route.template_id_b else route.template_id
+        if not route.enabled or not tid or m.batch.status != Batch.Status.APPROVED:
             _skip(m, "مسیر خاموش یا لغو شده")
         elif not wants(m.user) or not m.user.is_active:
             _skip(m, "لغو یا غیرفعال")
@@ -173,7 +216,7 @@ def send_due(now=None) -> dict:
             continue
         else:
             try:
-                sms.send_template(m.phone, route.template_id, sms_params(m))
+                sms.send_template(m.phone, tid, sms_params(m))
             except sms.SMSError as exc:
                 m.status, m.reason = Message.Status.FAILED, str(exc)[:200]
                 m.save(update_fields=["status", "reason"])
@@ -226,6 +269,11 @@ def grant_gift(msg: Message) -> bool:
         except ValueError:
             log.exception("winback gift failed")
             return False
+    elif route.gift_kind == Route.Gift.COUPON:
+        hours = int(conf.get(PLUGIN, "coupon_hours") or 72)
+        Coupon.objects.get_or_create(message=msg, defaults={
+            "user": msg.user, "percent": min(max(route.gift_percent, 1), 90),
+            "expires_at": timezone.now() + datetime.timedelta(hours=hours)})
     elif route.gift_kind == Route.Gift.EXTEND and msg.params.get("_db"):
         from databases.models import UserDatabase
 
@@ -276,3 +324,31 @@ def tick(now=None) -> str:
 
 def pending_batches() -> int:
     return Batch.objects.filter(status=Batch.Status.PENDING).count()
+
+
+def ab_results(key: str, now=None) -> dict | None:
+    """مقایسه‌ی A و B روی پیام‌های رسیده‌ی ۷ روزه: نرخ بازگشت هر نسخه و برنده (آزمون دو نسبت، حداقل ۳۰ نفر در هر نسخه)."""
+    import math
+
+    now = now or timezone.now()
+    base = Message.objects.filter(route_key=key, status=Message.Status.SENT,
+                                  send_at__lte=now - datetime.timedelta(days=WINDOW_DAYS))
+    out = {}
+    for v in ("A", "B"):
+        q = base.filter(variant=v)
+        n = q.count()
+        out[v] = {"n": n, "returned": q.filter(returned_at__isnull=False).count(),
+                  "clicked": q.filter(clicked_at__isnull=False).count()}
+    if not out["B"]["n"]:
+        return None
+    a, b = out["A"], out["B"]
+    out["winner"] = ""
+    if a["n"] >= 30 and b["n"] >= 30:
+        pa, pb = a["returned"] / a["n"], b["returned"] / b["n"]
+        p = (a["returned"] + b["returned"]) / (a["n"] + b["n"])
+        se = math.sqrt(p * (1 - p) * (1 / a["n"] + 1 / b["n"])) or 1
+        z = (pb - pa) / se
+        out["z"] = z
+        if abs(z) >= 1.96:
+            out["winner"] = "B" if z > 0 else "A"
+    return out

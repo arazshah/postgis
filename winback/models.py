@@ -16,6 +16,7 @@ class Route(models.Model):
         NONE = "none", "بدون هدیه"
         TRIAL = "trial", "آزمایش رایگان یک پلاگین"
         EXTEND = "extend", "چند روز تمدید پایگاه"
+        COUPON = "coupon", "کد تخفیف یک‌بارمصرف (مهلت‌دار)"
 
     key = models.CharField("کلید", max_length=30, unique=True, editable=False)
     enabled = models.BooleanField("روشن", default=False,
@@ -25,6 +26,9 @@ class Route(models.Model):
     gift_kind = models.CharField("هدیه‌ی بازگشت", max_length=10, choices=Gift.choices, default=Gift.NONE)
     gift_plugin = models.CharField("پلاگین هدیه", max_length=60, blank=True)
     gift_days = models.PositiveSmallIntegerField("روزِ هدیه", default=7)
+    gift_percent = models.PositiveSmallIntegerField("درصد تخفیف", default=20, help_text="فقط برای هدیه‌ی «کد تخفیف».")
+    template_id_b = models.CharField("شناسه‌ی قالب نسخه‌ی B (آزمون A/B)", max_length=12, blank=True,
+                                     help_text="اگر پر شود، گیرنده‌ها نصف‌نصف بین متن A و B تقسیم می‌شوند و برنده سنجیده می‌شود.")
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -89,6 +93,7 @@ class Message(models.Model):
     params = models.JSONField(default=dict)
     dest = models.CharField("مقصد", max_length=200, default="/")
     code = models.CharField(max_length=12, unique=True, default=new_code)
+    variant = models.CharField(max_length=1, default="A")
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
     reason = models.CharField("دلیل رد/خطا", max_length=200, blank=True)
     send_at = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -107,3 +112,19 @@ class Message(models.Model):
 
     def __str__(self):
         return f"{self.route_key} → {self.phone}"
+
+
+class Coupon(models.Model):
+    """کد تخفیف شخصی بازگشت: یک درصد روی فاکتور بعدی، تا مهلت؛ با `kernel.pricing` اعمال می‌شود (نه کد دستی)."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="winback_coupons")
+    message = models.OneToOneField(Message, on_delete=models.SET_NULL, null=True, blank=True, related_name="coupon")
+    percent = models.PositiveSmallIntegerField("درصد")
+    expires_at = models.DateTimeField("مهلت")
+    invoice = models.ForeignKey("billing.Invoice", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "تخفیف بازگشت"
+        verbose_name_plural = "تخفیف‌های بازگشت"
+        ordering = ["-created_at"]

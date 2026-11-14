@@ -27,6 +27,12 @@ class RouteDef:
     extra: tuple[str, ...]
     pick: Callable[[datetime.datetime], list]  # (now) -> [(user, {param: value}, dest, gift_db_id|None)]
     cooldown_days: int = 30
+    variant_b: str = ""  # متن جایگزین برای آزمون A/B (همان پارامترها)
+    manual_only: bool = False  # فهرست شبانه نمی‌سازد؛ فقط از «ارسال دستی»
+    extra_input: str = ""  # پارامتری که مدیر هنگام ارسال دستی تایپ می‌کند (مثلاً FEATURE)
+
+    def text(self, variant: str = "A") -> str:
+        return self.variant_b if variant == "B" and self.variant_b else self.template
 
     @property
     def params(self) -> tuple[str, ...]:
@@ -139,29 +145,43 @@ def _unpaid_invoice(now):
     return out
 
 
+def _announce(now):
+    from django.db.models.functions import Coalesce
+
+    UserDatabase = _db()
+    live = UserDatabase.objects.filter(owner=OuterRef("pk"), status__in=UserDatabase.LIVE_STATUSES)
+    qs = (_users().annotate(seen=Coalesce("last_login", "date_joined")).filter(seen__gte=now - datetime.timedelta(days=90))
+          .filter(Exists(live)))
+    return [(u, {}, "/plugins/", None) for u in qs]
+
+
 _TAIL = "\nلغو پیام‌ها: #STOP#"
 
 DEFS: dict[str, RouteDef] = {d.key: d for d in (
     RouteDef("no_database", "ثبت‌نام بدون شروع",
              "ثبت‌نام کرده‌اند ولی هنوز پایگاهی نساخته‌اند؛ ساخت پایگاه رایگان با یک کلیک.",
              "#NAME# عزیز، پایگاه PostGIS رایگان شما در ژئوپایگاه فقط ۳۰ ثانیه تا آماده‌شدن فاصله دارد.\nساخت: #LINK#" + _TAIL,
-             (), _no_database),
+             (), _no_database, variant_b="#NAME# عزیز، پایگاه PostGIS رایگان شما بدون نصب و تنظیم آماده‌ی ساخت است؛ فقط یک کلیک: #LINK#" + _TAIL),
     RouteDef("empty_database", "پایگاه خالی",
              "پایگاه ساخته‌اند ولی داده‌ای وارد نکرده‌اند؛ پیشنهاد ورود داده (CSV، شیپ‌فایل یا داده‌ی آماده‌ی ایران).",
              "#NAME# عزیز، پایگاه «#DB#» شما آماده است ولی هنوز داده ندارد. فایل خود را بیندازید یا داده‌ی آماده‌ی ایران را با یک کلیک بگیرید: #LINK#" + _TAIL,
-             ("DB",), _empty_database),
+             ("DB",), _empty_database, variant_b="#NAME# عزیز، پایگاه «#DB#» خالی است. فایل CSV، شیپ‌فایل یا داده‌ی آماده‌ی ایران را در چند دقیقه وارد کنید: #LINK#" + _TAIL),
     RouteDef("dormant", "کاربر خوابیده",
              "۳۰ تا ۱۲۰ روز است وارد نشده‌اند و پایگاه فعال دارند؛ یادآوری داده‌ی سالم خودشان.",
              "#NAME# عزیز، #DAYS# روز است سری به پایگاه «#DB#» نزده‌اید. داده‌هایتان سالم و آماده است: #LINK#" + _TAIL,
-             ("DB", "DAYS"), _dormant),
+             ("DB", "DAYS"), _dormant, variant_b="#NAME# عزیز، قابلیت‌های تازه‌ای از آخرین ورود شما به ژئوپایگاه اضافه شده. پایگاه «#DB#» منتظر شماست: #LINK#" + _TAIL),
     RouteDef("expired_plan", "پلن تمام‌شده",
              "پلن پایگاه در دو هفته‌ی اخیر تمام شده؛ یادآوری صادقانه و تمدید.",
              "#NAME# عزیز، پلن پایگاه «#DB#» #DAYS# روز پیش تمام شد. داده‌های شما نگه داشته شده؛ تمدید: #LINK#" + _TAIL,
-             ("DB", "DAYS"), _expired_plan, cooldown_days=14),
+             ("DB", "DAYS"), _expired_plan, cooldown_days=14, variant_b="#NAME# عزیز، پایگاه «#DB#» هنوز نگه داشته شده ولی پلنش تمام شده. برای ادامه‌ی کار تمدید کنید: #LINK#" + _TAIL),
     RouteDef("unpaid_invoice", "فاکتور نیمه‌کاره",
              "فاکتوری ساخته‌اند ولی پرداخت نکرده‌اند.",
              "#NAME# عزیز، فاکتور #AMOUNT# تومانی شما در ژئوپایگاه هنوز پرداخت نشده است. ادامه‌ی پرداخت: #LINK#" + _TAIL,
-             ("AMOUNT",), _unpaid_invoice, cooldown_days=14),
+             ("AMOUNT",), _unpaid_invoice, cooldown_days=14, variant_b="#NAME# عزیز، فاکتور #AMOUNT# تومانی شما فقط یک قدم تا فعال‌شدن مانده است: #LINK#" + _TAIL),
+    RouteDef("announce", "خبر قابلیت تازه",
+             "ارسال دستی: معرفی یک قابلیت یا پلاگین تازه به کاربران فعال ۹۰ روز اخیر که پایگاه دارند.",
+             "#NAME# عزیز، قابلیت تازه‌ی ژئوپایگاه: #FEATURE#. ببینید: #LINK#" + _TAIL,
+             ("FEATURE",), _announce, cooldown_days=14, manual_only=True, extra_input="FEATURE"),
 )}
 
 

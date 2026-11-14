@@ -1,5 +1,5 @@
 """مانیفست پلاگین «بازگشت کاربران» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0012)."""
-from kernel import conf, jobs, nav, plugins
+from kernel import conf, jobs, nav, plugins, pricing
 from kernel import profile as profile_sections
 
 plugin = plugins.register("winback", "بازگشت کاربران", kind="system", requires=("accounts",))
@@ -10,6 +10,10 @@ conf.option(plugin.id, "control_percent", "درصد گروه کنترل", kind="
             help="این درصد از هر فهرست عمداً پیام نمی‌گیرد تا اثر واقعی پیام سنجیده شود.")
 conf.option(plugin.id, "max_batch", "سقف هر فهرست روزانه", kind="int", default=300, min=10, max=5000)
 
+conf.option(plugin.id, "coupon_hours", "مهلت کد تخفیف بازگشت (ساعت)", kind="int", default=72, min=6, max=720,
+            help="از لحظه‌ی کلیک کاربر روی لینک پیامک؛ مهلت کوتاه حس فوریت می‌سازد.")
+
+pricing.register("winback", "winback.coupons.quote", "winback.coupons.bind", plugin=plugin.id)
 jobs.register_tick("winback", "winback.services.tick", plugin=plugin.id, order=70)
 
 nav.admin_item("marketing", "winback.batch", None, plugin=plugin.id, order=14)
