@@ -8,7 +8,7 @@ from kernel import stepup
 from kernel.plugins import registry
 
 from . import routes, services
-from .models import Batch, Message, Route
+from .models import Batch, Message, Referral, Route
 
 
 class RouteForm(forms.ModelForm):
@@ -196,6 +196,18 @@ class MessageAdmin(admin.ModelAdmin):
     list_display = ["route_key", "phone", "status", "send_at", "sent_at", "clicked_at", "returned_at", "paid_toman"]
     list_filter = ["route_key", "status"]
     search_fields = ["phone"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Referral)
+class ReferralAdmin(admin.ModelAdmin):
+    list_display = ["referrer", "referred", "created_at", "rewarded_at", "note"]
+    list_filter = ["rewarded_at"]
 
     def has_add_permission(self, request):
         return False

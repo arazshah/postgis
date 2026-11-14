@@ -128,3 +128,35 @@ class Coupon(models.Model):
         verbose_name = "تخفیف بازگشت"
         verbose_name_plural = "تخفیف‌های بازگشت"
         ordering = ["-created_at"]
+
+
+class InviteCode(models.Model):
+    """کد دعوت شخصی هر کاربر (لینک `/r/invite/<کد>/`)؛ تنها با اولین نیاز ساخته می‌شود."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="invite_code")
+    code = models.CharField(max_length=12, unique=True, default=new_code)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "کد دعوت"
+        verbose_name_plural = "کدهای دعوت"
+
+
+class Referral(models.Model):
+    """یک دعوت موفق: کاربر تازه با لینک معرف ثبت‌نام کرد. پاداش بعد از «فعال‌شدن» (ساخت پایگاه) به هر دو طرف می‌رسد."""
+
+    referrer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="referrals_made",
+                                 verbose_name="معرف")
+    referred = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="referral_in",
+                                    verbose_name="دعوت‌شده")
+    created_at = models.DateTimeField("ثبت‌نام", auto_now_add=True)
+    rewarded_at = models.DateTimeField("پاداش", null=True, blank=True)
+    note = models.CharField("یادداشت", max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = "دعوت دوست"
+        verbose_name_plural = "دعوت‌های دوستان"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.referrer} → {self.referred}"

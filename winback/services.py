@@ -256,33 +256,45 @@ def measure(now=None) -> int:
     return n
 
 
-def grant_gift(msg: Message) -> bool:
-    """هدیه‌ی بازگشت در اولین کلیک (یک بار)؛ کنترل لینک ندارد. آزمایش پلاگین یا تمدید پایگاه."""
-    route = Route.objects.filter(key=msg.route_key).first()
-    if msg.gift_at or msg.status != Message.Status.SENT or route is None or route.gift_kind == Route.Gift.NONE:
-        return False
-    days = max(1, route.gift_days)
-    if route.gift_kind == Route.Gift.TRIAL and route.gift_plugin:
+def give(kind: str, user, *, plugin: str = "", days: int = 7, percent: int = 20, db_id=None, message=None) -> bool:
+    """پاداش به کاربر (مشترک بین هدیه‌ی پیامک و پاداش دعوت): آزمایش پلاگین، تمدید پایگاه یا تخفیف مهلت‌دار."""
+    days = max(1, days)
+    if kind == Route.Gift.TRIAL and plugin:
         try:
-            entitlements.grant(route.gift_plugin, "user", str(msg.user_id), source="trial", days=days,
-                               note="هدیه‌ی بازگشت")
+            entitlements.grant(plugin, "user", str(user.pk), source="trial", days=days, note="هدیه")
         except ValueError:
             log.exception("winback gift failed")
             return False
-    elif route.gift_kind == Route.Gift.COUPON:
+        return True
+    if kind == Route.Gift.COUPON:
         hours = int(conf.get(PLUGIN, "coupon_hours") or 72)
-        Coupon.objects.get_or_create(message=msg, defaults={
-            "user": msg.user, "percent": min(max(route.gift_percent, 1), 90),
-            "expires_at": timezone.now() + datetime.timedelta(hours=hours)})
-    elif route.gift_kind == Route.Gift.EXTEND and msg.params.get("_db"):
+        fields = {"user": user, "percent": min(max(percent, 1), 90),
+                  "expires_at": timezone.now() + datetime.timedelta(hours=hours)}
+        if message is not None:
+            Coupon.objects.get_or_create(message=message, defaults=fields)
+        else:
+            Coupon.objects.create(**fields)
+        return True
+    if kind == Route.Gift.EXTEND:
         from databases.models import UserDatabase
 
-        db = UserDatabase.objects.filter(pk=msg.params["_db"], owner=msg.user).select_related("plan").first()
-        if db is None or not db.is_live:
+        qs = UserDatabase.objects.filter(owner=user, status__in=UserDatabase.LIVE_STATUSES).select_related("plan")
+        db = qs.filter(pk=db_id).first() if db_id else qs.order_by("-created_at").first()
+        if db is None or db.expires_at is None:  # پایگاه بدون انقضا تمدید نمی‌خواهد (و نباید تاریخ انقضا بگیرد)
             return False
         db.extend(days)
         db.save(update_fields=["expires_at", "expiry_warned_at"])
-    else:
+        return True
+    return False
+
+
+def grant_gift(msg: Message) -> bool:
+    """هدیه‌ی بازگشت در اولین کلیک (یک بار)؛ کنترل لینک ندارد."""
+    route = Route.objects.filter(key=msg.route_key).first()
+    if msg.gift_at or msg.status != Message.Status.SENT or route is None or route.gift_kind == Route.Gift.NONE:
+        return False
+    if not give(route.gift_kind, msg.user, plugin=route.gift_plugin, days=route.gift_days, percent=route.gift_percent,
+                db_id=msg.params.get("_db"), message=msg):
         return False
     msg.gift_at = timezone.now()
     msg.save(update_fields=["gift_at"])
@@ -313,8 +325,11 @@ def tick(now=None) -> str:
     """کار دوره‌ای worker: اندازه‌گیری همیشه؛ ساخت فهرست و ارسال فقط وقتی سوئیچ کلی روشن است."""
     now = now or timezone.now()
     measured = measure(now) if cache.add("winback:measure", 1, 600) else 0
+    from . import referrals
+
+    rewarded = referrals.reward_due(now)
     if not switch_on():
-        return f"خاموش (اندازه‌گیری: {measured})"
+        return f"خاموش (اندازه‌گیری: {measured}، پاداش دعوت: {rewarded})"
     planned = 0
     if now.astimezone(timing.TZ).hour >= PLAN_HOUR and cache.add(f"winback:plan:{now:%Y%m%d}", 1, 3600 * 3):
         planned = len(plan_batches(now))

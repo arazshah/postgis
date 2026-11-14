@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from . import services
+from . import referrals, services
 from .models import Message
 
 
@@ -45,3 +45,15 @@ def stop(request, code):
         services.set_pref(m.user, False)
         done = True
     return render(request, "winback/stop.html", {"done": done})
+
+
+@require_http_methods(["GET", "HEAD"])
+def invite(request, code):
+    """لینک دعوت دوست: معرف را در نشست نگه می‌دارد و به ورود/ثبت‌نام می‌برد؛ ثبت رابطه هنگام ورود (سیگنال)."""
+    if request.method == "GET" and referrals.enabled():
+        if not referrals.remember(request, code):
+            raise Http404
+    if request.user.is_authenticated:
+        return redirect("databases:dashboard")
+    utm = {"utm_source": "referral", "utm_medium": "invite", "utm_campaign": "friend", "cta": "invite"}
+    return redirect(f"{reverse('accounts:login')}?{urlencode(utm)}")
