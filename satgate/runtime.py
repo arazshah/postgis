@@ -16,7 +16,7 @@ from . import protocol
 from .spec import MISSIONS, PROVIDERS, Source
 
 VERSION = 1
-MAX_CRED_LEN = 600
+MAX_CRED_LEN = 4096     # توکن Earthdata یک JWT بلند است (بیش از هزار نویسه)
 # نشانی پیش‌فرض کاتالوگ هر تأمین‌کننده؛ متغیرهای قدیمی SATGATE_STAC_URL و SATGATE_LANDSAT_STAC_URL فقط پیش‌فرض‌اند
 _ENV_URL = {"earthsearch": "SATGATE_STAC_URL", "planetary": "SATGATE_LANDSAT_STAC_URL"}
 
@@ -55,8 +55,13 @@ def validate(doc) -> dict:
         spec = PROVIDERS[key]
         allowed = {c[0] for c in spec.creds}
         cred = p.get("cred") or {}
-        if not isinstance(cred, dict) or set(cred) - allowed or any(not isinstance(v, str) or len(v) > MAX_CRED_LEN for v in cred.values()):
-            raise ConfigError(f"اعتبارنامه‌ی {spec.title} نامعتبر است.")
+        if not isinstance(cred, dict) or any(not isinstance(v, str) for v in cred.values()):
+            raise ConfigError(f"اعتبارنامه‌ی {spec.title} نامعتبر است (ساختار).")
+        if set(cred) - allowed:
+            raise ConfigError(f"اعتبارنامه‌ی {spec.title} فیلد ناشناخته دارد: {', '.join(sorted(set(cred) - allowed))[:60]}")
+        long = [k for k, v in cred.items() if len(v) > MAX_CRED_LEN]
+        if long:
+            raise ConfigError(f"مقدار «{long[0]}» در اعتبارنامه‌ی {spec.title} از {MAX_CRED_LEN} نویسه بلندتر است.")
         out["providers"][key] = {"enabled": bool(p.get("enabled", True)), "url": safe_url(p.get("url", "")),
                                  "cred": {k: v.strip() for k, v in cred.items() if v.strip()}}
     for key, m in miss.items():

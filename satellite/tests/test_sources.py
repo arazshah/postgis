@@ -93,6 +93,15 @@ class ConfigDocTests(_Base):
         self.assertNotIn("PW-VALUE", blob)
         self.assertEqual(sources.provider_state("copernicus")["creds"], ["s3_secret"])        # فقط «تنظیم شده»
 
+    def test_long_token_is_stored_and_reaches_the_gateway_document(self):
+        jwt = "eyJ0eXAiOiJKV1Qi" + "B" * 1600
+        self.set(prov_earthdata_token=jwt)
+        self.assertEqual(sources.build_config()["providers"]["earthdata"]["cred"], {"token": jwt})
+        from satgate.runtime import RUNTIME
+        self.addCleanup(RUNTIME.reset)
+        RUNTIME.apply(sources.build_config())
+        self.assertEqual(RUNTIME.cred("earthdata", "token"), jwt)
+
     def test_hash_changes_with_settings_and_is_cached_until_invalidated(self):
         h1 = sources.config_hash()
         conf.set_value(sources.PLUGIN, "m_landsat_enabled", False)          # بدون invalidate: کش

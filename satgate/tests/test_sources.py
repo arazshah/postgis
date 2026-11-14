@@ -126,7 +126,7 @@ class RuntimeTests(Base):
             cfg_doc(providers={"earthsearch": {"url": "https://user:pw@es.example.org"}}),
             cfg_doc(providers={"earthsearch": {"url": "https://localhost/v1"}}),
             cfg_doc(providers={"copernicus": {"cred": {"unknown": "x"}}}),
-            cfg_doc(providers={"copernicus": {"cred": {"s3_access": "x" * 700}}}),
+            cfg_doc(providers={"copernicus": {"cred": {"s3_access": "x" * 5000}}}),
             cfg_doc(missions={"landsat": {"prefer": "earthsearch"}}),                       # این ماهواره آن منبع را ندارد
             cfg_doc(missions={"landsat": {"max_km2": "abc"}}),
         ]
@@ -580,6 +580,18 @@ class AccountMissionTests(Base):
         self.assertEqual([s.provider for s in RUNTIME.sources("dem")], ["earthsearch", "planetary", "opentopography"])
         RUNTIME.apply(cfg_doc(providers={"opentopography": {"enabled": True, "cred": {"api_key": "K"}}}, missions={"dem": {"prefer": "opentopography"}}))
         self.assertEqual(RUNTIME.sources("dem")[0].provider, "opentopography")
+
+    def test_long_jwt_token_is_accepted_with_specific_errors_otherwise(self):
+        jwt = "eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4i" + "A" * 1400            # توکن واقعی Earthdata بیش از هزار نویسه است
+        doc = cfg_doc(providers={"earthdata": {"enabled": True, "cred": {"token": jwt}}})
+        self.assertEqual(RUNTIME.apply(doc), protocol.config_hash(doc))
+        self.assertEqual(RUNTIME.cred("earthdata", "token"), jwt)
+        with self.assertRaises(ConfigError) as e:
+            runtime.validate(cfg_doc(providers={"earthdata": {"cred": {"token": "x" * 5000}}}))
+        self.assertIn("«token»", str(e.exception))
+        with self.assertRaises(ConfigError) as e:
+            runtime.validate(cfg_doc(providers={"earthdata": {"cred": {"nope": "x"}}}))
+        self.assertIn("nope", str(e.exception))
 
     def test_hls_search_uses_cmr_stac_and_cloud_filter(self):
         RUNTIME.apply(cfg_doc(providers={"earthdata": {"enabled": True, "cred": {"token": "T"}}}))
