@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from . import stac
 from .process import MAX_PIXELS, ProcessError, scene_refl, utm_grid
+from .runtime import RUNTIME
 from .spec import INDICES, MISSIONS, area_km2
 from .zonal import MAX_FEATURES, ZonalError, bbox_of, feature_labels, index_array, index_bands, rows_for, zonal_stats
 
@@ -69,7 +70,8 @@ def run_zonal(p: dict, fetch=stac.fetch_json, sign_for=None) -> dict:
             src = m.source(sc.get("source") or None) or m.primary
             item = stac.get_item(src.collection, sc["id"], fetch, src.provider)
             sign = sign_for(src.collection) if sign_for else None
-            refl = scene_refl(item, p["mission"], bands, grid, sign, p["mask"], src)
+            with RUNTIME.env(src.provider):
+                refl = scene_refl(item, p["mission"], bands, grid, sign, p["mask"], src)
             values = index_array(refl, p["index"])
             st = zonal_stats(labels, values, len(p["features"]))
         except (ProcessError, stac.StacError, ZonalError) as exc:

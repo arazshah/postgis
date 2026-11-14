@@ -16,8 +16,9 @@ from . import protocol
 from .spec import MISSIONS, PROVIDERS, Source
 
 VERSION = 1
-MAX_CRED_LEN = 600
+MAX_CRED_LEN = 4096     # توکن Earthdata یک JWT بلند است (بیش از هزار نویسه)
 # نشانی پیش‌فرض کاتالوگ هر تأمین‌کننده؛ متغیرهای قدیمی SATGATE_STAC_URL و SATGATE_LANDSAT_STAC_URL فقط پیش‌فرض‌اند
+S3_ENV_KEYS = ("AWS_S3_ENDPOINT", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_VIRTUAL_HOSTING", "AWS_HTTPS", "AWS_DEFAULT_REGION")
 _ENV_URL = {"earthsearch": "SATGATE_STAC_URL", "planetary": "SATGATE_LANDSAT_STAC_URL"}
 
 
@@ -55,8 +56,13 @@ def validate(doc) -> dict:
         spec = PROVIDERS[key]
         allowed = {c[0] for c in spec.creds}
         cred = p.get("cred") or {}
-        if not isinstance(cred, dict) or set(cred) - allowed or any(not isinstance(v, str) or len(v) > MAX_CRED_LEN for v in cred.values()):
-            raise ConfigError(f"اعتبارنامه‌ی {spec.title} نامعتبر است.")
+        if not isinstance(cred, dict) or any(not isinstance(v, str) for v in cred.values()):
+            raise ConfigError(f"اعتبارنامه‌ی {spec.title} نامعتبر است (ساختار).")
+        if set(cred) - allowed:
+            raise ConfigError(f"اعتبارنامه‌ی {spec.title} فیلد ناشناخته دارد: {', '.join(sorted(set(cred) - allowed))[:60]}")
+        long = [k for k, v in cred.items() if len(v) > MAX_CRED_LEN]
+        if long:
+            raise ConfigError(f"مقدار «{long[0]}» در اعتبارنامه‌ی {spec.title} از {MAX_CRED_LEN} نویسه بلندتر است.")
         out["providers"][key] = {"enabled": bool(p.get("enabled", True)), "url": safe_url(p.get("url", "")),
                                  "cred": {k: v.strip() for k, v in cred.items() if v.strip()}}
     for key, m in miss.items():
@@ -82,11 +88,14 @@ class Runtime:
         self.doc: dict = {}
         self.hash = ""
         self.at = 0.0
+        self._s3_set: set = getattr(self, "_s3_set", set())
+        self._sync_s3_env()
 
     def apply(self, doc) -> str:
         clean = validate(doc)
         with self._lock:
             self.doc, self.hash, self.at = clean, protocol.config_hash(doc), time.time()
+            self._sync_s3_env()
         return self.hash
 
     # ------------------------------------------------------------ تأمین‌کننده
@@ -129,6 +138,38 @@ class Runtime:
         srcs = [s for s in m.sources if self.provider_enabled(s.provider)]
         prefer = self._mission(key).get("prefer")
         return sorted(srcs, key=lambda s: s.provider != prefer) if prefer else srcs
+
+    def gdal_env(self, provider: str) -> dict:
+        """تنظیم GDAL برای خواندن مستقیم از S3 حساب‌دار (Copernicus: eodata)؛ برای بقیه خالی."""
+        if provider != "copernicus":
+            return {}
+        access, secret = self.cred("copernicus", "s3_access"), self.cred("copernicus", "s3_secret")
+        if not (access and secret):
+            return {}
+        return {"AWS_S3_ENDPOINT": "eodata.dataspace.copernicus.eu", "AWS_ACCESS_KEY_ID": access, "AWS_SECRET_ACCESS_KEY": secret,
+                "AWS_VIRTUAL_HOSTING": "FALSE", "AWS_HTTPS": "YES", "AWS_DEFAULT_REGION": "default",
+                "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR", "CPL_VSIL_CURL_ALLOWED_EXTENSIONS": ".jp2,.tif,.tiff"}
+
+    def _sync_s3_env(self) -> None:
+        """rasterio نسخه‌ی ۱٫۴+ کلید AWS را از راه Env نمی‌پذیرد (فقط boto3)؛ GDAL همان را از متغیر محیطی فرایند می‌خواند.
+        فقط کلیدهای AWS_* همین‌جا و فقط وقتی تنظیم می‌شوند که پنل اعتبارنامه داده باشد (در حافظه؛ روی دیسک نمی‌رود)."""
+        opts = {k: v for k, v in self.gdal_env("copernicus").items() if k.startswith("AWS_")}
+        for k in S3_ENV_KEYS:
+            if k in opts:
+                os.environ[k] = opts[k]
+            elif k in self._s3_set:
+                os.environ.pop(k, None)
+        self._s3_set = set(opts)
+
+    def env(self, provider: str):
+        """زمینه‌ی rasterio.Env برای خواندن از منبع این تأمین‌کننده (بدون تنظیم: زمینه‌ی خالی)."""
+        import contextlib
+
+        opts = {k: v for k, v in self.gdal_env(provider).items() if not k.startswith("AWS_")}   # کلیدها: _sync_s3_env
+        if not opts:
+            return contextlib.nullcontext()
+        import rasterio
+        return rasterio.Env(**opts)
 
     def public(self) -> dict:
         """وضعیت بدون اعتبارنامه برای GET /v1/config."""

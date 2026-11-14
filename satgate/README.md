@@ -59,9 +59,12 @@ docker compose -f satgate/docker-compose.yml --env-file .env up -d
 | ESA WorldCover (`worldcover`)، آب سطحی JRC (`water`) | Planetary Computer | ندارد |
 | HLS Sentinel-2 و HLS Landsat (`hls_s30`، `hls_l30`) | NASA Earthdata (CMR-STAC، فایل‌های LP DAAC) | **حساب رایگان**؛ توکن یا نام کاربری و رمز |
 | SRTM ۳۰ متر (`srtm30`)، ارتفاع و عمق دریا SRTM15+ (`bathy`) و پشتیبان سوم DEMها (COP30/COP90/NASADEM/AW3D30) | OpenTopography (API مستقیم) | **کلید API رایگان** |
-| Copernicus Data Space، JAXA | (گام بعد) | **ثبت‌نام یک‌باره**؛ اعتبارنامه از همین حالا در پنل ذخیره می‌شود ولی منبعی به آن‌ها وصل نیست |
+| Sentinel-2 L2A از ESA (پشتیبان سوم `sentinel2`) و L1C (`s2_l1c`) | Copernicus Data Space (STAC + S3، فایل‌های JP2) | **کلید S3 رایگان** (شناسه و کلید محرمانه) |
+| ALOS PALSAR باند L، HH و HV (`palsar_hh`، `palsar_hv`؛ موزاییک سال ۲۰۲۰ به دسی‌بل) | Planetary Computer (داده‌ی JAXA) | ندارد |
 
-ماهواره‌ی حساب‌دار تا اعتبارنامه‌ی کافی نرسد پنهان است («آزمایش اتصال» برایش «غیرفعال» می‌نویسد، نه خطا). نام کاربری بدون رمز کافی نیست.
+ماهواره‌ی حساب‌دار تا اعتبارنامه‌ی کافی نرسد پنهان است («آزمایش اتصال» برایش «غیرفعال» می‌نویسد، نه خطا). نام کاربری بدون رمز و شناسه‌ی S3 بدون کلید محرمانه کافی نیست.
+
+**چرا JAXA G-Portal نیست؟** G-Portal داده را به‌صورت بایگانی کامل صحنه (چند صد مگابایت تا چند گیگابایت) روی SFTP می‌دهد و مثل COG از راه دور برش نمی‌خورد؛ برای دروازه‌ای که فقط محدوده‌ی کاربر را می‌برد مناسب نیست. همان داده‌ی رادار باند L ژاپن (موزاییک سالانه‌ی PALSAR) بدون حساب از Planetary Computer می‌آید.
 
 دروازه در `GET /v1/missions` وضعیت هر ماهواره را می‌سنجد (برای هر تأمین‌کننده: جست‌وجوی نمونه روی تهران، **وجود نام باندها در پاسخ کاتالوگ** و خواندن یک فایل کوچک؛ ۱۰ دقیقه کش) و پنل فقط منبع در دسترس را نشان می‌دهد. اگر کاتالوگی نام یک باند را عوض کند، همین بررسی پیش از سفارش کاربر خطای دقیق می‌دهد («داراییِ لازم در کاتالوگ نیست: …»).
 
@@ -81,20 +84,22 @@ docker compose -f satgate/docker-compose.yml --env-file .env up -d
 earth-search.aws.element84.com    *.s3.us-west-2.amazonaws.com    *.s3.amazonaws.com
 planetarycomputer.microsoft.com   *.blob.core.windows.net
 ```
-برای تأمین‌کننده‌های حساب‌دار (گام بعد) میزبان‌هایشان هم لازم می‌شود: `stac.dataspace.copernicus.eu`، `eodata.dataspace.copernicus.eu`، `identity.dataspace.copernicus.eu`، `cmr.earthdata.nasa.gov`، `urs.earthdata.nasa.gov`، `data.lpdaac.earthdatacloud.nasa.gov`، `hyp3-api.asf.alaska.edu`، `portal.opentopography.org`، `gportal.jaxa.jp`.
+برای تأمین‌کننده‌های حساب‌دار میزبان‌هایشان هم لازم است: `stac.dataspace.copernicus.eu`، `eodata.dataspace.copernicus.eu` (S3)، `cmr.earthdata.nasa.gov`، `urs.earthdata.nasa.gov`، `data.lpdaac.earthdatacloud.nasa.gov`، `*.s3.us-west-2.amazonaws.com` (نشانی امضاشده‌ی Earthdata)، `portal.opentopography.org`.
 
 ## ثبت‌نام حساب‌ها (یک‌باره، رایگان)
 | تأمین‌کننده | کجا | در پنل چه بدهید |
 |---|---|---|
-| Copernicus Data Space | https://dataspace.copernicus.eu ← ثبت‌نام، سپس https://eodata-s3keysmanager.dataspace.copernicus.eu | شناسه‌ی دسترسی S3 و کلید محرمانه‌ی S3 |
+| Copernicus Data Space | https://dataspace.copernicus.eu ← ثبت‌نام؛ سپس در https://eodata-s3keysmanager.dataspace.copernicus.eu با همان حساب «Add credentials» بزنید (کلید محرمانه فقط یک‌بار نمایش داده می‌شود) | شناسه‌ی دسترسی S3 و کلید محرمانه‌ی S3 |
 | NASA Earthdata | https://urs.earthdata.nasa.gov/users/new؛ سپس در پروفایل ← «Earthdata Login Applications» برنامه‌ی **LP DAAC Data Pool** را تأیید کنید؛ از «Generate Token» توکن بگیرید (۶۰ روز اعتبار) | توکن (پیشنهادی) یا نام کاربری و رمز |
 | OpenTopography | https://portal.opentopography.org/newUser ← بعد از ورود «myOpenTopo» ← «Request API Key» | کلید API |
-| JAXA G-Portal | https://gportal.jaxa.jp/gpr/ | نام کاربری و رمز |
 
 شرایط استفاده‌ی هر سرویس را پیش از ثبت‌نام بخوانید؛ حساب را اپراتور دروازه (خارج از ایران) می‌سازد. اگر سرویسی ثبت‌نام را نپذیرفت، فقط همان تأمین‌کننده خاموش می‌ماند و بقیه کار می‌کنند.
 
 ### Earthdata: چطور فایل خوانده می‌شود
 فایل‌های HLS توکن Bearer می‌خواهند و بعد به نشانی امضاشده‌ی S3 هدایت می‌شوند. دروازه هدایت را خودش (بدون ارسال توکن به S3) می‌گیرد و فقط نشانی امضاشده را به GDAL می‌دهد (۴۵ دقیقه کش). اگر توکن نداده باشید و نام کاربری و رمز داده باشید، دروازه با `find_or_create_token` توکن می‌سازد و ۱۲ ساعت نگه می‌دارد. پیام «دسترسی Earthdata رد شد» یعنی توکن غلط است یا برنامه‌ی LP DAAC Data Pool تأیید نشده.
+
+### Copernicus Data Space
+کاتالوگ STAC بدون ورود جست‌وجو می‌شود؛ فایل‌های JP2 روی `s3://eodata` با کلید S3 خوانده می‌شوند. rasterio نسخه‌ی ۱٫۴ به بعد کلید AWS را از راه `rasterio.Env` نمی‌پذیرد، پس دروازه آن را (فقط هنگام دریافت پیکربندی از پنل) در متغیر محیطی فرایند می‌گذارد که GDAL مستقیم می‌خواند؛ روی دیسک نمی‌رود و با پاک‌شدن اعتبارنامه از محیط برداشته می‌شود. پیش‌نمایش (thumbnail) Copernicus توکن ورود می‌خواهد و نشان داده نمی‌شود. نام دارایی‌های Sentinel-2 L2A از یک آیتم واقعی CDSE برداشته شده؛ نام‌های L1C حدس است و «آزمایش اتصال» آن را می‌سنجد.
 
 ### OpenTopography
 خروجی GeoTIFF مستقیم از `globaldem` گرفته و به قالب یکدست لایه‌های آماده (float32، بی‌داده‌ی ‎-9999) تبدیل می‌شود. کلید فقط در نشانی درخواست می‌رود و در هیچ پیام خطا یا لاگی نمی‌آید. سهمیه‌ی روزانه‌ی خود OpenTopography برقرار است؛ ۴۲۹ یعنی تمام شده.

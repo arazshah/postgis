@@ -73,7 +73,15 @@ class RegistryTests(unittest.TestCase):
         for p in spec.PROVIDERS.values():
             if p.account:
                 self.assertTrue(p.creds and p.signup and p.hosts, p.key)
-                self.assertEqual(p.implemented, p.key in ("earthdata", "opentopography"), p.key)     # بقیه گام بعد
+                self.assertTrue(p.implemented, p.key)
+
+    def test_jaxa_card_is_gone_and_palsar_comes_from_planetary(self):
+        self.assertNotIn("jaxa", spec.PROVIDERS)
+        for k in ("palsar_hh", "palsar_hv"):
+            m = spec.MISSIONS[k]
+            self.assertEqual((m.kind, m.group, m.sources[0].provider, m.sources[0].collection), ("layer", "radar", "planetary", "alos-palsar-mosaic"))
+            p = spec.get_product(k, k)
+            self.assertEqual((p.convert, p.src_dtype, p.dtype, p.nodata), ("palsar_db", "uint16", "float32", -9999))
 
     def test_provider_readiness_rules(self):
         ed, ot = spec.PROVIDERS["earthdata"], spec.PROVIDERS["opentopography"]
@@ -126,7 +134,7 @@ class RuntimeTests(Base):
             cfg_doc(providers={"earthsearch": {"url": "https://user:pw@es.example.org"}}),
             cfg_doc(providers={"earthsearch": {"url": "https://localhost/v1"}}),
             cfg_doc(providers={"copernicus": {"cred": {"unknown": "x"}}}),
-            cfg_doc(providers={"copernicus": {"cred": {"s3_access": "x" * 700}}}),
+            cfg_doc(providers={"copernicus": {"cred": {"s3_access": "x" * 5000}}}),
             cfg_doc(missions={"landsat": {"prefer": "earthsearch"}}),                       # این ماهواره آن منبع را ندارد
             cfg_doc(missions={"landsat": {"max_km2": "abc"}}),
         ]
@@ -491,7 +499,7 @@ class ApiTests(Base):
         self.call("PUT", "/v1/config", cfg_doc(missions={"landsat": {"enabled": False}}))
         r = self.call("POST", "/v1/jobs", {"id": "c" * 32, "product": "ndvi", "mission": "landsat", "scene": "x", "bbox": BBOX})
         self.assertEqual(r["status"], 422)
-        r = self.call("POST", "/v1/jobs", {"id": "d" * 32, "product": "ndvi", "scene": "x", "bbox": BBOX, "source": "copernicus"})
+        r = self.call("POST", "/v1/jobs", {"id": "d" * 32, "product": "ndvi", "scene": "x", "bbox": BBOX, "source": "opentopography"})
         self.assertEqual(r["status"], 400)
 
     def test_mission_cap_from_panel_lowers_area_limit(self):
@@ -580,6 +588,18 @@ class AccountMissionTests(Base):
         self.assertEqual([s.provider for s in RUNTIME.sources("dem")], ["earthsearch", "planetary", "opentopography"])
         RUNTIME.apply(cfg_doc(providers={"opentopography": {"enabled": True, "cred": {"api_key": "K"}}}, missions={"dem": {"prefer": "opentopography"}}))
         self.assertEqual(RUNTIME.sources("dem")[0].provider, "opentopography")
+
+    def test_long_jwt_token_is_accepted_with_specific_errors_otherwise(self):
+        jwt = "eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4i" + "A" * 1400            # توکن واقعی Earthdata بیش از هزار نویسه است
+        doc = cfg_doc(providers={"earthdata": {"enabled": True, "cred": {"token": jwt}}})
+        self.assertEqual(RUNTIME.apply(doc), protocol.config_hash(doc))
+        self.assertEqual(RUNTIME.cred("earthdata", "token"), jwt)
+        with self.assertRaises(ConfigError) as e:
+            runtime.validate(cfg_doc(providers={"earthdata": {"cred": {"token": "x" * 5000}}}))
+        self.assertIn("«token»", str(e.exception))
+        with self.assertRaises(ConfigError) as e:
+            runtime.validate(cfg_doc(providers={"earthdata": {"cred": {"nope": "x"}}}))
+        self.assertIn("nope", str(e.exception))
 
     def test_hls_search_uses_cmr_stac_and_cloud_filter(self):
         RUNTIME.apply(cfg_doc(providers={"earthdata": {"enabled": True, "cred": {"token": "T"}}}))
@@ -708,6 +728,202 @@ class AccountMissionTests(Base):
         self.assertEqual(len(calls), 1)
         self.assertTrue(calls[0][1].startswith("Basic "))
         self.assertIn("find_or_create_token", calls[0][0])
+
+
+# نام دارایی‌های یک آیتم واقعی Copernicus (STAC v1.1، Sentinel-2 L2A)؛ نام‌های ما باید زیرمجموعه‌ی آن باشد
+CDSE_REAL_ASSETS = {"AOT_10m", "AOT_20m", "AOT_60m", "B01_20m", "B01_60m", "B02_10m", "B02_20m", "B02_60m", "B03_10m", "B03_20m", "B03_60m",
+                    "B04_10m", "B04_20m", "B04_60m", "B05_20m", "B05_60m", "B06_20m", "B06_60m", "B07_20m", "B07_60m", "B08_10m", "B09_60m",
+                    "B11_20m", "B11_60m", "B12_20m", "B12_60m", "B8A_20m", "B8A_60m", "Product", "SCL_20m", "SCL_60m", "TCI_10m", "TCI_20m",
+                    "TCI_60m", "WVP_10m", "WVP_20m", "WVP_60m", "thumbnail", "safe_manifest", "granule_metadata", "inspire_metadata",
+                    "product_metadata", "datastrip_metadata"}
+PC_REAL_ASSETS = {"B02", "B03", "B04", "B05", "B08", "B11", "B12", "B8A", "SCL"}      # آیتم واقعی Planetary Computer (همین‌ها که ما می‌خواهیم)
+
+
+class CopernicusTests(Base):
+    CRED = {"s3_access": "AKIA-TEST", "s3_secret": "SECRET-TEST"}
+
+    def enable(self):
+        RUNTIME.apply(cfg_doc(providers={"copernicus": {"enabled": True, "cred": self.CRED}}))
+
+    def test_our_asset_names_exist_in_real_items(self):
+        s2 = spec.MISSIONS["sentinel2"]
+        cd = s2.source("copernicus")
+        self.assertTrue(set(cd.assets.values()) | {cd.mask_asset} <= CDSE_REAL_ASSETS)
+        pc = s2.source("planetary")
+        for need in (set(pc.assets.values()) - {"B06", "B07"}) | {pc.mask_asset}:       # B06 و B07 در آیتم نمونه‌ی PC کوتاه‌شده نبود
+            self.assertIn(need, PC_REAL_ASSETS | {"B06", "B07"})
+
+    def test_sources_need_both_keys_and_come_after_the_open_catalogs(self):
+        self.assertEqual([s.provider for s in RUNTIME.sources("sentinel2")], ["earthsearch", "planetary"])
+        RUNTIME.apply(cfg_doc(providers={"copernicus": {"enabled": True, "cred": {"s3_access": "A"}}}))
+        self.assertEqual([s.provider for s in RUNTIME.sources("sentinel2")], ["earthsearch", "planetary"])      # کلید محرمانه ندارد
+        self.enable()
+        self.assertEqual([s.provider for s in RUNTIME.sources("sentinel2")], ["earthsearch", "planetary", "copernicus"])
+        self.assertEqual([s.provider for s in RUNTIME.sources("s2_l1c")], ["earthsearch", "copernicus"])
+
+    def test_gdal_env_points_at_the_eodata_endpoint(self):
+        self.assertEqual(RUNTIME.gdal_env("copernicus"), {})
+        self.enable()
+        env = RUNTIME.gdal_env("copernicus")
+        self.assertEqual((env["AWS_S3_ENDPOINT"], env["AWS_ACCESS_KEY_ID"], env["AWS_VIRTUAL_HOSTING"]),
+                         ("eodata.dataspace.copernicus.eu", "AKIA-TEST", "FALSE"))
+        self.assertEqual(env["GDAL_DISABLE_READDIR_ON_OPEN"], "EMPTY_DIR")
+        self.assertEqual(RUNTIME.gdal_env("earthsearch"), {})
+        import os
+
+        import rasterio
+        self.assertEqual(os.environ["AWS_S3_ENDPOINT"], "eodata.dataspace.copernicus.eu")          # کلید AWS فقط متغیر محیطی فرایند
+        self.assertEqual(os.environ["AWS_ACCESS_KEY_ID"], "AKIA-TEST")
+        with RUNTIME.env("copernicus"):                                                           # گزینه‌های غیر AWS از راه Env
+            self.assertEqual(rasterio.env.getenv()["GDAL_DISABLE_READDIR_ON_OPEN"], "EMPTY_DIR")
+        RUNTIME.reset()                                                                           # پاک‌سازی: کلید در محیط نماند
+        self.assertNotIn("AWS_ACCESS_KEY_ID", os.environ)
+        self.assertNotIn("AWS_SECRET_ACCESS_KEY", os.environ)
+
+    def test_other_aws_variables_of_the_operator_are_left_alone(self):
+        import os
+        with mock.patch.dict(os.environ, {"AWS_ACCESS_KEY_ID": "OPERATOR-OWN"}):
+            RUNTIME.apply(cfg_doc())                                                              # بدون اعتبارنامه‌ی Copernicus
+            self.assertEqual(os.environ["AWS_ACCESS_KEY_ID"], "OPERATOR-OWN")
+            self.enable()
+            self.assertEqual(os.environ["AWS_ACCESS_KEY_ID"], "AKIA-TEST")
+
+    def test_eodata_hrefs_stay_s3_and_others_become_https(self):
+        self.assertEqual(spec.https_href("s3://eodata/Sentinel-2/x.jp2"), "s3://eodata/Sentinel-2/x.jp2")
+        self.assertEqual(spec.https_href("s3://sentinel-cogs/x.tif"), "https://sentinel-cogs.s3.amazonaws.com/x.tif")
+
+    def make_cdse(self, nir=4000, red=2000) -> dict:
+        """آیتم ساختگی با نام‌های واقعی CDSE و فایل‌های JP2 واقعی (۱۰ و ۲۰ متر)."""
+        w, s, e, n = transform_bounds("EPSG:4326", "EPSG:32639", 51.2, 35.6, 51.45, 35.85)
+        ox, oy = int(w // 20 * 20), int(n // 20 * 20)
+        assets = {}
+        for key, v in {"B04_10m": red, "B03_10m": 1200, "B02_10m": 900, "B08_10m": nir, "B05_20m": 1500, "B06_20m": 1700, "B07_20m": 1800,
+                       "B8A_20m": 2900, "B11_20m": 2000, "B12_20m": 1600}.items():
+            res = int(key.split("_")[1][:-1])
+            size = int((e - w) / res) + 2, int((n - s) / res) + 2
+            path = self.root / f"{key}.jp2"
+            with rasterio.open(path, "w", driver="JP2OpenJPEG", width=size[0], height=size[1], count=1, dtype="uint16", crs="EPSG:32639",
+                               transform=from_origin(ox, oy, res, res)) as dst:
+                dst.write(np.full((size[1], size[0]), v, dtype="uint16"), 1)
+            assets[key] = {"href": str(path), "type": "image/jp2"}
+        sz = int((e - w) / 20) + 2, int((n - s) / 20) + 2
+        scl = np.full((sz[1], sz[0]), 4, dtype="uint8")
+        scl[: sz[1] // 2, :] = 9                                                          # نیمه‌ی شمالی ابر
+        sp = self.root / "SCL_20m.jp2"
+        with rasterio.open(sp, "w", driver="JP2OpenJPEG", width=sz[0], height=sz[1], count=1, dtype="uint8", crs="EPSG:32639",
+                           transform=from_origin(ox, oy, 20, 20)) as dst:
+            dst.write(scl, 1)
+        assets["SCL_20m"] = {"href": str(sp), "type": "image/jp2"}
+        return {"id": "S2C_MSIL2A_20260601T070001_N0511_R122_T39SUQ_20260601T100000", "collection": "sentinel-2-l2a", "assets": assets,
+                "properties": {"datetime": "2026-06-01T07:00:01Z", "eo:cloud_cover": 20, "platform": "sentinel-2c"}}
+
+    def test_jp2_scene_with_mixed_resolutions_builds_ndvi_and_masks_clouds(self):
+        item = self.make_cdse()
+        cd = spec.MISSIONS["sentinel2"].source("copernicus")
+        out = process.build_scene(item, "sentinel2", "ndvi", BBOX, self.root / "cd.tif", mask=False, source=cd)
+        with rasterio.open(out) as ds:
+            self.assertAlmostEqual(float(ds.read(1).mean()), 0.5, places=2)
+        out = process.build_scene(item, "sentinel2", "allbands", BBOX, self.root / "all.tif", mask=True, source=cd)
+        with rasterio.open(out) as ds:
+            self.assertEqual(ds.count, 10)
+        comp, used = process.build_composite([item], "sentinel2", "ndvi", BBOX, self.root / "comp.tif", mask=True, source=cd)
+        self.assertEqual(used, 1)
+        with rasterio.open(comp) as ds:
+            data = ds.read(1)
+            self.assertTrue((data == -9999).any() and (data != -9999).any())                  # ابر ماسک شد، بقیه ماند
+
+    def test_scene_cards_have_no_thumbnail_for_copernicus(self):
+        self.enable()
+        feat = {"id": "S2C_X", "collection": "sentinel-2-l2a", "geometry": FULL, "properties": {"datetime": "2026-06-01T07:00:00Z"},
+                "assets": {"thumbnail": {"href": "https://datahub.creodias.eu/odata/v1/Assets(x)/$value", "type": "image/jpeg"}}}
+
+        def fetch(url, body=None, timeout=30):
+            if "dataspace" in url:
+                return {"features": [feat]}
+            return {"features": []}
+        res = stac.search(BBOX, "2026-06-01", "2026-06-30", fetch=fetch, source="copernicus")
+        self.assertEqual((res[0]["source"], res[0]["thumb"]), ("copernicus", False))
+        self.assertEqual(RUNTIME.provider_url("copernicus"), "https://stac.dataspace.copernicus.eu/v1")
+
+    def test_probe_opens_a_band_with_gdal_not_the_thumbnail(self):
+        self.enable()
+        m = spec.MISSIONS["sentinel2"]
+        src = m.source("copernicus")
+        feat = {"id": "X", "assets": {**{a: {"href": f"s3://eodata/x/{a}.jp2"} for a in (*src.assets.values(), src.mask_asset)},
+                                      "thumbnail": {"href": "https://datahub.creodias.eu/x", "type": "image/jpeg"}}}
+        opened = []
+        with mock.patch.object(stac, "_gdal_head", lambda href: opened.append(href) or b"10980x10980"):
+            r = stac.check_source(m, src, lambda *a, **k: {"features": [feat]}, strict=True)
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(opened, ["s3://eodata/x/B04_10m.jp2"])
+
+    def test_gdal_head_explains_missing_key_and_denied_access(self):
+        with self.assertRaises(stac.StacError) as e:
+            stac._gdal_head("s3://eodata/x.jp2")
+        self.assertIn("کلید", str(e.exception))
+        self.enable()
+        import rasterio
+
+        def denied(*a, **k):
+            raise rasterio.errors.RasterioIOError("HTTP response code: 403 InvalidAccessKeyId")
+        with mock.patch("rasterio.open", denied), self.assertRaises(stac.StacError) as e:
+            stac._gdal_head("s3://eodata/x.jp2")
+        self.assertIn("رد شد", str(e.exception))
+        self.assertNotIn("SECRET-TEST", str(e.exception))
+
+    def test_job_runs_inside_the_s3_env(self):
+        self.enable()
+        item = self.make_cdse()
+        seen = []
+        real = process.build_scene
+
+        def spy(*a, **k):
+            import os
+
+            import rasterio
+            seen.append((os.environ.get("AWS_S3_ENDPOINT"), rasterio.env.getenv().get("GDAL_DISABLE_READDIR_ON_OPEN")))
+            return real(*a, **k)
+        cfg = Config({"SATGATE_SECRET": SECRET, "SATGATE_PANEL_URL": "https://panel.test", "SATGATE_DATA": str(self.root / "d"),
+                      "SATGATE_MAX_KM2": "200", "SATGATE_WORKERS": "1"})
+        gw = Gateway(cfg, fetch=lambda url, body=None, timeout=30: item if "/items/" in url else {"features": []}, post=lambda p, b: None)
+        gw.notify = lambda job: None
+        self.addCleanup(gw.pool.shutdown, True)
+        gw.store.put({"id": "7" * 32, "status": "queued", "product": "ndvi", "mission": "sentinel2", "bbox": BBOX, "scene": item["id"],
+                      "created": int(time.time()), "message": "", "mask": False, "composite": None, "source": "copernicus"})
+        with mock.patch("satgate.app.build_scene", spy):
+            gw.run("7" * 32)
+        self.assertEqual(gw.store.get("7" * 32)["status"], "ready", gw.store.get("7" * 32))
+        self.assertEqual(seen, [("eodata.dataspace.copernicus.eu", "EMPTY_DIR")])
+
+
+class PalsarTests(Base):
+    def test_digital_numbers_become_decibels(self):
+        t1 = tile(self.root / "p1.tif", 51.25, 35.65, 0.1, 1000, dtype="uint16", nodata=0)
+        t2 = tile(self.root / "p2.tif", 51.35, 35.65, 0.1, 0, dtype="uint16", nodata=0)                  # بی‌داده
+        items = [{"id": "a", "assets": {"HV": {"href": t1}}}, {"id": "b", "assets": {"HV": {"href": t2}}}]
+        out = process.build_layer(items, "palsar_hv", [51.30, 35.70, 51.40, 35.73], self.root / "hv.tif")
+        with rasterio.open(out) as ds:
+            data = ds.read(1)
+            self.assertEqual((ds.dtypes[0], ds.nodata), ("float32", -9999.0))
+            vals = np.unique(np.round(data, 3))
+            self.assertIn(-23.0, vals)                                  # ‎20·log10(1000) − 83
+            self.assertIn(-9999.0, vals)
+            self.assertEqual(ds.descriptions[0], "palsar_hv")
+
+    def test_all_nodata_is_an_error(self):
+        t = tile(self.root / "z.tif", 51.2, 35.6, 0.3, 0, dtype="uint16", nodata=0)
+        with self.assertRaises(process.ProcessError):
+            process.build_layer([{"assets": {"HH": {"href": t}}}], "palsar_hh", BBOX, self.root / "z_out.tif")
+
+    def test_layer_search_uses_the_fixed_year(self):
+        bodies = []
+
+        def fetch(url, body=None, timeout=30):
+            bodies.append(body)
+            return {"features": [{"id": "t", "assets": {"HH": {"href": "x"}}}]}
+        stac.layer_items(spec.MISSIONS["palsar_hh"], BBOX, fetch)
+        self.assertEqual(bodies[0]["collections"], ["alos-palsar-mosaic"])
+        self.assertEqual(bodies[0]["datetime"], "2020-01-01T00:00:00Z/2020-12-31T23:59:59Z")
 
 
 def tiff_bytes(value=1500, dtype="int16", nodata=-32768, size=20) -> bytes:

@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from . import auth, otapi
 from .runtime import RUNTIME
-from .spec import COLLECTION_S2, MISSIONS, PROVIDERS, Mission, Source, https_href, satellite_of, valid_bbox
+from .spec import COLLECTION_S2, MISSIONS, PROVIDERS, S3_PRIVATE, Mission, Source, https_href, satellite_of, valid_bbox
 
 # نشانی پیش‌فرض کاتالوگ‌ها (پنل می‌تواند عوض کند؛ runtime.provider_url مرجع است)؛ برای سازگاری با کد قدیمی می‌ماند
 STAC_URL = RUNTIME.provider_url("earthsearch")
@@ -103,7 +103,8 @@ def _scene(it: dict, bbox, default_collection: str = COLLECTION_S2, source: str 
     return {"id": it["id"], "collection": it.get("collection", default_collection), "source": source,
             "datetime": p.get("datetime", ""), "satellite": sat, "agency": agency, "gsd": p.get("gsd"),
             "cloud": round(float(p.get("eo:cloud_cover", 0) or 0), 1), "tile": p.get("grid:code") or p.get("s2:mgrs_tile", ""),
-            "coverage": coverage(it.get("geometry"), bbox), "thumb": thumb_asset(it) is not None}
+            "coverage": coverage(it.get("geometry"), bbox),
+            "thumb": source != "copernicus" and thumb_asset(it) is not None}      # پیش‌نمایش Copernicus توکن ورود می‌خواهد
 
 
 def ordered_sources(m: Mission, source: str | None = None) -> list[Source]:
@@ -280,7 +281,7 @@ def check_source(m: Mission, src: Source, fetch=fetch_json, open_url=None, stric
                 miss = _missing_assets(feat, m, src)
                 if miss:
                     raise StacError("داراییِ لازم در کاتالوگ نیست: " + "، ".join(miss))
-            href = (thumb_asset(feat) or {}).get("href", "")
+            href = (thumb_asset(feat) or {}).get("href", "") if src.provider != "copernicus" else ""
             if not href and strict:
                 key = src.asset or next(iter(src.assets.values()), "")
                 href = (feat.get("assets", {}).get(key) or {}).get("href", "")
@@ -308,7 +309,25 @@ def check_mission(key: str, fetch=fetch_json, open_url=None, strict: bool = Fals
     return {"ok": False, "ms": int((time.monotonic() - t) * 1000), "error": first.get("error", ""), "sources": per}
 
 
+def _gdal_head(href: str) -> bytes:
+    """خواندن سرآیند فایل S3 حساب‌دار با GDAL و اعتبارنامه‌ی پنل (آیا کلید کار می‌کند و فایل باز می‌شود؟)."""
+    import rasterio
+
+    if not RUNTIME.gdal_env("copernicus"):
+        raise StacError("کلید S3 مربوط به Copernicus در پنل وارد نشده است.")
+    try:
+        with RUNTIME.env("copernicus"), rasterio.open(href) as ds:
+            return f"{ds.width}x{ds.height}".encode()
+    except rasterio.errors.RasterioError as exc:
+        msg = str(exc)
+        if "403" in msg or "InvalidAccessKeyId" in msg or "SignatureDoesNotMatch" in msg:
+            raise StacError("دسترسی به Copernicus S3 رد شد؛ شناسه و کلید S3 را بررسی کنید.") from None
+        raise StacError("فایل Copernicus S3 باز نشد (کلید، شبکه یا نام دارایی).") from None
+
+
 def _read_head(href: str) -> bytes:
+    if href.startswith(S3_PRIVATE):
+        return _gdal_head(href)
     req = urllib.request.Request(https_href(href), headers={"User-Agent": UA})
     try:
         with urllib.request.urlopen(req, timeout=20) as r:  # noqa: S310 فقط https

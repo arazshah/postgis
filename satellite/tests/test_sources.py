@@ -93,6 +93,15 @@ class ConfigDocTests(_Base):
         self.assertNotIn("PW-VALUE", blob)
         self.assertEqual(sources.provider_state("copernicus")["creds"], ["s3_secret"])        # فقط «تنظیم شده»
 
+    def test_long_token_is_stored_and_reaches_the_gateway_document(self):
+        jwt = "eyJ0eXAiOiJKV1Qi" + "B" * 1600
+        self.set(prov_earthdata_token=jwt)
+        self.assertEqual(sources.build_config()["providers"]["earthdata"]["cred"], {"token": jwt})
+        from satgate.runtime import RUNTIME
+        self.addCleanup(RUNTIME.reset)
+        RUNTIME.apply(sources.build_config())
+        self.assertEqual(RUNTIME.cred("earthdata", "token"), jwt)
+
     def test_hash_changes_with_settings_and_is_cached_until_invalidated(self):
         h1 = sources.config_hash()
         conf.set_value(sources.PLUGIN, "m_landsat_enabled", False)          # بدون invalidate: کش
@@ -264,7 +273,7 @@ class MissionListTests(_Base):
         self.assertEqual(by["worldcover"]["kind"], "layer")
         self.assertFalse(by["s2_l1c"]["mask"])
         self.assertTrue(by["sentinel2"]["mask"])
-        self.assertEqual([(p["key"], p["ok"]) for p in by["sentinel2"]["providers"]], [("earthsearch", True), ("planetary", False)])
+        self.assertEqual([(p["key"], p["ok"]) for p in by["sentinel2"]["providers"]], [("earthsearch", True), ("planetary", False), ("copernicus", False)])
 
     def test_panel_disabled_mission_disappears_and_plan_lock_is_flagged(self):
         self.set(m_water_enabled=False)
@@ -353,13 +362,20 @@ class AdminPageTests(_Base):
         r = self.client.get(self.url)
         by = {p["key"]: p for p in r.context["providers"]}
         self.assertEqual((by["earthdata"]["status"], by["opentopography"]["status"]), ("کلید لازم", "کلید لازم"))
-        self.assertEqual((by["earthsearch"]["status"], by["copernicus"]["status"]), ("روشن", "گام بعد"))
+        self.assertEqual((by["earthsearch"]["status"], by["copernicus"]["status"]), ("روشن", "کلید لازم"))
+        self.assertNotIn("jaxa", by)                                                              # G-Portal: جایگزین PALSAR از Planetary
+        self.assertTrue(all(p["implemented"] for p in by.values()))
         self.client.post(self.url, self.form(prov_earthdata_user="me"), follow=True)               # نام کاربری بدون رمز: هنوز کافی نیست
         by = {p["key"]: p for p in self.client.get(self.url).context["providers"]}
         self.assertEqual(by["earthdata"]["status"], "کلید لازم")
-        self.client.post(self.url, self.form(prov_earthdata_password="pw", prov_opentopography_api_key="K"), follow=True)
+        self.client.post(self.url, self.form(prov_earthdata_password="pw", prov_opentopography_api_key="K",
+                                             prov_copernicus_s3_access="AK"), follow=True)
         by = {p["key"]: p for p in self.client.get(self.url).context["providers"]}
         self.assertEqual((by["earthdata"]["status"], by["opentopography"]["status"]), ("روشن", "روشن"))
+        self.assertEqual(by["copernicus"]["status"], "کلید لازم")                                 # شناسه بدون کلید محرمانه کافی نیست
+        self.client.post(self.url, self.form(prov_copernicus_s3_secret="SK"), follow=True)
+        by = {p["key"]: p for p in self.client.get(self.url).context["providers"]}
+        self.assertEqual(by["copernicus"]["status"], "روشن")
 
     def test_bad_values_are_reported_and_not_pushed(self):
         r = self.client.post(self.url, self.form(m_landsat_weight="99", prov_earthsearch_url="http://insecure.example.org"), follow=True)

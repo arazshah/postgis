@@ -62,7 +62,7 @@ def coerce(opt: Option, raw: Any) -> Any:
     v = str(raw if raw is not None else "").strip()
     if opt.kind == "choice" and v not in {c[0] for c in opt.choices}:
         raise ValueError("گزینه‌ی نامعتبر.")
-    if len(v) > 2000:
+    if len(v) > (4096 if opt.kind == "secret" else 2000):           # توکن‌های JWT بلندند
         raise ValueError("مقدار بیش از حد بلند است.")
     return v
 
