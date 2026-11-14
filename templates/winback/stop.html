@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% load ws %}
+{% block title %}لغو پیام‌های پیشنهادی — {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="wrap page">
+  <div class="auth">
+    <span class="auth-ico">{% icon "bell" 26 %}</span>
+    {% if done %}
+      <h1>لغو شد</h1>
+      <p class="muted">دیگر پیام پیشنهادی نمی‌فرستیم. هشدارها و اطلاعیه‌های ضروری حساب (مثلاً پایان پلن) همچنان می‌رسد. هر وقت خواستید، از پروفایل می‌توانید دوباره روشنش کنید.</p>
+      <a class="btn" href="{% url 'databases:dashboard' %}">رفتن به پنل</a>
+    {% else %}
+      <h1>لغو پیام‌های پیشنهادی</h1>
+      <p class="muted">با تأیید، پیام‌های یادآوری و پیشنهاد برایتان نمی‌آید. پیام‌های ضروری حساب ادامه دارد.</p>
+      <form method="post" class="card">{% csrf_token %}<button class="btn" type="submit" style="width:100%">تأیید لغو</button></form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

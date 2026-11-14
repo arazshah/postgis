@@ -1,0 +1,9 @@
+{% load fa ws %}
+<div class="card">
+  <h2 class="prof-h">{% icon "bell" 20 %}پیام‌ها و پیشنهادها</h2>
+  <p class="small muted">گاهی خبر قابلیت تازه یا یادآوری مفید (مثلاً پایگاهی که مدتی سر نزده‌اید) با پیامک می‌فرستیم؛ حداکثر یک پیام در هفته. پیام‌های ضروری حساب (انقضا، پرداخت) همیشه می‌رسد.</p>
+  <form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="winback_pref">
+    <label class="row"><input type="checkbox" name="marketing" value="1" {% if ps.marketing %}checked{% endif %}> دریافت پیام‌های پیشنهادی و خبر قابلیت‌ها</label>
+    <button class="btn sm" type="submit">ذخیره</button>
+  </form>
+</div>

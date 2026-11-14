@@ -1,0 +1,15 @@
+{% load fa ws %}
+<div class="card">
+  <h2 class="prof-h">{% icon "users" 20 %}دعوت دوستان</h2>
+  {% if not ps.on %}
+    <p class="small muted">برنامه‌ی دعوت دوستان فعلاً فعال نیست.</p>
+  {% else %}
+    <p class="small muted">لینک شخصی خود را برای دوستان بفرستید. وقتی ثبت‌نام کنند و اولین پایگاهشان را بسازند، <b>هر دوی شما</b> {{ ps.reward }} می‌گیرید.</p>
+    <div class="field"><label for="inv-link">لینک دعوت شما</label>
+      <div class="row">
+        <input id="inv-link" class="ltr" readonly value="{{ ps.link }}" onclick="this.select()">
+        <button class="btn sm" type="button" onclick="var i=document.getElementById('inv-link');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value)">{% icon "copy" 16 %}کپی</button>
+      </div></div>
+    <p class="small muted">دعوت‌شده: {{ ps.invited }} نفر — پاداش گرفته: {{ ps.rewarded }} نفر</p>
+  {% endif %}
+</div>

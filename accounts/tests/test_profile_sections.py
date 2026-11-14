@@ -18,7 +18,7 @@ class ProfileSectionsTests(TestCase):
         self.url = reverse("accounts:profile")
 
     def test_ai_tab_comes_from_analysis_plugin(self):
-        self.assertEqual([s.key for s in profile.sections()], ["ai", "alerts"])
+        self.assertEqual([s.key for s in profile.sections()], ["ai", "alerts", "winback", "invite"])
         self.assertEqual(profile.sections()[0].plugin, "analysis")
         self.assertEqual(profile.broken_paths(), [])
         r = self.client.get(self.url)

@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from core.models import SiteSettings
 from databases.models import Plan, UserDatabase
-from kernel import entitlements, workspace
+from kernel import entitlements, pricing, workspace
 
 from .gateways import GatewayError, get_gateway
 from .models import Invoice, PlanVoucher, PluginAddon
@@ -38,6 +38,16 @@ def methods_available(conf: SiteSettings | None = None) -> list[str]:
 
 
 # ---------------------------------------------------------------------- ساخت فاکتور
+def _reprice(inv: Invoice, q) -> Invoice:
+    """فاکتور باز و پرداخت‌نشده (هنوز بدون شناسه‌ی درگاه) اگر تخفیف تازه‌ای رسیده، ارزان‌تر می‌شود (بازگشت از فاکتور نیمه‌کاره)."""
+    if q.amount < inv.amount_toman and not inv.provider_id and not inv.receipt:
+        inv.amount_toman = q.amount
+        inv.note = (inv.note + "\n" + q.label).strip()
+        inv.save(update_fields=["amount_toman", "note"])
+        pricing.bind(q, inv)
+    return inv
+
+
 def create_invoice(user, kind: str, plan: Plan, database: UserDatabase | None = None) -> Invoice:
     conf = SiteSettings.get()
     if not conf.pay_enabled or not methods_available(conf):
@@ -58,11 +68,13 @@ def create_invoice(user, kind: str, plan: Plan, database: UserDatabase | None = 
 
     existing = Invoice.objects.filter(user=user, kind=kind, plan=plan, database=database,
                                       status=Invoice.Status.PENDING, expires_at__gt=timezone.now()).first()
+    q = pricing.quote(user, plan.price_toman)
     if existing:
-        return existing
+        return _reprice(existing, q)
     inv = Invoice.objects.create(
-        user=user, kind=kind, plan=plan, database=database, amount_toman=plan.price_toman,
+        user=user, kind=kind, plan=plan, database=database, amount_toman=q.amount, note=q.label,
         expires_at=timezone.now() + timedelta(minutes=conf.invoice_ttl_minutes))
+    pricing.bind(q, inv)
     workspace.log_event("invoice", f"فاکتور {inv.number}: {inv.title} – {inv.amount_toman} تومان",
                          user=user, database=database)
     return inv
@@ -89,11 +101,13 @@ def create_addon_invoice(user, addon: PluginAddon, database: UserDatabase | None
         database = None
     existing = Invoice.objects.filter(user=user, kind=Invoice.Kind.ADDON, addon=addon, database=database,
                                       status=Invoice.Status.PENDING, expires_at__gt=timezone.now()).first()
+    q = pricing.quote(user, addon.price_toman)
     if existing:
-        return existing
+        return _reprice(existing, q)
     inv = Invoice.objects.create(
-        user=user, kind=Invoice.Kind.ADDON, plan=None, addon=addon, database=database, amount_toman=addon.price_toman,
+        user=user, kind=Invoice.Kind.ADDON, plan=None, addon=addon, database=database, amount_toman=q.amount, note=q.label,
         expires_at=timezone.now() + timedelta(minutes=conf.invoice_ttl_minutes))
+    pricing.bind(q, inv)
     workspace.log_event("invoice", f"فاکتور {inv.number}: {inv.title} – {inv.amount_toman} تومان", user=user, database=database)
     return inv
 

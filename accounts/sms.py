@@ -81,6 +81,26 @@ def send_otp(phone: str, code: str) -> None:
     raise SMSError(f"سرویس پیامک ناشناخته: {conf.sms_backend}")
 
 
+def send_template(phone: str, template_id: str, params: dict[str, str]) -> None:
+    """پیامک با قالب تأییدشده‌ی sms.ir (برای پیام‌های بازگشت کاربر)؛ خطا = SMSError. نام پارامتر همان `#NAME#` قالب است."""
+    conf = SiteSettings.get()
+    if not phone:
+        raise SMSError("شماره‌ی موبایل خالی است")
+    if conf.sms_backend == "console":
+        log.info("SMS template %s to %s: %s", template_id, phone, params)
+        return
+    if conf.sms_backend != "smsir" or not conf.has_smsir_api_key:
+        raise SMSError("سرویس پیامک تنظیم نشده است")
+    try:
+        tid = int(template_id)
+    except (TypeError, ValueError) as exc:
+        raise SMSError("شناسه‌ی قالب باید عدد باشد") from exc
+    _smsir_post("send/verify", {
+        "mobile": _smsir_mobile(phone), "templateId": tid,
+        "parameters": [{"name": k, "value": str(v)} for k, v in params.items()],
+    })
+
+
 def send_text(phone: str, text: str) -> bool:
     """اطلاع‌رسانی متنی (انقضا، حجم). اگر خط اختصاصی تنظیم نشده باشد بی‌صدا رد می‌شود."""
     conf = SiteSettings.get()
