@@ -11,6 +11,8 @@ from pathlib import Path
 
 UA = "postgis.ir satgate"
 MAX_BYTES = 150 * 1024 * 1024
+# پنجره‌ی کمینه (درجه) برای مجموعه‌های کم‌وضوح: پنجره‌ی کوچک‌تر از چند سلول (SRTM15+: سلول ۱۵ ثانیه‌ی قوسی) رد می‌شود
+MIN_SPAN = {"SRTM15Plus": 0.1, "GEBCOIceTopo": 0.1, "GEBCOSubIceTopo": 0.1}
 TIFF_MAGIC = (b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+")
 
 
@@ -18,8 +20,19 @@ class OTError(Exception):
     pass
 
 
-def url(demtype: str, bbox, key: str, base: str) -> str:
+def padded(demtype: str, bbox) -> list[float]:
+    """محدوده‌ای که واقعاً درخواست می‌شود: برای مجموعه‌ی کم‌وضوح دست‌کم MIN_SPAN درجه (متقارن اطراف مرکز)."""
     w, s, e, n = (float(v) for v in bbox)
+    span = MIN_SPAN.get(demtype, 0.0)
+    if e - w < span:
+        w, e = (w + e) / 2 - span / 2, (w + e) / 2 + span / 2
+    if n - s < span:
+        s, n = (s + n) / 2 - span / 2, (s + n) / 2 + span / 2
+    return [w, s, e, n]
+
+
+def url(demtype: str, bbox, key: str, base: str) -> str:
+    w, s, e, n = padded(demtype, bbox)
     q = urllib.parse.urlencode({"demtype": demtype, "south": f"{s:.6f}", "north": f"{n:.6f}", "west": f"{w:.6f}", "east": f"{e:.6f}",
                                 "outputFormat": "GTiff", "API_Key": key})
     return f"{base.rstrip('/')}/globaldem?{q}"
@@ -44,10 +57,16 @@ def fetch_geotiff(demtype: str, bbox, key: str, base: str, dest: Path, open_url=
                     raise OTError("خروجی OpenTopography از سقف حجم بزرگ‌تر شد؛ محدوده را کوچک‌تر کنید.")
                 f.write(chunk)
     except urllib.error.HTTPError as exc:
+        detail = ""
+        if exc.code == 400:             # متن خود OpenTopography برای عیب‌یابی؛ کلید هرگز نمی‌آید
+            try:
+                detail = exc.read(300).decode("utf-8", "replace").replace(key, "***").strip().replace("\n", " ")[:160]
+            except (OSError, ValueError):
+                detail = ""
         msg = {400: "OpenTopography درخواست را رد کرد (محدوده یا نوع داده نامعتبر یا بیش از سقف).",
                401: "کلید OpenTopography نامعتبر است.", 403: "کلید OpenTopography اجازه‌ی این مجموعه را ندارد.",
                204: "OpenTopography برای این محدوده داده‌ای ندارد.", 429: "سهمیه‌ی روزانه‌ی OpenTopography تمام شده؛ بعداً امتحان کنید."}
-        raise OTError(msg.get(exc.code, f"OpenTopography پاسخ {exc.code} داد.")) from None
+        raise OTError(msg.get(exc.code, f"OpenTopography پاسخ {exc.code} داد.") + (f" [{detail}]" if detail else "")) from None
     except (urllib.error.URLError, TimeoutError, OSError):
         dest.unlink(missing_ok=True)
         raise OTError("به OpenTopography وصل نشدیم.") from None

@@ -354,14 +354,26 @@ def build_layer(items: list[dict], mission: str, bbox, out: Path, sign=None, sou
     return out
 
 
-def build_layer_from_file(raw: Path, mission: str, out: Path) -> Path:
-    """GeoTIFF خام یک API (OpenTopography) را به قالب یکدست لایه‌های آماده درمی‌آورد: float32 و بی‌داده‌ی ‎-9999."""
+def build_layer_from_file(raw: Path, mission: str, out: Path, bbox=None) -> Path:
+    """GeoTIFF خام یک API (OpenTopography) را به قالب یکدست لایه‌های آماده درمی‌آورد: float32 و بی‌داده‌ی ‎-9999.
+    اگر bbox داده شود، خروجی به همان محدوده بریده می‌شود (برای پنجره‌ی گسترش‌یافته‌ی مجموعه‌ی کم‌وضوح)؛ برش کمتر از ۲×۲ پیکسل نمی‌شود."""
     import numpy as np
     import rasterio
+    from rasterio.errors import WindowError
+    from rasterio.windows import Window, from_bounds
 
     spec = get_product(mission, mission)
     with rasterio.open(raw) as src:
-        data = src.read(1).astype("float32")
+        win = Window(0, 0, src.width, src.height)
+        if bbox is not None:
+            w = from_bounds(*bbox, transform=src.transform).round_offsets().round_lengths()
+            try:
+                w = w.intersection(win) if w.width > 0 and w.height > 0 else win
+            except WindowError:                      # محدوده کاملاً بیرون از داده: همان فایل کامل
+                w = win
+            if w.width >= 2 and w.height >= 2:
+                win = w
+        data = src.read(1, window=win).astype("float32")
         bad = ~np.isfinite(data)
         if src.nodata is not None:
             bad |= data == np.float32(src.nodata)
@@ -370,8 +382,8 @@ def build_layer_from_file(raw: Path, mission: str, out: Path) -> Path:
             raise ProcessError("محدوده بیش از اندازه کوچک است.")
         if bad.all():
             raise ProcessError("برای این محدوده داده‌ای پیدا نشد.")
-        _write(out, [arr], {"width": src.width, "height": src.height, "crs": src.crs, "transform": src.transform, "count": 1,
-                            "dtype": "float32", "nodata": spec.nodata, "predictor": 3}, [mission])
+        _write(out, [arr], {"width": arr.shape[1], "height": arr.shape[0], "crs": src.crs, "transform": src.window_transform(win),
+                            "count": 1, "dtype": "float32", "nodata": spec.nodata, "predictor": 3}, [mission])
     return out
 
 
