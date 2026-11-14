@@ -45,9 +45,9 @@ PROVIDERS: dict[str, Provider] = {p.key: p for p in (
              hosts=("earth-search.aws.element84.com", "*.s3.us-west-2.amazonaws.com", "*.s3.amazonaws.com")),
     Provider("planetary", "Planetary Computer (مایکروسافت)", "کاتالوگ آزاد؛ توکن خواندن را دروازه خودش و رایگان می‌گیرد", PC_URL,
              PC_TOKEN, AZURE_HOST, hosts=("planetarycomputer.microsoft.com", "*.blob.core.windows.net")),
-    Provider("copernicus", "Copernicus Data Space (ESA)", "Sentinel-1/2/3/5P رسمی و پشتیبان؛ کلید S3 رایگان", "https://stac.dataspace.copernicus.eu/v1",
+    Provider("copernicus", "Copernicus Data Space (ESA)", "Sentinel-2 رسمی ESA (پشتیبان سوم و L1C)؛ کلید S3 رایگان", "https://stac.dataspace.copernicus.eu/v1",
              account=True, creds=(("s3_access", "شناسه‌ی دسترسی S3", False), ("s3_secret", "کلید محرمانه‌ی S3", True)),
-             implemented=False, signup="https://eodata-s3keysmanager.dataspace.copernicus.eu",
+             signup="https://eodata-s3keysmanager.dataspace.copernicus.eu",
              hosts=("stac.dataspace.copernicus.eu", "eodata.dataspace.copernicus.eu", "identity.dataspace.copernicus.eu")),
     Provider("earthdata", "NASA Earthdata", "HLS (Landsat و Sentinel-2 هماهنگ‌شده)؛ حساب رایگان", "https://cmr.earthdata.nasa.gov/stac/LPCLOUD",
              account=True, creds=(("token", "توکن (پیشنهادی؛ ۶۰ روز اعتبار)", True), ("user", "نام کاربری (به‌جای توکن)", False),
@@ -57,9 +57,6 @@ PROVIDERS: dict[str, Provider] = {p.key: p for p in (
     Provider("opentopography", "OpenTopography", "SRTM، ارتفاع و عمق دریا (SRTM15+) و پشتیبان DEMها؛ کلید API رایگان",
              "https://portal.opentopography.org/API", account=True, creds=(("api_key", "کلید API", True),),
              signup="https://portal.opentopography.org/newUser", hosts=("portal.opentopography.org",)),
-    Provider("jaxa", "JAXA G-Portal", "ALOS-2 ScanSAR؛ حساب رایگان", "", account=True,
-             creds=(("user", "نام کاربری", False), ("password", "رمز عبور", True)), implemented=False,
-             signup="https://gportal.jaxa.jp/gpr/", hosts=("gportal.jaxa.jp",)),
 )}
 
 
@@ -136,6 +133,10 @@ class Mission:
 
 _S2_ES = {"red": "red", "green": "green", "blue": "blue", "nir": "nir", "rededge1": "rededge1", "rededge2": "rededge2",
           "rededge3": "rededge3", "nir08": "nir08", "swir16": "swir16", "swir22": "swir22"}
+_S2_CDSE = {"red": "B04_10m", "green": "B03_10m", "blue": "B02_10m", "nir": "B08_10m", "rededge1": "B05_20m", "rededge2": "B06_20m",
+            "rededge3": "B07_20m", "nir08": "B8A_20m", "swir16": "B11_20m", "swir22": "B12_20m"}      # از یک آیتم واقعی CDSE
+_S2_CDSE_L1C = {"red": "B04", "green": "B03", "blue": "B02", "nir": "B08", "rededge1": "B05", "rededge2": "B06", "rededge3": "B07",
+                "nir08": "B8A", "swir16": "B11", "swir22": "B12"}                                  # حدس؛ «آزمایش اتصال» می‌سنجد
 _S2_PC = {"red": "B04", "green": "B03", "blue": "B02", "nir": "B08", "rededge1": "B05", "rededge2": "B06",
           "rededge3": "B07", "nir08": "B8A", "swir16": "B11", "swir22": "B12"}
 _LS = {"red": "red", "green": "green", "blue": "blue", "nir": "nir08", "swir16": "swir16", "swir22": "swir22"}
@@ -143,6 +144,7 @@ _HLS_S = {"red": "B04", "green": "B03", "blue": "B02", "nir": "B8A", "swir16": "
 _HLS_L = {"red": "B04", "green": "B03", "blue": "B02", "nir": "B05", "swir16": "B06", "swir22": "B07"}
 _HLS = "Harmonized Landsat Sentinel-2 (HLS) v2.0, NASA LP DAAC"
 _OT = "via OpenTopography (opentopography.org)"
+_PALSAR = "ALOS PALSAR/PALSAR-2 Global Mosaic © JAXA EORC (Earth Observation Research Center)"
 _ESA = "Contains modified Copernicus Sentinel data (ESA)"
 _LANDSAT = "Landsat Collection 2 Level-2 image courtesy of the U.S. Geological Survey"
 _DEM = "Copernicus DEM © DLR e.V. / Airbus Defence and Space, provided under COPERNICUS by the EU and ESA"
@@ -151,7 +153,8 @@ MISSIONS: dict[str, Mission] = {m.key: m for m in (
     # ---------------------------------------------------------------- چندطیفی
     Mission("sentinel2", "Sentinel-2", "ESA / Copernicus", 10, "هر ۵ روز", "۲۰۱۷",
             "تصویر چندطیفی با وضوح ۱۰ متر؛ بهترین انتخاب برای کشاورزی و شهر",
-            (Source("earthsearch", COLLECTION_S2, _S2_ES, "scl"), Source("planetary", COLLECTION_S2, _S2_PC, "SCL")),
+            (Source("earthsearch", COLLECTION_S2, _S2_ES, "scl"), Source("planetary", COLLECTION_S2, _S2_PC, "SCL"),
+             Source("copernicus", COLLECTION_S2, _S2_CDSE, "SCL_20m")),
             attribution=_ESA, license="CC BY-SA 3.0 IGO (Copernicus)"),
     Mission("s2_c1", "Sentinel-2 (بازپردازش یکدست)", "ESA / Copernicus", 10, "هر ۵ روز", "۲۰۱۵",
             "Collection-1: همه‌ی سال‌ها (از ۲۰۱۵) با یک نسخه‌ی پردازش؛ مناسب سری زمانی بلند",
@@ -159,7 +162,7 @@ MISSIONS: dict[str, Mission] = {m.key: m for m in (
             license="CC BY-SA 3.0 IGO (Copernicus)"),
     Mission("s2_l1c", "Sentinel-2 L1C (بدون تصحیح جوی)", "ESA / Copernicus", 10, "هر ۵ روز", "۲۰۱۵",
             "بازتاب بالای جو؛ برای وقتی که L2A موجود نیست. ماسک ابر ندارد",
-            (Source("earthsearch", "sentinel-2-l1c", _S2_ES, ""),), attribution=_ESA,
+            (Source("earthsearch", "sentinel-2-l1c", _S2_ES, ""), Source("copernicus", "sentinel-2-l1c", _S2_CDSE_L1C, "")), attribution=_ESA,
             license="CC BY-SA 3.0 IGO (Copernicus)"),
     Mission("landsat", "Landsat 8/9", "USGS / NASA", 30, "هر ۸ روز", "۲۰۱۳",
             "وضوح ۳۰ متر و آرشیو چندساله؛ مناسب مقایسه‌ی سال‌ها و محدوده‌های بزرگ‌تر",
@@ -205,6 +208,14 @@ MISSIONS: dict[str, Mission] = {m.key: m for m in (
             (Source("opentopography", "SRTM15Plus", api="opentopography"),), kind="layer", group="elevation",
             attribution="SRTM15+V2.1, Tozer et al. (2019), Scripps Institution of Oceanography; " + _OT, license="استفاده‌ی آزاد با ذکر منبع"),
     # ---------------------------------------------------------------- لایه‌های موضوعی آماده
+    Mission("palsar_hv", "ALOS PALSAR باند L - HV (سالانه)", "JAXA", 25, "سالانه", "۲۰۱۵",
+            "رادار باند L (طول موج بلند) از JAXA؛ HV به ساختار جنگل و زیست‌توده حساس است. موزاییک سال ۲۰۲۰ به دسی‌بل",
+            (Source("planetary", "alos-palsar-mosaic", asset="HV", datetime="2020-01-01T00:00:00Z/2020-12-31T23:59:59Z"),),
+            kind="layer", group="radar", attribution=_PALSAR, license="استفاده‌ی آزاد با ذکر منبع (JAXA)"),
+    Mission("palsar_hh", "ALOS PALSAR باند L - HH (سالانه)", "JAXA", 25, "سالانه", "۲۰۱۵",
+            "رادار باند L؛ HH به سطح، ساختمان و زمین‌شناسی (خطواره و جنس سنگ) حساس است. موزاییک سال ۲۰۲۰ به دسی‌بل",
+            (Source("planetary", "alos-palsar-mosaic", asset="HH", datetime="2020-01-01T00:00:00Z/2020-12-31T23:59:59Z"),),
+            kind="layer", group="radar", attribution=_PALSAR, license="استفاده‌ی آزاد با ذکر منبع (JAXA)"),
     Mission("worldcover", "پوشش زمین ESA WorldCover", "ESA", 10, "سالانه", "۲۰۲۱", "۱۱ کلاس کاربری (شهر، کشاورزی، جنگل، آب و…) با وضوح ۱۰ متر",
             (Source("planetary", "esa-worldcover", asset="map", datetime="2021-01-01T00:00:00Z/2021-12-31T23:59:59Z"),),
             kind="layer", group="thematic", attribution="© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data",
@@ -241,6 +252,9 @@ class Product:
     needs_scene: bool = True
     mission: str = "sentinel2"
     nodata: float | None = None   # لایه‌های آماده: مقدار بی‌داده‌ی خروجی
+    src_dtype: str = ""           # لایه‌ی آماده با تبدیل: نوع و بی‌داده‌ی فایل منبع (merge با این‌ها انجام می‌شود)
+    src_nodata: float | None = None
+    convert: str = ""             # palsar_db: DN ← دسی‌بل (‎20·log10(DN) − 83)
 
 
 def _imagery(mission: str, allbands: tuple[str, ...]) -> dict[str, Product]:
@@ -270,10 +284,12 @@ def _radar(mission: str) -> dict[str, Product]:
     )}
 
 
-def _layer(mission: str, dtype: str, nodata: float, colormap: str, bytes_px: float, title: str = "") -> dict[str, Product]:
+def _layer(mission: str, dtype: str, nodata: float, colormap: str, bytes_px: float, title: str = "", src_dtype: str = "",
+           src_nodata: float | None = None, convert: str = "") -> dict[str, Product]:
     m = MISSIONS[mission]
     return {mission: Product(mission, title or m.title, m.hint, m.collection, (m.primary.asset,), dtype, m.res_m, bytes_px,
-                             colormap=colormap, needs_scene=False, mission=mission, nodata=nodata)}
+                             colormap=colormap, needs_scene=False, mission=mission, nodata=nodata, src_dtype=src_dtype,
+                             src_nodata=src_nodata, convert=convert)}
 
 
 DEM_PRODUCT = _layer("dem", "float32", -9999, "terrain", 4 * 0.5, "ارتفاع (DEM)")["dem"]
@@ -295,6 +311,8 @@ PRODUCTS_BY_MISSION: dict[str, dict[str, Product]] = {
     "alosdem": _layer("alosdem", "float32", -9999, "terrain", 4 * 0.5),
     "srtm30": _layer("srtm30", "float32", -9999, "terrain", 4 * 0.5),
     "bathy": _layer("bathy", "float32", -9999, "terrain", 4 * 0.5),
+    "palsar_hv": _layer("palsar_hv", "float32", -9999, "gray", 4 * 0.6, src_dtype="uint16", src_nodata=0, convert="palsar_db"),
+    "palsar_hh": _layer("palsar_hh", "float32", -9999, "gray", 4 * 0.6, src_dtype="uint16", src_nodata=0, convert="palsar_db"),
     "worldcover": _layer("worldcover", "uint8", 0, "spectral", 0.15),
     "water": _layer("water", "uint8", 255, "blues", 0.2),
 }
@@ -344,9 +362,12 @@ def area_km2(bbox) -> float:
     return abs(e - w) * EARTH_M * math.cos(mid) * abs(n - s) * EARTH_M / 1e6
 
 
+S3_PRIVATE = ("s3://eodata/",)      # S3 حساب‌دار (Copernicus): با اعتبارنامه و GDAL خوانده می‌شود، نه https عمومی
+
+
 def https_href(href: str) -> str:
-    """نشانی s3://باکت/کلید را به https تبدیل می‌کند (urllib و GDAL هر دو با https کار می‌کنند)."""
-    if href.startswith("s3://"):
+    """نشانی s3://باکت/کلید را به https تبدیل می‌کند (urllib و GDAL هر دو با https کار می‌کنند)؛ باکت‌های حساب‌دار دست‌نخورده می‌مانند."""
+    if href.startswith("s3://") and not href.startswith(S3_PRIVATE):
         return "https://" + href[5:].replace("/", ".s3.amazonaws.com/", 1)
     return href
 

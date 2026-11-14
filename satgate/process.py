@@ -333,15 +333,23 @@ def build_layer(items: list[dict], mission: str, bbox, out: Path, sign=None, sou
     if not srcs:
         raise ProcessError("داده‌ی این لایه در کاتالوگ پیدا نشد.")
     try:
-        data, transform = merge(srcs, bounds=tuple(bbox), nodata=spec.nodata, dtype=spec.dtype, method="first")
+        data, transform = merge(srcs, bounds=tuple(bbox), nodata=spec.src_nodata if spec.convert else spec.nodata,
+                                dtype=spec.src_dtype or spec.dtype, method="first")
         crs = srcs[0].crs
     finally:
         for s_ in srcs:
             s_.close()
     if data.shape[1] < 2 or data.shape[2] < 2:
         raise ProcessError("محدوده بیش از اندازه کوچک است.")
-    _write(out, [data[0]], {"width": data.shape[2], "height": data.shape[1], "crs": crs, "transform": transform, "count": 1,
-                            "dtype": spec.dtype, "nodata": spec.nodata, "predictor": 3 if spec.dtype == "float32" else 2},
+    band = data[0]
+    if spec.convert == "palsar_db":      # γ⁰ (dB) = 20·log10(DN) − 83؛ صفر = بی‌داده
+        import numpy as np
+        valid = band > 0
+        band = np.where(valid, 20 * np.log10(np.where(valid, band, 1).astype("float32")) - 83.0, spec.nodata).astype("float32")
+        if not valid.any():
+            raise ProcessError("برای این محدوده داده‌ای پیدا نشد.")
+    _write(out, [band], {"width": data.shape[2], "height": data.shape[1], "crs": crs, "transform": transform, "count": 1,
+                         "dtype": spec.dtype, "nodata": spec.nodata, "predictor": 3 if spec.dtype == "float32" else 2},
            [mission])
     return out
 

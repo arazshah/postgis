@@ -184,16 +184,18 @@ class Gateway:
                 self._build_layer(job, m, mission, part, sign)
             elif job.get("composite") or m.kind == "sar":
                 items, src = self._composite_items(job, mission, m)
-                if m.kind == "sar":
-                    _, used = build_sar(items, mission, job["product"], job["bbox"], part, sign=sign, source=src)
-                else:
-                    _, used = build_composite(items, mission, job["product"], job["bbox"], part, sign=sign,
-                                              mask=bool(job.get("mask", True)), source=src)
+                with RUNTIME.env(src.provider):                  # S3 حساب‌دار (Copernicus) با کلید پنل
+                    if m.kind == "sar":
+                        _, used = build_sar(items, mission, job["product"], job["bbox"], part, sign=sign, source=src)
+                    else:
+                        _, used = build_composite(items, mission, job["product"], job["bbox"], part, sign=sign,
+                                                  mask=bool(job.get("mask", True)), source=src)
                 extra = {"used": used, "of": len(items)}
             else:
                 src = m.source(job.get("source") or None) or m.primary
                 item = stac.get_item(src.collection, job["scene"], self.fetch, src.provider)
-                build_scene(item, mission, job["product"], job["bbox"], part, sign=sign, mask=bool(job.get("mask")), source=src)
+                with RUNTIME.env(src.provider):
+                    build_scene(item, mission, job["product"], job["bbox"], part, sign=sign, mask=bool(job.get("mask")), source=src)
             size = part.stat().st_size
             if size > self.cfg.max_mb * 1024 * 1024:
                 raise ProcessError(f"خروجی {size // 1048576} مگابایت شد و از سقف {self.cfg.max_mb} بیشتر است.")
@@ -232,7 +234,8 @@ class Gateway:
                         raw.unlink(missing_ok=True)
                 else:
                     s2, items = stac.layer_items(m, job["bbox"], self.fetch, src.provider)
-                    build_layer(items, mission, job["bbox"], part, sign=sign, source=s2)
+                    with RUNTIME.env(src.provider):
+                        build_layer(items, mission, job["bbox"], part, sign=sign, source=s2)
                 return
             except (stac.StacError, ProcessError, otapi.OTError) as exc:
                 part.unlink(missing_ok=True)
