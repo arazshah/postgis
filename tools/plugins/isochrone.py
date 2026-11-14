@@ -6,7 +6,9 @@ from tools.sdk import Param, ToolPlugin
 
 @sdk.register
 class Isochrone(ToolPlugin):
-    key, order, category, icon = "isochrone", 70, "network", "t-isochrone"
+    key, order, category, icon = "isochrone", 10, "network", "t-isochrone"
+    level = "mid"
+    popular = True
     title = "حوزه دسترسی"
     description = "محدوده‌ای که از یک نقطه با پیمودن فاصله مشخص روی شبکه معابر می‌رسید."
     inputs, output = ("نقطهٔ شروع",), "محدودهٔ دسترسی"
@@ -16,7 +18,7 @@ class Isochrone(ToolPlugin):
     params = (
         Param("lon", "text", "طول جغرافیایی", "نقطهٔ شروع", placeholder="51.389"),
         Param("lat", "text", "عرض جغرافیایی", placeholder="35.700"),
-        Param("distance", "number", "فاصله روی شبکه معابر (متر)", default="1000"),
+        Param("distance", "number", "فاصله روی شبکه معابر", default="1000", unit="متر"),
     )
 
     def build(self, ctx):

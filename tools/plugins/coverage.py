@@ -10,7 +10,8 @@ CAP = 500
 
 @sdk.register
 class Coverage(ToolPlugin):
-    key, order, category, icon = "coverage", 160, "network", "t-coverage"
+    key, order, category, icon = "coverage", 40, "network", "t-coverage"
+    level = "adv"
     title = "پوشش چند مرکز"
     description = "حوزه‌ی دسترسی روی شبکه معابر را برای همه‌ی نقطه‌های یک لایه می‌سازد و هر بخش را به نزدیک‌ترین مرکز می‌دهد."
     inputs, output = ("نقاط مرکز",), "حوزه دسترسی هر مرکز"
@@ -19,7 +20,7 @@ class Coverage(ToolPlugin):
     needs_routing = True
     params = (
         Param("layer", "layer", "لایه مراکز", "مثلاً ایستگاه‌ها (حداکثر ۵۰۰ نقطه)", geom="point"),
-        Param("distance", "number", "فاصله روی شبکه معابر (متر)", default="800"),
+        Param("distance", "number", "فاصله روی شبکه معابر", default="800", unit="متر"),
     )
 
     def build(self, ctx):

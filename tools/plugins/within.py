@@ -6,7 +6,8 @@ from tools.sdk import Param, ToolPlugin
 
 @sdk.register
 class Within(ToolPlugin):
-    key, order, category, icon = "within", 80, "proximity", "t-within"
+    key, order, category, icon = "within", 60, "proximity", "t-within"
+    level = "mid"
     title = "انتخاب بر اساس فاصله"
     description = "عارضه‌های یک لایه را که تا فاصله‌ی مشخصی از لایه‌ی دیگر هستند جدا می‌کند و تعداد همسایه‌ها را کنارشان می‌گذارد."
     inputs, output = ("لایه اول", "لایه دوم"), "عارضه‌های نزدیک + تعداد همسایه"
@@ -15,7 +16,7 @@ class Within(ToolPlugin):
     params = (
         Param("layer", "layer", "لایه‌ای که از آن انتخاب شود", "مثلاً مدرسه‌ها"),
         Param("other", "layer", "لایه مرجع", "مثلاً بزرگراه‌ها"),
-        Param("distance", "number", "حداکثر فاصله (متر)", "عارضه‌هایی که دورتر باشند در نتیجه نمی‌آیند", "300"),
+        Param("distance", "number", "حداکثر فاصله", "عارضه‌هایی که دورتر باشند در نتیجه نمی‌آیند", "300", unit="متر"),
     )
 
     def build(self, ctx):

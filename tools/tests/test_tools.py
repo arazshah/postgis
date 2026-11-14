@@ -33,6 +33,32 @@ class CatalogTests(BaseCase):
                 self.assertIn(p.kind, {"layer", "number", "text", "choice", "bool"})
             self.assertEqual(len({p.name for p in i.params}), len(i.params))
 
+    def test_toolbox_has_fifty_tools_in_nine_categories_with_valid_metadata(self):
+        from tools import sdk
+
+        tools = sdk.all_tools()
+        self.assertEqual(len(tools), 50)
+        self.assertEqual(len(sdk.categories()), 9)
+        levels = {k for k, _ in sdk.LEVELS}
+        for t in tools:
+            with self.subTest(tool=t.key):
+                self.assertIn(t.level, levels)
+                self.assertLessEqual(len(t.key), 20)
+                self.assertTrue(t.title and t.description and t.example and t.columns)
+                for p in t.params:
+                    self.assertIn(p.group, ("", "input", "settings", "advanced"))
+        for c in sdk.categories():
+            self.assertIn(c.icon, ICONS, c.key)
+            self.assertGreaterEqual(len([t for t in tools if t.category == c.key]), 4, c.key)
+        self.assertGreaterEqual(len([t for t in tools if t.popular]), 8)
+
+    def test_home_page_advertises_the_toolbox_from_registry(self):
+        r = self.client.get(reverse("core:home"))
+        self.assertContains(r, 'id="toolbox"')
+        self.assertContains(r, "۵۰ ابزار تخصصی")
+        for c in catalog.category_groups():
+            self.assertContains(r, c["title"])
+
     def test_groups_cover_all_tools_once(self):
         keys = [i.key for g in catalog.category_groups() for i in g["tools"]]
         self.assertEqual(sorted(keys), sorted(catalog.INFO))

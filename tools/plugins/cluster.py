@@ -6,7 +6,8 @@ from tools.sdk import Param, ToolPlugin
 
 @sdk.register
 class Cluster(ToolPlugin):
-    key, order, category, icon = "cluster", 100, "aggregate", "t-cluster"
+    key, order, category, icon = "cluster", 40, "aggregate", "t-cluster"
+    level = "mid"
     title = "خوشه‌بندی نقطه‌ها"
     description = "نقطه‌های نزدیک به هم را خوشه می‌کند و دور هر خوشه چندضلعی و تعدادش را می‌دهد؛ برای یافتن کانون‌ها."
     inputs, output = ("لایه نقطه‌ای",), "چندضلعی هر خوشه + تعداد"
@@ -15,8 +16,8 @@ class Cluster(ToolPlugin):
     chart_hint = {"kind": "hist", "field": "point_count"}
     params = (
         Param("layer", "layer", "لایه نقطه‌ای", geom="point"),
-        Param("distance", "number", "شعاع همسایگی (متر)", "نقطه‌های نزدیک‌تر از این فاصله به هم می‌پیوندند", "200"),
-        Param("minpoints", "number", "حداقل نقطه در هر خوشه", "گروه‌های کوچک‌تر نقطهٔ پراکنده حساب می‌شوند", "5"),
+        Param("distance", "number", "شعاع همسایگی", "نقطه‌های نزدیک‌تر از این فاصله به هم می‌پیوندند", "200", unit="متر"),
+        Param("minpoints", "number", "حداقل نقطه در هر خوشه", "گروه‌های کوچک‌تر نقطه‌ی پراکنده حساب می‌شوند", "5", unit="نقطه"),
     )
 
     def build(self, ctx):

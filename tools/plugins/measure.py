@@ -6,7 +6,8 @@ from tools.sdk import Param, ToolPlugin
 
 @sdk.register
 class Measure(ToolPlugin):
-    key, order, category, icon = "measure", 110, "aggregate", "t-measure"
+    key, order, category, icon = "measure", 20, "measure", "t-measure"
+    level = "mid"
     title = "طول و مساحت در چندضلعی"
     description = "مجموع طول خط‌ها یا مساحت چندضلعی‌های یک لایه را داخل هر چندضلعی حساب می‌کند."
     inputs, output = ("چندضلعی", "خط یا چندضلعی"), "چندضلعی‌ها + طول یا مساحت"

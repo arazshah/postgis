@@ -1,0 +1,16 @@
+{% with p=f.p %}
+{% if p.kind == 'bool' %}
+<div class="tl-field tl-bool"><label class="check small"><input type="checkbox" name="{{ p.name }}" {% if f.checked %}checked{% endif %}><span>{{ p.label }}</span></label>{% if p.help %}<span class="help">{{ p.help }}</span>{% endif %}</div>
+{% elif p.kind == 'choice' %}
+<div class="tl-field tl-wide"><span class="lbl" id="{{ f.id }}-l">{{ p.label }}</span>
+  <div class="tl-choice" role="radiogroup" aria-labelledby="{{ f.id }}-l">{% for val, text in p.choices %}<label><input type="radio" name="{{ p.name }}" value="{{ val }}" {% if f.value == val %}checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</div>{% if p.help %}<span class="help">{{ p.help }}</span>{% endif %}</div>
+{% elif p.kind == 'layer' %}
+<div class="tl-field tl-wide"><label for="{{ f.id }}">{{ p.label }}{% if p.required %} <span class="req" aria-hidden="true">*</span>{% endif %}</label>
+  <select id="{{ f.id }}" name="{{ p.name }}" {% if p.required %}required{% endif %}>{% if not p.required %}<option value="">{{ p.empty|default:"هیچ‌کدام" }}</option>{% endif %}{% for o in f.options %}<option value="{{ o.value }}" {% if f.value == o.value %}selected{% endif %}>{{ o.label }}{% if o.type %} ({{ o.type }}){% endif %}</option>{% empty %}<option value="">لایه مناسب نیست</option>{% endfor %}</select>
+  {% if p.help %}<span class="help">{{ p.help }}</span>{% endif %}</div>
+{% else %}
+<div class="tl-field{% if p.wide or p.kind == 'text' and not p.unit %} tl-wide{% endif %}"><label for="{{ f.id }}">{{ p.label }}{% if p.required %} <span class="req" aria-hidden="true">*</span>{% endif %}</label>
+  <div class="tl-in{% if p.unit %} has-unit{% endif %}"><input id="{{ f.id }}" type="text" name="{{ p.name }}" value="{{ f.value }}" {% if p.required %}required{% endif %} {% if p.kind == 'number' %}inputmode="decimal" dir="ltr"{% else %}class="ltr" dir="ltr"{% endif %} placeholder="{{ p.placeholder }}" autocomplete="off">{% if p.unit %}<span class="tl-unit">{{ p.unit }}</span>{% endif %}</div>
+  {% if p.help %}<span class="help">{{ p.help }}</span>{% endif %}</div>
+{% endif %}
+{% endwith %}

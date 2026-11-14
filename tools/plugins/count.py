@@ -6,7 +6,8 @@ from tools.sdk import Param, ToolError, ToolPlugin
 
 @sdk.register
 class Count(ToolPlugin):
-    key, order, category, icon = "count", 30, "aggregate", "t-count"
+    key, order, category, icon = "count", 10, "aggregate", "t-count"
+    popular = True
     title = "شمارش در چندضلعی"
     description = "تعداد نقطه‌های یک لایه داخل هر چندضلعی؛ مثلاً مدرسه‌های هر محله."
     inputs, output = ("چندضلعی", "نقطه"), "چندضلعی‌ها + تعداد"

@@ -10,7 +10,8 @@ CAP_FROM, CAP_TO = 3000, 500
 
 @sdk.register
 class NetNearest(ToolPlugin):
-    key, order, category, icon = "netnearest", 150, "network", "t-netnearest"
+    key, order, category, icon = "netnearest", 30, "network", "t-netnearest"
+    level = "mid"
     title = "نزدیک‌ترین روی شبکه"
     description = "برای هر نقطه نزدیک‌ترین مرکز را با فاصله‌ی واقعی روی خیابان‌ها پیدا می‌کند."
     inputs, output = ("نقاط مبدأ", "نقاط مقصد"), "همان نقاط + فاصله روی خیابان"
@@ -22,7 +23,7 @@ class NetNearest(ToolPlugin):
         Param("layer", "layer", "لایه مبدأ", "مثلاً خانه‌ها یا مدرسه‌ها (حداکثر ۳۰۰۰ نقطه)", geom="point"),
         Param("other", "layer", "لایه مقصد", "مثلاً درمانگاه‌ها (حداکثر ۵۰۰ نقطه)", geom="point"),
         Param("label", "text", "ستون نام در لایه مقصد", "اختیاری؛ برای نوشتن نام نزدیک‌ترین", required=False, placeholder="name"),
-        Param("distance", "number", "حداکثر فاصله روی شبکه (متر)", "نقطه‌هایی که دورتر باشند بدون مقدار می‌مانند", "5000"),
+        Param("distance", "number", "حداکثر فاصله روی شبکه", "نقطه‌هایی که دورتر باشند بدون مقدار می‌مانند", "5000", unit="متر"),
     )
 
     def build(self, ctx):

@@ -8,7 +8,7 @@ from ._overlay import mask_sql
 
 @sdk.register
 class Erase(ToolPlugin):
-    key, order, category, icon = "erase", 130, "overlay", "t-erase"
+    key, order, category, icon = "erase", 20, "overlay", "t-erase"
     title = "حذف ناحیه"
     description = "بخشی از لایه چندضلعی را که زیر لایه‌ی چندضلعی دیگر قرار دارد حذف می‌کند."
     inputs, output = ("چندضلعی", "چندضلعی حذفی"), "چندضلعی باقی‌مانده"

@@ -107,7 +107,7 @@ def contact(request):
 
 
 def home(request):
-    from kernel import showcase
+    from kernel import showcase, toolbox
 
     plans = list(Plan.objects.filter(is_public=True))
     bundled = showcase.bundled_with_plan([p.slug for p in plans])
@@ -123,6 +123,7 @@ def home(request):
     trust_cards = HomeTrustCard.visible(conf) if conf.home_trust_enabled else []
     trust_buttons = HomeTrustButton.visible() if conf.home_trust_enabled else []
     return render(request, "core/home.html", {"market_picks": showcase.home_picks(6), "market_count": showcase.count(), "market_audiences": showcase.AUDIENCES,
+                                              "toolbox": toolbox.pitch(),
                                               "plans": plans, "guides_count": len(GUIDES), "faqs": faqs,
                                               "faq_json": faq_jsonld(faqs), "trust_conf": conf,
                                               "trust_cards": trust_cards, "trust_buttons": trust_buttons})

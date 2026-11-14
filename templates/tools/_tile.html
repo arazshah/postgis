@@ -1,0 +1,9 @@
+{% load fa ws %}<a class="tb-tile{% if c.blocked %} off{% endif %}" href="{{ c.url }}" data-key="{{ c.info.key }}" data-cat="{{ c.info.category }}" data-level="{{ c.info.level }}" data-ready="{% if c.blocked %}0{% else %}1{% endif %}" data-text="{{ c.info.title }} {{ c.info.description }} {{ c.info.example }} {{ c.info.key }}">
+  <span class="tb-ico">{% icon c.info.icon 22 %}</span>
+  <span class="tb-body">
+    <span class="tb-name">{{ c.info.title }}{% if c.info.level != 'basic' %}<i class="tb-lv tb-lv-{{ c.info.level }}" title="سطح {{ c.level }}">{{ c.level }}</i>{% endif %}</span>
+    <span class="tb-desc">{{ c.info.description }}</span>
+    <span class="tb-io">{% for x in c.info.inputs %}<em>{{ x }}</em>{% endfor %}{% icon "next" 12 %}<em>{{ c.info.output }}</em></span>
+    {% if c.blocked %}<span class="tb-why">{{ c.blocked }}</span>{% endif %}
+  </span>
+</a>

@@ -754,6 +754,1328 @@
   }
  },
  {
+  "tool": "ringbuf",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "distance": "300",
+   "rings": "3"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", r.i AS ring, ((r.i - 1) * 300.0)::float8 AS from_m, (r.i * 300.0)::float8 AS to_m, CASE WHEN r.i = 1 THEN ST_Buffer(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography, 300.0)::geometry ELSE ST_Difference(ST_Buffer(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography, r.i * 300.0)::geometry, ST_Buffer(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography, (r.i - 1) * 300.0)::geometry) END AS geom FROM \"public\".\"schools\" s CROSS JOIN generate_series(1, 3) AS r(i) WHERE s.\"geom\" IS NOT NULL",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "حریم چندحلقه‌ای تا ۲۰٬۰۰۰ عارضه را پشتیبانی می‌کند؛ لایه را کوچک‌تر کنید."
+    ]
+   ],
+   "summary": "schools · فاصله 300 متر · 3 حلقه"
+  }
+ },
+ {
+  "tool": "ringbuf",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "distance": "300",
+   "rings": "1"
+  },
+  "result": {
+   "error": "مقدار باید بین 2 و 10 باشد."
+  }
+ },
+ {
+  "tool": "knn",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "other": "public.pois",
+   "k": "3",
+   "label": "name"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"a\".\"name\" AS \"name\", \"a\".\"price\" AS \"price\", \"a\".\"landuse\" AS \"landuse\", n.rnk::int AS rank, round(ST_Distance(ST_SetSRID(\"a\".\"geom\"::geometry, 4326)::geography, n.bg::geography)::numeric, 1) AS distance_m, n.lbl AS nearest_name, ST_MakeLine(ST_PointOnSurface(ST_SetSRID(\"a\".\"geom\"::geometry, 4326)::geometry), ST_PointOnSurface(n.bg)) AS geom FROM \"public\".\"schools\" a CROSS JOIN LATERAL (SELECT ST_Transform(\"b\".\"shape\"::geometry, 4326) AS bg, b.\"name\" AS lbl, row_number() OVER (ORDER BY b.\"shape\" <-> ST_Transform(ST_SetSRID(\"a\".\"geom\"::geometry, 4326), 32639)) AS rnk FROM \"public\".\"pois\" b WHERE b.\"shape\" IS NOT NULL ORDER BY b.\"shape\" <-> ST_Transform(ST_SetSRID(\"a\".\"geom\"::geometry, 4326), 32639) LIMIT 3) n WHERE a.\"geom\" IS NOT NULL",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 50001) x",
+     50000,
+     "این ابزار تا ۵۰٬۰۰۰ عارضه‌ی مبدأ را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools · با pois · k = 3"
+  }
+ },
+ {
+  "tool": "knn",
+  "routing": false,
+  "params": {
+   "layer": "public.pois",
+   "other": "public.schools",
+   "k": "30"
+  },
+  "result": {
+   "error": "مقدار باید بین 1 و 20 باشد."
+  }
+ },
+ {
+  "tool": "nearlines",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "other": "public.pois",
+   "distance": "500"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"a\".\"name\" AS \"name\", \"a\".\"price\" AS \"price\", \"a\".\"landuse\" AS \"landuse\", round(ST_Distance(ST_SetSRID(\"a\".\"geom\"::geometry, 4326)::geography, ST_Transform(\"b\".\"shape\"::geometry, 4326)::geography)::numeric, 1) AS distance_m, ST_MakeLine(ST_PointOnSurface(ST_SetSRID(\"a\".\"geom\"::geometry, 4326)::geometry), ST_PointOnSurface(ST_Transform(\"b\".\"shape\"::geometry, 4326)::geometry)) AS geom FROM \"public\".\"schools\" a JOIN \"public\".\"pois\" b ON b.\"shape\" IS NOT NULL  AND ST_DWithin(ST_SetSRID(\"a\".\"geom\"::geometry, 4326)::geography, ST_Transform(\"b\".\"shape\"::geometry, 4326)::geography, 500.0) WHERE a.\"geom\" IS NOT NULL",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "لایه‌ی اول تا ۲۰٬۰۰۰ عارضه مجاز است."
+    ],
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"pois\" WHERE \"shape\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "لایه‌ی دوم تا ۲۰٬۰۰۰ عارضه مجاز است."
+    ]
+   ],
+   "summary": "schools · با pois · فاصله 500 متر"
+  }
+ },
+ {
+  "tool": "nearlines",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "other": "public.pois",
+   "distance": "0"
+  },
+  "result": {
+   "error": "مقدار باید بین 1 و 50000 باشد."
+  }
+ },
+ {
+  "tool": "intersect",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "other": "public.landuse"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"a\".\"name\" AS \"a_name\", \"a\".\"price\" AS \"a_price\", \"a\".\"landuse\" AS \"a_landuse\", \"b\".\"name\" AS \"b_name\", \"b\".\"price\" AS \"b_price\", \"b\".\"landuse\" AS \"b_landuse\", round(ST_Area(c.g::geography)::numeric, 1) AS area_m2, c.g AS geom FROM \"public\".\"zones\" a JOIN \"public\".\"landuse\" b ON ST_Intersects(b.\"geom\", ST_Transform(\"a\".\"geom\", 32639)) CROSS JOIN LATERAL (SELECT ST_CollectionExtract(ST_Intersection(ST_MakeValid(ST_SetSRID(\"a\".\"geom\"::geometry, 4326)), ST_MakeValid(ST_Transform(\"b\".\"geom\"::geometry, 4326))), 3) AS g) c WHERE a.\"geom\" IS NOT NULL AND b.\"geom\" IS NOT NULL AND NOT ST_IsEmpty(c.g)",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"zones\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "لایه‌ی اول تا ۲۰٬۰۰۰ چندضلعی مجاز است."
+    ],
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"landuse\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "لایه‌ی دوم تا ۲۰٬۰۰۰ چندضلعی مجاز است."
+    ]
+   ],
+   "summary": "zones · با landuse"
+  }
+ },
+ {
+  "tool": "intersect",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "other": "public.landuse"
+  },
+  "result": {
+   "error": "جدول schools از نوع POINT است؛ این ابزار POLYGON می‌خواهد."
+  }
+ },
+ {
+  "tool": "union",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "other": "public.landuse"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT * FROM (SELECT \"a\".\"name\" AS \"a_name\", \"a\".\"price\" AS \"a_price\", \"a\".\"landuse\" AS \"a_landuse\", \"b\".\"name\" AS \"b_name\", \"b\".\"price\" AS \"b_price\", \"b\".\"landuse\" AS \"b_landuse\", 'both' AS part, ST_CollectionExtract(ST_Intersection(ST_MakeValid(ST_SetSRID(\"a\".\"geom\"::geometry, 4326)), ST_MakeValid(ST_Transform(\"b\".\"geom\"::geometry, 4326))), 3) AS geom FROM \"public\".\"zones\" a JOIN \"public\".\"landuse\" b ON ST_Intersects(b.\"geom\", ST_Transform(\"a\".\"geom\", 32639)) WHERE a.\"geom\" IS NOT NULL UNION ALL SELECT \"a\".\"name\" AS \"a_name\", \"a\".\"price\" AS \"a_price\", \"a\".\"landuse\" AS \"a_landuse\", NULL AS \"b_name\", NULL AS \"b_price\", NULL AS \"b_landuse\", 'a_only' AS part, ST_CollectionExtract(ST_Difference(ST_MakeValid(ST_SetSRID(\"a\".\"geom\"::geometry, 4326)), coalesce(m.g, ST_GeomFromText('POLYGON EMPTY', 4326))), 3) AS geom FROM \"public\".\"zones\" a CROSS JOIN LATERAL (SELECT ST_Union(ST_MakeValid(ST_Transform(\"b\".\"geom\"::geometry, 4326))) AS g FROM \"public\".\"landuse\" b WHERE b.\"geom\" IS NOT NULL AND ST_Intersects(b.\"geom\", ST_Transform(\"a\".\"geom\", 32639))) m WHERE a.\"geom\" IS NOT NULL UNION ALL SELECT NULL AS \"a_name\", NULL AS \"a_price\", NULL AS \"a_landuse\", \"b\".\"name\" AS \"b_name\", \"b\".\"price\" AS \"b_price\", \"b\".\"landuse\" AS \"b_landuse\", 'b_only' AS part, ST_CollectionExtract(ST_Difference(ST_MakeValid(ST_Transform(\"b\".\"geom\"::geometry, 4326)), coalesce(m.g, ST_GeomFromText('POLYGON EMPTY', 4326))), 3) AS geom FROM \"public\".\"landuse\" b CROSS JOIN LATERAL (SELECT ST_Union(ST_MakeValid(ST_SetSRID(\"a\".\"geom\"::geometry, 4326))) AS g FROM \"public\".\"zones\" a WHERE a.\"geom\" IS NOT NULL AND ST_Intersects(a.\"geom\", ST_Transform(\"b\".\"geom\", 4326))) m WHERE b.\"geom\" IS NOT NULL) u WHERE u.geom IS NOT NULL AND NOT ST_IsEmpty(u.geom)",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"zones\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "لایه‌ی اول تا ۲۰٬۰۰۰ چندضلعی مجاز است."
+    ],
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"landuse\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "لایه‌ی دوم تا ۲۰٬۰۰۰ چندضلعی مجاز است."
+    ]
+   ],
+   "summary": "zones · با landuse"
+  }
+ },
+ {
+  "tool": "union",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "other": "public.nope"
+  },
+  "result": {
+   "error": "لایه انتخاب نشده یا وجود ندارد."
+  }
+ },
+ {
+  "tool": "symdiff",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "other": "public.landuse"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT * FROM (SELECT \"a\".\"name\" AS \"a_name\", \"a\".\"price\" AS \"a_price\", \"a\".\"landuse\" AS \"a_landuse\", NULL AS \"b_name\", NULL AS \"b_price\", NULL AS \"b_landuse\", 'a_only' AS part, ST_CollectionExtract(ST_Difference(ST_MakeValid(ST_SetSRID(\"a\".\"geom\"::geometry, 4326)), coalesce(m.g, ST_GeomFromText('POLYGON EMPTY', 4326))), 3) AS geom FROM \"public\".\"zones\" a CROSS JOIN LATERAL (SELECT ST_Union(ST_MakeValid(ST_Transform(\"b\".\"geom\"::geometry, 4326))) AS g FROM \"public\".\"landuse\" b WHERE b.\"geom\" IS NOT NULL AND ST_Intersects(b.\"geom\", ST_Transform(\"a\".\"geom\", 32639))) m WHERE a.\"geom\" IS NOT NULL UNION ALL SELECT NULL AS \"a_name\", NULL AS \"a_price\", NULL AS \"a_landuse\", \"b\".\"name\" AS \"b_name\", \"b\".\"price\" AS \"b_price\", \"b\".\"landuse\" AS \"b_landuse\", 'b_only' AS part, ST_CollectionExtract(ST_Difference(ST_MakeValid(ST_Transform(\"b\".\"geom\"::geometry, 4326)), coalesce(m.g, ST_GeomFromText('POLYGON EMPTY', 4326))), 3) AS geom FROM \"public\".\"landuse\" b CROSS JOIN LATERAL (SELECT ST_Union(ST_MakeValid(ST_SetSRID(\"a\".\"geom\"::geometry, 4326))) AS g FROM \"public\".\"zones\" a WHERE a.\"geom\" IS NOT NULL AND ST_Intersects(a.\"geom\", ST_Transform(\"b\".\"geom\", 4326))) m WHERE b.\"geom\" IS NOT NULL) u WHERE u.geom IS NOT NULL AND NOT ST_IsEmpty(u.geom)",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"zones\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "لایه‌ی اول تا ۲۰٬۰۰۰ چندضلعی مجاز است."
+    ],
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"landuse\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "لایه‌ی دوم تا ۲۰٬۰۰۰ چندضلعی مجاز است."
+    ]
+   ],
+   "summary": "zones · با landuse"
+  }
+ },
+ {
+  "tool": "symdiff",
+  "routing": false,
+  "params": {
+   "layer": "public.roads",
+   "other": "public.landuse"
+  },
+  "result": {
+   "error": "جدول roads از نوع LINESTRING است؛ این ابزار POLYGON می‌خواهد."
+  }
+ },
+ {
+  "tool": "spatialjoin",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "other": "public.zones"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"a\".\"name\" AS \"name\", \"a\".\"price\" AS \"price\", \"a\".\"landuse\" AS \"landuse\", \"j\".\"name\" AS \"j_name\", \"j\".\"price\" AS \"j_price\", \"j\".\"landuse\" AS \"j_landuse\", ST_SetSRID(\"a\".\"geom\"::geometry, 4326)::geometry AS geom FROM \"public\".\"schools\" a INNER JOIN LATERAL (SELECT b.* FROM \"public\".\"zones\" b WHERE b.\"geom\" IS NOT NULL AND ST_Intersects(b.\"geom\", \"a\".\"geom\") LIMIT 1) j ON true WHERE a.\"geom\" IS NOT NULL",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 100001) x",
+     100000,
+     "این ابزار تا ۱۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools · با zones"
+  }
+ },
+ {
+  "tool": "spatialjoin",
+  "routing": false,
+  "params": {
+   "layer": "public.pois",
+   "other": "public.landuse",
+   "relation": "within",
+   "keep": "on"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"a\".\"name\" AS \"name\", \"a\".\"price\" AS \"price\", \"a\".\"landuse\" AS \"landuse\", \"j\".\"name\" AS \"j_name\", \"j\".\"price\" AS \"j_price\", \"j\".\"landuse\" AS \"j_landuse\", ST_Transform(\"a\".\"shape\"::geometry, 4326)::geometry AS geom FROM \"public\".\"pois\" a LEFT JOIN LATERAL (SELECT b.* FROM \"public\".\"landuse\" b WHERE b.\"geom\" IS NOT NULL AND ST_Within(\"a\".\"shape\", b.\"geom\") LIMIT 1) j ON true WHERE a.\"shape\" IS NOT NULL",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"pois\" WHERE \"shape\" IS NOT NULL LIMIT 100001) x",
+     100000,
+     "این ابزار تا ۱۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "pois · با landuse · همه بمانند"
+  }
+ },
+ {
+  "tool": "spatialjoin",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "other": "public.roads"
+  },
+  "result": {
+   "error": "جدول roads از نوع LINESTRING است؛ این ابزار POLYGON می‌خواهد."
+  }
+ },
+ {
+  "tool": "centroid",
+  "routing": false,
+  "params": {
+   "layer": "public.zones"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", ST_PointOnSurface(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) AS geom FROM \"public\".\"zones\" s WHERE s.\"geom\" IS NOT NULL",
+   "guards": [],
+   "summary": "zones"
+  }
+ },
+ {
+  "tool": "centroid",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "mode": "centroid"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", ST_Centroid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) AS geom FROM \"public\".\"zones\" s WHERE s.\"geom\" IS NOT NULL",
+   "guards": [],
+   "summary": "zones"
+  }
+ },
+ {
+  "tool": "centroid",
+  "routing": false,
+  "params": {
+   "layer": "public.notes"
+  },
+  "result": {
+   "error": "جدول notes ستون مکانی ندارد."
+  }
+ },
+ {
+  "tool": "hull",
+  "routing": false,
+  "params": {
+   "layer": "public.schools"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT h.n AS feature_count, round(ST_Area(h.g::geography)::numeric, 1) AS area_m2, h.g AS geom FROM (SELECT count(*) AS n, ST_ConvexHull(ST_Collect(ST_SetSRID(\"s\".\"geom\"::geometry, 4326))) AS g FROM \"public\".\"schools\" s WHERE s.\"geom\" IS NOT NULL) h WHERE GeometryType(h.g) = 'POLYGON'",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 200001) x",
+     200000,
+     "این ابزار تا ۲۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools"
+  }
+ },
+ {
+  "tool": "hull",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "mode": "concave",
+   "ratio": "0.4"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT h.n AS feature_count, round(ST_Area(h.g::geography)::numeric, 1) AS area_m2, h.g AS geom FROM (SELECT count(*) AS n, ST_ConcaveHull(ST_Collect(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)), 0.4) AS g FROM \"public\".\"schools\" s WHERE s.\"geom\" IS NOT NULL) h WHERE GeometryType(h.g) = 'POLYGON'",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 200001) x",
+     200000,
+     "این ابزار تا ۲۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools"
+  }
+ },
+ {
+  "tool": "hull",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "mode": "concave",
+   "ratio": "5"
+  },
+  "result": {
+   "error": "مقدار باید بین 0.01 و 1 باشد."
+  }
+ },
+ {
+  "tool": "envelope",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "shape": "rotated"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", round(ST_Area(ST_OrientedEnvelope(ST_SetSRID(\"s\".\"geom\"::geometry, 4326))::geography)::numeric, 1) AS area_m2, ST_OrientedEnvelope(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) AS geom FROM \"public\".\"zones\" s WHERE s.\"geom\" IS NOT NULL AND GeometryType(ST_OrientedEnvelope(ST_SetSRID(\"s\".\"geom\"::geometry, 4326))) = 'POLYGON'",
+   "guards": [],
+   "summary": "zones"
+  }
+ },
+ {
+  "tool": "envelope",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "shape": "circle",
+   "scope": "all"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT h.n AS feature_count, round(ST_Area(h.g::geography)::numeric, 1) AS area_m2, h.g AS geom FROM (SELECT count(*) AS n, ST_MinimumBoundingCircle(ST_Collect(ST_SetSRID(\"s\".\"geom\"::geometry, 4326))) AS g FROM \"public\".\"schools\" s WHERE s.\"geom\" IS NOT NULL) h WHERE GeometryType(h.g) = 'POLYGON'",
+   "guards": [],
+   "summary": "schools"
+  }
+ },
+ {
+  "tool": "envelope",
+  "routing": false,
+  "params": {
+   "layer": "public.nope"
+  },
+  "result": {
+   "error": "لایه انتخاب نشده یا وجود ندارد."
+  }
+ },
+ {
+  "tool": "dissolve",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "field": "landuse"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT s.\"landuse\", count(*) AS feature_count, ST_Union(ST_MakeValid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326))) AS geom FROM \"public\".\"zones\" s WHERE s.\"geom\" IS NOT NULL GROUP BY s.\"landuse\"",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"zones\" WHERE \"geom\" IS NOT NULL LIMIT 100001) x",
+     100000,
+     "این ابزار تا ۱۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "zones · بر اساس landuse"
+  }
+ },
+ {
+  "tool": "dissolve",
+  "routing": false,
+  "params": {
+   "layer": "public.zones"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT count(*) AS feature_count, ST_Union(ST_MakeValid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326))) AS geom FROM \"public\".\"zones\" s WHERE s.\"geom\" IS NOT NULL",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"zones\" WHERE \"geom\" IS NOT NULL LIMIT 100001) x",
+     100000,
+     "این ابزار تا ۱۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "zones"
+  }
+ },
+ {
+  "tool": "dissolve",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "field": "nope"
+  },
+  "result": {
+   "error": "ستون «nope» در لایه zones نیست."
+  }
+ },
+ {
+  "tool": "explode",
+  "routing": false,
+  "params": {
+   "layer": "public.landuse"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", d.path[1] AS part_no, d.geom AS geom FROM \"public\".\"landuse\" s CROSS JOIN LATERAL ST_Dump(ST_Transform(\"s\".\"geom\"::geometry, 4326)) d WHERE s.\"geom\" IS NOT NULL",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"landuse\" WHERE \"geom\" IS NOT NULL LIMIT 200001) x",
+     200000,
+     "این ابزار تا ۲۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "landuse"
+  }
+ },
+ {
+  "tool": "explode",
+  "routing": false,
+  "params": {
+   "layer": "public.nope"
+  },
+  "result": {
+   "error": "لایه انتخاب نشده یا وجود ندارد."
+  }
+ },
+ {
+  "tool": "simplify",
+  "routing": false,
+  "params": {
+   "layer": "public.landuse",
+   "tolerance": "50"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", ST_NPoints(ST_Transform(\"s\".\"geom\"::geometry, 4326)) AS vertices_before, ST_NPoints(r.g) AS vertices_after, r.g AS geom FROM \"public\".\"landuse\" s CROSS JOIN LATERAL (SELECT ST_Transform(ST_SimplifyPreserveTopology(ST_Transform(ST_Transform(\"s\".\"geom\"::geometry, 4326), 3857), (50.0 / greatest(cos(radians(ST_Y(ST_PointOnSurface(ST_Transform(\"s\".\"geom\"::geometry, 4326))))), 0.05))), 4326) AS g) r WHERE s.\"geom\" IS NOT NULL AND NOT ST_IsEmpty(r.g)",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"landuse\" WHERE \"geom\" IS NOT NULL LIMIT 100001) x",
+     100000,
+     "این ابزار تا ۱۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "landuse"
+  }
+ },
+ {
+  "tool": "simplify",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "tolerance": "50"
+  },
+  "result": {
+   "error": "جدول schools از نوع POINT است؛ این ابزار LINE/POLYGON می‌خواهد."
+  }
+ },
+ {
+  "tool": "simplify",
+  "routing": false,
+  "params": {
+   "layer": "public.landuse",
+   "tolerance": "0"
+  },
+  "result": {
+   "error": "مقدار باید بین 0.1 و 10000 باشد."
+  }
+ },
+ {
+  "tool": "smooth",
+  "routing": false,
+  "params": {
+   "layer": "public.roads",
+   "iterations": "2"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", ST_ChaikinSmoothing(ST_SetSRID(\"s\".\"geom\"::geometry, 4326), 2) AS geom FROM \"public\".\"roads\" s WHERE s.\"geom\" IS NOT NULL",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"roads\" WHERE \"geom\" IS NOT NULL LIMIT 50001) x",
+     50000,
+     "این ابزار تا ۵۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "roads"
+  }
+ },
+ {
+  "tool": "smooth",
+  "routing": false,
+  "params": {
+   "layer": "public.roads",
+   "iterations": "9"
+  },
+  "result": {
+   "error": "مقدار باید بین 1 و 5 باشد."
+  }
+ },
+ {
+  "tool": "polyline",
+  "routing": false,
+  "params": {
+   "layer": "public.zones"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", round(ST_Length(b.g::geography)::numeric, 1) AS perimeter_m, b.g AS geom FROM \"public\".\"zones\" s CROSS JOIN LATERAL (SELECT ST_CollectionExtract(ST_Boundary(ST_MakeValid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326))), 2) AS g) b WHERE s.\"geom\" IS NOT NULL AND NOT ST_IsEmpty(b.g)",
+   "guards": [],
+   "summary": "zones"
+  }
+ },
+ {
+  "tool": "polyline",
+  "routing": false,
+  "params": {
+   "layer": "public.roads"
+  },
+  "result": {
+   "error": "جدول roads از نوع LINESTRING است؛ این ابزار POLYGON می‌خواهد."
+  }
+ },
+ {
+  "tool": "geomstats",
+  "routing": false,
+  "params": {
+   "layer": "public.zones"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", round(ST_Area(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography)::numeric, 1) AS area_m2, round((ST_Area(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography) / 10000.0)::numeric, 3) AS area_ha, round((CASE WHEN ST_Dimension(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) = 2 THEN ST_Perimeter(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography) WHEN ST_Dimension(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) = 1 THEN ST_Length(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography) ELSE 0 END)::numeric, 1) AS length_m, ST_NPoints(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) AS vertices, ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geometry AS geom FROM \"public\".\"zones\" s WHERE s.\"geom\" IS NOT NULL",
+   "guards": [],
+   "summary": "zones"
+  }
+ },
+ {
+  "tool": "geomstats",
+  "routing": false,
+  "params": {
+   "layer": "public.pois"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", round(ST_Area(ST_Transform(\"s\".\"shape\"::geometry, 4326)::geography)::numeric, 1) AS area_m2, round((ST_Area(ST_Transform(\"s\".\"shape\"::geometry, 4326)::geography) / 10000.0)::numeric, 3) AS area_ha, round((CASE WHEN ST_Dimension(ST_Transform(\"s\".\"shape\"::geometry, 4326)) = 2 THEN ST_Perimeter(ST_Transform(\"s\".\"shape\"::geometry, 4326)::geography) WHEN ST_Dimension(ST_Transform(\"s\".\"shape\"::geometry, 4326)) = 1 THEN ST_Length(ST_Transform(\"s\".\"shape\"::geometry, 4326)::geography) ELSE 0 END)::numeric, 1) AS length_m, ST_NPoints(ST_Transform(\"s\".\"shape\"::geometry, 4326)) AS vertices, ST_Transform(\"s\".\"shape\"::geometry, 4326)::geometry AS geom FROM \"public\".\"pois\" s WHERE s.\"shape\" IS NOT NULL",
+   "guards": [],
+   "summary": "pois"
+  }
+ },
+ {
+  "tool": "geomstats",
+  "routing": false,
+  "params": {
+   "layer": "public.plain"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", round(ST_Area(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography)::numeric, 1) AS area_m2, round((ST_Area(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography) / 10000.0)::numeric, 3) AS area_ha, round((CASE WHEN ST_Dimension(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) = 2 THEN ST_Perimeter(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography) WHEN ST_Dimension(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) = 1 THEN ST_Length(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography) ELSE 0 END)::numeric, 1) AS length_m, ST_NPoints(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) AS vertices, ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geometry AS geom FROM \"public\".\"plain\" s WHERE s.\"geom\" IS NOT NULL",
+   "guards": [],
+   "summary": "plain"
+  }
+ },
+ {
+  "tool": "coords",
+  "routing": false,
+  "params": {
+   "layer": "public.schools"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", round(ST_X(c.p)::numeric, 6) AS lon, round(ST_Y(c.p)::numeric, 6) AS lat, c.zone AS utm_zone, c.epsg AS utm_epsg, round(ST_X(u.p)::numeric, 1) AS utm_x, round(ST_Y(u.p)::numeric, 1) AS utm_y, ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geometry AS geom FROM \"public\".\"schools\" s CROSS JOIN LATERAL (SELECT ST_PointOnSurface(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) AS p) c0 CROSS JOIN LATERAL (SELECT c0.p AS p, floor((ST_X(c0.p) + 180) / 6)::int + 1 AS zone, (CASE WHEN ST_Y(c0.p) >= 0 THEN 32600 ELSE 32700 END) + floor((ST_X(c0.p) + 180) / 6)::int + 1 AS epsg) c CROSS JOIN LATERAL (SELECT ST_Transform(c.p, c.epsg) AS p) u WHERE s.\"geom\" IS NOT NULL",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 200001) x",
+     200000,
+     "این ابزار تا ۲۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools"
+  }
+ },
+ {
+  "tool": "coords",
+  "routing": false,
+  "params": {
+   "layer": "public.nope"
+  },
+  "result": {
+   "error": "لایه انتخاب نشده یا وجود ندارد."
+  }
+ },
+ {
+  "tool": "compact",
+  "routing": false,
+  "params": {
+   "layer": "public.zones"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", round(m.a::numeric, 1) AS area_m2, round(m.p::numeric, 1) AS perimeter_m, round((4 * pi() * m.a / NULLIF(m.p * m.p, 0))::numeric, 3) AS compactness, CASE WHEN 4 * pi() * m.a / NULLIF(m.p * m.p, 0) >= 0.7 THEN 'compact' WHEN 4 * pi() * m.a / NULLIF(m.p * m.p, 0) >= 0.4 THEN 'moderate' ELSE 'irregular' END AS shape_class, ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geometry AS geom FROM \"public\".\"zones\" s CROSS JOIN LATERAL (SELECT ST_Area(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography) AS a, ST_Perimeter(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography) AS p) m WHERE s.\"geom\" IS NOT NULL AND m.p > 0",
+   "guards": [],
+   "summary": "zones"
+  }
+ },
+ {
+  "tool": "compact",
+  "routing": false,
+  "params": {
+   "layer": "public.schools"
+  },
+  "result": {
+   "error": "جدول schools از نوع POINT است؛ این ابزار POLYGON می‌خواهد."
+  }
+ },
+ {
+  "tool": "bearing",
+  "routing": false,
+  "params": {
+   "layer": "public.roads"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", round(m.az::numeric, 1) AS azimuth_deg, (ARRAY['N','NE','E','SE','S','SW','W','NW'])[1 + (round(m.az / 45.0)::int % 8)] AS direction, round(m.len::numeric, 1) AS length_m, round(m.st::numeric, 1) AS straight_m, round((m.len / NULLIF(m.st, 0))::numeric, 3) AS sinuosity, ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geometry AS geom FROM \"public\".\"roads\" s CROSS JOIN LATERAL (SELECT ST_GeometryN(ST_LineMerge(ST_Multi(ST_SetSRID(\"s\".\"geom\"::geometry, 4326))), 1) AS l) x CROSS JOIN LATERAL (SELECT degrees(ST_Azimuth(ST_StartPoint(x.l)::geography, ST_EndPoint(x.l)::geography)) AS az, ST_Length(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography) AS len, ST_Distance(ST_StartPoint(x.l)::geography, ST_EndPoint(x.l)::geography) AS st) m WHERE s.\"geom\" IS NOT NULL AND m.az IS NOT NULL",
+   "guards": [],
+   "summary": "roads"
+  }
+ },
+ {
+  "tool": "bearing",
+  "routing": false,
+  "params": {
+   "layer": "public.zones"
+  },
+  "result": {
+   "error": "جدول zones از نوع POLYGON است؛ این ابزار LINE می‌خواهد."
+  }
+ },
+ {
+  "tool": "linepoints",
+  "routing": false,
+  "params": {
+   "layer": "public.roads",
+   "distance": "100"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", p.path[1] AS seq, round((p.path[1] * 100.0)::numeric, 1) AS at_m, p.geom AS geom FROM \"public\".\"roads\" s CROSS JOIN LATERAL ST_Dump(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) ln CROSS JOIN LATERAL (SELECT ST_Length(ln.geom::geography) AS len) l CROSS JOIN LATERAL ST_Dump(ST_LineInterpolatePoints(ln.geom, least(100.0 / l.len, 1), true)) p WHERE s.\"geom\" IS NOT NULL AND l.len > 0 AND GeometryType(ln.geom) = 'LINESTRING'",
+   "guards": [
+    [
+     "SELECT coalesce(ceil(sum(ST_Length(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography)) / 100.0), 0)::bigint FROM \"public\".\"roads\" s WHERE s.\"geom\" IS NOT NULL",
+     1000000,
+     "تعداد نقطه‌ها از یک میلیون بیشتر می‌شود؛ فاصله را بیشتر کنید."
+    ]
+   ],
+   "summary": "roads · فاصله 100 متر"
+  }
+ },
+ {
+  "tool": "linepoints",
+  "routing": false,
+  "params": {
+   "layer": "public.roads",
+   "distance": "abc"
+  },
+  "result": {
+   "error": "عدد نامعتبر است."
+  }
+ },
+ {
+  "tool": "linesplit",
+  "routing": false,
+  "params": {
+   "layer": "public.roads",
+   "distance": "500"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", i.n + 1 AS seg_no, round(least(500.0, l.len - i.n * 500.0)::numeric, 1) AS length_m, ST_LineSubstring(ln.geom, least(i.n * 500.0 / l.len, 1), least((i.n + 1) * 500.0 / l.len, 1)) AS geom FROM \"public\".\"roads\" s CROSS JOIN LATERAL ST_Dump(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) ln CROSS JOIN LATERAL (SELECT ST_Length(ln.geom::geography) AS len) l CROSS JOIN LATERAL generate_series(0, greatest(ceil(l.len / 500.0)::int - 1, 0)) AS i(n) WHERE s.\"geom\" IS NOT NULL AND l.len > 0 AND GeometryType(ln.geom) = 'LINESTRING'",
+   "guards": [
+    [
+     "SELECT coalesce(ceil(sum(ST_Length(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geography)) / 500.0), 0)::bigint FROM \"public\".\"roads\" s WHERE s.\"geom\" IS NOT NULL",
+     500000,
+     "تعداد قطعه‌ها از ۵۰۰٬۰۰۰ بیشتر می‌شود؛ طول قطعه را بیشتر کنید."
+    ]
+   ],
+   "summary": "roads · فاصله 500 متر"
+  }
+ },
+ {
+  "tool": "linesplit",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "distance": "500"
+  },
+  "result": {
+   "error": "جدول schools از نوع POINT است؛ این ابزار LINE می‌خواهد."
+  }
+ },
+ {
+  "tool": "linecross",
+  "routing": false,
+  "params": {
+   "layer": "public.roads"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT DISTINCT ON (ST_AsBinary(p.geom)) p.geom AS geom FROM \"public\".\"roads\" a JOIN \"public\".\"roads\" b ON a.\"geom\" IS NOT NULL AND b.\"geom\" IS NOT NULL AND a.ctid < b.ctid AND ST_Intersects(b.\"geom\", \"a\".\"geom\") CROSS JOIN LATERAL ST_Dump(ST_CollectionExtract(ST_Intersection(ST_SetSRID(\"a\".\"geom\"::geometry, 4326), ST_SetSRID(\"b\".\"geom\"::geometry, 4326)), 1)) p",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"roads\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "لایه‌ی اول تا ۲۰٬۰۰۰ خط مجاز است."
+    ]
+   ],
+   "summary": "roads"
+  }
+ },
+ {
+  "tool": "linecross",
+  "routing": false,
+  "params": {
+   "layer": "public.roads",
+   "other": "public.roads"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT DISTINCT ON (ST_AsBinary(p.geom)) p.geom AS geom FROM \"public\".\"roads\" a JOIN \"public\".\"roads\" b ON a.\"geom\" IS NOT NULL AND b.\"geom\" IS NOT NULL AND true AND ST_Intersects(b.\"geom\", \"a\".\"geom\") CROSS JOIN LATERAL ST_Dump(ST_CollectionExtract(ST_Intersection(ST_SetSRID(\"a\".\"geom\"::geometry, 4326), ST_SetSRID(\"b\".\"geom\"::geometry, 4326)), 1)) p",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"roads\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "لایه‌ی اول تا ۲۰٬۰۰۰ خط مجاز است."
+    ],
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"roads\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "لایه‌ی دوم تا ۲۰٬۰۰۰ خط مجاز است."
+    ]
+   ],
+   "summary": "roads · با roads"
+  }
+ },
+ {
+  "tool": "linecross",
+  "routing": false,
+  "params": {
+   "layer": "public.zones"
+  },
+  "result": {
+   "error": "جدول zones از نوع POLYGON است؛ این ابزار LINE می‌خواهد."
+  }
+ },
+ {
+  "tool": "endpoints",
+  "routing": false,
+  "params": {
+   "layer": "public.roads"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", e.kind AS end_type, e.geom AS geom FROM \"public\".\"roads\" s CROSS JOIN LATERAL ST_Dump(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) ln CROSS JOIN LATERAL (VALUES ('start', ST_StartPoint(ln.geom)), ('end', ST_EndPoint(ln.geom))) AS e(kind, geom) WHERE s.\"geom\" IS NOT NULL AND GeometryType(ln.geom) = 'LINESTRING'",
+   "guards": [],
+   "summary": "roads"
+  }
+ },
+ {
+  "tool": "endpoints",
+  "routing": false,
+  "params": {
+   "layer": "public.roads",
+   "which": "end"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", e.kind AS end_type, e.geom AS geom FROM \"public\".\"roads\" s CROSS JOIN LATERAL ST_Dump(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) ln CROSS JOIN LATERAL (VALUES ('start', ST_StartPoint(ln.geom)), ('end', ST_EndPoint(ln.geom))) AS e(kind, geom) WHERE s.\"geom\" IS NOT NULL AND GeometryType(ln.geom) = 'LINESTRING' AND e.kind = 'end'",
+   "guards": [],
+   "summary": "roads"
+  }
+ },
+ {
+  "tool": "endpoints",
+  "routing": false,
+  "params": {
+   "layer": "public.schools"
+  },
+  "result": {
+   "error": "جدول schools از نوع POINT است؛ این ابزار LINE می‌خواهد."
+  }
+ },
+ {
+  "tool": "fishnet",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "size": "500"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "WITH pts AS (SELECT ST_Transform(ST_SetSRID(\"s\".\"geom\"::geometry, 4326), 3857) AS g FROM \"public\".\"schools\" s WHERE s.\"geom\" IS NOT NULL), grid AS (SELECT q.geom FROM ST_SquareGrid(500.0, (SELECT ST_SetSRID(ST_Extent(g)::geometry, 3857) FROM pts)) q) SELECT count(pts.g) AS count, round((count(pts.g) / (ST_Area(grid.geom) / 1e6))::numeric, 2) AS density_km2, ST_Transform(grid.geom, 4326)::geometry(Polygon, 4326) AS geom FROM grid JOIN pts ON ST_Intersects(grid.geom, pts.g) GROUP BY grid.geom",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 500001) x",
+     500000,
+     "این ابزار تا ۵۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ],
+    [
+     "SELECT coalesce(ceil((ST_XMax(e.b) - ST_XMin(e.b)) / 500.0) * ceil((ST_YMax(e.b) - ST_YMin(e.b)) / 500.0), 0)::bigint FROM (SELECT (SELECT ST_SetSRID(ST_Extent(ST_Transform(ST_SetSRID(\"s\".\"geom\"::geometry, 4326), 3857))::geometry, 3857) FROM \"public\".\"schools\" s WHERE s.\"geom\" IS NOT NULL) AS b) e",
+     400000,
+     "تعداد خانه‌های شبکه از ۴۰۰٬۰۰۰ بیشتر می‌شود؛ اندازه‌ی خانه را بزرگ‌تر کنید."
+    ]
+   ],
+   "summary": "schools · اندازه خانه 500 متر · خانه 500 متر"
+  }
+ },
+ {
+  "tool": "fishnet",
+  "routing": false,
+  "params": {
+   "layer": "public.pois",
+   "size": "500",
+   "empty": "on"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "WITH pts AS (SELECT ST_Transform(ST_Transform(\"s\".\"shape\"::geometry, 4326), 3857) AS g FROM \"public\".\"pois\" s WHERE s.\"shape\" IS NOT NULL), grid AS (SELECT q.geom FROM ST_SquareGrid(500.0, (SELECT ST_SetSRID(ST_Extent(g)::geometry, 3857) FROM pts)) q) SELECT count(pts.g) AS count, round((count(pts.g) / (ST_Area(grid.geom) / 1e6))::numeric, 2) AS density_km2, ST_Transform(grid.geom, 4326)::geometry(Polygon, 4326) AS geom FROM grid LEFT JOIN pts ON ST_Intersects(grid.geom, pts.g) GROUP BY grid.geom",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"pois\" WHERE \"shape\" IS NOT NULL LIMIT 500001) x",
+     500000,
+     "این ابزار تا ۵۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ],
+    [
+     "SELECT coalesce(ceil((ST_XMax(e.b) - ST_XMin(e.b)) / 500.0) * ceil((ST_YMax(e.b) - ST_YMin(e.b)) / 500.0), 0)::bigint FROM (SELECT (SELECT ST_SetSRID(ST_Extent(ST_Transform(ST_Transform(\"s\".\"shape\"::geometry, 4326), 3857))::geometry, 3857) FROM \"public\".\"pois\" s WHERE s.\"shape\" IS NOT NULL) AS b) e",
+     400000,
+     "تعداد خانه‌های شبکه از ۴۰۰٬۰۰۰ بیشتر می‌شود؛ اندازه‌ی خانه را بزرگ‌تر کنید."
+    ]
+   ],
+   "summary": "pois · اندازه خانه 500 متر · خانه 500 متر"
+  }
+ },
+ {
+  "tool": "fishnet",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "size": "1"
+  },
+  "result": {
+   "error": "مقدار باید بین 10 و 100000 باشد."
+  }
+ },
+ {
+  "tool": "randompts",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "count": "10",
+   "seed": "7"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", d.path[1] AS pt_no, d.geom AS geom FROM \"public\".\"zones\" s CROSS JOIN LATERAL ST_Dump(ST_GeneratePoints(ST_MakeValid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)), 10, 7)) d WHERE s.\"geom\" IS NOT NULL",
+   "guards": [
+    [
+     "SELECT count(*) * 10 FROM (SELECT 1 FROM \"public\".\"zones\" s WHERE s.\"geom\" IS NOT NULL LIMIT 500001) x",
+     500000,
+     "مجموع نقطه‌ها از ۵۰۰٬۰۰۰ بیشتر می‌شود؛ تعداد یا چندضلعی‌ها را کم کنید."
+    ]
+   ],
+   "summary": "zones"
+  }
+ },
+ {
+  "tool": "randompts",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "count": "5000"
+  },
+  "result": {
+   "error": "مقدار باید بین 1 و 1000 باشد."
+  }
+ },
+ {
+  "tool": "meancenter",
+  "routing": false,
+  "params": {
+   "layer": "public.schools"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "WITH p AS (SELECT NULL::text AS grp, ST_X(q.t) AS x, ST_Y(q.t) AS y, 1.0 AS w FROM \"public\".\"schools\" s CROSS JOIN LATERAL (SELECT ST_Transform(ST_SetSRID(\"s\".\"geom\"::geometry, 4326), 3857) AS t) q WHERE s.\"geom\" IS NOT NULL AND (1.0) > 0), c AS (SELECT grp, count(*) AS n, sum(w) AS sw, sum(w * x) / sum(w) AS mx, sum(w * y) / sum(w) AS my FROM p GROUP BY grp) SELECT c.n, round((sqrt(sum(p.w * ((p.x - c.mx) ^ 2 + (p.y - c.my) ^ 2)) / c.sw) * cos(radians(ST_Y(ST_Transform(ST_SetSRID(ST_MakePoint(c.mx, c.my), 3857), 4326)))))::numeric, 1) AS std_distance_m, ST_Transform(ST_SetSRID(ST_MakePoint(c.mx, c.my), 3857), 4326) AS geom FROM c JOIN p ON p.grp IS NOT DISTINCT FROM c.grp GROUP BY c.grp, c.n, c.sw, c.mx, c.my",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 500001) x",
+     500000,
+     "این ابزار تا ۵۰۰٬۰۰۰ نقطه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools"
+  }
+ },
+ {
+  "tool": "meancenter",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "weight": "price",
+   "field": "landuse"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "WITH p AS (SELECT s.\"landuse\" AS grp, ST_X(q.t) AS x, ST_Y(q.t) AS y, greatest(s.\"price\"::float8, 0) AS w FROM \"public\".\"schools\" s CROSS JOIN LATERAL (SELECT ST_Transform(ST_SetSRID(\"s\".\"geom\"::geometry, 4326), 3857) AS t) q WHERE s.\"geom\" IS NOT NULL AND (greatest(s.\"price\"::float8, 0)) > 0), c AS (SELECT grp, count(*) AS n, sum(w) AS sw, sum(w * x) / sum(w) AS mx, sum(w * y) / sum(w) AS my FROM p GROUP BY grp) SELECT c.grp AS \"landuse\", c.n, round((sqrt(sum(p.w * ((p.x - c.mx) ^ 2 + (p.y - c.my) ^ 2)) / c.sw) * cos(radians(ST_Y(ST_Transform(ST_SetSRID(ST_MakePoint(c.mx, c.my), 3857), 4326)))))::numeric, 1) AS std_distance_m, ST_Transform(ST_SetSRID(ST_MakePoint(c.mx, c.my), 3857), 4326) AS geom FROM c JOIN p ON p.grp IS NOT DISTINCT FROM c.grp GROUP BY c.grp, c.n, c.sw, c.mx, c.my",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 500001) x",
+     500000,
+     "این ابزار تا ۵۰۰٬۰۰۰ نقطه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools"
+  }
+ },
+ {
+  "tool": "meancenter",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "weight": "name"
+  },
+  "result": {
+   "error": "ستون «name» باید یک ستون عددی در لایه schools باشد."
+  }
+ },
+ {
+  "tool": "sdellipse",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "k": "2"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "WITH p AS (SELECT ST_X(q.t) AS x, ST_Y(q.t) AS y FROM \"public\".\"schools\" s CROSS JOIN LATERAL (SELECT ST_Transform(ST_SetSRID(\"s\".\"geom\"::geometry, 4326), 3857) AS t) q WHERE s.\"geom\" IS NOT NULL), c AS (SELECT count(*) AS n, avg(x) AS mx, avg(y) AS my, var_pop(x) AS sxx, var_pop(y) AS syy, covar_pop(x, y) AS sxy FROM p), e AS (SELECT n, mx, my, (sxx + syy) / 2 + sqrt(((sxx - syy) / 2) ^ 2 + sxy ^ 2) AS l1, (sxx + syy) / 2 - sqrt(((sxx - syy) / 2) ^ 2 + sxy ^ 2) AS l2, 0.5 * atan2(2 * sxy, sxx - syy) AS phi FROM c), z AS (SELECT e.*, cos(radians(ST_Y(ST_Transform(ST_SetSRID(ST_MakePoint(mx, my), 3857), 4326)))) AS kc FROM e) SELECT n, round((2 * 2 * sqrt(l1) * kc)::numeric, 1) AS major_m, round((2 * 2 * sqrt(l2) * kc)::numeric, 1) AS minor_m, round(mod(mod(degrees(pi() / 2 - phi)::numeric, 180) + 180, 180), 1) AS angle_deg, ST_Transform(ST_Translate(ST_Rotate(ST_Scale(ST_Buffer(ST_SetSRID(ST_MakePoint(0, 0), 3857), 1, 'quad_segs=24'), ST_MakePoint(2 * sqrt(l1), 2 * sqrt(l2))), phi, ST_SetSRID(ST_MakePoint(0, 0), 3857)), mx, my), 4326) AS geom FROM z WHERE n >= 3 AND l2 > 0",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 500001) x",
+     500000,
+     "این ابزار تا ۵۰۰٬۰۰۰ نقطه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools"
+  }
+ },
+ {
+  "tool": "sdellipse",
+  "routing": false,
+  "params": {
+   "layer": "public.zones"
+  },
+  "result": {
+   "error": "جدول zones از نوع POLYGON است؛ این ابزار POINT می‌خواهد."
+  }
+ },
+ {
+  "tool": "hotspot",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "value": "price",
+   "distance": "1000"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "WITH f AS (SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", s.\"price\"::float8 AS _x, ST_PointOnSurface(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) AS _pt, ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geometry AS _g FROM \"public\".\"schools\" s WHERE s.\"geom\" IS NOT NULL AND s.\"price\" IS NOT NULL), st AS (SELECT count(*)::float8 AS n, avg(_x) AS xb, stddev_pop(_x) AS sd FROM f), r AS (SELECT f.*, nb.m, nb.sx, st.n, st.xb, st.sd FROM f CROSS JOIN st CROSS JOIN LATERAL (SELECT count(*)::float8 AS m, sum(f2._x) AS sx FROM f f2 WHERE f2._pt && ST_Expand(f._pt, 1000.0 / 111320.0 / greatest(cos(radians(ST_Y(f._pt))), 0.05)) AND ST_DWithin(f._pt::geography, f2._pt::geography, 1000.0)) nb), z AS (SELECT r.*, (r.sx - r.xb * r.m) / NULLIF(r.sd * sqrt((r.n * r.m - r.m ^ 2) / NULLIF(r.n - 1, 0)), 0) AS gi FROM r) SELECT \"z\".\"name\" AS \"name\", \"z\".\"price\" AS \"price\", \"z\".\"landuse\" AS \"landuse\", z.m::int AS neighbors, round(z.gi::numeric, 3) AS gi_z, CASE WHEN z.gi IS NULL THEN 'not_sig' WHEN z.gi >= 2.576 THEN 'hot99' WHEN z.gi >= 1.96 THEN 'hot95' WHEN z.gi >= 1.645 THEN 'hot90' WHEN z.gi <= -2.576 THEN 'cold99' WHEN z.gi <= -1.96 THEN 'cold95' WHEN z.gi <= -1.645 THEN 'cold90' ELSE 'not_sig' END AS hotspot, z._g AS geom FROM z",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 3001) x",
+     3000,
+     "این ابزار تا 3000 عارضه را پشتیبانی می‌کند؛ لایه را کوچک‌تر کنید."
+    ]
+   ],
+   "summary": "schools · فاصله 1000 متر · ستون price · sum price"
+  }
+ },
+ {
+  "tool": "hotspot",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "value": "name",
+   "distance": "1000"
+  },
+  "result": {
+   "error": "ستون «name» باید یک ستون عددی در لایه schools باشد."
+  }
+ },
+ {
+  "tool": "hotspot",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "distance": "1000"
+  },
+  "result": {
+   "error": "ستون عددی را مشخص کنید."
+  }
+ },
+ {
+  "tool": "kmeans",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "k": "5"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"k\".\"name\" AS \"name\", \"k\".\"price\" AS \"price\", \"k\".\"landuse\" AS \"landuse\", k.cid + 1 AS cluster_id, count(*) OVER (PARTITION BY k.cid) AS cluster_size, k._g AS geom FROM (SELECT s.*, ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geometry AS _g, ST_ClusterKMeans(ST_Transform(ST_PointOnSurface(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)), 3857), least(5, greatest((SELECT count(*) FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL), 1))::int) OVER () AS cid FROM \"public\".\"schools\" s WHERE s.\"geom\" IS NOT NULL) k",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 100001) x",
+     100000,
+     "این ابزار تا ۱۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools · k = 5"
+  }
+ },
+ {
+  "tool": "kmeans",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "k": "1"
+  },
+  "result": {
+   "error": "مقدار باید بین 2 و 200 باشد."
+  }
+ },
+ {
+  "tool": "makevalid",
+  "routing": false,
+  "params": {
+   "layer": "public.zones"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", ST_IsValid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) AS was_valid, CASE WHEN ST_IsValid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) THEN NULL ELSE ST_IsValidReason(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)) END AS issue, ST_CollectionExtract(ST_MakeValid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326)), 3) AS geom FROM \"public\".\"zones\" s WHERE s.\"geom\" IS NOT NULL",
+   "guards": [],
+   "summary": "zones"
+  }
+ },
+ {
+  "tool": "makevalid",
+  "routing": false,
+  "params": {
+   "layer": "public.landuse",
+   "only_invalid": "on"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"s\".\"name\" AS \"name\", \"s\".\"price\" AS \"price\", \"s\".\"landuse\" AS \"landuse\", ST_IsValid(ST_Transform(\"s\".\"geom\"::geometry, 4326)) AS was_valid, CASE WHEN ST_IsValid(ST_Transform(\"s\".\"geom\"::geometry, 4326)) THEN NULL ELSE ST_IsValidReason(ST_Transform(\"s\".\"geom\"::geometry, 4326)) END AS issue, ST_CollectionExtract(ST_MakeValid(ST_Transform(\"s\".\"geom\"::geometry, 4326)), 3) AS geom FROM \"public\".\"landuse\" s WHERE s.\"geom\" IS NOT NULL AND NOT ST_IsValid(ST_Transform(\"s\".\"geom\"::geometry, 4326))",
+   "guards": [],
+   "summary": "landuse · فقط نامعتبرها"
+  }
+ },
+ {
+  "tool": "makevalid",
+  "routing": false,
+  "params": {
+   "layer": "public.notes"
+  },
+  "result": {
+   "error": "جدول notes ستون مکانی ندارد."
+  }
+ },
+ {
+  "tool": "dedupe",
+  "routing": false,
+  "params": {
+   "layer": "public.schools"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT DISTINCT ON (d._k) \"d\".\"name\" AS \"name\", \"d\".\"price\" AS \"price\", \"d\".\"landuse\" AS \"landuse\", d._n AS dup_count, d._g AS geom FROM (SELECT s.*, ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geometry AS _g, md5(ST_AsBinary(ST_SnapToGrid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326), 1e-09))::text || '') AS _k, count(*) OVER (PARTITION BY md5(ST_AsBinary(ST_SnapToGrid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326), 1e-09))::text || '')) AS _n FROM \"public\".\"schools\" s WHERE s.\"geom\" IS NOT NULL) d ORDER BY d._k",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 500001) x",
+     500000,
+     "این ابزار تا ۵۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools"
+  }
+ },
+ {
+  "tool": "dedupe",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "field": "name",
+   "tolerance": "5"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT DISTINCT ON (d._k) \"d\".\"name\" AS \"name\", \"d\".\"price\" AS \"price\", \"d\".\"landuse\" AS \"landuse\", d._n AS dup_count, d._g AS geom FROM (SELECT s.*, ST_SetSRID(\"s\".\"geom\"::geometry, 4326)::geometry AS _g, md5(ST_AsBinary(ST_SnapToGrid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326), 4.4915558749550845e-05))::text || coalesce(s.\"name\"::text, '')) AS _k, count(*) OVER (PARTITION BY md5(ST_AsBinary(ST_SnapToGrid(ST_SetSRID(\"s\".\"geom\"::geometry, 4326), 4.4915558749550845e-05))::text || coalesce(s.\"name\"::text, ''))) AS _n FROM \"public\".\"schools\" s WHERE s.\"geom\" IS NOT NULL) d ORDER BY d._k",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 500001) x",
+     500000,
+     "این ابزار تا ۵۰۰٬۰۰۰ عارضه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools"
+  }
+ },
+ {
+  "tool": "dedupe",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "tolerance": "500"
+  },
+  "result": {
+   "error": "مقدار باید بین 0 و 100 باشد."
+  }
+ },
+ {
+  "tool": "snap",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "other": "public.roads",
+   "distance": "30"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT \"a\".\"name\" AS \"name\", \"a\".\"price\" AS \"price\", \"a\".\"landuse\" AS \"landuse\", coalesce(n.dist <= 30.0, false) AS snapped, round((CASE WHEN n.dist <= 30.0 THEN n.dist ELSE 0 END)::numeric, 2) AS moved_m, CASE WHEN n.dist <= 30.0 THEN n.cp ELSE ST_SetSRID(\"a\".\"geom\"::geometry, 4326)::geometry END AS geom FROM \"public\".\"schools\" a LEFT JOIN LATERAL (SELECT ST_ClosestPoint(ST_SetSRID(\"b\".\"geom\"::geometry, 4326), ST_SetSRID(\"a\".\"geom\"::geometry, 4326)) AS cp, ST_Distance(ST_SetSRID(\"b\".\"geom\"::geometry, 4326)::geography, ST_SetSRID(\"a\".\"geom\"::geometry, 4326)::geography) AS dist FROM \"public\".\"roads\" b WHERE b.\"geom\" IS NOT NULL ORDER BY b.\"geom\" <-> ST_SetSRID(\"a\".\"geom\"::geometry, 4326) LIMIT 1) n ON true WHERE a.\"geom\" IS NOT NULL",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 100001) x",
+     100000,
+     "این ابزار تا ۱۰۰٬۰۰۰ نقطه را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools · با roads · فاصله 30 متر"
+  }
+ },
+ {
+  "tool": "snap",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "other": "public.roads",
+   "distance": "30"
+  },
+  "result": {
+   "error": "جدول zones از نوع POLYGON است؛ این ابزار POINT می‌خواهد."
+  }
+ },
+ {
+  "tool": "selfoverlap",
+  "routing": false,
+  "params": {
+   "layer": "public.zones",
+   "label": "name"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "SELECT a.\"name\"::text AS a_label, b.\"name\"::text AS b_label, round(ST_Area(x.g::geography)::numeric, 1) AS area_m2, x.g AS geom FROM \"public\".\"zones\" a JOIN \"public\".\"zones\" b ON a.ctid < b.ctid AND a.\"geom\" IS NOT NULL AND b.\"geom\" IS NOT NULL AND a.\"geom\" && b.\"geom\" CROSS JOIN LATERAL (SELECT ST_CollectionExtract(ST_Intersection(ST_MakeValid(ST_SetSRID(\"a\".\"geom\"::geometry, 4326)), ST_MakeValid(ST_SetSRID(\"b\".\"geom\"::geometry, 4326))), 3) AS g) x WHERE NOT ST_IsEmpty(x.g) AND ST_Area(x.g::geography) >= 1.0",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"zones\" WHERE \"geom\" IS NOT NULL LIMIT 20001) x",
+     20000,
+     "این ابزار تا ۲۰٬۰۰۰ چندضلعی را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "zones"
+  }
+ },
+ {
+  "tool": "selfoverlap",
+  "routing": false,
+  "params": {
+   "layer": "public.schools"
+  },
+  "result": {
+   "error": "جدول schools از نوع POINT است؛ این ابزار POLYGON می‌خواهد."
+  }
+ },
+ {
+  "tool": "odmatrix",
+  "routing": true,
+  "params": {
+   "layer": "public.schools",
+   "other": "public.pois",
+   "distance": "5000"
+  },
+  "result": {
+   "out": "out_t",
+   "target": "\"public\".\"out_t\"",
+   "sql": "WITH o AS (SELECT row_number() OVER () AS oid, ST_SetSRID(\"a\".\"geom\"::geometry, 4326)::geometry AS g, v.id AS vid FROM \"public\".\"schools\" a CROSS JOIN LATERAL (SELECT id FROM routing.ways_vertices_pgr ORDER BY the_geom <-> ST_SetSRID(\"a\".\"geom\"::geometry, 4326) LIMIT 1) v WHERE a.\"geom\" IS NOT NULL), t AS (SELECT row_number() OVER () AS tid, ST_Transform(\"b\".\"shape\"::geometry, 4326)::geometry AS g, w.id AS vid FROM \"public\".\"pois\" b CROSS JOIN LATERAL (SELECT id FROM routing.ways_vertices_pgr ORDER BY the_geom <-> ST_Transform(\"b\".\"shape\"::geometry, 4326) LIMIT 1) w WHERE b.\"shape\" IS NOT NULL), c AS (SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstraCost('SELECT gid AS id, source, target, length_m AS cost, CASE WHEN reverse_cost < 0 THEN -1 ELSE length_m END AS reverse_cost FROM routing.ways', (SELECT array_agg(DISTINCT vid) FROM o), (SELECT array_agg(DISTINCT vid) FROM t), directed := true)) SELECT o.oid::int AS origin_id, t.tid::int AS dest_id, round(c.agg_cost::numeric, 1) AS network_m, round(ST_Distance(o.g::geography, t.g::geography)::numeric, 1) AS straight_m, round((c.agg_cost / NULLIF(ST_Distance(o.g::geography, t.g::geography), 0))::numeric, 2) AS detour, ST_MakeLine(o.g, t.g) AS geom FROM o JOIN c ON c.start_vid = o.vid JOIN t ON t.vid = c.end_vid WHERE c.agg_cost <= 5000.0",
+   "guards": [
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"schools\" WHERE \"geom\" IS NOT NULL LIMIT 201) x",
+     200,
+     "این ابزار تا 200 نقطه‌ی مبدأ را پشتیبانی می‌کند."
+    ],
+    [
+     "SELECT count(*) FROM (SELECT 1 FROM \"public\".\"pois\" WHERE \"shape\" IS NOT NULL LIMIT 201) x",
+     200,
+     "این ابزار تا 200 نقطه‌ی مقصد را پشتیبانی می‌کند."
+    ]
+   ],
+   "summary": "schools · با pois · فاصله 5000 متر"
+  }
+ },
+ {
+  "tool": "odmatrix",
+  "routing": false,
+  "params": {
+   "layer": "public.schools",
+   "other": "public.pois",
+   "distance": "5000"
+  },
+  "result": {
+   "error": "شبکه معابر (routing.ways) ندارید؛ از «داده آماده ایران» شبکه مسیریابی بگیرید."
+  }
+ },
+ {
   "tool": "nope",
   "routing": false,
   "params": {

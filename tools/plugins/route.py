@@ -6,7 +6,8 @@ from tools.sdk import Param, ToolError, ToolPlugin
 
 @sdk.register
 class Route(ToolPlugin):
-    key, order, category, icon = "route", 140, "network", "t-route"
+    key, order, category, icon = "route", 20, "network", "t-route"
+    popular = True
     title = "کوتاه‌ترین مسیر"
     description = "کوتاه‌ترین مسیر روی شبکه معابر بین دو نقطه، با طول آن به متر."
     inputs, output = ("دو نقطه",), "خط مسیر + طول"

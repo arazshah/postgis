@@ -25,10 +25,17 @@ def _geom_ok(t, want: str) -> bool:
     return any(want.upper() in k for k in kinds)
 
 
+def _kind_fa(t) -> str:
+    """نوع هندسه‌ی لایه به فارسی کوتاه برای کنار نام لایه در فهرست انتخاب."""
+    g = ((t.geometry[0].get("type") or "") if t.geometry else "").upper()
+    for key, fa in (("POINT", "نقطه‌ای"), ("LINE", "خطی"), ("POLYGON", "چندضلعی")):
+        if key in g:
+            return fa
+    return "مکانی"
+
+
 def _layers(spatial, want: str):
-    return [{"value": f"{t.schema}.{t.name}", "label": t.name,
-             "type": ((t.geometry[0].get("type") or "") if t.geometry else "").lower()}
-            for t in spatial if _geom_ok(t, want)]
+    return [{"value": f"{t.schema}.{t.name}", "label": t.name, "type": _kind_fa(t)} for t in spatial if _geom_ok(t, want)]
 
 
 def _has_routing(tables) -> bool:
@@ -63,19 +70,37 @@ def _context(request, pk):
     return db, ex, tables, [t for t in tables if t.geometry]
 
 
+def _recent(db, limit: int = 5) -> list:
+    """ابزارهایی که کاربران این پایگاه اخیراً اجرا کرده‌اند (یکتا، از تازه به قدیم)."""
+    seen: dict[str, None] = {}
+    for key in ToolRun.objects.filter(database=db).order_by("-created_at").values_list("tool", flat=True)[:60]:
+        if sdk.get(key) is not None:
+            seen.setdefault(key, None)
+        if len(seen) >= limit:
+            break
+    return [sdk.get(k) for k in seen]
+
+
 @site_user_required
 def index(request, pk):
     db, ex, tables, spatial = _context(request, pk)
     if ex is None:
         return redirect("databases:detail", pk=db.pk)
     routing = _has_routing(tables)
+    levels = dict(sdk.LEVELS)
     groups = category_groups()
+    cards = {}
     for g in groups:
-        g["cards"] = [{"info": i, "blocked": _blocked(i, spatial, routing),
+        g["cards"] = [{"info": i, "blocked": _blocked(i, spatial, routing), "level": levels.get(i.level, ""),
                        "url": reverse("tools:detail", args=[db.pk, i.key])} for i in g["tools"]]
+        g["ready"] = sum(1 for c in g["cards"] if not c["blocked"])
+        cards.update({c["info"].key: c for c in g["cards"]})
+    popular = [cards[t.key] for t in sdk.all_tools() if t.popular and t.key in cards]
+    recent = [cards[t.key] for t in _recent(db) if t.key in cards]
     hist = history.entries(db, ("tool",), 8)
     return render(request, "tools/index.html", {
         "db": db, "section": "tools", "groups": groups, "total": len(sdk.all_tools()), "history": hist,
+        "ready_total": sum(g["ready"] for g in groups), "popular": popular, "recent": recent, "levels": sdk.LEVELS,
         "active": any(e["job"] and e["job"].active for e in hist), "hist_kinds": "tool"})
 
 
@@ -112,17 +137,23 @@ def detail(request, pk, key):
                 messages.success(request, "تحلیل در صف قرار گرفت؛ پایان آن اعلام می‌شود.")
                 return redirect(reverse("tools:detail", args=[db.pk, key]) + "#history")
     fields = []
-    for p in (*info.params, ):
+    for p in info.params:
         v = vals.get(p.name, p.default)
         f = {"p": p, "value": v, "id": f"f-{p.name}"}
         if p.kind == "layer":
             f["options"] = _layers(spatial, p.geom)
         elif p.kind == "bool":
             f["checked"] = vals.get(p.name) == "on" if request.method == "POST" else False
+        f["group"] = p.group or ("input" if p.kind == "layer" else "settings")
+        f["layer_name"] = p.kind == "layer"
         fields.append(f)
+    sections = [{"key": k, "title": t, "fields": [f for f in fields if f["group"] == k]}
+                for k, t in (("input", "داده‌ی ورودی"), ("settings", "تنظیمات"), ("advanced", "تنظیمات پیشرفته"))]
+    sections = [x for x in sections if x["fields"]]
     hist = [e for e in history.entries(db, ("tool",), 40) if e["tool"] == key][:8]
     return render(request, "tools/detail.html", {
-        "db": db, "section": "tools", "info": info, "fields": fields, "blocked": blocked,
-        "out_value": vals.get("output", f"{key}_result"), "replace": vals.get("replace") == "on",
+        "db": db, "section": "tools", "info": info, "fields": fields, "sections": sections, "blocked": blocked,
+        "level": dict(sdk.LEVELS).get(info.level, ""), "category": next((c for c in sdk.categories() if c.key == info.category), None),
+        "out_value": vals.get("output", f"{key}_result"), "touched": "output" in vals, "replace": vals.get("replace") == "on",
         "history": hist, "active": any(e["job"] and e["job"].active for e in hist) or _busy(db),
         "hist_kinds": "tool", "hist_tool": key})
