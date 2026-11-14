@@ -40,7 +40,8 @@
   <details style="margin-top:var(--s4,16px)"><summary><b>پلاگین‌های سیستمی ({{ system_cards|length }})</b> — همیشه روشن، همراه ایمیج</summary>
     <div class="ph-grid" style="margin-top:var(--s3,12px)">{% for c in system_cards %}
       <section class="ph-card sys"><h3>{{ c.name }}</h3><div class="ph-meta"><span class="ph-chip ltr">v{{ c.version }}</span></div>
-        <div class="ph-st {{ c.health.0 }}" style="font-weight:500">{{ c.health.1 }}</div></section>{% endfor %}
+        <div class="ph-st {{ c.health.0 }}" style="font-weight:500">{{ c.health.1 }}</div>
+        {% if c.options %}<div class="ph-act"><a href="{{ c.options }}">تنظیمات</a></div>{% endif %}</section>{% endfor %}
     </div>
   </details>
   {% endif %}

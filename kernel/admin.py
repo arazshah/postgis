@@ -30,10 +30,17 @@ from .plugins import registry
 
 
 def sync_states() -> int:
-    """برای هر پلاگین غیرسیستمیِ نصب‌شده یک ردیف وضعیت (پیش‌فرض: روشن و باز) می‌سازد تا در پنل قابل کنترل باشد."""
+    """برای هر پلاگین غیرسیستمیِ نصب‌شده یک ردیف وضعیت (پیش‌فرض: روشن و باز) می‌سازد تا در پنل قابل کنترل باشد.
+
+    پلاگین سیستمی هم اگر گزینه‌ی تنظیم دارد ردیف می‌گیرد (فقط برای رسیدن به صفحه‌ی «تنظیمات»؛ سیستمی همیشه روشن است).
+    """
     made = 0
     for p in registry.plugins.values():
-        if p.kind != "system":
+        if p.kind == "system":
+            if conf.options(p.id):
+                _, new = PluginState.objects.get_or_create(plugin_id=p.id)
+                made += new
+        else:
             # سطح ۳ به‌طور پیش‌فرض «محدود و بدون مجوز» است؛ مدیر باید آگاهانه مجوز بدهد (ADR-0007)
             defaults = {"access": PluginState.Access.RESTRICTED} if p.tier == 3 else {}
             _, new = PluginState.objects.get_or_create(plugin_id=p.id, defaults=defaults)
@@ -108,6 +115,12 @@ class PluginStateAdmin(admin.ModelAdmin):
     fields = ("plugin_id", "enabled", "access", "note", "options_link")
     readonly_fields = ("plugin_id", "options_link")
 
+    def get_readonly_fields(self, request, obj=None):
+        p = registry.plugins.get(obj.plugin_id) if obj else None
+        if p is not None and p.kind == "system":  # سیستمی همیشه روشن است؛ فقط تنظیمات معنا دارد
+            return (*self.readonly_fields, "enabled", "access", "note")
+        return self.readonly_fields
+
     @admin.display(description="تنظیمات پلاگین")
     def options_link(self, obj):
         from django.urls import reverse
@@ -143,7 +156,7 @@ class PluginStateAdmin(admin.ModelAdmin):
             messages.success(request, "تنظیمات پلاگین ذخیره شد.")
             return redirect(back)
         return TemplateResponse(request, "admin/kernel/pluginstate/options.html", {
-            **self.admin_site.each_context(request), "title": f"تنظیمات {obj.plugin_id}", "form": form, "obj": obj,
+            **self.admin_site.each_context(request), "title": f"تنظیمات {registry.plugins[obj.plugin_id].name if obj.plugin_id in registry.plugins else obj.plugin_id}", "form": form, "obj": obj,
             "back": back, "opts": opts, "has_view_permission": True})
 
     def has_add_permission(self, request):
