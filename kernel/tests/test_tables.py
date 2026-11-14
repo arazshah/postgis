@@ -168,6 +168,32 @@ class RealTests(BaseCase):
         self.assertEqual(set(self.cols()), {"customer_data"})
         self.assertFalse(PluginTable.objects.exists())
 
+    def test_dropped_table_is_restored(self):
+        tables.ensure(self.db, "mon", self.page.tables)
+        with psycopg.connect(dbname="pagekit_tbl", **self.kw) as c:
+            c.execute("drop table mon_points")
+        self.assertEqual(self.cols(), {})
+        restored = []
+        self.assertEqual(tables.ensure(self.db, "mon", self.page.tables, restored), 1)
+        self.assertEqual(restored, ["mon_points"])
+        self.assertEqual(set(self.cols()), {"id", "device", "lat", "lon", "speed", "at"})
+        self.assertEqual(tables.ensure(self.db, "mon", self.page.tables), 0)  # سالم: بی‌اثر
+
+    def test_dropped_column_is_restored(self):
+        tables.ensure(self.db, "mon", self.page.tables)
+        with psycopg.connect(dbname="pagekit_tbl", **self.kw) as c:
+            c.execute("alter table mon_points drop column speed")
+        restored = []
+        tables.ensure(self.db, "mon", self.page.tables, restored)
+        self.assertEqual(restored, ["mon_points"])
+        self.assertIn("speed", self.cols())
+
+    def test_owners(self):
+        tables.ensure(self.db, "mon", self.page.tables)
+        self.assertEqual(tables.owners(self.db, "public", "mon_points"), ["mon"])
+        self.assertEqual(tables.owners(self.db, "public", "other"), [])
+        self.assertEqual(tables.owners(self.db, "x", "mon_points"), [])
+
     def test_another_plugin_cannot_adopt_my_table(self):
         tables.ensure(self.db, "mon", self.page.tables)
         PluginTable.objects.all().delete()  # ردپا نیست ⇒ جدول «از آن کسی نیست»

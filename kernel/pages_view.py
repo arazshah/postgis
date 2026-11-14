@@ -43,7 +43,11 @@ def page(request, pk, plugin, page):
         return redirect("databases:detail", pk=ws.pk)
     if spec.tables:
         try:
-            tables.ensure(ws, plugin, spec.tables)  # جدول‌های اعلام‌شده‌ی پلاگین (نخستین استفاده در این پایگاه)
+            restored: list[str] = []
+            tables.ensure(ws, plugin, spec.tables, restored)  # جدول‌های اعلام‌شده‌ی پلاگین (نخستین استفاده / ترمیم)
+            if restored:
+                messages.warning(request, "جدول " + "، ".join(f"«{n}»" for n in restored) + " حذف شده بود و دوباره (خالی) ساخته شد؛ "
+                                 "داده‌های قبلی را می‌توانید از پشتیبان‌ها برگردانید.")
         except tables.TableError as exc:
             messages.error(request, str(exc))
     layers: dict[str, str] = {}
