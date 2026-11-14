@@ -148,8 +148,8 @@ def extent(request, pk):
 @require_GET
 def missions(request, pk):
     """ماهواره‌هایی که الان می‌شود از آن‌ها تصویر گرفت (دروازه وضعیتشان را می‌سنجد)."""
-    workspace.get(request, pk, "viewer")
-    return _json({"ok": True, "missions": services.missions(force=request.GET.get("refresh") == "1" and request.user.is_staff)})
+    db = workspace.get(request, pk, "viewer")
+    return _json({"ok": True, "missions": services.missions(db, force=request.GET.get("refresh") == "1" and request.user.is_staff)})
 
 
 def _analyses(db):
@@ -301,13 +301,15 @@ def order(request, pk):
 def thumb(request, pk, collection, item):
     """پیش‌نمایش تصویر از طریق دروازه (مرورگر کاربر در ایران به منبع اصلی دسترسی ندارد)."""
     workspace.get(request, pk, "viewer")
-    if collection not in (spec.COLLECTION_S2, spec.COLLECTION_LANDSAT) or not NAME_RE.match(item):
+    known = {s.collection for m in spec.MISSIONS.values() if m.kind != "layer" for s in m.sources}
+    src = request.GET.get("src", "")
+    if collection not in known or not NAME_RE.match(item) or (src and src not in spec.PROVIDERS):
         raise Http404
     key = f"satthumb:{item}"
     data = cache.get(key)
     if data is None:
         try:
-            data = client.thumb(collection, item)
+            data = client.thumb(collection, item, src)
         except client.GatewayError:
             raise Http404 from None
         cache.set(key, data, 86400)

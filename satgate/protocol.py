@@ -59,3 +59,12 @@ def check(secret: str, method: str, target: str, body: bytes, ts, sig, kid: str 
 def verify(secret: str, method: str, target: str, body: bytes, ts, sig, now: float | None = None,
            kid: str | None = None) -> bool:
     return check(secret, method, target, body, ts, sig, kid, now).ok
+
+
+# ---------------------------------------------------------------- پیکربندی ارسالی از پنل
+def config_hash(doc: dict) -> str:
+    """چکیده‌ی یکتای پیکربندی (JSON مرتب‌شده)؛ پنل در هر کار می‌فرستد تا دروازه بفهمد پیکربندیِ به‌روز را دارد."""
+    import json
+
+    raw = json.dumps(doc, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+    return hashlib.sha256(raw).hexdigest()[:16]

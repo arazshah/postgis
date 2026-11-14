@@ -86,6 +86,8 @@
     try { j = await r.json(); } catch (e) { j = {ok: false, error: "پاسخ نامعتبر از سرور."}; }
     return j;
   };
+  const curMission = () => (S.missions || []).find((m) => m.key === S.mission) || {};
+  const isLayer = () => curMission().kind === "layer";
   const areaKm2 = (b) => Math.abs(b[2] - b[0]) * 111.32 * Math.cos((b[1] + b[3]) / 2 * Math.PI / 180) * Math.abs(b[3] - b[1]) * 111.32;
   const token = (v, fallback) => (getComputedStyle(document.documentElement).getPropertyValue(v).trim() || fallback);
 
@@ -184,6 +186,8 @@
 
   // -- مرحله‌ها
   const NEXT_LABEL = {1: "بعدی", 2: "جست‌وجوی تصویر", 3: "بعدی"};
+  const nextStep = () => (S.step === 2 && isLayer() ? 4 : Math.min(S.step + 1, 4));      // لایه‌ی آماده انتخاب تصویر ندارد
+  const prevStep = () => (S.step === 4 && isLayer() ? 2 : Math.max(S.step - 1, 1));
   function go(n) {
     S.step = n;
     dlg.querySelectorAll("[data-step]").forEach((s) => { s.hidden = +s.dataset.step !== n; });
@@ -207,7 +211,7 @@
       const none = S.mode === "composite" && S.scenes && !S.scenes.length;
       if (none) { next.disabled = true; }
       msg = none ? "در این بازه تصویری پیدا نشد؛ به مرحله‌ی ۲ بروید و بازه یا ابر را بیشتر کنید."
-        : (S.scene || S.mode === "composite") ? "" : "یک تصویر انتخاب کنید، یا «ترکیب بی‌ابر» را بزنید، یا برای فقط ارتفاع (DEM) ادامه دهید.";
+        : (S.scene || S.mode === "composite") ? "" : "یک تصویر انتخاب کنید یا «ترکیب بی‌ابر» را بزنید.";
     }
     if (S.step === 4) {
       const q = S.quote, p = prod(S.product);
@@ -218,37 +222,54 @@
       goBtn.disabled = !can || S.busy;
     }
     if (S.step !== 3) next.disabled = !can;
-    next.firstChild.nodeValue = NEXT_LABEL[S.step] || "بعدی";
+    next.firstChild.nodeValue = (S.step === 2 && isLayer() ? "انتخاب محصول" : NEXT_LABEL[S.step]) || "بعدی";
     why.textContent = msg;
   }
-  $("[data-next]").addEventListener("click", () => go(Math.min(S.step + 1, 4)));
-  $("[data-back]").addEventListener("click", () => go(Math.max(S.step - 1, 1)));
+  $("[data-next]").addEventListener("click", () => go(nextStep()));
+  $("[data-back]").addEventListener("click", () => go(prevStep()));
 
   // -- مرحله ۲: انتخاب ماهواره (فقط آن‌هایی که الان در دسترس‌اند)
   async function loadMissions() {
     if (S.missions) return;
     let list = [];
     try { list = (await (await fetch(cfg.urls.missions)).json()).missions || []; } catch (e) { /* فقط Sentinel-2 */ }
-    S.missions = list.length ? list : [{key: "sentinel2", title: "Sentinel-2", agency: "ESA / Copernicus", res: 10, revisit: "هر ۵ روز", since: "۲۰۱۷", hint: "", available: true}];
+    S.missions = list.length ? list : [{key: "sentinel2", title: "Sentinel-2", agency: "ESA / Copernicus", res: 10, revisit: "هر ۵ روز", since: "۲۰۱۷", hint: "", available: true, allowed: true, kind: "optical", group: "optical", cost: 1, mask: true}];
     renderMissions();
   }
+  const GROUPS = [["optical", "چندطیفی"], ["radar", "راداری (از ابر عبور می‌کند)"], ["elevation", "ارتفاع"], ["thematic", "لایه‌ی موضوعی آماده"]];
   function renderMissions() {
-    const wrap = $("[data-missions]"), ok = S.missions.filter((m) => m.available), off = S.missions.filter((m) => !m.available);
-    if (ok.length && !ok.some((m) => m.key === S.mission)) S.mission = ok[0].key;
+    const wrap = $("[data-missions]"), shown = S.missions.filter((m) => m.available && m.allowed), off = S.missions.filter((m) => !m.available);
+    if (shown.length && !shown.some((m) => m.key === S.mission)) S.mission = shown[0].key;
     wrap.innerHTML = "";
-    ok.forEach((m) => {
-      const l = el(`<label class="sat-prod"><input type="radio" name="mission" value="${esc(m.key)}" ${m.key === S.mission ? "checked" : ""}><b>${esc(m.title)} <small>${esc(m.agency)}</small></b>
-        <small>${esc(m.hint)}</small><small>وضوح ${faN(m.res, {maximumFractionDigits: 0})} متر، ${esc(m.revisit)}، از ${esc(m.since)}</small></label>`);
-      l.querySelector("input").addEventListener("change", () => {
-        if (S.mission === m.key) return;
-        S.mission = m.key; S.scenes = null; S.scene = null; S.quote = null; S.product = null; S.key = "";
-        dlg.querySelectorAll('[name="prod"]').forEach((r) => { r.checked = false; });
-        renderProds(); renderNav();
+    GROUPS.forEach(([g, title]) => {
+      const list = S.missions.filter((m) => (m.group || "optical") === g && m.available);
+      if (!list.length) return;
+      wrap.append(el(`<div class="sat-grp">${esc(title)}</div>`));
+      list.forEach((m) => {
+        const lock = !m.allowed;
+        const meta = m.kind === "layer" ? `وضوح ${faN(m.res, {maximumFractionDigits: 0})} متر، ${esc(m.revisit)}` :
+          `وضوح ${faN(m.res, {maximumFractionDigits: 0})} متر، ${esc(m.revisit)}، از ${esc(m.since)}`;
+        const l = el(`<label class="sat-prod${lock ? " off" : ""}"><input type="radio" name="mission" value="${esc(m.key)}" ${m.key === S.mission ? "checked" : ""} ${lock ? "disabled" : ""}>
+          <b>${esc(m.title)} <small>${esc(m.agency)}</small>${m.cost > 1 ? `<span class="cost">${faN(m.cost, {maximumFractionDigits: 0})} واحد</span>` : ""}</b>
+          <small>${esc(m.hint)}</small><small>${meta}</small>${lock ? "<small>در پلن فعلی شما نیست.</small>" : ""}</label>`);
+        l.querySelector("input").addEventListener("change", () => {
+          if (S.mission === m.key) return;
+          S.mission = m.key; S.scenes = null; S.scene = null; S.quote = null; S.product = null; S.key = "";
+          dlg.querySelectorAll('[name="prod"]').forEach((r) => { r.checked = false; });
+          renderProds(); renderStep2(); renderNav();
+        });
+        wrap.append(l);
       });
-      wrap.append(l);
     });
     $("[data-mission-hint]").textContent = off.length ? `${off.map((m) => m.title).join("، ")} فعلاً در دسترس نیست.` : "";
-    renderProds();
+    renderStep2(); renderProds();
+  }
+  // زمان و ابر فقط برای ماهواره‌ای معنا دارند که صحنه دارد؛ رادار ابر ندارد و لایه‌ی آماده هیچ‌کدام
+  function renderStep2() {
+    const m = curMission();
+    dlg.querySelectorAll("[data-when]").forEach((f) => {
+      f.hidden = f.dataset.when === "scene" ? m.kind === "layer" : f.dataset.when === "optical" ? m.kind !== "optical" : false;
+    });
   }
 
   // -- مرحله ۲ (زمان و ابر)
@@ -274,7 +295,7 @@
     note.hidden = !comp;
     if (comp) {
       const n = S.scenes ? S.scenes.length : null;
-      note.innerHTML = n === null ? "در حال یافتن تصویرها…" : n ? `${icon("layers", 18)}<span>از میان <b>${faN(n, {maximumFractionDigits: 0})}</b> تصویر پیداشده در بازه، کم‌ابرترین‌ها (تا ${faN(COMPOSITE_N, {maximumFractionDigits: 0})} تصویر) ترکیب می‌شوند: برای هر پیکسل میانه‌ی مقدارهای بی‌ابر. ابر و سایه‌ی هر تصویر با تصویرهای دیگر پر می‌شود.</span>` : "در این بازه تصویری پیدا نشد؛ بازه یا ابر مجاز را بیشتر کنید.";
+      note.innerHTML = n === null ? "در حال یافتن تصویرها…" : n ? `${icon("layers", 18)}<span>از میان <b>${faN(n, {maximumFractionDigits: 0})}</b> تصویر پیداشده در بازه، ${curMission().kind === "sar" ? "تازه‌ترین صحنه‌ها" : "کم‌ابرترین‌ها"} (تا ${faN(COMPOSITE_N, {maximumFractionDigits: 0})} تصویر) ترکیب می‌شوند: برای هر پیکسل میانه‌ی مقدارهای معتبر. ${curMission().kind === "sar" ? "نقطه‌های پرنویز با میانه‌گیری کم می‌شوند." : "ابر و سایه‌ی هر تصویر با تصویرهای دیگر پر می‌شود."}</span>` : "در این بازه تصویری پیدا نشد؛ بازه یا ابر مجاز را بیشتر کنید.";
     }
     renderNav();
   }
@@ -312,8 +333,8 @@
     S.scenes.forEach((s, i) => {
       const low = s.coverage < 95;
       const lab = el(`<label class="sat-scene"><input type="radio" name="scene" value="${esc(s.id)}" ${S.scene && S.scene.id === s.id ? "checked" : ""}>
-        <span class="th">${s.thumb ? `<img loading="lazy" alt="" src="${cfg.thumb.replace("COLL", encodeURIComponent(s.collection)).replace("ITEM", encodeURIComponent(s.id))}">` : icon("satellite", 28)}</span>
-        <span class="tx"><b>${fmtDate(s.datetime)}</b>${s.satellite ? `<span class="sn">${esc(s.satellite)}</span>` : ""}<span>ابر ${faN(s.cloud, {maximumFractionDigits: 0})}٪</span>
+        <span class="th">${s.thumb ? `<img loading="lazy" alt="" src="${cfg.thumb.replace("COLL", encodeURIComponent(s.collection)).replace("ITEM", encodeURIComponent(s.id))}${s.source ? "?src=" + encodeURIComponent(s.source) : ""}">` : icon("satellite", 28)}</span>
+        <span class="tx"><b>${fmtDate(s.datetime)}</b>${s.satellite ? `<span class="sn">${esc(s.satellite)}</span>` : ""}${curMission().kind === "optical" ? `<span>ابر ${faN(s.cloud, {maximumFractionDigits: 0})}٪</span>` : ""}
         <span class="${low ? "low" : ""}">${low ? "پوشش ناقص: " : "پوشش محدوده: "}${faN(s.coverage, {maximumFractionDigits: 0})}٪</span></span></label>`);
       lab.querySelector("input").addEventListener("change", () => { S.scene = s; S.quote = null; renderNav(); });
       lab.querySelector("img")?.addEventListener("error", (e) => { e.target.replaceWith(el(icon("satellite", 28))); });
@@ -323,7 +344,7 @@
   }
 
   // -- مرحله ۴
-  const mine = (p) => p.mission === S.mission || p.mission === "dem";
+  const mine = (p) => p.mission === S.mission;
   const prod = (k) => cfg.products.find((p) => p.key === k && mine(p));
   function renderProds() {
     const wrap = $("[data-prods]");
@@ -345,7 +366,7 @@
     if (!S.product) { box.innerHTML = ""; S.quote = null; renderNav(); return; }
     const p = prod(S.product);
     if (p.needs_scene && !S.scene && S.mode !== "composite") { box.innerHTML = ""; S.quote = null; renderNav(); return; }
-    $("[data-maskrow]").hidden = !p.needs_scene;
+    $("[data-maskrow]").hidden = !p.needs_scene || !curMission().mask;
     box.innerHTML = '<div class="sat-skel" style="aspect-ratio:6/1"></div>';
     const j = await post(cfg.urls.quote, {bbox: S.bbox, product: S.product, mission: S.mission});
     if (!j.ok) { S.quote = null; box.innerHTML = `<div class="sat-block"><p>${esc(j.error)}</p></div>`; renderNav(); return; }
@@ -359,8 +380,8 @@
       <div><span>حجم تقریبی: <b>${esc(q.est_text)}</b> · مساحت ${faN(q.area_km2)} کیلومتر مربع</span>
         <div class="meter" role="meter" aria-label="فضای رستر پس از دریافت"><i style="inset-inline-start:0;width:${pct(st.space.used)}%"></i><i class="add" style="inset-inline-start:${pct(st.space.used)}%;width:${Math.max(pct(after) - pct(st.space.used), 0)}%"></i></div>
         <small class="muted">فضا: ${fmtSize(st.space.used)} ← ${fmtSize(after)} از ${fmtSize(st.space.cap)}</small></div>
-      <div><span>اعتبار این دریافت: <b>۱ از ${faN(st.credits.left)} باقی‌مانده</b></span>
-        <small class="muted">بعد از دریافت ${faN(Math.max(st.credits.left - 1, 0))} بار از ${faN(st.credits.cap)} می‌ماند. دریافت ناموفق برمی‌گردد.</small></div>
+      <div><span>اعتبار این دریافت: <b>${faN(q.cost || 1)} واحد از ${faN(st.credits.left)} باقی‌مانده</b></span>
+        <small class="muted">بعد از دریافت ${faN(Math.max(st.credits.left - (q.cost || 1), 0))} واحد از ${faN(st.credits.cap)} می‌ماند. دریافت ناموفق برمی‌گردد.</small></div>
     </div></div>`;
     q.blockers.forEach((b) => {
       const fix = [];
@@ -376,7 +397,7 @@
       html += `<div class="sat-block"><p><b>با ارتقای پلن چه عوض می‌شود؟</b></p>` + (u ? `<div class="sat-up">
         <span class="h"></span><span class="h">پلن فعلی (${esc(c.name)})</span><span class="h">${esc(u.name)}</span>
         <span>فضای رستر</span><span>${faN(c.raster_mb)} مگابایت</span><span class="new">${faN(u.raster_mb)} مگابایت</span>
-        <span>دریافت در ماه</span><span>${faN(c.sat_credits)} بار</span><span class="new">${faN(u.sat_credits)} بار</span>
+        <span>اعتبار در ماه</span><span>${faN(c.sat_credits)} واحد</span><span class="new">${faN(u.sat_credits)} واحد</span>
         <span>بزرگ‌ترین محدوده</span><span>${faN(c.sat_max_km2)} کیلومتر مربع</span><span class="new">${faN(u.sat_max_km2)} کیلومتر مربع</span></div>
         <div class="fix"><a class="btn sm" href="${cfg.plansUrl}">مشاهده و ارتقای پلن</a></div>` :
         `<p class="small">پلنی که این درخواست در آن جا شود هنوز در فهرست نیست؛ برای تصویر بزرگ‌تر با <a href="${cfg.plansUrl}">پشتیبانی یا پلن‌ها</a> صحبت کنید.</p>`) + `</div>`;
@@ -401,7 +422,7 @@
     S.busy = true; renderNav();
     const sc = S.mode === "composite" ? null : S.scene;
     const pr = params();
-    const j = await post(cfg.urls.order, {bbox: S.bbox, product: S.product, mission: S.mission, mask: S.mask, composite: S.mode === "composite" ? {start: pr.start, end: pr.end, max_cloud: pr.max_cloud} : null, scene: sc ? sc.id : "", scene_date: sc ? sc.datetime : "", cloud: sc ? sc.cloud : null});
+    const j = await post(cfg.urls.order, {bbox: S.bbox, product: S.product, mission: S.mission, mask: S.mask && !!curMission().mask, source: S.mode === "composite" || !sc ? "" : (sc.source || ""), composite: S.mode === "composite" ? {start: pr.start, end: pr.end, max_cloud: pr.max_cloud} : null, scene: sc ? sc.id : "", scene_date: sc ? sc.datetime : "", cloud: sc ? sc.cloud : null});
     S.busy = false;
     if (!j.ok) {
       if (j.quote) { S.quote = j.quote; renderQuote(); } else $("[data-quote]").insertAdjacentHTML("afterbegin", `<div class="sat-block"><p>${esc(j.error)}</p></div>`);

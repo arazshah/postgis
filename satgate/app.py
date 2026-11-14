@@ -16,12 +16,13 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import analysis, protocol, stac
-from .process import ProcessError, build_composite, build_dem, build_scene, check_limits
-from .spec import COLLECTION_DEM, COLLECTION_LANDSAT, COLLECTION_S2, DEM_MISSION, MISSIONS, get_product, valid_bbox
+from .process import ProcessError, build_composite, build_layer, build_sar, build_scene, check_limits
+from .runtime import RUNTIME, ConfigError
+from .spec import COLLECTION_S2, DEM_MISSION, MISSIONS, get_product, valid_bbox
 from .store import ID_RE, Store
 
 log = logging.getLogger("satgate")
-VERSION = "1.2"
+VERSION = "1.3"
 MAX_BODY = 64 * 1024
 MAX_BODY_ANALYZE = 4 * 1024 * 1024   # عارضه‌های کاربر برای آمار هر ناحیه
 
@@ -56,7 +57,25 @@ class Gateway:
         self._missions: tuple[float, dict] | None = None
 
     # ------------------------------------------------------------ کار
+    def _stale(self, body: dict) -> tuple[int, dict] | None:
+        """پنل چکیده‌ی پیکربندیِ خودش را می‌فرستد؛ اگر با پیکربندی دروازه نخواند (مثلاً دروازه تازه بالا آمده)،
+        ۴۰۹ می‌دهیم تا پنل پیکربندی را بفرستد و دوباره امتحان کند."""
+        want = str(body.get("cfg") or "")
+        if want and want != RUNTIME.hash:
+            return 409, {"error": "پیکربندی دروازه قدیمی است؛ پنل آن را دوباره می‌فرستد.", "reason": "config", "have": RUNTIME.hash}
+        return None
+
+    def apply_config(self, doc) -> tuple[int, dict]:
+        try:
+            h = RUNTIME.apply(doc)
+        except ConfigError as exc:
+            return 422, {"error": str(exc)}
+        self._missions = None          # وضعیت ماهواره‌ها با پیکربندی تازه از نو سنجیده شود
+        return 200, {"ok": True, "hash": h}
+
     def submit(self, body: dict) -> tuple[int, dict]:
+        if (stale := self._stale(body)):
+            return stale
         jid, product = str(body.get("id", "")), body.get("product")
         if not ID_RE.match(jid):
             return 400, {"error": "شناسه نامعتبر است."}
@@ -65,8 +84,13 @@ class Gateway:
             return 200, _public(old)  # درخواست تکراری (پنل دوباره فرستاده)
         mission = DEM_MISSION if product == "dem" else str(body.get("mission") or "sentinel2")
         spec = get_product(mission, product) if isinstance(product, str) else None
-        if spec is None or (mission != DEM_MISSION and mission not in MISSIONS):
+        if spec is None or mission not in MISSIONS:
             return 400, {"error": "ماهواره یا محصول ناشناخته است."}
+        if not RUNTIME.sources(mission):
+            return 422, {"error": "این ماهواره فعلاً از پنل خاموش است."}
+        source = str(body.get("source") or "")
+        if source and MISSIONS[mission].source(source) is None:
+            return 400, {"error": "تأمین‌کننده‌ی تصویر نامعتبر است."}
         bbox = body.get("bbox")
         if not valid_bbox(bbox):
             return 400, {"error": "محدوده نامعتبر است."}
@@ -79,6 +103,8 @@ class Gateway:
             return 400, {"error": "تصویر انتخاب نشده است."}
         try:
             cap = min(float(body.get("max_km2") or self.cfg.max_km2), self.cfg.max_km2)
+            if RUNTIME.max_km2(mission):
+                cap = min(cap, RUNTIME.max_km2(mission))
             check_limits(bbox, product, cap, mission)
         except (ProcessError, ValueError) as exc:
             return 422, {"error": str(exc)}
@@ -86,12 +112,14 @@ class Gateway:
             return 503, {"error": "صف دروازه پر است؛ کمی بعد دوباره امتحان کنید."}
         job = {"id": jid, "status": "queued", "product": product, "mission": mission, "bbox": [float(v) for v in bbox],
                "scene": str(body.get("scene", ""))[:120], "created": int(time.time()), "message": "",
-               "mask": bool(body.get("mask")), "composite": comp}
+               "mask": bool(body.get("mask")), "composite": comp, "source": source}
         self.store.put(job)
         self.pool.submit(self.run, jid)
         return 202, _public(job)
 
     def submit_analysis(self, body: dict) -> tuple[int, dict]:
+        if (stale := self._stale(body)):
+            return stale
         jid = str(body.get("id", ""))
         if not ID_RE.match(jid):
             return 400, {"error": "شناسه نامعتبر است."}
@@ -140,19 +168,25 @@ class Gateway:
         part = out.with_suffix(".part.tif")
         try:
             mission = job.get("mission") or "sentinel2"
+            m = MISSIONS[mission]
             spec = get_product(mission, job["product"])
             sign = lambda href, c=spec.collection: stac.sign_href(c, href, self.fetch)  # noqa: E731
             extra = {}
-            if spec.collection == COLLECTION_DEM:
-                build_dem(stac.dem_items(job["bbox"], self.fetch), job["bbox"], part)
-            elif job.get("composite"):
-                items = self._composite_items(job, mission, spec)
-                _, used = build_composite(items, mission, job["product"], job["bbox"], part, sign=sign,
-                                          mask=bool(job.get("mask", True)))
+            if m.kind == "layer":
+                src, items = stac.layer_items(m, job["bbox"], self.fetch, job.get("source") or None)
+                build_layer(items, mission, job["bbox"], part, sign=sign, source=src)
+            elif job.get("composite") or m.kind == "sar":
+                items, src = self._composite_items(job, mission, m)
+                if m.kind == "sar":
+                    _, used = build_sar(items, mission, job["product"], job["bbox"], part, sign=sign, source=src)
+                else:
+                    _, used = build_composite(items, mission, job["product"], job["bbox"], part, sign=sign,
+                                              mask=bool(job.get("mask", True)), source=src)
                 extra = {"used": used, "of": len(items)}
             else:
-                item = stac.get_item(spec.collection, job["scene"], self.fetch)
-                build_scene(item, mission, job["product"], job["bbox"], part, sign=sign, mask=bool(job.get("mask")))
+                src = m.source(job.get("source") or None) or m.primary
+                item = stac.get_item(src.collection, job["scene"], self.fetch, src.provider)
+                build_scene(item, mission, job["product"], job["bbox"], part, sign=sign, mask=bool(job.get("mask")), source=src)
             size = part.stat().st_size
             if size > self.cfg.max_mb * 1024 * 1024:
                 raise ProcessError(f"خروجی {size // 1048576} مگابایت شد و از سقف {self.cfg.max_mb} بیشتر است.")
@@ -173,15 +207,21 @@ class Gateway:
             job = self.store.update(jid, status="failed", message=f"پردازش ناموفق بود ({exc.__class__.__name__}{detail}).")
         self.notify(job)
 
-    def _composite_items(self, job: dict, mission: str, spec) -> list[dict]:
-        """تصویرهای بازه را خود دروازه پیدا می‌کند: کم‌ابرترین‌ها با پوشش کافی، تا سقف تعداد."""
-        c = job["composite"]
-        found = stac.search(job["bbox"], c["start"], c["end"], c["max_cloud"], 30, self.fetch, mission=mission)
+    def _composite_items(self, job: dict, mission: str, m) -> tuple[list[dict], object]:
+        """تصویرهای بازه را خود دروازه پیدا می‌کند: کم‌ابرترین‌ها با پوشش کافی، تا سقف تعداد.
+        رادار: صحنه‌ی تکی همان را می‌خواند؛ ترکیب، میانه‌ی چند صحنه‌ی تازه است. (آیتم‌ها، منبع)"""
+        c = job.get("composite") or {}
+        if not c and job.get("scene"):                       # رادار با صحنه‌ی تکی
+            src = m.source(job.get("source") or None) or m.primary
+            return [stac.get_item(src.collection, job["scene"], self.fetch, src.provider)], src
+        found = stac.search(job["bbox"], c["start"], c["end"], c["max_cloud"], 30, self.fetch, mission=mission,
+                            source=job.get("source") or None)
         found = [x for x in found if x["coverage"] >= 30]
         if not found:
             raise ProcessError("تصویری با این شرایط در بازه پیدا نشد؛ بازه یا ابر مجاز را بیشتر کنید.")
         found.sort(key=lambda x: (x["cloud"], -int(x["datetime"][:10].replace("-", "") or 0)))
-        return [stac.get_item(spec.collection, x["id"], self.fetch) for x in found[: c["max_scenes"]]]
+        src = m.source(found[0].get("source") or None) or m.primary
+        return [stac.get_item(src.collection, x["id"], self.fetch, src.provider) for x in found[: c["max_scenes"]]], src
 
     def notify(self, job: dict) -> None:
         """هوک به پنل؛ اگر نرسید، پنل خودش وضعیت را می‌پرسد."""
@@ -203,13 +243,14 @@ class Gateway:
             pass
 
     # ------------------------------------------------------------ پیش‌نمایش و سنجش
-    def thumb(self, collection: str, item_id: str) -> bytes | None:
-        if collection not in (COLLECTION_S2, COLLECTION_LANDSAT) or not all(c.isalnum() or c in "_-" for c in item_id):
+    def thumb(self, collection: str, item_id: str, provider: str | None = None) -> bytes | None:
+        known = {src.collection for m in MISSIONS.values() if m.kind != "layer" for src in m.sources}
+        if collection not in known or not all(c.isalnum() or c in "_-" for c in item_id):
             return None
         cache = self.store.thumbs / f"{item_id}.jpg"
         if cache.exists():
             return cache.read_bytes()
-        asset = stac.thumb_asset(stac.get_item(collection, item_id, self.fetch))
+        asset = stac.thumb_asset(stac.get_item(collection, item_id, self.fetch, provider))
         if asset is None:
             return None
         href = asset["href"]
@@ -220,11 +261,14 @@ class Gateway:
         return data
 
     def missions(self, force: bool = False) -> dict:
-        """وضعیت هر ماهواره (در دسترس یا نه)؛ ۱۰ دقیقه کش تا هر بار پنل کاتالوگ بیرونی را نزند."""
+        """وضعیت هر ماهواره (در دسترس یا نه، به‌تفکیک تأمین‌کننده)؛ ۱۰ دقیقه کش تا هر بار پنل کاتالوگ بیرونی را نزند."""
         now = time.time()
         if not force and self._missions and now - self._missions[0] < 600:
             return self._missions[1]
-        res = {k: stac.check_mission(k, self.fetch) for k in MISSIONS}
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            futs = {k: ex.submit(stac.check_mission, k, self.fetch, None, True) for k in MISSIONS}
+            res = {k: f.result() for k, f in futs.items()}
         self._missions = (now, res)
         return res
 
@@ -232,7 +276,7 @@ class Gateway:
         res: dict = {"version": VERSION}
         t = time.monotonic()
         try:
-            hit = self.fetch(f"{stac.STAC_URL}/search", {"collections": [COLLECTION_S2], "limit": 1})
+            hit = self.fetch(f"{RUNTIME.provider_url('earthsearch')}/search", {"collections": [COLLECTION_S2], "limit": 1})
             res["stac_ms"] = int((time.monotonic() - t) * 1000)
             f = (hit.get("features") or [None])[0]
             t = time.monotonic()
@@ -293,7 +337,7 @@ REJECT = {
     "signature": "کلیدها یکی‌اند ولی امضا نخورد؛ مسیر یا بدنه‌ی درخواست در راه تغییر کرده است.",
 }
 _REASON = {200: "OK", 202: "Accepted", 206: "Partial Content", 400: "Bad Request", 401: "Unauthorized", 404: "Not Found",
-           405: "Method Not Allowed", 416: "Range Not Satisfiable", 422: "Unprocessable", 503: "Unavailable"}
+           405: "Method Not Allowed", 409: "Conflict", 416: "Range Not Satisfiable", 422: "Unprocessable", 503: "Unavailable"}
 
 
 def make_app(gw: Gateway):
@@ -303,7 +347,8 @@ def make_app(gw: Gateway):
         gw.maintenance()
         if path == "/v1/health":
             return _resp(start, 200, {"ok": True, "version": VERSION, "active": gw.store.active(),
-                                      "configured": bool(gw.cfg.secret), "load": _load()})
+                                      "configured": bool(gw.cfg.secret), "load": _load(),
+                                      "cfg": RUNTIME.hash})
         try:
             n = int(environ.get("CONTENT_LENGTH") or 0)
         except ValueError:
@@ -323,11 +368,19 @@ def make_app(gw: Gateway):
         except ValueError:
             return _resp(start, 400, {"error": "JSON نامعتبر است."})
 
+        if path == "/v1/config":
+            if method == "PUT":
+                code, out = gw.apply_config(data)
+                return _resp(start, code, out)
+            if method == "GET":
+                return _resp(start, 200, RUNTIME.public())
         if path == "/v1/search" and method == "POST":
+            if (stale := gw._stale(data)):
+                return _resp(start, *stale)
             try:
                 scenes = stac.search(data.get("bbox"), str(data.get("start", ""))[:10], str(data.get("end", ""))[:10],
                                      float(data.get("max_cloud", 30)), int(data.get("limit", 24)), gw.fetch,
-                                     mission=str(data.get("mission") or "sentinel2"))
+                                     mission=str(data.get("mission") or "sentinel2"), source=str(data.get("source") or "") or None)
             except stac.StacError as exc:
                 return _resp(start, 503, {"error": str(exc)})
             except (TypeError, ValueError):
@@ -345,8 +398,9 @@ def make_app(gw: Gateway):
             return _resp(start, 200, gw.probe())
         if path.startswith("/v1/thumb/") and method == "GET":
             parts = path.split("/")
+            qs = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
             try:
-                img = gw.thumb(parts[3], parts[4].removesuffix(".jpg")) if len(parts) == 5 else None
+                img = gw.thumb(parts[3], parts[4].removesuffix(".jpg"), qs.get("src") or None) if len(parts) == 5 else None
             except (stac.StacError, OSError):
                 img = None
             if img is None:

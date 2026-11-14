@@ -67,13 +67,7 @@ def coerce(opt: Option, raw: Any) -> Any:
     return v
 
 
-def get(plugin: str, key: str) -> Any:
-    from .models import PluginSetting
-
-    opt = _find(plugin, key)
-    if opt is None:
-        raise KeyError(f"گزینه‌ای به نام {plugin}.{key} اعلام نشده است.")
-    row = PluginSetting.objects.filter(plugin_id=plugin, key=key).values_list("value", flat=True).first()
+def _value(opt: Option, row: str | None) -> Any:
     if row is None:
         return opt.default
     try:
@@ -81,6 +75,23 @@ def get(plugin: str, key: str) -> Any:
         return coerce(opt, raw) if opt.kind != "secret" else raw
     except ValueError:
         return opt.default
+
+
+def get(plugin: str, key: str) -> Any:
+    from .models import PluginSetting
+
+    opt = _find(plugin, key)
+    if opt is None:
+        raise KeyError(f"گزینه‌ای به نام {plugin}.{key} اعلام نشده است.")
+    return _value(opt, PluginSetting.objects.filter(plugin_id=plugin, key=key).values_list("value", flat=True).first())
+
+
+def get_all(plugin: str) -> dict[str, Any]:
+    """همه‌ی مقدارهای مؤثر یک پلاگین با یک پرس‌وجو (برای پلاگینی که ده‌ها گزینه دارد)."""
+    from .models import PluginSetting
+
+    rows = dict(PluginSetting.objects.filter(plugin_id=plugin).values_list("key", "value"))
+    return {o.key: _value(o, rows.get(o.key)) for o in options(plugin)}
 
 
 def is_set(plugin: str, key: str) -> bool:

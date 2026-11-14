@@ -1,0 +1,77 @@
+{% extends "admin/base_site.html" %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .ss{max-width:1100px}
+  .ss h2{margin:22px 0 8px}
+  .ss .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+  .ss .card{border:1px solid var(--hairline-color,#ddd);border-radius:8px;padding:12px 14px;background:var(--body-bg,#fff)}
+  .ss .card h3{margin:0 0 4px;font-size:14px}
+  .ss .muted{color:var(--body-quiet-color,#666);font-size:12px;line-height:1.8}
+  .ss label.row{display:block;margin:8px 0 2px;font-weight:600;font-size:12px}
+  .ss input[type=text],.ss input[type=password],.ss input[type=number],.ss select{width:100%;box-sizing:border-box;direction:ltr}
+  .ss .badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;background:#eee;margin-inline-start:6px}
+  .ss .ok{background:#d1fadf;color:#05603a}.ss .warn{background:#fef0c7;color:#93370d}.ss .bad{background:#fee4e2;color:#b42318}
+  .ss table{width:100%}.ss td,.ss th{vertical-align:middle}
+  .ss td input[type=number]{width:80px}
+  .ss code{direction:ltr;unicode-bidi:embed}
+</style>{% endblock %}
+{% block content %}
+<div class="ss" id="content-main">
+<p class="muted">همه‌ی تنظیم‌های ماهواره از همین‌جاست. بعد از «ذخیره» پیکربندی به‌صورت امضاشده به دروازه می‌رود و فقط در حافظه‌ی آن می‌ماند؛ روی سرور خارجی چیزی جز نشانی پنل و کلید مشترک تنظیم نمی‌شود.
+  کلیدها رمزنگاری‌شده ذخیره می‌شوند و دوباره نمایش داده نمی‌شوند.</p>
+<form method="post">{% csrf_token %}
+<h2>تأمین‌کننده‌ها</h2>
+<div class="grid">
+{% for p in providers %}
+  <div class="card">
+    <h3>{{ p.title }}
+      <span class="badge {{ p.badge }}">{{ p.status }}</span></h3>
+    <div class="muted">{{ p.hint }}</div>
+    <label class="row"><input type="checkbox" name="prov_{{ p.key }}_enabled" {% if p.enabled %}checked{% endif %}> روشن</label>
+    {% if p.url_editable %}
+    <label class="row" for="url_{{ p.key }}">نشانی کاتالوگ <span class="muted">(خالی = پیش‌فرض)</span></label>
+    <input type="text" id="url_{{ p.key }}" name="prov_{{ p.key }}_url" value="{{ p.url }}" placeholder="{{ p.default_url }}" autocomplete="off">
+    {% endif %}
+    {% for c in p.creds %}
+    <label class="row" for="c_{{ p.key }}_{{ c.name }}">{{ c.label }}
+      {% if c.is_set %}<span class="badge ok">تنظیم شده</span>{% endif %}</label>
+    <input type="{% if c.secret %}password{% else %}text{% endif %}" id="c_{{ p.key }}_{{ c.name }}" name="prov_{{ p.key }}_{{ c.name }}"
+           value="{% if not c.secret %}{{ c.value }}{% endif %}" autocomplete="new-password"
+           placeholder="{% if c.is_set %}برای تغییر، مقدار تازه را بنویسید{% endif %}">
+    {% if c.is_set %}<label class="muted"><input type="checkbox" name="clear_{{ p.key }}_{{ c.name }}"> حذف این مقدار</label>{% endif %}
+    {% endfor %}
+    {% if not p.implemented %}<p class="muted">منبع‌های این تأمین‌کننده در گام بعدی به دروازه اضافه می‌شوند؛ اعتبارنامه را همین حالا می‌توانید ذخیره کنید.</p>{% endif %}
+    {% if p.signup %}<p class="muted">ثبت‌نام رایگان: <a href="{{ p.signup }}" target="_blank" rel="noopener noreferrer"><code>{{ p.signup }}</code></a></p>{% endif %}
+    <details><summary class="muted">میزبان‌های لازم در فایروال خروجی دروازه</summary>
+      <div class="muted"><code>{{ p.hosts }}</code></div></details>
+  </div>
+{% endfor %}
+</div>
+
+<h2>ماهواره‌ها و لایه‌ها</h2>
+<table>
+  <thead><tr><th>روشن</th><th>نام</th><th>گروه</th><th>وضوح</th><th>هزینه از سهمیه‌ی مشترک</th><th>سقف مساحت (کم‌تر از پلن)</th><th>تأمین‌کننده‌ی اول</th><th>وضعیت دروازه</th></tr></thead>
+  <tbody>
+  {% for m in missions %}
+    <tr>
+      <td><input type="checkbox" name="m_{{ m.key }}_enabled" {% if m.enabled %}checked{% endif %}></td>
+      <td><b>{{ m.title }}</b><div class="muted"><code>{{ m.key }}</code> · {{ m.agency }}</div></td>
+      <td>{{ m.group }}</td>
+      <td>{{ m.res }} متر</td>
+      <td><input type="number" name="m_{{ m.key }}_weight" min="1" max="20" value="{{ m.weight }}"></td>
+      <td><input type="number" name="m_{{ m.key }}_max_km2" min="0" max="100000" value="{{ m.max_km2 }}"></td>
+      <td>{% if m.prefer_choices %}<select name="m_{{ m.key }}_prefer">{% for k, t, sel in m.prefer_choices %}<option value="{{ k }}"{% if sel %} selected{% endif %}>{{ t }}</option>{% endfor %}</select>{% else %}{{ m.provider }}{% endif %}</td>
+      <td>{% if m.live %}<span class="badge {{ m.live.badge }}">{{ m.live.text }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted">ماهواره‌هایی که برای هر پلن مجازند را از «پلن‌ها ← رستر و تصویر ماهواره‌ای ← ماهواره‌های مجاز» تعیین کنید؛ مقدارش کلید ماهواره‌هاست (ستون «نام»).
+  هزینه، وزن هر دریافت از اعتبار ماهانه‌ی مشترک پلن است.</p>
+<div class="submit-row">
+  <input type="submit" class="default" value="ذخیره و ارسال به دروازه">
+  <a class="closelink" href="{{ back }}">بازگشت</a>
+</div>
+</form>
+</div>
+{% endblock %}

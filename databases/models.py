@@ -216,6 +216,10 @@ class Plan(models.Model):
     sat_max_km2 = models.PositiveIntegerField(
         "سقف مساحت هر دریافت ماهواره‌ای (کیلومتر مربع)", default=100,
         help_text="بزرگ‌ترین محدوده‌ای که در یک درخواست می‌شود از تصویر ماهواره‌ای برید.")
+    sat_missions = models.CharField(
+        "ماهواره‌های مجاز", max_length=300, blank=True, default="",
+        help_text="کلید ماهواره‌ها با ویرگول، مثلاً sentinel2,landsat,dem. خالی یعنی همه‌ی ماهواره‌هایی که مدیر در "
+                  "«تنظیمات ← ماهواره ← منابع ماهواره» روشن کرده است. کلیدها در همان صفحه دیده می‌شوند.")
     clone_enabled = models.BooleanField("کپی آزمایشی پایگاه داده از بکاپ", default=False)
     snapshot_hours = models.PositiveSmallIntegerField(
         "بکاپ هر چند ساعت", default=0, help_text="۰ یعنی فقط بکاپ شبانه؛ مثلاً ۶ یعنی هر ۶ ساعت یک نسخه (۴۸ ساعت نگه‌داری).")

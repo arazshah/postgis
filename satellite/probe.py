@@ -6,7 +6,7 @@ import time
 import urllib.error
 import urllib.request
 
-from . import client
+from . import client, sources
 
 
 def run() -> list[tuple[bool, str]]:
@@ -43,6 +43,10 @@ def run() -> list[tuple[bool, str]]:
         out.append((False, f"امضا پذیرفته نشد: {exc}"))
         return out
     out.append((True, "کلید مشترک و ساعت دو سرور درست است (امضا پذیرفته شد)."))
+    pushed, msg = sources.push()          # تنظیم تأمین‌کننده‌ها و ماهواره‌ها از پنل به دروازه می‌رود (فقط در حافظه‌ی آن)
+    out.append((pushed, msg))
+    if not pushed:
+        return out
     if res.get("ok"):
         out.append((True, f"دروازه به کاتالوگ و داده‌ی ماهواره می‌رسد (کاتالوگ {res.get('stac_ms')} و داده {res.get('data_ms')} میلی‌ثانیه)."))
     else:
@@ -51,11 +55,15 @@ def run() -> list[tuple[bool, str]]:
 
     try:
         ms = client.call("GET", "/v1/missions?refresh=1", timeout=90).get("missions", {})
-        from satgate.spec import MISSIONS
+        from satgate.spec import MISSIONS, PROVIDERS
         for key, m in MISSIONS.items():
+            if not sources.mission_enabled(key):
+                continue
             st = ms.get(key) or {}
-            out.append((bool(st.get("ok")), f"{m.title}: " + (f"در دسترس ({st.get('ms')} میلی‌ثانیه)." if st.get("ok") else
-                                                              f"در دسترس نیست — {st.get('error') or 'پاسخی نیامد'}")))
+            per = "، ".join(f"{PROVIDERS[k].title}: {'سالم' if r.get('ok') else 'ناسالم'}" for k, r in (st.get("sources") or {}).items())
+            out.append((bool(st.get("ok")), f"{m.title}: " + (f"در دسترس ({st.get('ms')} میلی‌ثانیه)" if st.get("ok") else
+                                                              f"در دسترس نیست — {st.get('error') or 'پاسخی نیامد'}")
+                        + (f" ({per})" if len(st.get("sources") or {}) > 1 else "") + "."))
     except client.GatewayError as exc:
         out.append((False, f"وضعیت ماهواره‌ها خوانده نشد (دروازه را به‌روز کنید): {exc}"))
     try:
