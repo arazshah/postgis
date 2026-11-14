@@ -246,6 +246,24 @@ class SigningAndCheckTests(Base):
         self.assertTrue(r["ok"])
         self.assertEqual({k: v["ok"] for k, v in r["sources"].items()}, {"earthsearch": False, "planetary": True})
 
+    def test_probe_reads_s3_hrefs_over_https(self):
+        seen = []
+
+        class R:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self, n=-1):
+                return b"II*\x00"
+        with mock.patch("urllib.request.urlopen", side_effect=lambda req, timeout=0: (seen.append(req.full_url), R())[1]):
+            self.assertTrue(stac._read_head("s3://copernicus-dem-30m/Copernicus_DSM/x/y.tif"))
+            stac._read_head("https://a.example/x.tif")
+        self.assertEqual(seen, ["https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM/x/y.tif", "https://a.example/x.tif"])
+        self.assertEqual(spec.https_href("/local/x.tif"), "/local/x.tif")
+
     def test_disabled_mission_is_reported_not_probed(self):
         RUNTIME.apply(cfg_doc(missions={"water": {"enabled": False}}))
         called = []

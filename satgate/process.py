@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .spec import MISSIONS, Source, area_km2, get_product, pixels
+from .spec import MISSIONS, Source, area_km2, get_product, https_href, pixels
 
 MAX_PIXELS = int(os.environ.get("SATGATE_MAX_PIXELS", str(30_000 * 30_000 // 4)))
 REFLECT_MAX = 0.30   # بازتابِ معادل ۲۵۵ در تصویر رنگی
@@ -40,8 +40,7 @@ def _refl(asset: dict, mission: str = "sentinel2", date: str = "", source: Sourc
 def _open(href: str, sign=None):
     import rasterio
 
-    if href.startswith("s3://"):
-        href = "https://" + href[5:].replace("/", ".s3.amazonaws.com/", 1)
+    href = https_href(href)
     return rasterio.open(sign(href) if sign else href)
 
 

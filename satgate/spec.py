@@ -308,6 +308,13 @@ def area_km2(bbox) -> float:
     return abs(e - w) * EARTH_M * math.cos(mid) * abs(n - s) * EARTH_M / 1e6
 
 
+def https_href(href: str) -> str:
+    """نشانی s3://باکت/کلید را به https تبدیل می‌کند (urllib و GDAL هر دو با https کار می‌کنند)."""
+    if href.startswith("s3://"):
+        return "https://" + href[5:].replace("/", ".s3.amazonaws.com/", 1)
+    return href
+
+
 def valid_bbox(bbox) -> bool:
     try:
         w, s, e, n = (float(v) for v in bbox)
