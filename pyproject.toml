@@ -14,7 +14,7 @@ root_packages = [
     "kernel", "accounts", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases",
     "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam", "ext",
     "enterprise", "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate",
-    "support", "survey", "tools",
+    "support", "survey", "tools", "winback",
 ]
 include_external_packages = false
 
@@ -26,6 +26,7 @@ forbidden_modules = [
     "accounts", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases", "enterprise",
     "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate", "support",
     "survey", "tools", "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam", "ext",
+    "winback",
 ]
 ignore_imports = ["kernel.tests.** -> **"]
 unmatched_ignore_imports_alerting = "none"
@@ -72,7 +73,7 @@ source_modules = ["core"]
 forbidden_modules = [
     "analysis", "analytics", "assistant", "billing", "classroom", "enterprise", "iranmap", "jobs", "maps",
     "notifications", "publish", "restapi", "satellite", "satgate", "support", "survey", "tools",
-    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
+    "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam", "winback",
 ]
 ignore_imports = ["core.tests.** -> **"]
 unmatched_ignore_imports_alerting = "none"
@@ -126,6 +127,7 @@ name = "پلاگین‌های سیستمی پلاگین‌های قابلیت ر
 type = "forbidden"
 source_modules = [
     "accounts", "core", "databases", "jobs", "billing", "support", "notifications", "kb", "assistant", "analytics",
+    "winback",
 ]
 forbidden_modules = [
     "analysis", "tools", "maps", "publish", "restapi", "survey", "iranmap", "classroom", "enterprise", "satellite",
@@ -134,7 +136,7 @@ forbidden_modules = [
 ignore_imports = [
     "accounts.tests.** -> **", "core.tests.** -> **", "databases.tests.** -> **", "jobs.tests.** -> **",
     "billing.tests.** -> **", "support.tests.** -> **", "notifications.tests.** -> **", "kb.tests.** -> **",
-    "assistant.tests.** -> **", "analytics.tests.** -> **",
+    "assistant.tests.** -> **", "analytics.tests.** -> **", "winback.tests.** -> **",
 ]
 unmatched_ignore_imports_alerting = "none"
 
@@ -172,7 +174,7 @@ forbidden_modules = [
     "accounts.views", "accounts.admin", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases.views",
     "databases.urls", "databases.plugin", "databases.gateway", "databases.admin", "databases.explorer", "databases.team",
     "enterprise", "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate", "support",
-    "survey", "tools", "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam",
+    "survey", "tools", "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam", "winback",
     "kernel.crypto", "kernel.pkg", "kernel.runner", "kernel.admin", "kernel.studio", "kernel.pluginio", "kernel.pkgtest",
     "kernel.health", "kernel.alerts", "kernel.admin_cards", "kernel.stepup",
 ]

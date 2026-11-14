@@ -42,6 +42,7 @@ urlpatterns = [
     path("support/", include("support.urls")),
     path("class/", include("classroom.urls")),
     path("go/", include("analytics.urls")),
+    path("r/", include("winback.urls")),
     path("assistant/", include("assistant.urls")),
     path("", include("kb.urls")),
     path("", include("publish.urls")),
