@@ -16,6 +16,23 @@
   {% endif %}
 </div>
 
+{% if plugin_tables %}
+<section class="card hg hg-error" aria-labelledby="pt-h">
+  <div class="hg-head">
+    <span class="hg-ic">{% icon "warn" 20 %}</span>
+    <div class="hg-t">
+      <h2 id="pt-h">جدول پلاگین حذف شده است</h2>
+      <p class="small muted">این جدول‌ها را پلاگین‌ها ساخته بودند و الان در پایگاه نیستند یا ستونی از آن‌ها حذف شده است. بازسازی، ساختار را خالی برمی‌گرداند؛ داده‌ی قبلی فقط از پشتیبان برمی‌گردد.</p>
+    </div>
+    {% if db.status == 'active' and db.can_edit %}
+    <form method="post">{% csrf_token %}<input type="hidden" name="fix" value="plugin_tables">
+      <button class="btn sm" type="submit">{% icon "bolt" 16 %}بازسازی ساختار</button>
+    </form>
+    {% endif %}
+  </div>
+  <ul class="small">{% for r in plugin_tables %}<li><b class="ltr">{{ r.table }}</b> — پلاگین <span class="ltr">{{ r.plugin }}</span>: {% if r.state == 'missing' %}جدول نیست{% else %}ستون‌های حذف‌شده: <span class="ltr">{{ r.lost|join:", " }}</span>{% endif %}</li>{% endfor %}</ul>
+</section>
+{% endif %}
 {% if issues %}
 <div class="hk-row" role="group" aria-label="فیلتر شدت">
   <button type="button" class="hk hk-error" data-lf-chip="error" aria-pressed="false"><span class="hk-i">{% icon "warn" 18 %}</span><b>{{ n_error|fanum }}</b><span>خطا</span></button>

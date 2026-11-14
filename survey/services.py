@@ -69,6 +69,36 @@ def create_project(db, user, name: str, srid, template: str = "blank") -> Survey
         raise
 
 
+def missing_tables(db, project: SurveyProject) -> list[str]:
+    """جدول‌های پروژه که کاربر (یا هر چیز دیگر) از پایگاه حذف کرده است؛ خطای اتصال = خالی (بررسی رد می‌شود)."""
+    try:
+        with tenantdb.connect(db) as conn:
+            return ddl.missing_tables(conn, project.slug)
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def restore_project(db, project: SurveyProject) -> list[str]:
+    """ساختار حذف‌شده‌ی پروژه را (خالی) بازمی‌سازد؛ جدول‌های سالم و داده‌هایشان دست نمی‌خورند. نام جدول‌های ساخته‌شده."""
+    miss = missing_tables(db, project)
+    if not miss:
+        return []
+    try:
+        with tenantdb.catalog(db).connect(read_only=False) as conn:
+            try:
+                conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(db.role_name)))
+                conn.execute(sql.SQL("SET LOCAL lock_timeout = '5s'"))
+                ddl.create_schema(conn, project.slug, project.srid, project.template or "blank")
+                conn.commit()
+            except psycopg.Error as exc:
+                conn.rollback()
+                log.warning("survey restore failed for %s: %s", db.pk, exc)
+                raise SurveyError("بازسازی ساختار پروژه ممکن نشد.") from exc
+    except TenantError as exc:
+        raise SurveyError(str(exc)) from exc
+    return miss
+
+
 def _drop_quietly(db, slug: str) -> None:
     try:
         with tenantdb.catalog(db).connect(read_only=False) as conn:

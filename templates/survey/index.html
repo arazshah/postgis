@@ -27,9 +27,12 @@
         </div>
         {% endif %}
       </div>
+      {% if p.missing %}<p class="small" role="alert">جدول‌های این پروژه از پایگاه داده حذف شده‌اند. بازسازی فقط ساختار خالی را برمی‌گرداند؛ داده‌ی قبلی از پشتیبان برمی‌گردد.</p>{% endif %}
       <div class="sv-card-f">
         <span class="badge active ltr">EPSG:{{ p.srid }}</span>
-        <a class="btn sm" href="{% url 'survey:studio' db.pk p.pk %}">باز کردن</a>
+        {% if p.missing %}
+        {% if db.can_edit %}<form method="post" action="{% url 'survey:restore' db.pk p.pk %}">{% csrf_token %}<button class="btn sm" type="submit">{% icon "bolt" 16 %}بازسازی ساختار</button></form>{% endif %}
+        {% else %}<a class="btn sm" href="{% url 'survey:studio' db.pk p.pk %}">باز کردن</a>{% endif %}
       </div>
     </article>
     {% endfor %}

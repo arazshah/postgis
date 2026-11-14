@@ -65,6 +65,20 @@ class ProjectPgTests(TestCase):
                   "corr_age", "driver_id", "driver_version", "qc_flags", "deleted_at", "synced_at"):
             self.assertIn(c, cols)
 
+    def test_dropped_schema_or_table_is_restored_empty_and_healthy_data_kept(self):
+        p = services.create_project(self.db, self.owner, "کوی نمونه", 32639, "topo")
+        self.assertEqual(services.missing_tables(self.db, p), [])
+        self._sql(f'DROP TABLE "{p.slug}".lines')
+        self.assertEqual(services.missing_tables(self.db, p), ["lines"])
+        self.assertEqual(services.restore_project(self.db, p), ["lines"])
+        self.assertEqual(services.restore_project(self.db, p), [])
+        self.assertEqual(self._sql(f'SELECT count(*) FROM "{p.slug}".codes')[0][0], 6)  # کدهای سالم دوباره درج نشد
+        self._sql(f'DROP SCHEMA "{p.slug}" CASCADE')
+        self.assertEqual(len(services.missing_tables(self.db, p)), 6)
+        services.restore_project(self.db, p)
+        self.assertEqual(services.missing_tables(self.db, p), [])
+        self.assertEqual(self._sql(f'SELECT count(*) FROM "{p.slug}".codes')[0][0], 6)
+
     def test_two_projects_with_different_srids_coexist(self):
         a = services.create_project(self.db, self.owner, "الف", 32639)
         b = services.create_project(self.db, self.owner, "ب", 32640)

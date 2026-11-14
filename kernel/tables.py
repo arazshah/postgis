@@ -74,6 +74,41 @@ def owners(ws, schema: str, name: str) -> list[str]:
     return sorted(PluginTable.objects.filter(workspace_id=ws.pk, table=name).values_list("plugin_id", flat=True))
 
 
+def status(ws) -> list[dict]:
+    """وضعیت جدول‌های پلاگین‌ها در این پایگاه (فقط جدول‌هایی که ردپا دارند): `ok` | `missing` | `columns` | `unknown`.
+    هر ردیف: plugin, table, state, lost (ستون‌های حذف‌شده). برای نمای سلامت داده."""
+    from . import pagekit
+    from .models import PluginTable
+
+    recs = {(r.plugin_id, r.table) for r in PluginTable.objects.filter(workspace_id=ws.pk)}
+    if not recs:
+        return []
+    specs = {(pg.plugin, t.name): t for pg in pagekit.pages() for t in pg.tables if (pg.plugin, t.name) in recs}
+    have = probe(ws, list(specs.values()))
+    out = []
+    for (plugin, name), t in sorted(specs.items()):
+        if have is None:
+            state, lost = "unknown", []
+        elif name not in have:
+            state, lost = "missing", []
+        else:
+            lost = sorted({c.name for c in t.columns} - have[name])
+            state = "columns" if lost else "ok"
+        out.append({"plugin": plugin, "table": name, "state": state, "lost": lost})
+    return out
+
+
+def rebuild(ws, plugin: str | None = None) -> list[str]:
+    """جدول‌های حذف‌شده/ناقص را بازمی‌سازد (همه یا فقط یک پلاگین)؛ نام جدول‌های ترمیم‌شده. TableError اگر ممکن نیست."""
+    from . import pagekit
+
+    restored: list[str] = []
+    for pg in pagekit.pages():
+        if pg.tables and (plugin is None or pg.plugin == plugin):
+            ensure(ws, pg.plugin, pg.tables, restored)
+    return restored
+
+
 def probe(ws, tables) -> dict[str, set[str]] | None:
     """ستون‌های موجودِ هر جدول در `public` (جدولِ نبود = کلید ندارد). یک پرس‌وجوی سبک برای همه؛ خطا ⇒ None (بررسی رد می‌شود)."""
     names = [t.name for t in tables]

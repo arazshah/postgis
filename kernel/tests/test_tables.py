@@ -188,6 +188,17 @@ class RealTests(BaseCase):
         self.assertEqual(restored, ["mon_points"])
         self.assertIn("speed", self.cols())
 
+    def test_status_and_rebuild(self):
+        tables.ensure(self.db, "mon", self.page.tables)
+        with mock.patch("kernel.pagekit.pages", return_value=[self.page]):
+            self.assertEqual([r["state"] for r in tables.status(self.db)], ["ok"])
+            with psycopg.connect(dbname="pagekit_tbl", **self.kw) as c:
+                c.execute("drop table mon_points")
+            self.assertEqual([r["state"] for r in tables.status(self.db)], ["missing"])
+            self.assertEqual(tables.rebuild(self.db, "other"), [])
+            self.assertEqual(tables.rebuild(self.db), ["mon_points"])
+            self.assertEqual([r["state"] for r in tables.status(self.db)], ["ok"])
+
     def test_owners(self):
         tables.ensure(self.db, "mon", self.page.tables)
         self.assertEqual(tables.owners(self.db, "public", "mon_points"), ["mon"])
