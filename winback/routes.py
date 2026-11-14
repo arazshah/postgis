@@ -32,11 +32,22 @@ class RouteDef:
     extra_input: str = ""  # پارامتری که مدیر هنگام ارسال دستی تایپ می‌کند (مثلاً FEATURE)
 
     def text(self, variant: str = "A") -> str:
-        return self.variant_b if variant == "B" and self.variant_b else self.template
+        """متن قالب با دامنه‌ی سایت (sms.ir دامنه‌ی ثابت می‌خواهد؛ فقط انتهای لینک متغیر است)."""
+        raw = self.variant_b if variant == "B" and self.variant_b else self.template
+        return raw.replace("{SITE}", site())
 
     @property
     def params(self) -> tuple[str, ...]:
         return COMMON + self.extra
+
+
+def site() -> str:
+    """دامنه‌ی ثابت لینک در قالب پیامک (بدون http؛ از CANONICAL_URL)."""
+    from urllib.parse import urlsplit
+
+    from django.conf import settings
+
+    return urlsplit(settings.CANONICAL_URL).netloc
 
 
 def first_name(user) -> str:
@@ -155,32 +166,32 @@ def _announce(now):
     return [(u, {}, "/plugins/", None) for u in qs]
 
 
-_TAIL = "\nلغو پیام‌ها: #STOP#"
+_TAIL = "\nلغو پیام‌ها: {SITE}/r/stop/#STOP#"
 
 DEFS: dict[str, RouteDef] = {d.key: d for d in (
     RouteDef("no_database", "ثبت‌نام بدون شروع",
              "ثبت‌نام کرده‌اند ولی هنوز پایگاهی نساخته‌اند؛ ساخت پایگاه رایگان با یک کلیک.",
-             "#NAME# عزیز، پایگاه PostGIS رایگان شما در ژئوپایگاه فقط ۳۰ ثانیه تا آماده‌شدن فاصله دارد.\nساخت: #LINK#" + _TAIL,
-             (), _no_database, variant_b="#NAME# عزیز، پایگاه PostGIS رایگان شما بدون نصب و تنظیم آماده‌ی ساخت است؛ فقط یک کلیک: #LINK#" + _TAIL),
+             "#NAME# عزیز، پایگاه PostGIS رایگان شما در ژئوپایگاه فقط ۳۰ ثانیه تا آماده‌شدن فاصله دارد.\nساخت: {SITE}/r/#LINK#" + _TAIL,
+             (), _no_database, variant_b="#NAME# عزیز، پایگاه PostGIS رایگان شما بدون نصب و تنظیم آماده‌ی ساخت است؛ فقط یک کلیک: {SITE}/r/#LINK#" + _TAIL),
     RouteDef("empty_database", "پایگاه خالی",
              "پایگاه ساخته‌اند ولی داده‌ای وارد نکرده‌اند؛ پیشنهاد ورود داده (CSV، شیپ‌فایل یا داده‌ی آماده‌ی ایران).",
-             "#NAME# عزیز، پایگاه «#DB#» شما آماده است ولی هنوز داده ندارد. فایل خود را بیندازید یا داده‌ی آماده‌ی ایران را با یک کلیک بگیرید: #LINK#" + _TAIL,
-             ("DB",), _empty_database, variant_b="#NAME# عزیز، پایگاه «#DB#» خالی است. فایل CSV، شیپ‌فایل یا داده‌ی آماده‌ی ایران را در چند دقیقه وارد کنید: #LINK#" + _TAIL),
+             "#NAME# عزیز، پایگاه «#DB#» شما آماده است ولی هنوز داده ندارد. فایل خود را بیندازید یا داده‌ی آماده‌ی ایران را با یک کلیک بگیرید: {SITE}/r/#LINK#" + _TAIL,
+             ("DB",), _empty_database, variant_b="#NAME# عزیز، پایگاه «#DB#» خالی است. فایل CSV، شیپ‌فایل یا داده‌ی آماده‌ی ایران را در چند دقیقه وارد کنید: {SITE}/r/#LINK#" + _TAIL),
     RouteDef("dormant", "کاربر خوابیده",
              "۳۰ تا ۱۲۰ روز است وارد نشده‌اند و پایگاه فعال دارند؛ یادآوری داده‌ی سالم خودشان.",
-             "#NAME# عزیز، #DAYS# روز است سری به پایگاه «#DB#» نزده‌اید. داده‌هایتان سالم و آماده است: #LINK#" + _TAIL,
-             ("DB", "DAYS"), _dormant, variant_b="#NAME# عزیز، قابلیت‌های تازه‌ای از آخرین ورود شما به ژئوپایگاه اضافه شده. پایگاه «#DB#» منتظر شماست: #LINK#" + _TAIL),
+             "#NAME# عزیز، #DAYS# روز است سری به پایگاه «#DB#» نزده‌اید. داده‌هایتان سالم و آماده است: {SITE}/r/#LINK#" + _TAIL,
+             ("DB", "DAYS"), _dormant, variant_b="#NAME# عزیز، قابلیت‌های تازه‌ای از آخرین ورود شما به ژئوپایگاه اضافه شده. پایگاه «#DB#» منتظر شماست: {SITE}/r/#LINK#" + _TAIL),
     RouteDef("expired_plan", "پلن تمام‌شده",
              "پلن پایگاه در دو هفته‌ی اخیر تمام شده؛ یادآوری صادقانه و تمدید.",
-             "#NAME# عزیز، پلن پایگاه «#DB#» #DAYS# روز پیش تمام شد. داده‌های شما نگه داشته شده؛ تمدید: #LINK#" + _TAIL,
-             ("DB", "DAYS"), _expired_plan, cooldown_days=14, variant_b="#NAME# عزیز، پایگاه «#DB#» هنوز نگه داشته شده ولی پلنش تمام شده. برای ادامه‌ی کار تمدید کنید: #LINK#" + _TAIL),
+             "#NAME# عزیز، پلن پایگاه «#DB#» #DAYS# روز پیش تمام شد. داده‌های شما نگه داشته شده؛ تمدید: {SITE}/r/#LINK#" + _TAIL,
+             ("DB", "DAYS"), _expired_plan, cooldown_days=14, variant_b="#NAME# عزیز، پایگاه «#DB#» هنوز نگه داشته شده ولی پلنش تمام شده. برای ادامه‌ی کار تمدید کنید: {SITE}/r/#LINK#" + _TAIL),
     RouteDef("unpaid_invoice", "فاکتور نیمه‌کاره",
              "فاکتوری ساخته‌اند ولی پرداخت نکرده‌اند.",
-             "#NAME# عزیز، فاکتور #AMOUNT# تومانی شما در ژئوپایگاه هنوز پرداخت نشده است. ادامه‌ی پرداخت: #LINK#" + _TAIL,
-             ("AMOUNT",), _unpaid_invoice, cooldown_days=14, variant_b="#NAME# عزیز، فاکتور #AMOUNT# تومانی شما فقط یک قدم تا فعال‌شدن مانده است: #LINK#" + _TAIL),
+             "#NAME# عزیز، فاکتور #AMOUNT# تومانی شما در ژئوپایگاه هنوز پرداخت نشده است. ادامه‌ی پرداخت: {SITE}/r/#LINK#" + _TAIL,
+             ("AMOUNT",), _unpaid_invoice, cooldown_days=14, variant_b="#NAME# عزیز، فاکتور #AMOUNT# تومانی شما فقط یک قدم تا فعال‌شدن مانده است: {SITE}/r/#LINK#" + _TAIL),
     RouteDef("announce", "خبر قابلیت تازه",
              "ارسال دستی: معرفی یک قابلیت یا پلاگین تازه به کاربران فعال ۹۰ روز اخیر که پایگاه دارند.",
-             "#NAME# عزیز، قابلیت تازه‌ی ژئوپایگاه: #FEATURE#. ببینید: #LINK#" + _TAIL,
+             "#NAME# عزیز، قابلیت تازه‌ی ژئوپایگاه: #FEATURE#. ببینید: {SITE}/r/#LINK#" + _TAIL,
              ("FEATURE",), _announce, cooldown_days=14, manual_only=True, extra_input="FEATURE"),
 )}
 

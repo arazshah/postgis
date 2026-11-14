@@ -120,7 +120,7 @@ def manual_estimate(route: Route, fixed: dict, limit: int, now=None) -> dict:
     rows = _collect(d, now, limit)
     today = now.astimezone(timing.TZ).date()
     control = sum(1 for r in rows if _is_control(r[0], d.key, today))
-    demo = {"NAME": "علی", "LINK": link_for("Ab3xK9aQ"), "STOP": link_for("Ab3xK9aQ", stop=True), "DB": "پایگاه من",
+    demo = {"NAME": "علی", "LINK": "Ab3xK9aQ", "STOP": "Ab3xK9aQ", "DB": "پایگاه من",
             "DAYS": "45", "AMOUNT": "490,000"}
     sample = routes.render(d.text("A"), {**demo, **fixed})
     real = len(rows) - control
@@ -144,9 +144,11 @@ def link_for(code: str, stop: bool = False) -> str:
 
 
 def sms_params(msg: Message) -> dict[str, str]:
-    """فقط پارامترهایی که در متن همان نسخه‌ی قالب هست (قالب sms.ir پارامتر اضافه را ممکن است نپذیرد)."""
-    allp = {**{k: v for k, v in msg.params.items() if not k.startswith("_")},
-            "LINK": link_for(msg.code), "STOP": link_for(msg.code, stop=True)}
+    """فقط پارامترهایی که در متن همان نسخه‌ی قالب هست (قالب sms.ir پارامتر اضافه را ممکن است نپذیرد).
+
+    LINK و STOP فقط «کد کوتاه» انتهای لینک‌اند؛ دامنه و مسیر ثابتِ داخل متن قالب است (شرط sms.ir).
+    """
+    allp = {**{k: v for k, v in msg.params.items() if not k.startswith("_")}, "LINK": msg.code, "STOP": msg.code}
     text = routes.DEFS[msg.route_key].text(msg.variant)
     return {k: v for k, v in allp.items() if f"#{k}#" in text}
 

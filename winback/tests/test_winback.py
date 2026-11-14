@@ -108,13 +108,15 @@ class SendTests(Base):
             args = send.call_args.args
             self.assertEqual(args[1], "123")
             self.assertIn("LINK", args[2])
-            self.assertIn("/stop/", args[2]["STOP"])
+            self.assertEqual(set(args[2]), {"NAME", "LINK", "STOP"})
+            self.assertEqual(args[2]["LINK"], m.code)  # فقط کدِ انتهای لینک؛ دامنه در متن قالب است
+            self.assertEqual(args[2]["STOP"], m.code)
         m.refresh_from_db()
         self.assertEqual(m.status, Message.Status.SENT)
 
     def test_user_who_returned_or_opted_out_is_skipped(self):
         u, batch, m = self._approved()
-        User.objects.filter(pk=u.pk).update(last_login=NOW + datetime.timedelta(hours=1))
+        User.objects.filter(pk=u.pk).update(last_login=timezone.now() + datetime.timedelta(hours=1))  # بعد از ساخت دسته (ساعت واقعی)
         with mock.patch.object(sms, "send_template") as send:
             services.send_due(m.send_at)
             send.assert_not_called()
@@ -245,3 +247,36 @@ class SettingsReachableTests(TestCase):
         self.assertEqual(r.status_code, 302)
         self.assertTrue(services.switch_on())
         self.addCleanup(conf.clear, "winback", "enabled")
+
+
+class SmsIrLinkRuleTests(TestCase):
+    """sms.ir: دامنه‌ی لینک ثابت در متن قالب، فقط انتهای آن متغیر."""
+
+    def test_domain_fixed_and_only_tail_variable(self):
+        import re
+
+        for d in routes.DEFS.values():
+            for v in ("A", "B"):
+                text = d.text(v)
+                for name in ("LINK", "STOP"):
+                    if f"#{name}#" in text:
+                        self.assertRegex(text, rf"{re.escape(routes.site())}/r/(stop/)?#{name}#", d.key)
+                        self.assertNotRegex(text, rf"#{name}#\S", d.key)  # بعد از متغیر چیزی نچسبد
+                self.assertNotIn("{SITE}", text)
+                self.assertNotIn("http", text)
+
+    def test_codes_are_alnum_and_short_stop_route_works(self):
+        from winback.models import new_code
+
+        for _ in range(50):
+            self.assertRegex(new_code(), r"^[A-Za-z0-9]{8}$")
+        mk = mk_user(1)
+        Route.objects.get_or_create(key="no_database")
+        from winback.models import Batch, Message
+
+        b = Batch.objects.create(route=Route.objects.get(key="no_database"))
+        m = Message.objects.create(batch=b, user=mk, route_key="no_database", phone=mk.phone, status="sent")
+        self.assertEqual(self.client.get(f"/r/stop/{m.code}/").status_code, 200)
+        self.assertEqual(self.client.post(f"/r/stop/{m.code}/").status_code, 200)
+        self.assertFalse(services.wants(mk))
+        self.assertEqual(self.client.get(f"/r/{m.code}/stop/").status_code, 200)  # مسیر قدیمی هم کار می‌کند
