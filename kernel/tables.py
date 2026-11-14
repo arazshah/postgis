@@ -65,16 +65,86 @@ def index_statements(t: TableSpec) -> list[sql.Composable]:
     return out
 
 
-def ensure(ws, plugin: str, tables) -> int:
-    """جدول‌های اعلام‌شده را در پایگاه `ws` تضمین می‌کند؛ تعداد جدول ساخته/به‌روزشده. TableError اگر ممکن نیست."""
+def owners(ws, schema: str, name: str) -> list[str]:
+    """شناسه‌ی پلاگین‌هایی که این جدول را برای این پایگاه ساخته‌اند (برای هشدار پیش از حذف)."""
+    if schema != "public":
+        return []
     from .models import PluginTable
 
+    return sorted(PluginTable.objects.filter(workspace_id=ws.pk, table=name).values_list("plugin_id", flat=True))
+
+
+def status(ws) -> list[dict]:
+    """وضعیت جدول‌های پلاگین‌ها در این پایگاه (فقط جدول‌هایی که ردپا دارند): `ok` | `missing` | `columns` | `unknown`.
+    هر ردیف: plugin, table, state, lost (ستون‌های حذف‌شده). برای نمای سلامت داده."""
+    from . import pagekit
+    from .models import PluginTable
+
+    recs = {(r.plugin_id, r.table) for r in PluginTable.objects.filter(workspace_id=ws.pk)}
+    if not recs:
+        return []
+    specs = {(pg.plugin, t.name): t for pg in pagekit.pages() for t in pg.tables if (pg.plugin, t.name) in recs}
+    have = probe(ws, list(specs.values()))
+    out = []
+    for (plugin, name), t in sorted(specs.items()):
+        if have is None:
+            state, lost = "unknown", []
+        elif name not in have:
+            state, lost = "missing", []
+        else:
+            lost = sorted({c.name for c in t.columns} - have[name])
+            state = "columns" if lost else "ok"
+        out.append({"plugin": plugin, "table": name, "state": state, "lost": lost})
+    return out
+
+
+def rebuild(ws, plugin: str | None = None) -> list[str]:
+    """جدول‌های حذف‌شده/ناقص را بازمی‌سازد (همه یا فقط یک پلاگین)؛ نام جدول‌های ترمیم‌شده. TableError اگر ممکن نیست."""
+    from . import pagekit
+
+    restored: list[str] = []
+    for pg in pagekit.pages():
+        if pg.tables and (plugin is None or pg.plugin == plugin):
+            ensure(ws, pg.plugin, pg.tables, restored)
+    return restored
+
+
+def probe(ws, tables) -> dict[str, set[str]] | None:
+    """ستون‌های موجودِ هر جدول در `public` (جدولِ نبود = کلید ندارد). یک پرس‌وجوی سبک برای همه؛ خطا ⇒ None (بررسی رد می‌شود)."""
+    names = [t.name for t in tables]
+    try:
+        with tenantdb.connect(ws) as conn:
+            rows = conn.execute(
+                "SELECT c.relname, a.attname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped "
+                "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND c.relname = ANY(%s)", (names,)).fetchall()
+    except Exception:  # noqa: BLE001  نبود اتصال را «جدول نیست» نگیریم؛ خود خواندن خطا را نشان می‌دهد
+        return None
+    out: dict[str, set[str]] = {}
+    for rel, col in rows:
+        out.setdefault(rel, set()).add(col)
+    return out
+
+
+def ensure(ws, plugin: str, tables, restored: list | None = None) -> int:
+    """جدول‌های اعلام‌شده را در پایگاه `ws` تضمین می‌کند؛ تعداد جدول ساخته/به‌روز/ترمیم‌شده. TableError اگر ممکن نیست.
+
+    ردپا (`PluginTable`) ثابت می‌کند جدول را همین پلاگین ساخته بود؛ پس اگر کاربر جدول (یا ستونی از آن) را حذف کرده باشد،
+    همان ساختار اعلام‌شده دوباره (خالی) ساخته می‌شود. نام جدول‌های ترمیم‌شده به `restored` افزوده و در گزارش فضای کار ثبت می‌شود."""
+    from .models import PluginTable
+
+    recs = {r.table: r for r in PluginTable.objects.filter(plugin_id=plugin, workspace_id=ws.pk, table__in=[t.name for t in tables])}
+    fresh = [t for t in tables if t.name in recs and recs[t.name].spec_hash == spec_hash(t)]
+    have = probe(ws, fresh) if fresh else None
     done = 0
     for t in tables:
         h = spec_hash(t)
-        rec = PluginTable.objects.filter(plugin_id=plugin, table=t.name, workspace_id=ws.pk).first()
+        rec = recs.get(t.name)
+        healed = False
         if rec is not None and rec.spec_hash == h:
-            continue
+            if have is None or (t.name in have and {c.name for c in t.columns} <= have[t.name]):
+                continue
+            healed = True  # جدول یا ستونی حذف شده است
         try:
             cat = tenantdb.catalog(ws)
             existing = next((x for x in cat.tables() if x.schema == "public" and x.name == t.name), None)
@@ -108,4 +178,14 @@ def ensure(ws, plugin: str, tables) -> int:
         except IntegrityError:  # رقابت: همزمان ثبت شد
             PluginTable.objects.filter(plugin_id=plugin, table=t.name, workspace_id=ws.pk).update(spec_hash=h)
         done += 1
+        if healed:
+            log.warning("plugin table %s.%s was missing and restored (ws=%s)", plugin, t.name, ws.pk)
+            if restored is not None:
+                restored.append(t.name)
+            try:
+                from . import workspace
+
+                workspace.log_event("plugin_table_restored", f"جدول «{t.name}» پلاگین «{plugin}» حذف شده بود و دوباره (خالی) ساخته شد.", database=ws)
+            except Exception:  # noqa: BLE001  گزارش‌دهی نباید ترمیم را بشکند
+                log.exception("restore event failed")
     return done

@@ -159,6 +159,12 @@ class BlockRenderTests(SimpleTestCase):
         self.assertEqual(out["error"], "خواندن داده ممکن نشد.")
         self.assertEqual(out["detail"], "secret detail")
 
+    def test_missing_table_and_column_have_specific_messages(self):
+        out, _ = self.render(1, psycopg.errors.UndefinedTable('relation "mon_points" does not exist'))
+        self.assertIn("بازسازی", out["error"])
+        out, _ = self.render(1, psycopg.errors.UndefinedColumn("column x does not exist"))
+        self.assertIn("ستون", out["error"])
+
     def test_unavailable_layer_is_a_block_error_not_a_crash(self):
         self.values["t"] = None
         out, _ = self.render(1, (["c"], [(1,)]))

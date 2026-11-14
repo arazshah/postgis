@@ -51,6 +51,10 @@ class ProjectPgTests(TestCase):
         with psycopg.connect(**self.kw) as c:
             return c.execute(q, args).fetchall()
 
+    def _exec(self, q):
+        with psycopg.connect(**self.kw) as c:
+            c.execute(q)
+
     def test_create_makes_schema_and_tables_with_right_srid(self):
         p = services.create_project(self.db, self.owner, "کوی نمونه", 32639, "topo")
         rows = self._sql("SELECT f_table_name, srid, type FROM geometry_columns WHERE f_table_schema = %s "
@@ -64,6 +68,20 @@ class ProjectPgTests(TestCase):
         for c in ("client_uuid", "fix_quality", "hdop", "acc_h", "std_e", "h_ellip", "h_ortho", "antenna_h",
                   "corr_age", "driver_id", "driver_version", "qc_flags", "deleted_at", "synced_at"):
             self.assertIn(c, cols)
+
+    def test_dropped_schema_or_table_is_restored_empty_and_healthy_data_kept(self):
+        p = services.create_project(self.db, self.owner, "کوی نمونه", 32639, "topo")
+        self.assertEqual(services.missing_tables(self.db, p), [])
+        self._exec(f'DROP TABLE "{p.slug}".lines')
+        self.assertEqual(services.missing_tables(self.db, p), ["lines"])
+        self.assertEqual(services.restore_project(self.db, p), ["lines"])
+        self.assertEqual(services.restore_project(self.db, p), [])
+        self.assertEqual(self._sql(f'SELECT count(*) FROM "{p.slug}".codes')[0][0], 6)  # کدهای سالم دوباره درج نشد
+        self._exec(f'DROP SCHEMA "{p.slug}" CASCADE')
+        self.assertEqual(len(services.missing_tables(self.db, p)), 6)
+        services.restore_project(self.db, p)
+        self.assertEqual(services.missing_tables(self.db, p), [])
+        self.assertEqual(self._sql(f'SELECT count(*) FROM "{p.slug}".codes')[0][0], 6)
 
     def test_two_projects_with_different_srids_coexist(self):
         a = services.create_project(self.db, self.owner, "الف", 32639)

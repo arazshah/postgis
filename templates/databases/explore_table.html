@@ -145,6 +145,7 @@
   <summary>حذف {{ t.kind_label }}</summary>
   <form method="post" action="{% url 'databases:explore_drop' db.pk t.schema t.name %}" class="stack-form">{% csrf_token %}
     <p class="small">این کار برگشت‌پذیر نیست{% if t.kind in 'rp' %} و همه سطرها پاک می‌شوند{% endif %}. اگر از این جدول لایه یا API منتشر کرده‌اید، آن هم برداشته می‌شود. پیشنهاد: اول از «پشتیبان‌گیری» بکاپ بگیرید.</p>
+    {% if plugin_owners %}<p class="small" role="alert"><b>این جدول متعلق به {% if plugin_owners|length > 1 %}پلاگین‌های{% else %}پلاگین{% endif %} {% for p in plugin_owners %}<span class="ltr">{{ p }}</span>{% if not forloop.last %}، {% endif %}{% endfor %} است.</b> با حذف آن، صفحه‌ی پلاگین داده‌ای نشان نمی‌دهد؛ با بازکردن دوباره‌ی صفحه جدول خالی بازسازی می‌شود و داده‌ی قبلی فقط از پشتیبان برمی‌گردد.</p>{% endif %}
     <div class="field"><label for="drop-c">برای تأیید، نام جدول را بنویسید: <b class="ltr">{{ t.name }}</b></label>
       <input id="drop-c" type="text" name="confirm" class="ltr" autocomplete="off" required></div>
     <div><button class="btn danger sm" type="submit">حذف همیشگی</button></div>

@@ -34,40 +34,51 @@ def check_slug(slug: str) -> str:
 
 
 def create_schema(conn, slug: str, srid: int, template: str = "blank") -> None:
-    """schema و شش جدول پروژه را می‌سازد. فراخواننده تراکنش و SET ROLE را مدیریت می‌کند."""
+    """schema و شش جدول پروژه را می‌سازد؛ تکرارپذیر است (جدول‌های موجود دست نمی‌خورند و فقط نبودها ساخته می‌شوند، برای بازسازی پس از
+    حذف دستی). فراخواننده تراکنش و SET ROLE را مدیریت می‌کند."""
     check_slug(slug)
     srid = int(srid)
     ident = lambda name: sql.Identifier(slug, name)  # noqa: E731
-    conn.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(slug)))
-    conn.execute(sql.SQL("""CREATE TABLE {t} (
+    conn.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(slug)))
+    conn.execute(sql.SQL("""CREATE TABLE IF NOT EXISTS {t} (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text, device text, driver_id text,
         started_at timestamptz NOT NULL DEFAULT now(), ended_at timestamptz, base_info jsonb, notes text,
         created_by text)""").format(t=ident("sessions")))
     for name, gtype in (("points", "Point"), ("lines", "LineString"), ("polygons", "Polygon")):
         is_points = name == "points"
-        head = sql.SQL("CREATE TABLE ") + ident(name) + sql.SQL(
+        head = sql.SQL("CREATE TABLE IF NOT EXISTS ") + ident(name) + sql.SQL(
             " (id bigserial PRIMARY KEY, client_uuid uuid NOT NULL UNIQUE DEFAULT gen_random_uuid(), "
             "code text, descr text, " + ("pt_no text, " if is_points else "")
             + "session_id uuid REFERENCES ") + ident("sessions") + sql.SQL(
             "(id) ON DELETE SET NULL, " + (_ACCURACY if is_points else "") + _PROVENANCE
             + "geom geometry(" + gtype + ", ") + sql.Literal(srid) + sql.SQL(") NOT NULL)")
         conn.execute(head)
-        conn.execute(sql.SQL("CREATE INDEX {i} ON {t} USING gist (geom)").format(
+        conn.execute(sql.SQL("CREATE INDEX IF NOT EXISTS {i} ON {t} USING gist (geom)").format(
             i=sql.Identifier(f"{name}_geom_gix"), t=ident(name)))
-        conn.execute(sql.SQL("CREATE INDEX {i} ON {t} (session_id) WHERE deleted_at IS NULL").format(
+        conn.execute(sql.SQL("CREATE INDEX IF NOT EXISTS {i} ON {t} (session_id) WHERE deleted_at IS NULL").format(
             i=sql.Identifier(f"{name}_session_ix"), t=ident(name)))
-    conn.execute(sql.SQL("""CREATE TABLE {t} (id serial PRIMARY KEY, pt_no text NOT NULL UNIQUE, descr text,
+    conn.execute(sql.SQL("""CREATE TABLE IF NOT EXISTS {t} (id serial PRIMARY KEY, pt_no text NOT NULL UNIQUE, descr text,
         h_ortho double precision, acc_h real, geom geometry(Point, {srid}) NOT NULL)""").format(
         t=ident("control_points"), srid=sql.Literal(srid)))
-    conn.execute(sql.SQL("CREATE INDEX {i} ON {t} USING gist (geom)").format(
+    conn.execute(sql.SQL("CREATE INDEX IF NOT EXISTS {i} ON {t} USING gist (geom)").format(
         i=sql.Identifier("control_points_geom_gix"), t=ident("control_points")))
-    conn.execute(sql.SQL("""CREATE TABLE {t} (id serial PRIMARY KEY, code text NOT NULL UNIQUE, name text NOT NULL,
+    had_codes = conn.execute("SELECT to_regclass(%s)", (f"{slug}.codes",)).fetchone()[0] is not None
+    conn.execute(sql.SQL("""CREATE TABLE IF NOT EXISTS {t} (id serial PRIMARY KEY, code text NOT NULL UNIQUE, name text NOT NULL,
         geom_type text NOT NULL CHECK (geom_type IN ('point','line','polygon')), layer text,
         sort smallint NOT NULL DEFAULT 0)""").format(t=ident("codes")))
-    rows = presets.TEMPLATES.get(template, presets.TEMPLATES["blank"])[1]
+    rows = [] if had_codes else presets.TEMPLATES.get(template, presets.TEMPLATES["blank"])[1]
     for i, (code, name, gtype, layer) in enumerate(rows):
         conn.execute(sql.SQL("INSERT INTO {t} (code, name, geom_type, layer, sort) VALUES (%s, %s, %s, %s, %s)").format(
             t=ident("codes")), (code, name, gtype, layer, i))
+
+
+def missing_tables(conn, slug: str) -> list[str]:
+    """جدول‌های پروژه که در پایگاه نیستند (schema حذف‌شده = همه)."""
+    check_slug(slug)
+    have = {r[0] for r in conn.execute(
+        "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+        "WHERE n.nspname = %s AND c.relkind IN ('r', 'p')", (slug,))}
+    return [t for t in TABLES if t not in have]
 
 
 def drop_schema(conn, slug: str) -> None:

@@ -7,6 +7,7 @@ from django.views.decorators.http import require_http_methods
 from accounts.decorators import site_user_required
 from databases.explorer import Explorer, ExplorerError
 from databases.models import UserDatabase
+from kernel import tables as plugin_tables
 from kernel import workspace
 
 # ---------------------------------------------------------------------- ورود فایل
@@ -61,6 +62,14 @@ def explore_health(request, pk):
             messages.error(request, "پایگاه داده فقط‌خواندنی یا غیرفعال است؛ اصلاح ممکن نیست.")
         else:
             try:
+                if request.POST.get("fix") == "plugin_tables":
+                    try:
+                        done = plugin_tables.rebuild(db, request.POST.get("plugin") or None)
+                    except plugin_tables.TableError as exc:
+                        messages.error(request, str(exc))
+                    else:
+                        messages.success(request, ("جدول‌های بازسازی‌شده (خالی): " + "، ".join(done)) if done else "همه‌ی جدول‌های پلاگین‌ها سالم است.")
+                    return redirect("databases:explore_health", pk=db.pk)
                 if request.POST.get("fix") == "group":
                     done, failed = ex.fix_group(request.POST.get("kind", ""))
                     if done:
@@ -90,6 +99,7 @@ def explore_health(request, pk):
         tables, issues = [], []
     return render(request, "databases/explore_health.html", {
         "db": db, "tables": tables, "issues": issues, "section": "health", "fixes": Explorer.FIXES,
+        "plugin_tables": [r for r in plugin_tables.status(db) if r["state"] in ("missing", "columns")],
         "srid_common": SRID_CHOICES[:1] + [c for c in SRID_CHOICES if c[0] in (32639, 3857)],
         "srid_other": [c for c in SRID_CHOICES if c[0] not in (4326, 32639, 3857)],
         **_health_context(tables, issues)})

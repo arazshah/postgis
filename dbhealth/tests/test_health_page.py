@@ -59,6 +59,18 @@ class HealthPageTests(BaseCase):
         self.assertNotContains(r, 'name="fix"')
         self.assertNotContains(r, 'id="srid-dlg"')
 
+    def test_plugin_tables_card_and_rebuild(self):
+        row = {"plugin": "mon", "table": "mon_points", "state": "missing", "lost": []}
+        with mock.patch("kernel.tables.status", return_value=[row, {**row, "table": "ok_t", "state": "ok"}]):
+            r = self.client.get(self.url)
+        self.assertContains(r, "جدول پلاگین حذف شده است")
+        self.assertContains(r, "mon_points")
+        self.assertNotContains(r, "ok_t")
+        with mock.patch("kernel.tables.rebuild", return_value=["mon_points"]) as m:
+            r = self.client.post(self.url, {"fix": "plugin_tables"})
+        m.assert_called_once_with(mock.ANY, None)
+        self.assertRedirects(r, self.url)
+
     def test_group_fix_posts_to_explorer(self):
         with mock.patch.object(Explorer, "fix_group", return_value=(["a: ok", "b: ok"], [])) as m:
             r = self.client.post(self.url, {"fix": "group", "kind": "add_pk"})

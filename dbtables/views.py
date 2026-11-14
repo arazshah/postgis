@@ -18,6 +18,7 @@ from databases import services
 from databases.explorer import EXPORT_LIMIT, MAP_LIMIT, Explorer, ExplorerError
 from databases.models import EditBatch
 from kernel import events, workspace
+from kernel import tables as plugin_tables
 
 from . import editor, tablealter, tablebuilder
 from .editor import EDIT_TTL, EditError, Editor
@@ -135,7 +136,8 @@ def explore_table(request, pk, schema, table):
         if t is None:
             raise ExplorerError("جدول پیدا نشد.")
         tab = request.GET.get("tab", "data")
-        ctx = {"db": db, "tables": tables, "t": t, "tab": tab, "section": "tables"}
+        ctx = {"db": db, "tables": tables, "t": t, "tab": tab, "section": "tables",
+               "plugin_owners": plugin_tables.owners(db, t.schema, t.name)}
         editing = db.can_edit and db.status == db.Status.ACTIVE
         if editing:
             ctx["edit_cfg"] = _edit_config(request, db, ex, t)

@@ -873,6 +873,18 @@ def _fmt(v) -> str:
     return s if len(s) <= 200 else s[:200] + "…"
 
 
+def _read_error(exc: Exception, msg: str) -> str:
+    """پیام کوتاه فارسی برای خطای خواندن؛ نبودن جدول/ستون (مثلاً حذف دستی) را از خطای عمومی جدا می‌کند."""
+    if "statement timeout" in msg:
+        return "زمان اجرا تمام شد؛ پرس‌وجو سنگین است."
+    code = getattr(exc, "sqlstate", None) or getattr(getattr(exc, "diag", None), "sqlstate", None)
+    if code == "42P01":
+        return "جدول این بخش در پایگاه داده نیست (شاید حذف شده)؛ صفحه را دوباره باز کنید تا جدول‌های پلاگین بازسازی شود."
+    if code == "42703":
+        return "یکی از ستون‌های این بخش در پایگاه داده نیست؛ صفحه را دوباره باز کنید تا ساختار پلاگین ترمیم شود."
+    return "خواندن داده ممکن نشد."
+
+
 def render_block(ws, page: Page, block: Block, values: dict) -> dict:
     """مدل نمایش یک بلوک برای قالب. خطای داده فقط همین بلوک را به پیام کوتاه تبدیل می‌کند."""
     out = {"kind": block.kind, "title": block.title, "width": block.width, "hint": block.hint, "error": ""}
@@ -886,7 +898,7 @@ def render_block(ws, page: Page, block: Block, values: dict) -> dict:
         return out
     except Exception as exc:  # noqa: BLE001  خطای PostgreSQL: متن کوتاه برای کاربر، جزئیات برای مدیر
         msg = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
-        out["error"] = "زمان اجرا تمام شد؛ پرس‌وجو سنگین است." if "statement timeout" in msg else "خواندن داده ممکن نشد."
+        out["error"] = _read_error(exc, msg)
         out["detail"] = msg[:300]
         return out
     if block.kind == "kpi":

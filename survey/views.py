@@ -71,6 +71,8 @@ def index(request, pk):
     if not _live(request, db):
         return redirect("databases:detail", pk=db.pk)
     projects = list(services.active_projects(db))
+    for p in projects:
+        p.missing = services.missing_tables(db, p)
     return render(request, "survey/index.html", {
         "db": db, "projects": projects, "cap": db.plan.survey_projects, "left": services.quota_left(db),
         "points_cap": db.plan.survey_max_points, "presets": crs.preset_tiles(), "templates": presets.template_choices(),
@@ -96,6 +98,21 @@ def create(request, pk):
 
 @site_user_required
 @require_POST
+def restore(request, pk, project_id):
+    db = _db(request, pk, "editor")
+    if not _live(request, db):
+        return redirect("databases:detail", pk=db.pk)
+    try:
+        done = services.restore_project(db, _project(db, project_id))
+    except services.SurveyError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, "ساختار پروژه بازسازی شد (خالی)؛ داده‌ی قبلی را از پشتیبان برگردانید." if done else "ساختار پروژه سالم است.")
+    return redirect("survey:index", pk=db.pk)
+
+
+@site_user_required
+@require_POST
 def archive(request, pk, project_id):
     db = _db(request, pk, "owner")
     services.archive_project(_project(db, project_id))
@@ -110,6 +127,9 @@ def studio(request, pk, project_id):
     if not _live(request, db):
         return redirect("databases:detail", pk=db.pk)
     p = _project(db, project_id)
+    if services.missing_tables(db, p):
+        messages.error(request, "جدول‌های این پروژه از پایگاه داده حذف شده‌اند؛ از فهرست پروژه‌ها «بازسازی ساختار» را بزنید.")
+        return redirect("survey:index", pk=db.pk)
     try:
         counts, codes = data.counts(db, p), data.codes(db, p)
     except TenantError as exc:
