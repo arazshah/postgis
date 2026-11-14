@@ -70,7 +70,7 @@ def build_s2(item: dict, product: str, bbox, out: Path) -> Path:
     return build_scene(item, "sentinel2", product, bbox, out)
 
 
-MASK_KIND = {"sentinel2": "scl", "s2_c1": "scl", "landsat": "qa", "landsat_old": "qa"}
+MASK_KIND = {"sentinel2": "scl", "s2_c1": "scl", "landsat": "qa", "landsat_old": "qa", "hls_s30": "hls", "hls_l30": "hls"}
 
 
 def bad_pixels(mission: str, mask_dn):
@@ -82,6 +82,9 @@ def bad_pixels(mission: str, mask_dn):
         return np.isin(mask_dn, (0, 1, 3, 8, 9, 10))
     if kind == "qa":                # QA_PIXEL: بیت ۰ بی‌داده، ۱ ابر پهن‌شده، ۲ سیروس، ۳ ابر، ۴ سایه
         return (mask_dn.astype("uint16") & 0b11111) != 0
+    if kind == "hls":               # Fmask: بیت ۱ ابر، ۲ مجاور ابر یا سایه، ۳ سایه‌ی ابر؛ ۲۵۵ بی‌داده
+        fm = mask_dn.astype("uint16")
+        return ((fm & 0b1110) != 0) | (fm == 255)
     raise ProcessError("ماسک ابر برای این ماهواره پشتیبانی نمی‌شود.")
 
 
@@ -188,7 +191,7 @@ def read_on_grid(asset: dict, grid: dict, resampling, sign=None):
 
     with _open(asset["href"], sign) as src, WarpedVRT(
             src, crs=grid["crs"], transform=grid["transform"], width=grid["width"], height=grid["height"],
-            resampling=resampling, src_nodata=0, nodata=0) as vrt:
+            resampling=resampling, src_nodata=src.nodata if src.nodata is not None else 0, nodata=0) as vrt:
         return vrt.read(1)
 
 
@@ -340,6 +343,27 @@ def build_layer(items: list[dict], mission: str, bbox, out: Path, sign=None, sou
     _write(out, [data[0]], {"width": data.shape[2], "height": data.shape[1], "crs": crs, "transform": transform, "count": 1,
                             "dtype": spec.dtype, "nodata": spec.nodata, "predictor": 3 if spec.dtype == "float32" else 2},
            [mission])
+    return out
+
+
+def build_layer_from_file(raw: Path, mission: str, out: Path) -> Path:
+    """GeoTIFF خام یک API (OpenTopography) را به قالب یکدست لایه‌های آماده درمی‌آورد: float32 و بی‌داده‌ی ‎-9999."""
+    import numpy as np
+    import rasterio
+
+    spec = get_product(mission, mission)
+    with rasterio.open(raw) as src:
+        data = src.read(1).astype("float32")
+        bad = ~np.isfinite(data)
+        if src.nodata is not None:
+            bad |= data == np.float32(src.nodata)
+        arr = np.where(bad, spec.nodata, data).astype("float32")
+        if arr.shape[0] < 2 or arr.shape[1] < 2:
+            raise ProcessError("محدوده بیش از اندازه کوچک است.")
+        if bad.all():
+            raise ProcessError("برای این محدوده داده‌ای پیدا نشد.")
+        _write(out, [arr], {"width": src.width, "height": src.height, "crs": src.crs, "transform": src.transform, "count": 1,
+                            "dtype": "float32", "nodata": spec.nodata, "predictor": 3}, [mission])
     return out
 
 

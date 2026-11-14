@@ -57,7 +57,11 @@ docker compose -f satgate/docker-compose.yml --env-file .env up -d
 | ارتفاع Copernicus ۳۰ و ۹۰ متر (`dem`، `dem90`) | Earth Search، پشتیبان: Planetary Computer | ندارد |
 | NASADEM (`nasadem`)، ALOS AW3D30 (`alosdem`) | Planetary Computer | ندارد |
 | ESA WorldCover (`worldcover`)، آب سطحی JRC (`water`) | Planetary Computer | ندارد |
-| Copernicus Data Space، NASA Earthdata، OpenTopography، JAXA | (گام بعد) | **ثبت‌نام یک‌باره**؛ اعتبارنامه از همین حالا در پنل ذخیره می‌شود |
+| HLS Sentinel-2 و HLS Landsat (`hls_s30`، `hls_l30`) | NASA Earthdata (CMR-STAC، فایل‌های LP DAAC) | **حساب رایگان**؛ توکن یا نام کاربری و رمز |
+| SRTM ۳۰ متر (`srtm30`)، ارتفاع و عمق دریا SRTM15+ (`bathy`) و پشتیبان سوم DEMها (COP30/COP90/NASADEM/AW3D30) | OpenTopography (API مستقیم) | **کلید API رایگان** |
+| Copernicus Data Space، JAXA | (گام بعد) | **ثبت‌نام یک‌باره**؛ اعتبارنامه از همین حالا در پنل ذخیره می‌شود ولی منبعی به آن‌ها وصل نیست |
+
+ماهواره‌ی حساب‌دار تا اعتبارنامه‌ی کافی نرسد پنهان است («آزمایش اتصال» برایش «غیرفعال» می‌نویسد، نه خطا). نام کاربری بدون رمز کافی نیست.
 
 دروازه در `GET /v1/missions` وضعیت هر ماهواره را می‌سنجد (برای هر تأمین‌کننده: جست‌وجوی نمونه روی تهران، **وجود نام باندها در پاسخ کاتالوگ** و خواندن یک فایل کوچک؛ ۱۰ دقیقه کش) و پنل فقط منبع در دسترس را نشان می‌دهد. اگر کاتالوگی نام یک باند را عوض کند، همین بررسی پیش از سفارش کاربر خطای دقیق می‌دهد («داراییِ لازم در کاتالوگ نیست: …»).
 
@@ -83,11 +87,17 @@ planetarycomputer.microsoft.com   *.blob.core.windows.net
 | تأمین‌کننده | کجا | در پنل چه بدهید |
 |---|---|---|
 | Copernicus Data Space | https://dataspace.copernicus.eu ← ثبت‌نام، سپس https://eodata-s3keysmanager.dataspace.copernicus.eu | شناسه‌ی دسترسی S3 و کلید محرمانه‌ی S3 |
-| NASA Earthdata | https://urs.earthdata.nasa.gov/users/new (برنامه‌های LP DAAC و ASF را در «Applications» تأیید کنید) | نام کاربری و رمز (یا توکن) |
-| OpenTopography | https://portal.opentopography.org/newUser ← «Request API key» | کلید API |
+| NASA Earthdata | https://urs.earthdata.nasa.gov/users/new؛ سپس در پروفایل ← «Earthdata Login Applications» برنامه‌ی **LP DAAC Data Pool** را تأیید کنید؛ از «Generate Token» توکن بگیرید (۶۰ روز اعتبار) | توکن (پیشنهادی) یا نام کاربری و رمز |
+| OpenTopography | https://portal.opentopography.org/newUser ← بعد از ورود «myOpenTopo» ← «Request API Key» | کلید API |
 | JAXA G-Portal | https://gportal.jaxa.jp/gpr/ | نام کاربری و رمز |
 
 شرایط استفاده‌ی هر سرویس را پیش از ثبت‌نام بخوانید؛ حساب را اپراتور دروازه (خارج از ایران) می‌سازد. اگر سرویسی ثبت‌نام را نپذیرفت، فقط همان تأمین‌کننده خاموش می‌ماند و بقیه کار می‌کنند.
+
+### Earthdata: چطور فایل خوانده می‌شود
+فایل‌های HLS توکن Bearer می‌خواهند و بعد به نشانی امضاشده‌ی S3 هدایت می‌شوند. دروازه هدایت را خودش (بدون ارسال توکن به S3) می‌گیرد و فقط نشانی امضاشده را به GDAL می‌دهد (۴۵ دقیقه کش). اگر توکن نداده باشید و نام کاربری و رمز داده باشید، دروازه با `find_or_create_token` توکن می‌سازد و ۱۲ ساعت نگه می‌دارد. پیام «دسترسی Earthdata رد شد» یعنی توکن غلط است یا برنامه‌ی LP DAAC Data Pool تأیید نشده.
+
+### OpenTopography
+خروجی GeoTIFF مستقیم از `globaldem` گرفته و به قالب یکدست لایه‌های آماده (float32، بی‌داده‌ی ‎-9999) تبدیل می‌شود. کلید فقط در نشانی درخواست می‌رود و در هیچ پیام خطا یا لاگی نمی‌آید. سهمیه‌ی روزانه‌ی خود OpenTopography برقرار است؛ ۴۲۹ یعنی تمام شده.
 
 ## تحلیل و پایش
 `POST /v1/analyze` چندضلعی‌ها (حداکثر ۱۰۰۰) و یک شاخص (NDVI، NDWI، NDMI، NBR، NDBI) را می‌گیرد (فقط برای ماهواره‌ی چندطیفی، نه رادار و لایه‌ی آماده)، تا ۲۴ تصویر بی‌ابر بازه را روی دروازه می‌خواند و فقط ردیف‌های آمار (میانگین، میانه، کمینه، بیشینه، انحراف معیار، درصد پیکسل معتبر) را به‌صورت JSON برمی‌گرداند (`GET /v1/jobs/<id>/result`). پنل آن را در جدول پایگاه داده‌ی خود کاربر می‌نویسد. پایش خودکار هم همین را هر ۷/۱۴/۳۰ روز برای تصویرهای تازه صدا می‌زند. `GET /v1/health` بار دروازه را هم برمی‌گرداند.

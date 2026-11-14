@@ -12,7 +12,7 @@ import rasterio
 from rasterio.transform import from_origin
 from rasterio.warp import transform_bounds
 
-from satgate import process, protocol, runtime, spec, stac
+from satgate import auth, otapi, process, protocol, runtime, spec, stac
 from satgate.app import Config, Gateway, make_app
 from satgate.runtime import RUNTIME, ConfigError
 from satgate.tests.test_gateway import BBOX, SECRET, make_scene
@@ -54,7 +54,7 @@ class RegistryTests(unittest.TestCase):
                 if m.kind == "layer":
                     self.assertFalse(p.needs_scene)
                     self.assertEqual(pk, key)
-                    self.assertTrue(all(s.asset for s in m.sources), key)
+                    self.assertTrue(all(s.asset or s.api for s in m.sources), key)
                 else:
                     for b in p.bands:
                         for s in m.sources:
@@ -73,7 +73,17 @@ class RegistryTests(unittest.TestCase):
         for p in spec.PROVIDERS.values():
             if p.account:
                 self.assertTrue(p.creds and p.signup and p.hosts, p.key)
-                self.assertFalse(p.implemented, p.key)
+                self.assertEqual(p.implemented, p.key in ("earthdata", "opentopography"), p.key)     # بقیه گام بعد
+
+    def test_provider_readiness_rules(self):
+        ed, ot = spec.PROVIDERS["earthdata"], spec.PROVIDERS["opentopography"]
+        self.assertTrue(ed.ready({"token": "t"}))
+        self.assertTrue(ed.ready({"user": "u", "password": "p"}))
+        self.assertFalse(ed.ready({"user": "u"}))                          # نام کاربری بدون رمز کافی نیست
+        self.assertFalse(ed.ready({}))
+        self.assertTrue(ot.ready({"api_key": "k"}))
+        self.assertFalse(ot.ready(None))
+        self.assertTrue(spec.PROVIDERS["earthsearch"].ready(None))
 
 
 class RuntimeTests(Base):
@@ -542,14 +552,300 @@ class ApiTests(Base):
         self.assertFalse(p["mask"])                                             # L1C ماسک ندارد؛ بی‌صدا خاموش می‌شود
 
     def test_missions_endpoint_lists_every_mission_with_sources(self):
+        self.call("PUT", "/v1/config", cfg_doc(providers={"earthdata": {"enabled": True, "cred": {"token": "T"}},
+                                                          "opentopography": {"enabled": True, "cred": {"api_key": "K"}}}))
         names = {a for m in spec.MISSIONS.values() for s_ in m.sources for a in (*s_.assets.values(), s_.mask_asset, s_.asset) if a}
         feat = {"id": "X", "assets": {a: {"href": "https://x.example/" + a} for a in names}}
         self.gw.fetch = lambda url, body=None, timeout=30: {"features": [feat]}
-        with mock.patch.object(stac, "_read_head", lambda href: b"x"):
+        with mock.patch.object(stac, "_read_head", lambda href: b"x"), mock.patch.object(otapi, "probe", lambda *a, **k: 1000):
             res = self.call("GET", "/v1/missions?refresh=1")["json"]["missions"]
         self.assertEqual(set(res), set(spec.MISSIONS))
         self.assertTrue(all(v["ok"] for v in res.values()), {k: v for k, v in res.items() if not v["ok"]})
         self.assertEqual(set(res["sentinel2"]["sources"]), {"earthsearch", "planetary"})
+        self.assertEqual(set(res["dem"]["sources"]), {"earthsearch", "planetary", "opentopography"})
+
+
+class AccountMissionTests(Base):
+    """ماهواره‌ی حساب‌دار تا اعتبارنامه نرسد پنهان است؛ با رسیدنش فعال می‌شود."""
+
+    def test_missions_need_credentials(self):
+        self.assertEqual(RUNTIME.sources("hls_s30"), [])
+        self.assertEqual(RUNTIME.sources("srtm30"), [])
+        self.assertEqual([s.provider for s in RUNTIME.sources("dem")], ["earthsearch", "planetary"])      # OT فقط با کلید
+        RUNTIME.apply(cfg_doc(providers={"earthdata": {"enabled": True, "cred": {"user": "u"}}}))
+        self.assertEqual(RUNTIME.sources("hls_s30"), [])                                                   # رمز ندارد
+        RUNTIME.apply(cfg_doc(providers={"earthdata": {"enabled": True, "cred": {"token": "T"}},
+                                         "opentopography": {"enabled": True, "cred": {"api_key": "K"}}}))
+        self.assertEqual([s.provider for s in RUNTIME.sources("hls_s30")], ["earthdata"])
+        self.assertEqual([s.provider for s in RUNTIME.sources("dem")], ["earthsearch", "planetary", "opentopography"])
+        RUNTIME.apply(cfg_doc(providers={"opentopography": {"enabled": True, "cred": {"api_key": "K"}}}, missions={"dem": {"prefer": "opentopography"}}))
+        self.assertEqual(RUNTIME.sources("dem")[0].provider, "opentopography")
+
+    def test_hls_search_uses_cmr_stac_and_cloud_filter(self):
+        RUNTIME.apply(cfg_doc(providers={"earthdata": {"enabled": True, "cred": {"token": "T"}}}))
+        seen = {}
+
+        def fake(url, body=None, timeout=30):
+            seen.update(url=url, body=body)
+            return {"features": [{"id": "HLS.S30.T39SUQ.2026152T071229.v2.0", "collection": "HLSS30.v2.0", "geometry": FULL,
+                                  "properties": {"datetime": "2026-06-01T07:12:29Z", "eo:cloud_cover": 7}}]}
+        res = stac.search(BBOX, "2026-06-01", "2026-06-30", 20, fetch=fake, mission="hls_s30")
+        self.assertEqual(seen["url"], "https://cmr.earthdata.nasa.gov/stac/LPCLOUD/search")
+        self.assertEqual(seen["body"]["collections"], ["HLSS30.v2.0"])
+        self.assertEqual(seen["body"]["query"], {"eo:cloud_cover": {"lte": 20.0}})
+        self.assertEqual((res[0]["source"], res[0]["satellite"]), ("earthdata", "HLS Sentinel-2"))
+
+    def test_hls_mask_bits(self):
+        mask = np.array([[0, 2, 4, 8, 16, 32, 255, 64]], dtype="uint8")        # پاک، ابر، مجاور، سایه، برف، آب، بی‌داده، آئروسل
+        bad = process.bad_pixels("hls_s30", mask)
+        self.assertEqual(bad.tolist(), [[False, True, True, True, False, False, True, False]])
+
+    def make_hls(self, nir=3000, red=1000, fmask=None):
+        w, s, e, n = transform_bounds("EPSG:4326", "EPSG:32639", 51.1, 35.5, 51.55, 35.95)
+        ox, oy = int(w // 30 * 30), int(n // 30 * 30)
+        size = int((e - w) / 30) + 2, int((n - s) / 30) + 2
+        assets = {}
+        for name, v in {"B04": red, "B03": 1200, "B02": 900, "B8A": nir, "B11": 2000, "B12": 1600}.items():
+            arr = np.full((size[1], size[0]), v, dtype="int16")
+            arr[0, 0] = -9999
+            path = self.root / f"hls_{name}.tif"
+            with rasterio.open(path, "w", driver="GTiff", width=size[0], height=size[1], count=1, dtype="int16", crs="EPSG:32639",
+                               transform=from_origin(ox, oy, 30, 30), nodata=-9999) as dst:
+                dst.write(arr, 1)
+            assets[name] = {"href": str(path)}
+        fm = np.zeros((size[1], size[0]), dtype="uint8") if fmask is None else fmask(size)
+        fpath = self.root / "hls_Fmask.tif"
+        with rasterio.open(fpath, "w", driver="GTiff", width=size[0], height=size[1], count=1, dtype="uint8", crs="EPSG:32639",
+                           transform=from_origin(ox, oy, 30, 30), nodata=255) as dst:
+            dst.write(fm, 1)
+        assets["Fmask"] = {"href": str(fpath)}
+        return {"id": "HLS.S30.T39SUQ.2026152T071229.v2.0", "collection": "HLSS30.v2.0", "assets": assets,
+                "properties": {"datetime": "2026-06-01T07:12:29Z", "eo:cloud_cover": 3}}
+
+    def test_hls_ndvi_scale_and_mask(self):
+        item = self.make_hls(nir=4000, red=2000)
+        out = process.build_scene(item, "hls_s30", "ndvi", BBOX, self.root / "h.tif", mask=True)
+        with rasterio.open(out) as ds:
+            self.assertAlmostEqual(float(ds.read(1).mean()), (0.4 - 0.2) / (0.4 + 0.2), places=2)       # مقیاس ۰٫۰۰۰۱ و بدون جابه‌جایی
+            self.assertAlmostEqual(ds.res[0], 30, places=3)
+        cloudy = self.make_hls(fmask=lambda size: np.full((size[1], size[0]), 2, dtype="uint8"))
+        out = process.build_scene(cloudy, "hls_s30", "ndvi", BBOX, self.root / "c.tif", mask=True)
+        with rasterio.open(out) as ds:
+            self.assertTrue((ds.read(1) == -9999).all())
+
+    def test_hls_composite_on_common_grid(self):
+        item = self.make_hls(nir=4000, red=2000)
+        out, used = process.build_composite([item], "hls_s30", "ndvi", BBOX, self.root / "hc.tif")
+        self.assertEqual(used, 1)
+        with rasterio.open(out) as ds:
+            self.assertAlmostEqual(float(np.median(ds.read(1))), 1 / 3, places=2)
+
+    def test_nodata_edge_is_not_blended_into_values(self):
+        """بی‌داده‌ی -9999 باید به بی‌داده‌ی خروجی بروند و با بازنمونه‌گیری مقدار کاذب نسازند."""
+        item = self.make_hls(nir=4000, red=2000)
+        grid = process.utm_grid(BBOX, 30)
+        r = process.scene_refl(item, "hls_s30", ("red",), grid, mask=False)["red"]
+        valid = r[np.isfinite(r)]
+        self.assertTrue(np.allclose(valid, 0.2, atol=1e-4))
+
+    def test_earthdata_token_resolve_and_redirect(self):
+        import io
+        import urllib.error
+        auth.reset()
+        self.addCleanup(auth.reset)
+        RUNTIME.apply(cfg_doc(providers={"earthdata": {"enabled": True, "cred": {"token": "TOK"}}}))
+        seen = []
+
+        def opener(req, timeout=20):
+            seen.append((req.full_url, req.get_header("Authorization"), req.get_header("Range")))
+            raise urllib.error.HTTPError(req.full_url, 302, "Found", {"Location": "https://s3.example/presigned?sig=1"}, io.BytesIO())
+        href = "https://data.lpdaac.earthdatacloud.nasa.gov/lp-protected/HLSS30.020/x/x.B04.tif"
+        self.assertEqual(auth.resolve_edl(href, opener), "https://s3.example/presigned?sig=1")
+        self.assertEqual(auth.resolve_edl(href, opener), "https://s3.example/presigned?sig=1")        # کش
+        self.assertEqual(seen, [(href, "Bearer TOK", "bytes=0-0")])
+        with mock.patch.object(auth, "_open_noredirect", opener):
+            auth._urls.clear()
+            self.assertEqual(stac.sign_href("HLSS30.v2.0", href), "https://s3.example/presigned?sig=1")
+        self.assertEqual(stac.sign_href("HLSS30.v2.0", "https://other.example/x.tif"), "https://other.example/x.tif")
+
+    def test_earthdata_errors_are_explained(self):
+        import io
+        import urllib.error
+        auth.reset()
+        self.addCleanup(auth.reset)
+        href = "https://data.lpdaac.earthdatacloud.nasa.gov/lp-protected/x.tif"
+        with self.assertRaises(auth.AuthError):                                  # بدون اعتبارنامه
+            auth.resolve_edl(href, lambda *a, **k: None)
+        RUNTIME.apply(cfg_doc(providers={"earthdata": {"enabled": True, "cred": {"token": "TOK"}}}))
+
+        def deny(req, timeout=20):
+            raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO())
+        with self.assertRaises(auth.AuthError) as e:
+            auth.resolve_edl(href, deny)
+        self.assertIn("LP DAAC", str(e.exception))
+        with mock.patch.object(auth, "_open_noredirect", deny), self.assertRaises(stac.StacError):
+            stac.sign_href("HLSS30.v2.0", href)
+
+    def test_token_is_made_from_user_and_password_and_cached(self):
+        import io
+        auth.reset()
+        self.addCleanup(auth.reset)
+        RUNTIME.apply(cfg_doc(providers={"earthdata": {"enabled": True, "cred": {"user": "me", "password": "pw"}}}))
+        calls = []
+
+        class R(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def opener(req, timeout=20):
+            calls.append((req.full_url, req.get_header("Authorization")))
+            return R(b'{"access_token": "GENERATED", "token_type": "Bearer"}')
+        self.assertEqual(auth.edl_token(opener), "GENERATED")
+        self.assertEqual(auth.edl_token(opener), "GENERATED")
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(calls[0][1].startswith("Basic "))
+        self.assertIn("find_or_create_token", calls[0][0])
+
+
+def tiff_bytes(value=1500, dtype="int16", nodata=-32768, size=20) -> bytes:
+    from rasterio.io import MemoryFile
+    with MemoryFile() as mf:
+        with mf.open(driver="GTiff", width=size, height=size, count=1, dtype=dtype, crs="EPSG:4326",
+                     transform=from_origin(51.29, 35.72, 0.001, 0.001), nodata=nodata) as dst:
+            arr = np.full((size, size), value, dtype=dtype)
+            arr[0, 0] = nodata
+            dst.write(arr, 1)
+        return mf.read()
+
+
+class OpenTopographyTests(Base):
+    def fake(self, body: bytes, calls=None):
+        class R(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def opener(req, timeout=0):
+            if calls is not None:
+                calls.append(req.full_url)
+            return R(body)
+        return opener
+
+    def test_url_has_all_parameters_and_download_checks_magic(self):
+        calls = []
+        dest = self.root / "o.tif"
+        n = otapi.fetch_geotiff("SRTMGL1", BBOX, "KEY123", "https://portal.opentopography.org/API", dest, self.fake(tiff_bytes(), calls))
+        self.assertGreater(n, 100)
+        self.assertIn("demtype=SRTMGL1", calls[0])
+        self.assertIn("south=35.700000", calls[0])
+        self.assertIn("outputFormat=GTiff", calls[0])
+        self.assertIn("API_Key=KEY123", calls[0])
+        with self.assertRaises(otapi.OTError) as e:
+            otapi.fetch_geotiff("SRTMGL1", BBOX, "K", "https://x.example/API", self.root / "bad.tif", self.fake(b"<html>error</html>"))
+        self.assertFalse((self.root / "bad.tif").exists())
+        self.assertNotIn("K", str(e.exception).replace("OpenTopography", "").replace("درخواست", ""))
+        with self.assertRaises(otapi.OTError):
+            otapi.fetch_geotiff("SRTMGL1", BBOX, "", "https://x.example/API", self.root / "n.tif")        # بدون کلید
+
+    def test_http_errors_are_mapped_and_never_leak_the_key(self):
+        import urllib.error
+        for code, word in ((401, "نامعتبر"), (403, "اجازه"), (204, "ندارد"), (400, "رد کرد"), (429, "سهمیه"), (500, "۵۰۰".replace("۵۰۰", "500"))):
+            def opener(req, timeout=0, code=code):
+                raise urllib.error.HTTPError(req.full_url, code, "x", {}, io.BytesIO())
+            with self.assertRaises(otapi.OTError) as e:
+                otapi.fetch_geotiff("COP30", BBOX, "SECRETKEY", "https://x.example/API", self.root / "e.tif", opener)
+            self.assertIn(word, str(e.exception))
+            self.assertNotIn("SECRETKEY", str(e.exception))
+
+        def down(req, timeout=0):
+            raise urllib.error.URLError("boom SECRETKEY")
+        with self.assertRaises(otapi.OTError) as e:
+            otapi.fetch_geotiff("COP30", BBOX, "SECRETKEY", "https://x.example/API", self.root / "e.tif", down)
+        self.assertNotIn("SECRETKEY", str(e.exception))
+
+    def test_size_cap(self):
+        with self.assertRaises(otapi.OTError):
+            otapi.fetch_geotiff("COP30", BBOX, "K", "https://x.example/API", self.root / "big.tif", self.fake(tiff_bytes(size=200)), max_bytes=500)
+
+    def test_raw_geotiff_becomes_float32_with_minus_9999(self):
+        raw = self.root / "raw.tif"
+        raw.write_bytes(tiff_bytes(1500))
+        out = process.build_layer_from_file(raw, "srtm30", self.root / "out.tif")
+        with rasterio.open(out) as ds:
+            data = ds.read(1)
+            self.assertEqual((ds.dtypes[0], ds.nodata), ("float32", -9999.0))
+            self.assertEqual(float(data[0, 0]), -9999.0)
+            self.assertAlmostEqual(float(data[5, 5]), 1500.0)
+        empty = self.root / "empty.tif"
+        empty.write_bytes(tiff_bytes(-32768))
+        with self.assertRaises(process.ProcessError):
+            process.build_layer_from_file(empty, "bathy", self.root / "e.tif")
+
+    def test_probe_and_check_source(self):
+        RUNTIME.apply(cfg_doc(providers={"opentopography": {"enabled": True, "cred": {"api_key": "K"}}}))
+        with mock.patch.object(otapi, "probe", lambda *a, **k: 5000):
+            r = stac.check_mission("srtm30", strict=True)
+        self.assertTrue(r["ok"], r)
+
+        def bad(*a, **k):
+            raise otapi.OTError("کلید OpenTopography نامعتبر است.")
+        with mock.patch.object(otapi, "probe", bad):
+            r = stac.check_mission("srtm30", strict=True)
+        self.assertEqual((r["ok"], r["error"]), (False, "کلید OpenTopography نامعتبر است."))
+
+    def gateway(self, fetch):
+        cfg = Config({"SATGATE_SECRET": SECRET, "SATGATE_PANEL_URL": "https://panel.test", "SATGATE_DATA": str(self.root / "d"),
+                      "SATGATE_MAX_KM2": "200", "SATGATE_WORKERS": "1"})
+        gw = Gateway(cfg, fetch=fetch, post=lambda path, body: None)
+        gw.notify = lambda job: None
+        self.addCleanup(gw.pool.shutdown, True)
+        return gw
+
+    def run_job(self, gw, mission, jid="9" * 32):
+        gw.store.put({"id": jid, "status": "queued", "product": mission, "mission": mission, "bbox": BBOX, "scene": "", "created": int(time.time()),
+                      "message": "", "mask": False, "composite": None, "source": ""})
+        gw.run(jid)
+        return gw.store.get(jid)
+
+    def test_layer_falls_back_to_opentopography_when_catalogs_fail(self):
+        RUNTIME.apply(cfg_doc(providers={"opentopography": {"enabled": True, "cred": {"api_key": "K"}}}))
+
+        def down(url, body=None, timeout=30):
+            raise stac.StacError("وصل نشدیم")
+        gw = self.gateway(down)
+        with mock.patch("urllib.request.urlopen", side_effect=self.fake(tiff_bytes(900))):
+            job = self.run_job(gw, "dem")
+        self.assertEqual(job["status"], "ready", job)
+        with rasterio.open(gw.store.file("9" * 32)) as ds:
+            self.assertEqual((ds.dtypes[0], round(float(ds.read(1)[5, 5]))), ("float32", 900))
+        self.assertFalse(list((self.root / "d").rglob("*.raw")))             # فایل خام پاک شد
+
+    def test_opentopography_only_layer_and_error_message(self):
+        RUNTIME.apply(cfg_doc(providers={"opentopography": {"enabled": True, "cred": {"api_key": "K"}}}))
+        gw = self.gateway(lambda *a, **k: {"features": []})
+        with mock.patch("urllib.request.urlopen", side_effect=self.fake(tiff_bytes(-300))):
+            job = self.run_job(gw, "bathy")
+        self.assertEqual(job["status"], "ready", job)
+        import urllib.error
+
+        def deny(req, timeout=0):
+            raise urllib.error.HTTPError(req.full_url, 401, "x", {}, io.BytesIO())
+        with mock.patch("urllib.request.urlopen", side_effect=deny):
+            job = self.run_job(gw, "srtm30", "8" * 32)
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("کلید OpenTopography نامعتبر", job["message"])
+        self.assertNotIn("API_Key", job["message"])
+
+    def test_layer_without_key_is_off(self):
+        gw = self.gateway(lambda *a, **k: {"features": []})
+        job = self.run_job(gw, "srtm30")
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("خاموش", job["message"])
 
 
 if __name__ == "__main__":

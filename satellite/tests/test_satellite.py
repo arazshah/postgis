@@ -704,6 +704,20 @@ class ProbeTests(TestCase):
         self.assertTrue(all(ok for ok, _ in steps), steps)
         self.assertEqual(len(steps), 6 + len(MISSIONS))
 
+    def test_missing_key_is_informational_not_a_failure(self):
+        from satgate.spec import MISSIONS
+        health = mock.MagicMock()
+        health.__enter__.return_value.read.return_value = b'{"ok": true, "version": "1.3", "configured": true}'
+        live = {k: {"ok": True, "ms": 5, "sources": {m.primary.provider: {"ok": True}}} for k, m in MISSIONS.items()}
+        live["hls_s30"] = {"ok": False, "ms": 0, "error": "x", "disabled": True, "sources": {}}
+        replies = [{"ok": True}, {"missions": live}, {"scenes": []}]
+        with mock.patch("urllib.request.urlopen", return_value=health), mock.patch("satellite.client.call", side_effect=replies), \
+                mock.patch("satellite.sources.push", return_value=(True, "پیکربندی به دروازه رسید.")):
+            steps = probe.run()
+        line = next((ok, t) for ok, t in steps if t.startswith("HLS Sentinel-2"))
+        self.assertTrue(line[0])
+        self.assertIn("غیرفعال", line[1])
+
     def test_unhealthy_provider_shows_its_reason(self):
         from satgate.spec import MISSIONS
         health = mock.MagicMock()

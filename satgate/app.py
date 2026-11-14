@@ -15,8 +15,16 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import analysis, protocol, stac
-from .process import ProcessError, build_composite, build_layer, build_sar, build_scene, check_limits
+from . import analysis, otapi, protocol, stac
+from .process import (
+    ProcessError,
+    build_composite,
+    build_layer,
+    build_layer_from_file,
+    build_sar,
+    build_scene,
+    check_limits,
+)
 from .runtime import RUNTIME, ConfigError
 from .spec import COLLECTION_S2, DEM_MISSION, MISSIONS, get_product, valid_bbox
 from .store import ID_RE, Store
@@ -173,8 +181,7 @@ class Gateway:
             sign = lambda href, c=spec.collection: stac.sign_href(c, href, self.fetch)  # noqa: E731
             extra = {}
             if m.kind == "layer":
-                src, items = stac.layer_items(m, job["bbox"], self.fetch, job.get("source") or None)
-                build_layer(items, mission, job["bbox"], part, sign=sign, source=src)
+                self._build_layer(job, m, mission, part, sign)
             elif job.get("composite") or m.kind == "sar":
                 items, src = self._composite_items(job, mission, m)
                 if m.kind == "sar":
@@ -206,6 +213,31 @@ class Gateway:
             detail = f": {exc}"[:160] if isinstance(exc, (ImportError, OSError)) else ""
             job = self.store.update(jid, status="failed", message=f"پردازش ناموفق بود ({exc.__class__.__name__}{detail}).")
         self.notify(job)
+
+    def _build_layer(self, job: dict, m, mission: str, part: Path, sign) -> None:
+        """لایه‌ی آماده: منبع‌ها به ترتیب اولویت امتحان می‌شوند (کاتالوگ STAC یا API مستقیم)؛ اولین موفق می‌ماند."""
+        srcs = stac.ordered_sources(m, job.get("source") or None)
+        if not srcs:
+            raise ProcessError("این لایه فعلاً از پنل خاموش است.")
+        last: Exception | None = None
+        for src in srcs:
+            try:
+                if src.api == "opentopography":
+                    raw = part.with_suffix(".raw")
+                    try:
+                        otapi.fetch_geotiff(src.collection, job["bbox"], RUNTIME.cred("opentopography", "api_key"),
+                                            RUNTIME.provider_url("opentopography"), raw)
+                        build_layer_from_file(raw, mission, part)
+                    finally:
+                        raw.unlink(missing_ok=True)
+                else:
+                    s2, items = stac.layer_items(m, job["bbox"], self.fetch, src.provider)
+                    build_layer(items, mission, job["bbox"], part, sign=sign, source=s2)
+                return
+            except (stac.StacError, ProcessError, otapi.OTError) as exc:
+                part.unlink(missing_ok=True)
+                last = exc
+        raise ProcessError(str(last)) if isinstance(last, otapi.OTError) else last
 
     def _composite_items(self, job: dict, mission: str, m) -> tuple[list[dict], object]:
         """تصویرهای بازه را خود دروازه پیدا می‌کند: کم‌ابرترین‌ها با پوشش کافی، تا سقف تعداد.
