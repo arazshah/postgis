@@ -23,6 +23,7 @@ from .models import Batch, Coupon, Message, Preference, Route
 log = logging.getLogger(__name__)
 PLUGIN = "winback"
 WEEK_CAP, MONTH_CAP, WINDOW_DAYS, PER_TICK, PLAN_HOUR = 1, 3, 7, 20, 5
+FALLBACK_DAYS = 3  # «اول ایمیل، بعد پیامک»: صبر تا این روز برای کلیک/بازگشت
 
 
 def sync_routes() -> None:
@@ -67,11 +68,19 @@ def _eligible(user, d: routes.RouteDef, now) -> bool:
     return not busy and not recent
 
 
-def _collect(d: routes.RouteDef, now, cap: int) -> list:
+def effective_channel(route: Route, d: routes.RouteDef) -> str:
+    """کانال تنظیم‌شده‌ی مسیر، محدود به کانال‌های مجاز تعریف آن (مسیر ایمیلی هرگز پیامک نمی‌شود)."""
+    return route.channel if route.channel in d.channels else d.channels[0]
+
+
+def _collect(d: routes.RouteDef, now, cap: int, route: Route | None = None) -> list:
+    """(user, extra, dest, db_id, channel)؛ کاربرِ بدون کانال لازم این مسیر کنار گذاشته می‌شود."""
+    wanted = effective_channel(route, d) if route else "sms"
     rows = []
     for user, extra, dest, db_id in d.pick(now):
-        if _eligible(user, d, now):
-            rows.append((user, extra, dest, db_id))
+        ch = routes.channel_for(user, wanted)
+        if ch and _eligible(user, d, now):
+            rows.append((user, extra, dest, db_id, ch))
         if len(rows) >= cap:
             break
     return rows
@@ -79,7 +88,11 @@ def _collect(d: routes.RouteDef, now, cap: int) -> list:
 
 def _variant(user, key: str, route: Route) -> str:
     """نصف‌نصف و ثابت برای هر کاربر؛ بدون قالب B همیشه A."""
-    if not route.template_id_b or not routes.DEFS[key].variant_b:
+    d = routes.DEFS[key]
+    ch = effective_channel(route, d)
+    has_sms_b = ch in ("sms", "both", "email_sms") and route.template_id_b and d.variant_b
+    has_email_b = ch != "sms" and (route.email_subject_b or d.email_subject_b)
+    if not (has_sms_b or has_email_b):
         return "A"
     return "B" if hashlib.sha256(f"ab:{user.pk}:{key}".encode()).digest()[0] % 2 else "A"
 
@@ -88,11 +101,20 @@ def _make_batch(route: Route, d: routes.RouteDef, rows: list, today, fixed: dict
     with transaction.atomic():
         batch = Batch.objects.create(route=route)
         Message.objects.bulk_create([
-            Message(batch=batch, user=u, route_key=d.key, phone=u.phone, dest=dest, variant=_variant(u, d.key, route),
+            Message(batch=batch, user=u, route_key=d.key, phone=(u.phone if routes.has_sms(u) else ""),
+                    email=(u.email if routes.has_email(u) else ""), channel=ch, dest=dest, variant=_variant(u, d.key, route),
                     params={**extra, "NAME": routes.first_name(u), **(fixed or {}), **({"_db": db_id} if db_id else {})},
                     status=Message.Status.CONTROL if _is_control(u, d.key, today) else Message.Status.PENDING)
-            for u, extra, dest, db_id in rows])
+            for u, extra, dest, db_id, ch in rows])
     return batch
+
+
+def ready(route: Route) -> bool:
+    """مسیر برای ارسال آماده است؟ مسیر دارای پیامک قالب sms.ir می‌خواهد؛ مسیر فقط‌ایمیلی نه."""
+    d = routes.DEFS.get(route.key)
+    if d is None:
+        return False
+    return effective_channel(route, d) == "email" or bool(route.template_id)
 
 
 def plan_batches(now=None) -> list[Batch]:
@@ -102,12 +124,12 @@ def plan_batches(now=None) -> list[Batch]:
     cap = int(conf.get(PLUGIN, "max_batch") or 300)
     today = now.astimezone(timing.TZ).date()
     made = []
-    for route in Route.objects.filter(enabled=True).exclude(template_id=""):
+    for route in Route.objects.filter(enabled=True):
         d = routes.DEFS.get(route.key)
-        if d is None or d.manual_only or route.batches.filter(status=Batch.Status.PENDING).exists() or \
+        if d is None or d.manual_only or not ready(route) or route.batches.filter(status=Batch.Status.PENDING).exists() or \
                 route.batches.filter(created_at__date=today).exists():
             continue
-        rows = _collect(d, now, cap)
+        rows = _collect(d, now, cap, route)
         if rows:
             made.append(_make_batch(route, d, rows, today))
     return made
@@ -117,22 +139,26 @@ def manual_estimate(route: Route, fixed: dict, limit: int, now=None) -> dict:
     """پیش‌نمایش ارسال دستی بدون ساخت چیزی: تعداد، کنترل، بخش پیامک و نمونه."""
     now = now or timezone.now()
     d = routes.DEFS[route.key]
-    rows = _collect(d, now, limit)
+    rows = _collect(d, now, limit, route)
     today = now.astimezone(timing.TZ).date()
     control = sum(1 for r in rows if _is_control(r[0], d.key, today))
     demo = {"NAME": "علی", "LINK": "Ab3xK9aQ", "STOP": "Ab3xK9aQ", "DB": "پایگاه من",
             "DAYS": "45", "AMOUNT": "490,000"}
     sample = routes.render(d.text("A"), {**demo, **fixed})
     real = len(rows) - control
-    return {"rows": rows, "count": len(rows), "control": control, "real": real, "segments": real * routes.segments(sample),
-            "sample": sample}
+    sms_n = sum(1 for r in rows if r[4] in ("sms", "both", "email_sms") and not _is_control(r[0], d.key, today))
+    email_n = sum(1 for r in rows if r[4] != "sms" and not _is_control(r[0], d.key, today))
+    subject = email_subject(d, route, "A", {**demo, **fixed})
+    return {"rows": rows, "count": len(rows), "control": control, "real": real,
+            "segments": sms_n * routes.segments(sample) if sample else 0, "sample": sample,
+            "sms_n": sms_n, "email_n": email_n, "email_subject": subject}
 
 
 def manual_send(route: Route, fixed: dict, limit: int, admin_user, now=None) -> tuple[Batch | None, int]:
     """ساخت و تأیید یک‌جای دسته‌ی دستی (فراخوان باید stepup را گذرانده باشد). همان قاعده‌های رضایت/سقف/کنترل/زمان."""
     now = now or timezone.now()
     d = routes.DEFS[route.key]
-    rows = _collect(d, now, limit)
+    rows = _collect(d, now, limit, route)
     if not rows:
         return None, 0
     batch = _make_batch(route, d, rows, now.astimezone(timing.TZ).date(), fixed)
@@ -149,13 +175,27 @@ def sms_params(msg: Message) -> dict[str, str]:
     LINK و STOP فقط «کد کوتاه» انتهای لینک‌اند؛ دامنه و مسیر ثابتِ داخل متن قالب است (شرط sms.ir).
     """
     allp = {**{k: v for k, v in msg.params.items() if not k.startswith("_")}, "LINK": msg.code, "STOP": msg.code}
-    text = routes.DEFS[msg.route_key].text(msg.variant)
+    text = routes.DEFS[msg.route_key].text(sms_variant(msg))
     return {k: v for k, v in allp.items() if f"#{k}#" in text}
+
+
+def sms_variant(msg: Message, route: Route | None = None) -> str:
+    """B فقط وقتی قالب B واقعاً ساخته شده (آزمون A/B ایمیل نباید پیامک را به متن بی‌قالب ببرد)."""
+    route = route or Route.objects.filter(key=msg.route_key).first()
+    return "B" if msg.variant == "B" and route is not None and route.template_id_b else "A"
+
+
+def email_subject(d: routes.RouteDef, route: Route, variant: str, params: dict) -> str:
+    raw = (route.email_subject_b or d.email_subject_b) if variant == "B" else ""
+    raw = raw or route.email_subject or d.email_subject
+    return " ".join(routes.render(raw, params).split())[:150]
 
 
 def preview(msg: Message) -> str:
     d = routes.DEFS[msg.route_key]
-    return routes.render(d.text(msg.variant), sms_params(msg))
+    if msg.channel == "email" or not d.template:
+        return f"[ایمیل] {email_subject(d, Route.objects.get(key=msg.route_key), msg.variant, {**msg.params, 'LINK': msg.code, 'STOP': msg.code})}"
+    return routes.render(d.text(sms_variant(msg)), sms_params(msg))
 
 
 @transaction.atomic
@@ -190,6 +230,39 @@ def _skip(msg: Message, reason: str) -> None:
     msg.save(update_fields=["status", "reason"])
 
 
+def _email_cap_left(now) -> int:
+    """سقف روزانه‌ی ایمیل بازاریابی (جدا از سقف کل سرور) تا بازاریابی ایمیل‌های امنیتی و رسید را گرسنه نکند."""
+    cap = int(conf.get(PLUGIN, "email_daily_cap") or 0)
+    used = Message.objects.filter(sent_at__gte=now - datetime.timedelta(hours=24), via__contains="email").count()
+    return max(cap - used, 0)
+
+
+def _email_headers(msg: Message) -> dict:
+    url = f"{settings.CANONICAL_URL.rstrip('/')}/r/{msg.code}/oneclick/"
+    return {"List-Unsubscribe": f"<{url}>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}
+
+
+def send_email(msg: Message, d: routes.RouteDef, route: Route) -> str:
+    """ایمیل بازاریابی را در صف kernel.mail می‌گذارد. برمی‌گرداند "" در موفقیت، وگرنه دلیل (فارسی/کد کوتاه)."""
+    from kernel import mail
+
+    base = settings.CANONICAL_URL.rstrip("/")
+    params = {**{k: v for k, v in msg.params.items() if not k.startswith("_")}, "LINK": msg.code, "STOP": msg.code}
+    ctx = {
+        "subject": email_subject(d, route, msg.variant, params),
+        "paragraphs": [routes.render(line, params) for line in d.email_body.splitlines() if line.strip()],
+        "url": f"{base}/r/{msg.code}/?c=e", "label": d.email_cta,
+        "unsubscribe_url": f"{base}/r/{msg.code}/stop/",
+        "reason": "این ایمیل را چون در ژئوپایگاه حساب دارید دریافت کرده‌اید.",
+    }
+    row = mail.send("winback", user=msg.user, to=msg.email, context=ctx, key=f"wb:{msg.code}", headers=_email_headers(msg))
+    if row is None:
+        return "ایمیل در صف نرفت"
+    if row.status == "skipped":
+        return {"unverified": "ایمیل تأییدنشده", "no-consent": "رضایت ندارد", "pref-off": "ایمیل خاموش"}.get(row.error, row.error)
+    return ""
+
+
 def send_due(now=None) -> dict:
     from accounts import sms
 
@@ -199,15 +272,20 @@ def send_due(now=None) -> dict:
                .select_related("user", "batch__route").order_by("send_at")[:PER_TICK])
     if not due:
         return out
-    credit = sms.get_credit()
-    if credit is not None and credit < len(due):
-        out["failed"] = -1  # اعتبار کم؛ بعداً دوباره
-        return out
+    sms_due = sum(1 for m in due if m.channel in ("sms", "both"))
+    credit = sms.get_credit() if sms_due else None
+    sms_ok = credit is None or credit >= sms_due
+    email_left = _email_cap_left(now)
     for m in due:
         route = m.batch.route
-        tid = route.template_id_b if m.variant == "B" and route.template_id_b else route.template_id
-        if not route.enabled or not tid or m.batch.status != Batch.Status.APPROVED:
+        d = routes.DEFS.get(m.route_key)
+        tid = route.template_id_b if sms_variant(m, route) == "B" else route.template_id
+        sms_leg = m.channel in ("sms", "both") and bool(tid) and bool(m.phone)
+        email_leg = m.channel in ("email", "both", "email_sms") and bool(m.email)
+        if d is None or not route.enabled or m.batch.status != Batch.Status.APPROVED:
             _skip(m, "مسیر خاموش یا لغو شده")
+        elif not (sms_leg or email_leg):
+            _skip(m, "قالب پیامک یا ایمیل کاربر موجود نیست")
         elif not wants(m.user) or not m.user.is_active:
             _skip(m, "لغو یا غیرفعال")
         elif m.user.last_login and m.user.last_login > m.batch.created_at:
@@ -219,19 +297,82 @@ def send_due(now=None) -> dict:
             m.save(update_fields=["send_at"])
             continue
         else:
-            try:
-                sms.send_template(m.phone, tid, sms_params(m))
-            except sms.SMSError as exc:
-                m.status, m.reason = Message.Status.FAILED, str(exc)[:200]
+            via, errors = [], []
+            if email_leg:
+                if email_left <= 0:
+                    errors.append("سقف روزانه‌ی ایمیل بازاریابی")
+                    if not sms_leg:
+                        continue  # فردا دوباره؛ زمان‌بندی همان می‌ماند
+                else:
+                    why = send_email(m, d, route)
+                    if why:
+                        errors.append(why)
+                    else:
+                        via.append("email")
+                        email_left -= 1
+            if sms_leg:
+                if not sms_ok:
+                    if not via:
+                        continue  # اعتبار پیامک کم است؛ بعداً دوباره
+                else:
+                    try:
+                        sms.send_template(m.phone, tid, sms_params(m))
+                        via.append("sms")
+                    except sms.SMSError as exc:
+                        errors.append(str(exc))
+            if not via:
+                m.status, m.reason = Message.Status.FAILED, "؛ ".join(errors)[:200]
                 m.save(update_fields=["status", "reason"])
                 out["failed"] += 1
                 continue
-            m.status, m.sent_at = Message.Status.SENT, now
-            m.save(update_fields=["status", "sent_at"])
+            m.status, m.sent_at, m.via = Message.Status.SENT, now, "+".join(via)
+            if m.channel == "email_sms" and "email" in via and m.phone and route.template_id:
+                m.sms_fallback_at = now + datetime.timedelta(days=FALLBACK_DAYS)
+            m.save(update_fields=["status", "sent_at", "via", "sms_fallback_at"])
             out["sent"] += 1
             continue
         out["skipped"] += 1
     return out
+
+
+def send_fallbacks(now=None) -> int:
+    """«اول ایمیل، بعد پیامک»: اگر تا ۳ روز نه کلیک شد نه کاربر برگشت، همان پیام یک‌بار با پیامک می‌رود (هزینه فقط برای بی‌پاسخ‌ها).
+
+    رضایت و پنجره‌ی زمانی دوباره سنجیده می‌شود؛ سقف دفعات نه (همین پیام خودش در سقف شمرده شده است).
+    """
+    from accounts import sms
+
+    now = now or timezone.now()
+    n = 0
+    due = list(Message.objects.filter(status=Message.Status.SENT, sms_fallback_at__isnull=False, sms_fallback_at__lte=now)
+               .select_related("user")[:PER_TICK])
+    credit = sms.get_credit() if due else None
+    left = None if credit is None else int(credit)
+    for m in due:
+        route = Route.objects.filter(key=m.route_key).first()
+        done = (m.clicked_at or m.returned_at or not wants(m.user) or not m.user.is_active or route is None
+                or not route.enabled or not route.template_id or not m.phone
+                or (m.user.last_login and m.sent_at and m.user.last_login > m.sent_at))
+        if done:
+            m.sms_fallback_at = None
+            m.save(update_fields=["sms_fallback_at"])
+            continue
+        if not timing.in_window(now) or (left is not None and left < 1):
+            continue
+        tid = route.template_id_b if sms_variant(m, route) == "B" else route.template_id
+        try:
+            sms.send_template(m.phone, tid, sms_params(m))
+        except sms.SMSError as exc:
+            m.reason = str(exc)[:200]
+            m.sms_fallback_at = None
+            m.save(update_fields=["reason", "sms_fallback_at"])
+            continue
+        m.via, m.sms_fallback_at = f"{m.via}+sms", None
+        m.save(update_fields=["via", "sms_fallback_at"])
+        n += 1
+        if left is not None:
+            left -= 1
+    return n
 
 
 def measure(now=None) -> int:
@@ -338,7 +479,8 @@ def tick(now=None) -> str:
     if now.astimezone(timing.TZ).hour >= PLAN_HOUR and cache.add(f"winback:plan:{now:%Y%m%d}", 1, 3600 * 3):
         planned = len(plan_batches(now))
     sent = send_due(now)
-    return f"فهرست تازه: {planned}، ارسال: {sent['sent']}، رد: {sent['skipped']}، ناموفق: {sent['failed']}، بازگشت: {measured}"
+    sent["fallback"] = send_fallbacks(now)
+    return f"فهرست تازه: {planned}، ارسال: {sent['sent']} (پیامک پس از ایمیل: {sent['fallback']})، رد: {sent['skipped']}، ناموفق: {sent['failed']}، بازگشت: {measured}"
 
 
 def pending_batches() -> int:

@@ -18,8 +18,10 @@
   {% if est %}
   <fieldset class="module">
     <h2>پیش‌نمایش</h2>
-    <p>گیرنده‌ی واجد شرایط (بعد از رضایت و سقف دفعات): <b>{{ est.count }}</b> — گروه کنترل: {{ est.control }} — پیامک واقعی: <b>{{ est.real }}</b> — حدود <b>{{ est.segments }}</b> بخش پیامک.</p>
-    <p dir="rtl"><b>نمونه:</b> {{ est.sample }}</p>
+    <p>گیرنده‌ی واجد شرایط (بعد از رضایت و سقف دفعات): <b>{{ est.count }}</b> — گروه کنترل: {{ est.control }} — گیرنده‌ی واقعی: <b>{{ est.real }}</b>
+      ({{ est.email_n }} ایمیل، {{ est.sms_n }} پیامک{% if est.segments %} — حدود <b>{{ est.segments }}</b> بخش پیامک{% endif %}).</p>
+    {% if est.sample %}<p dir="rtl"><b>نمونه‌ی پیامک:</b> {{ est.sample }}</p>{% endif %}
+    {% if est.email_n %}<p dir="rtl"><b>موضوع ایمیل:</b> {{ est.email_subject }}</p>{% endif %}
     {% if est.real %}<div class="submit-row"><button name="do" value="send" type="submit" onclick="return confirm('{{ est.real }} پیام زمان‌بندی شود؟')">تأیید و زمان‌بندی (تأیید تازه)</button></div>{% endif %}
   </fieldset>
   {% endif %}

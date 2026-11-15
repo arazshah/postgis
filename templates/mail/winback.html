@@ -1,0 +1,5 @@
+{% extends "mail/_base.html" %}{% block body %}
+{% for p in paragraphs %}<p style="margin:0 0 12px;{% if forloop.first %}font-size:16px;font-weight:bold{% endif %}">{{ p }}</p>{% endfor %}
+{% include "mail/_button.html" with url=url label=label %}
+{% endblock %}
+{% block footer %}{{ reason }} می‌توانید دریافت پیشنهادها را با پیوند زیر یک‌ضربه لغو کنید؛ ایمیل‌های ضروری حساب (امنیت، رسید، انقضا) همچنان می‌رسد.{% endblock %}

@@ -8,4 +8,5 @@ urlpatterns = [
     path("invite/<str:code>/", views.invite, name="invite"),
     path("<str:code>/", views.go, name="go"),
     path("<str:code>/stop/", views.stop, name="stop"),
+    path("<str:code>/oneclick/", views.oneclick, name="oneclick"),
 ]

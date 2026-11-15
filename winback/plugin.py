@@ -1,5 +1,5 @@
 """مانیفست پلاگین «بازگشت کاربران» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0012)."""
-from kernel import conf, jobs, nav, plugins, pricing
+from kernel import conf, jobs, mail, nav, plugins, pricing
 from kernel import profile as profile_sections
 
 plugin = plugins.register("winback", "بازگشت کاربران", kind="system", requires=("accounts",))
@@ -10,6 +10,8 @@ conf.option(plugin.id, "control_percent", "درصد گروه کنترل", kind="
             help="این درصد از هر فهرست عمداً پیام نمی‌گیرد تا اثر واقعی پیام سنجیده شود.")
 conf.option(plugin.id, "max_batch", "سقف هر فهرست روزانه", kind="int", default=300, min=10, max=5000)
 
+conf.option(plugin.id, "email_daily_cap", "سقف روزانه‌ی ایمیل بازاریابی", kind="int", default=100, min=0, max=5000,
+            help="حداکثر ایمیل پیشنهادی در ۲۴ ساعت. از سقف کل سرور ایمیل (تنظیم ایمیل) کمتر بگذارید تا ایمیل‌های امنیتی و رسید جا داشته باشند.")
 conf.option(plugin.id, "coupon_hours", "مهلت کد تخفیف بازگشت (ساعت)", kind="int", default=72, min=6, max=720,
             help="از لحظه‌ی کلیک کاربر روی لینک پیامک؛ مهلت کوتاه حس فوریت می‌سازد.")
 
@@ -37,3 +39,13 @@ profile_sections.section("invite", "دعوت دوستان", "winback/_invite.htm
                          context="winback.profile.invite_context")
 
 nav.admin_item("marketing", "winback.referral", None, plugin=plugin.id, order=17)
+
+
+def _consent(user) -> bool:
+    from . import services
+
+    return services.wants(user)
+
+
+mail.set_consent_provider(_consent)  # رضایت ایمیل بازاریابی همان رضایت پیامکی است (لغو یک‌جا برای هر دو)
+mail.register("winback", plugin=plugin.id, category=mail.MARKETING, subject="{{ subject }}", template="mail/winback.html")
