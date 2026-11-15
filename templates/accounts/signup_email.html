@@ -6,7 +6,7 @@
     <span class="auth-ico">{% icon "mail" 26 %}</span>
     <h1>ثبت‌نام با ایمیل</h1>
     {% include "accounts/_methods.html" with active="signup" %}
-    <p class="muted" style="margin-top:var(--s3)">بدون نیاز به پیامک؛ با هر ایمیلی ثبت‌نام کنید. فعلاً ایمیل تأیید نمی‌شود.</p>
+    <p class="muted" style="margin-top:var(--s3)">بدون نیاز به پیامک؛ با هر ایمیلی ثبت‌نام کنید. پیوند تأیید به ایمیل‌تان فرستاده می‌شود؛ تا تأیید هم می‌توانید کار کنید.</p>
     <form method="post" class="card" novalidate>
       {% csrf_token %}
       {% include "partials/form_errors.html" %}

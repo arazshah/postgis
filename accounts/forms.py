@@ -143,3 +143,11 @@ class ProfileForm(forms.ModelForm):
         if User.objects.filter(email__iexact=email).exclude(pk=self.instance.pk).exists():
             raise ValidationError("این ایمیل برای حساب دیگری ثبت شده است.")
         return email
+
+
+class ForgotForm(forms.Form):
+    email = forms.CharField(label="ایمیل", max_length=254,
+                            widget=forms.EmailInput(attrs={"dir": "ltr", "autocomplete": "email", "autofocus": True}))
+
+    def clean_email(self):
+        return _clean_email(self.cleaned_data["email"])

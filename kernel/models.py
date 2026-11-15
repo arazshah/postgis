@@ -6,6 +6,7 @@
 """
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Organization(models.Model):
@@ -554,3 +555,67 @@ class PluginShowcaseOverride(models.Model):
 
         showcase.invalidate()
         return out
+
+
+class MailConfig(models.Model):
+    """تنظیم SMTP سکو (یک ردیف). رمز با `kernel.crypto` رمزنگاری می‌شود؛ خالی/غیرفعال = رفتار قبلی (متغیر محیطی/کنسول)."""
+
+    SECURITY = [("starttls", "STARTTLS (پورت ۵۸۷)"), ("ssl", "SSL/TLS (پورت ۴۶۵)"), ("none", "بدون رمزنگاری (فقط آزمون)")]
+
+    enabled = models.BooleanField("ارسال ایمیل فعال", default=False)
+    host = models.CharField("میزبان SMTP", max_length=200, blank=True, default="t1.mail.chabokan.net")
+    port = models.PositiveIntegerField("پورت", default=587)
+    security = models.CharField("امنیت اتصال", max_length=10, choices=SECURITY, default="starttls")
+    username = models.CharField("نام کاربری", max_length=200, blank=True, default="no-reply@postgis.ir")
+    password_enc = models.TextField(blank=True, editable=False)
+    password_hint = models.CharField(max_length=12, blank=True, editable=False)
+    from_name = models.CharField("نام فرستنده", max_length=100, blank=True, default="ژئوپایگاه")
+    from_email = models.EmailField("نشانی فرستنده", blank=True, default="no-reply@postgis.ir")
+    reply_to = models.EmailField("نشانی پاسخ (Reply-To)", blank=True,
+                                 help_text="پاسخ کاربران به این نشانی می‌رود؛ مثلاً ایمیل پشتیبانی.")
+    daily_limit = models.PositiveIntegerField("سقف ارسال در ۲۴ ساعت", default=200,
+                                              help_text="سقف سرویس‌دهنده. ۲۰ سهم آخر فقط برای ایمیل‌های امنیتی (تأیید، بازنشانی رمز) نگه داشته می‌شود.")
+    last_ok = models.DateTimeField(null=True, blank=True, editable=False)
+    last_error = models.CharField(max_length=300, blank=True, editable=False)
+
+    class Meta:
+        verbose_name = "تنظیم ایمیل"
+        verbose_name_plural = "تنظیم ایمیل"
+
+    def __str__(self):
+        return "تنظیم ایمیل"
+
+
+class OutgoingEmail(models.Model):
+    """صف و دفتر ایمیل‌های خروجی: درخواست کاربر منتظر SMTP نمی‌ماند؛ شکست با تلاش دوباره جبران می‌شود."""
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "در صف"
+        SENT = "sent", "ارسال شد"
+        FAILED = "failed", "ناموفق"
+        SKIPPED = "skipped", "رد شد"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    to = models.EmailField("گیرنده")
+    template = models.CharField("قالب", max_length=60)
+    category = models.CharField("دسته", max_length=12)
+    subject = models.CharField("موضوع", max_length=200)
+    text = models.TextField(blank=True)
+    html = models.TextField(blank=True)
+    headers = models.JSONField(default=dict, blank=True)
+    key = models.CharField("کلید تکرارگیری", max_length=120, blank=True)
+    status = models.CharField("وضعیت", max_length=8, choices=Status.choices, default=Status.QUEUED, db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_try = models.DateTimeField(default=timezone.now)
+    error = models.CharField("خطا", max_length=300, blank=True)
+    created_at = models.DateTimeField("ساخت", auto_now_add=True, db_index=True)
+    sent_at = models.DateTimeField("ارسال", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "ایمیل خروجی"
+        verbose_name_plural = "ایمیل‌های خروجی"
+        ordering = ["-id"]
+        indexes = [models.Index(fields=["status", "next_try"]), models.Index(fields=["to", "key", "created_at"])]
+
+    def __str__(self):
+        return f"{self.template} → {self.to}"

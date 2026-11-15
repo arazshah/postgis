@@ -21,7 +21,7 @@
     <form method="post" class="card">
       {% csrf_token %}<input type="hidden" name="action" value="profile">
       {% for field in form %}{% include "partials/field.html" %}{% endfor %}
-      <p class="small muted">نام و دانشگاه/شرکت در منوی حساب و برای هم‌تیمی‌ها نمایش داده می‌شود. ایمیل اختیاری است؛ اگر وارد کنید، هشدارهای حجم و انقضا به ایمیل هم ارسال می‌شود.</p>
+      <p class="small muted">نام و دانشگاه/شرکت در منوی حساب و برای هم‌تیمی‌ها نمایش داده می‌شود. ایمیل اختیاری است؛ اگر وارد و <b>تأیید</b> کنید، هشدارهای حجم و انقضا و رسیدها به ایمیل هم می‌رسد. با تغییر ایمیل، پیوند تأیید تازه می‌آید.</p>
       <button class="btn" type="submit">{% icon "check" 18 %}ذخیره تغییرات</button>
     </form>
   </section>
@@ -37,7 +37,10 @@
       <h2 class="prof-h">{% icon "lock" 20 %}حساب و امنیت</h2>
       <table class="kv"><tbody>
         {% if user.phone %}<tr><th>شماره‌ی ورود</th><td class="ltr">{{ user.phone }}</td></tr>{% endif %}
-        {% if user.email %}<tr><th>ایمیل ورود</th><td class="ltr">{{ user.email }}</td></tr>{% endif %}
+        {% if user.email %}<tr><th>ایمیل</th><td><span class="ltr">{{ user.email }}</span>
+          {% if user.email_verified_at %}<span class="chip geo">{% icon "check" 14 %}تأییدشده</span>
+          {% else %}<span class="chip">تأییدنشده</span>
+          <form method="post" action="{% url 'accounts:email_resend' %}" style="display:inline">{% csrf_token %}<button class="btn ghost sm" type="submit">ارسال دوباره‌ی پیوند</button></form>{% endif %}</td></tr>{% endif %}
         <tr><th>عضو از</th><td style="direction:rtl;text-align:right">{{ user.date_joined|jdate }}</td></tr>
       </tbody></table>
       {% if user.phone %}<p class="small muted">با موبایل می‌توانید با کد پیامکی وارد شوید{% if user.has_usable_password %}؛ رمز عبور هم دارید و می‌توانید با آن وارد شوید{% endif %}.</p>{% endif %}

@@ -1,6 +1,6 @@
 """مانیفست پلاگین «حساب و ورود» و سهم‌های آن در نقاط توسعه‌ی هسته (docs/adr/0004)."""
 from kernel import dash as admin_dash
-from kernel import nav, plugins, stepup
+from kernel import mail, nav, plugins, stepup
 from kernel import settings as site_settings
 
 plugin = plugins.register("accounts", "حساب و ورود", kind="system")
@@ -20,6 +20,14 @@ site_settings.display("api_key_status", "وضعیت کلید API", "accounts.set
 site_settings.display("sms_tools", "ابزار پیامک", "accounts.settings_admin.sms_tools", plugin=plugin.id)
 site_settings.tool("credit", "credit/", "accounts.settings_admin.credit_view", plugin=plugin.id)
 site_settings.tool("testsms", "test-sms/", "accounts.settings_admin.test_sms_view", plugin=plugin.id)
+
+for _key, _cat, _subject in (
+        ("verify_email", mail.SECURITY, "تأیید ایمیل {{ SITE_NAME }}"),
+        ("password_reset", mail.SECURITY, "بازنشانی رمز عبور {{ SITE_NAME }}"),
+        ("password_changed", mail.SECURITY, "رمز عبور شما تغییر کرد"),
+        ("email_changed", mail.SECURITY, "ایمیل حساب شما تغییر کرد"),
+        ("welcome", mail.PRODUCT, "به {{ SITE_NAME }} خوش آمدید")):
+    mail.register(_key, plugin=plugin.id, category=_cat, subject=_subject, template=f"mail/{_key}.html")
 
 admin_dash.attention("accounts.admin_cards.attention", plugin=plugin.id, order=60)
 admin_dash.health("accounts.admin_cards.health", plugin=plugin.id, order=40)

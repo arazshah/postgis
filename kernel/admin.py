@@ -8,14 +8,17 @@ from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
+from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
-from . import conf, entitlements, notify, pagekit, pkg, platform, stepup, studio, workspace
+from . import conf, entitlements, mail, notify, pagekit, pkg, platform, stepup, studio, workspace
 from .models import (
     Entitlement,
+    MailConfig,
     NotifyChannel,
     Organization,
     OrgMember,
+    OutgoingEmail,
     PluginDraft,
     PluginRelease,
     PluginShowcaseOverride,
@@ -811,3 +814,95 @@ class PluginShowcaseOverrideAdmin(admin.ModelAdmin):
     list_display = ("plugin_id", "tagline", "featured", "hidden", "updated_at")
     list_filter = ("hidden",)
     search_fields = ("plugin_id", "tagline")
+
+
+class MailConfigForm(forms.ModelForm):
+    new_password = forms.CharField(label="رمز ایمیل", required=False,
+                                   widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password", "dir": "ltr"}),
+                                   help_text="رمزنگاری می‌شود و دیگر نمایش داده نمی‌شود. خالی = بدون تغییر.")
+    test_to = forms.EmailField(label="ایمیل آزمایشی به", required=False,
+                               help_text="پس از «ذخیره و ادامه»، در فهرست اقدام «ارسال ایمیل آزمایشی» را بزنید. خالی = ایمیل شما.")
+
+    class Meta:
+        model = MailConfig
+        fields = ("enabled", "host", "port", "security", "username", "from_name", "from_email", "reply_to", "daily_limit")
+
+
+@admin.register(MailConfig)
+class MailConfigAdmin(admin.ModelAdmin):
+    """تنظیم ارسال ایمیل (SMTP). رمز فقط اینجا و رمزنگاری‌شده؛ تغییر آن تأیید تازه می‌خواهد."""
+
+    form = MailConfigForm
+    list_display = ("host", "username", "enabled", "last_ok", "last_error")
+    actions = ["test_connection", "send_test"]
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser or request.user.has_perm("kernel.change_mailconfig")
+
+    def has_add_permission(self, request):
+        return not MailConfig.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        if not MailConfig.objects.exists():
+            MailConfig.objects.create()  # تک‌ردیفی: همیشه یک ردیف برای ویرایش و اقدام‌های آزمون هست
+        return super().changelist_view(request, extra_context)
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        if request.method == "POST" and not stepup.ok(request):
+            return redirect(stepup.url(request))
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def save_model(self, request, obj, form, change):
+        import logging
+
+        d = form.cleaned_data
+        cfg = mail.save_config(enabled=d["enabled"], host=d["host"], port=d["port"], security=d["security"],
+                               username=d["username"], password=d.get("new_password", ""), from_name=d["from_name"],
+                               from_email=d["from_email"], reply_to=d["reply_to"], daily_limit=d["daily_limit"])
+        obj.pk = cfg.pk
+        logging.getLogger(__name__).warning("mail config changed by user %s", request.user.pk)
+        if d["enabled"] and not cfg.enabled:
+            messages.warning(request, "بدون رمز نمی‌شود ارسال را فعال کرد.")
+
+    @admin.action(description="آزمون اتصال و ورود به سرور ایمیل")
+    def test_connection(self, request, queryset):
+        ok, detail = mail.test_connection()
+        (messages.success if ok else messages.error)(request, detail)
+
+    @admin.action(description="ارسال ایمیل آزمایشی به ایمیل من")
+    def send_test(self, request, queryset):
+        if not request.user.email:
+            messages.error(request, "برای حساب شما ایمیلی ثبت نشده است.")
+            return
+        ok, detail = mail.send_test(request.user.email)
+        (messages.success if ok else messages.error)(request, detail)
+
+
+@admin.register(OutgoingEmail)
+class OutgoingEmailAdmin(admin.ModelAdmin):
+    """دفتر ایمیل‌های خروجی (فقط‌خواندنی). ناموفق‌ها را می‌شود دوباره در صف گذاشت."""
+
+    list_display = ("created_at", "to", "template", "category", "status", "attempts", "error")
+    list_filter = ("status", "category", "template")
+    search_fields = ("to", "subject")
+    actions = ["requeue"]
+    readonly_fields = [f.name for f in OutgoingEmail._meta.fields]
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.action(description="قرار دادن دوباره در صف")
+    def requeue(self, request, queryset):
+        n = queryset.filter(status=OutgoingEmail.Status.FAILED).update(
+            status=OutgoingEmail.Status.QUEUED, attempts=0, error="", next_try=timezone.now())
+        messages.success(request, f"{n} ایمیل دوباره در صف رفت.")

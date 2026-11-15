@@ -1,0 +1,6 @@
+{% extends "mail/_base.html" %}{% block body %}
+<h1 style="font-size:18px;margin:0 0 12px">تأیید ایمیل</h1>
+<p>{{ name|default:"کاربر" }} عزیز، برای تأیید نشانی ایمیل خود در {{ SITE_NAME }} روی دکمه‌ی زیر بزنید. پیوند ۴۸ ساعت اعتبار دارد.</p>
+{% include "mail/_button.html" with url=url label="تأیید ایمیل" %}
+<p style="font-size:13px;color:#4B6269">اگر شما ثبت‌نام نکرده‌اید، این ایمیل را نادیده بگیرید.</p>
+{% endblock %}
