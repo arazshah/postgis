@@ -375,6 +375,30 @@ def send_fallbacks(now=None) -> int:
     return n
 
 
+def send_now(messages, now=None) -> dict:
+    """ارسال دستی «همین حالا» برای پیام‌های زمان‌بندی‌شده‌ی تأییدشده (فراخوان باید stepup را گذرانده باشد).
+
+    زمان‌شان به اکنون می‌آید و همان `send_due` می‌فرستد؛ پس رضایت، سقف دفعات، «کاربر خودش برگشت» و پنجره‌ی مجاز ساعت
+    (۱۰ تا ۲۰، نه جمعه) همچنان اجرا می‌شود: خارج از پنجره، پیام به اولین ساعت مجاز می‌رود (`deferred`). پیامی که با وجود
+    رسیدن زمانش نرفت (اعتبار پیامک یا سقف ایمیل) در `stuck` شمرده می‌شود.
+    """
+    now = now or timezone.now()
+    ids = list(messages.filter(status=Message.Status.SCHEDULED, batch__status=Batch.Status.APPROVED).values_list("pk", flat=True))
+    Message.objects.filter(pk__in=ids, send_at__gt=now).update(send_at=now)
+    out = {"picked": len(ids), "sent": 0, "skipped": 0, "failed": 0}
+    for _ in range(max(1, -(-len(ids) // PER_TICK))):
+        r = send_due(now)
+        if not any(r.values()):
+            break
+        for k in out:
+            if k != "picked":
+                out[k] += r[k]
+    left = Message.objects.filter(pk__in=ids, status=Message.Status.SCHEDULED)
+    out["deferred"] = left.filter(send_at__gt=now).count()
+    out["stuck"] = left.filter(send_at__lte=now).count()
+    return out
+
+
 def measure(now=None) -> int:
     """بازگشت (ورود بعد از پیام) و پرداخت ۷ روز بعد از زمان ارسال را برای پیام‌ها و کنترل ثبت می‌کند."""
     from django.db.models import Sum
