@@ -29,9 +29,11 @@ class KernelConfig(AppConfig):
         mail.register("notice", plugin="kernel", category=mail.SERVICE, subject="{{ title }}", template="mail/notice.html")
         mail.register("digest", plugin="kernel", category=mail.SERVICE, subject="خلاصه‌ی امروز {{ SITE_NAME }}",
                       template="mail/digest.html")
+        jobs.register_tick("mail_dns", "kernel.maildns.tick", plugin="kernel", order=94)
         jobs.register_tick("sources_fetch", "kernel.sources.tick", plugin="kernel", order=93)
         jobs.register_tick("plugin_breaker", "kernel.health.tick", plugin="kernel", order=95)
         from . import dash
 
         dash.attention("kernel.admin_cards.attention", plugin="kernel", order=5)
         dash.attention("kernel.admin_cards.ext_state", plugin="kernel", order=6)
+        dash.attention("kernel.admin_cards.mail_dns", plugin="kernel", order=7)

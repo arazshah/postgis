@@ -37,3 +37,22 @@ def ext_state():
     if manual:
         out.append(dash.item("info", f"با PLUGINS_DISABLED خاموش‌اند: {'، '.join(manual)}", "پلاگین‌ها", link))
     return out
+
+
+def mail_dns():
+    """ایمیل فعال است ولی SPF/DKIM/DMARC دامنه سالم نیست ⇒ ایمیل‌ها به اسپم می‌روند؛ تا درست‌شدن می‌ماند."""
+    from . import mail
+
+    cfg = mail.config()
+    if cfg is None or not cfg.enabled:
+        return []
+    link = dash.url("admin:kernel_mailconfig_changelist")
+    if not cfg.dns_checked_at:
+        return [dash.item("warn", "ایمیل فعال است ولی رکوردهای DNS دامنه (SPF/DKIM/DMARC) هنوز بررسی نشده است", "بررسی", link)]
+    bad = [c["title"] for c in cfg.dns_report if c["status"] == "bad"]
+    if bad:
+        return [dash.item("bad", "DNS ایمیل مشکل دارد و ایمیل‌ها ممکن است به اسپم بروند: " + "، ".join(bad), "رفع", link)]
+    warn = [c["title"] for c in cfg.dns_report if c["status"] == "warn"]
+    if warn:
+        return [dash.item("warn", "DNS ایمیل هشدار دارد: " + "، ".join(warn), "بررسی", link)]
+    return []

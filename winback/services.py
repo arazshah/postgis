@@ -428,7 +428,7 @@ def give(kind: str, user, *, plugin: str = "", days: int = 7, percent: int = 20,
         if db is None or db.expires_at is None:  # پایگاه بدون انقضا تمدید نمی‌خواهد (و نباید تاریخ انقضا بگیرد)
             return False
         db.extend(days)
-        db.save(update_fields=["expires_at", "expiry_warned_at"])
+        db.save(update_fields=["expires_at", "expiry_warned_at", "expiry_stage"])
         return True
     return False
 

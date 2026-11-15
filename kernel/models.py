@@ -580,6 +580,11 @@ class MailConfig(models.Model):
                                               help_text="سقف سرویس‌دهنده. ۲۰ سهم آخر فقط برای ایمیل‌های امنیتی (تأیید، بازنشانی رمز) نگه داشته می‌شود.")
     last_ok = models.DateTimeField(null=True, blank=True, editable=False)
     last_error = models.CharField(max_length=300, blank=True, editable=False)
+    dkim_selector = models.CharField("شناسه‌ی DKIM (selector)", max_length=60, blank=True,
+                                     help_text="از پنل سرویس ایمیل بگیرید (مثلاً default). خالی = چند نام رایج امتحان می‌شود.")
+    dns_status = models.CharField(max_length=8, blank=True, editable=False)  # ok | warn | bad
+    dns_report = models.JSONField(default=list, blank=True, editable=False)
+    dns_checked_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         verbose_name = "تنظیم ایمیل"
