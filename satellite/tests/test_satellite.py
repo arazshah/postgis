@@ -757,6 +757,14 @@ class MissionTests(_Base):
         self.assertIn("وصل نشدیم", by["landsat"]["error"])
         self.assertEqual(by["landsat"]["res"], 30)
 
+    def test_missions_response_carries_catalog_for_the_picker(self):
+        live = {"missions": {"sentinel2": {"ok": True}}}
+        with mock.patch("satellite.client.call", return_value=live):
+            j = self.client.get(self.url("missions")).json()
+        self.assertIn("sentinel2", j["catalog"]["missions"])
+        self.assertTrue(j["catalog"]["goals"])
+        self.assertIn("max_km2", {k for m in j["missions"] for k in m})
+
     def test_landsat_available_when_gateway_says_so(self):
         live = {"missions": {"sentinel2": {"ok": True}, "landsat": {"ok": True, "ms": 300}}}
         with mock.patch("satellite.client.call", return_value=live):

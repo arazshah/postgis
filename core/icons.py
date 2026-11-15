@@ -3,6 +3,13 @@
 """
 
 ICONS: dict[str, str] = {
+    'star': '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9 6.8 19.7l1-5.9L3.5 9.7l5.9-.8z"/>',
+    'leaf': '<path d="M5 19c0-8 5-14 15-14 0 10-6 15-14 15"/><path d="M5 19l8-8"/>',
+    'building': '<path d="M5 21V4h9v17"/><path d="M14 9h5v12"/><path d="M3 21h18"/><path d="M8 8h3"/><path d="M8 12h3"/><path d="M8 16h3"/>',
+    'drop': '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+    'mountain': '<path d="M3 19l6.5-11 3.5 6 2-3 6 8z"/>',
+    'wave': '<path d="M3 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M3 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>',
+    'tree': '<path d="M12 3l5 7h-3l4 6H6l4-6H7z"/><path d="M12 16v5"/>',
     'undo': '<path d="M9 7 4 12l5 5"/><path d="M4 12h9a6 6 0 0 1 0 6h-3"/>',
     'redo': '<path d="m15 7 5 5-5 5"/><path d="M20 12h-9a6 6 0 0 0 0 6h3"/>',
     'desktop': '<path d="M3 4h18v12H3z"/><path d="M8 21h8"/><path d="M12 16v5"/>',
