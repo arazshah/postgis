@@ -66,7 +66,25 @@ def for_job(job: Job) -> Notification | None:
         over = (kinds.call(k.notice, job, subject) if k else None) or {}
         level, title = over.get("level", level), over.get("title", title)
         body, action = over.get("body", body), over.get("action", action)
-    note, _ = Notification.objects.get_or_create(job=job, defaults=dict(
+    note, created = Notification.objects.get_or_create(job=job, defaults=dict(
         user_id=owner, level=level, title=title[:160], body=body, detail=detail, url=_url(job),
         action=action, database_id=job.database_id))
+    if created and job.status == Job.Status.FAILED:
+        _email_failure(note, owner)
     return note
+
+
+def _email_failure(note: Notification, owner_id: int) -> None:
+    """خطای کار فقط به ایمیل تأییدشده می‌رود (نه پیامک: خطای کار فوری نیست)؛ شکست ایمیل کار را نمی‌شکند."""
+    try:
+        from django.conf import settings
+        from django.contrib.auth import get_user_model
+
+        from kernel import mail
+
+        user = get_user_model().objects.filter(pk=owner_id).first()
+        if mail.can_email(user):
+            url = (settings.CANONICAL_URL.rstrip("/") + note.url) if note.url else ""
+            mail.notice(user, note.title, note.body, url=url, label="مشاهده جزئیات", key=f"job:{note.job_id}")
+    except Exception:  # noqa: BLE001
+        pass

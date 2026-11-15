@@ -451,6 +451,9 @@ class NotifyPref(models.Model):
     quiet_from = models.PositiveSmallIntegerField(null=True, blank=True)
     quiet_to = models.PositiveSmallIntegerField(null=True, blank=True)
     fallback = models.BooleanField("پیامک/ایمیل اگر پیام‌رسان نرسید", default=True)
+    email_service = models.BooleanField("ایمیل هشدار و رسید", default=True)
+    email_product = models.BooleanField("ایمیل خبر محصول", default=True)
+    email_digest = models.BooleanField("خلاصه‌ی روزانه به‌جای ایمیل جدا", default=False)
 
 
 class NotifyLog(models.Model):
@@ -619,3 +622,16 @@ class OutgoingEmail(models.Model):
 
     def __str__(self):
         return f"{self.template} → {self.to}"
+
+
+class DigestItem(models.Model):
+    """اعلان غیرفوریِ منتظر «خلاصه‌ی روزانه»؛ بعد از ارسال خلاصه پاک می‌شود."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    title = models.CharField(max_length=200)
+    body = models.TextField(blank=True)
+    url = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]

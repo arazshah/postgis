@@ -1,0 +1,6 @@
+{% extends "mail/_base.html" %}{% block body %}
+<h1 style="font-size:18px;margin:0 0 12px">{{ title }}</h1>
+{% if body %}<p style="white-space:pre-line">{{ body }}</p>{% endif %}
+{% if url %}{% include "mail/_button.html" with url=url label=label %}{% endif %}
+{% endblock %}
+{% block footer %}این پیام خودکار است. نوع اعلان‌هایی که ایمیل می‌شوند را از «پروفایل ← کانال‌های هشدار» تنظیم کنید.{% endblock %}

@@ -1,7 +1,7 @@
 """اطلاع‌رسانی به مدیر سایت: پیامک به موبایل پشتیبانی و ایمیل پشتیبانی (هر کدام که تنظیم شده باشد)."""
 import logging
 
-from django.core.mail import send_mail
+from kernel import mail
 
 from .models import SiteSettings
 
@@ -24,5 +24,5 @@ def notify_admins(subject: str, text: str, sms: bool = True) -> None:
             except Exception:  # noqa: BLE001
                 log.exception("admin sms failed")
     if conf.support_email:
-        send_mail(f"[{conf.site_name}] {subject}", text, None, [conf.support_email], fail_silently=True)
+        mail.notice(None, f"[{conf.site_name}] {subject}", text, to=conf.support_email, urgent=True)
     log.warning("ADMIN ALERT %s: %s", subject, text)

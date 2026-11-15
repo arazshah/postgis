@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
@@ -187,19 +186,20 @@ def set_status(db: UserDatabase, status: str, actor=None):
     logevent("status", f"وضعیت: {db.get_status_display()}", user=actor, database=db)
 
 
-def _notify(user, subject, body):
-    """اطلاع‌رسانی: پیامک (اگر خط اطلاع‌رسانی تنظیم شده) و ایمیل (اگر کاربر ایمیل دارد)."""
+def _notify(user, subject, body, *, urgent=False, url=""):
+    """اطلاع‌رسانی: اول ایمیل تأییدشده (kernel.mail)؛ پیامک فقط برای اعلان فوری یا وقتی ایمیل ممکن نیست."""
     from accounts.sms import send_text
+    from kernel import mail
 
-    try:
-        send_text(user.phone, f"{conf().site_name}: {body}")
-    except Exception:  # noqa: BLE001
-        log.exception("sms notify failed")
-    if user.email:
+    emailed = False
+    if mail.can_email(user):
+        emailed = mail.notice(user, subject, body, url=url, urgent=urgent)
+    if urgent or not emailed:
         try:
-            send_mail(f"[{conf().site_name}] {subject}", body, None, [user.email], fail_silently=True)
+            if user.phone:
+                send_text(user.phone, f"{conf().site_name}: {body}")
         except Exception:  # noqa: BLE001
-            log.exception("email failed")
+            log.exception("sms notify failed")
 
 
 def check_quotas() -> dict:
@@ -231,7 +231,8 @@ def check_quotas() -> dict:
                     logevent("quota", "عبور از سقف حجم؛ فقط‌خواندنی شد", database=db)
                     _notify(db.owner, "حجم پایگاه داده پر شد",
                             f"پایگاه داده {db.label} به سقف حجم رسید و فقط‌خواندنی شد. "
-                            "با حذف داده‌های اضافه (DROP یا TRUNCATE توسط پشتیبانی) یا ارتقای پلن دوباره فعال می‌شود.")
+                            "با حذف داده‌های اضافه (DROP یا TRUNCATE توسط پشتیبانی) یا ارتقای پلن دوباره فعال می‌شود.",
+                            urgent=True)
                 elif db.status == UserDatabase.Status.READONLY and db.size_bytes <= db.quota_bytes * 0.95:
                     p.set_readonly(db.db_name, False)
                     db.status = UserDatabase.Status.ACTIVE
@@ -274,7 +275,8 @@ def process_expiry() -> dict:
             db.save(update_fields=["status"])
             logevent("expire", "اعتبار تمام شد؛ ورود غیرفعال شد", database=db)
             _notify(db.owner, "اعتبار پایگاه داده تمام شد",
-                    f"{db.label} منقضی شد. تا {c.expired_grace_days} روز فرصت تمدید دارید؛ پس از آن حذف می‌شود.")
+                    f"{db.label} منقضی شد. تا {c.expired_grace_days} روز فرصت تمدید دارید؛ پس از آن حذف می‌شود.",
+                    urgent=True)
             stats["expired"] += 1
         except ProvisionError as exc:
             stats["errors"] += 1

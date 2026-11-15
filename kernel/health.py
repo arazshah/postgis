@@ -165,7 +165,7 @@ def _notify(t) -> None:
         body = (f"پلاگین {t.plugin_id} نسخه‌ی {t.version} در {WINDOW_MIN} دقیقه‌ی اخیر {t.errors} خطا از {t.runs} اجرا داشت و {what}. "
                 "گزارش: پنل مدیریت ← قطع‌های خودکار پلاگین.")
         for u in get_user_model().objects.filter(is_superuser=True, is_active=True)[:20]:
-            workspace.notify_user(u, "قطع خودکار پلاگین", body)
+            workspace.notify_user(u, "قطع خودکار پلاگین", body, urgent=True)
     except Exception:  # noqa: BLE001 - اعلان نباید قطع‌کن را بشکند
         log.exception("اعلان قطع خودکار ارسال نشد")
 

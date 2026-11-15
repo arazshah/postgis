@@ -189,6 +189,30 @@ def render(template_key: str, context: dict | None = None) -> tuple[str, str, st
     return subject, html, to_text(html)
 
 
+def _pref(user):
+    from .models import NotifyPref
+
+    return NotifyPref.objects.filter(user=user).first() if getattr(user, "pk", None) else None
+
+
+def _pref_allows(user, category: str) -> bool:
+    pref = _pref(user)
+    if pref is None:
+        return True
+    return pref.email_service if category == SERVICE else pref.email_product
+
+
+def available() -> bool:
+    """سرور ایمیل واقعاً تنظیم است؟ (تنظیم پنل یا EMAIL_HOST). وگرنه اعلان‌ها به پیامک برمی‌گردند و گم نمی‌شوند."""
+    return _ready(config()) or bool(getattr(settings, "EMAIL_HOST", ""))
+
+
+def can_email(user) -> bool:
+    """اعلان سرویس را می‌شود با ایمیل رساند؟ (ایمیل تأییدشده + سرور تنظیم + کاربر خاموشش نکرده)."""
+    return bool(user is not None and getattr(user, "email", None) and getattr(user, "email_verified_at", None)
+                and getattr(user, "is_active", True) and available() and _pref_allows(user, SERVICE))
+
+
 def _eligible(user, to: str, category: str) -> str:
     """"" = مجاز؛ وگرنه دلیل رد."""
     if not to:
@@ -202,6 +226,8 @@ def _eligible(user, to: str, category: str) -> str:
             return "inactive"
     if category == MARKETING and not _wants_marketing(user):
         return "no-consent"
+    if user is not None and category in (SERVICE, PRODUCT) and not _pref_allows(user, category):
+        return "pref-off"
     return ""
 
 
@@ -316,6 +342,7 @@ def tick(now=None) -> dict:
 
     now = now or timezone.now()
     OutgoingEmail.objects.filter(created_at__lt=now - datetime.timedelta(days=KEEP_DAYS)).delete()
+    send_digests(now)
     sent = 0
     due = OutgoingEmail.objects.filter(status=OutgoingEmail.Status.QUEUED, next_try__lte=now)
     ids = sorted(due.values_list("pk", "category")[:200], key=lambda r: (r[1] != SECURITY, r[0]))[:BATCH]
@@ -336,3 +363,53 @@ def send_test(to: str) -> tuple[bool, str]:
     except Exception as exc:  # noqa: BLE001
         return False, _safe_error(exc)
     return True, "ایمیل آزمایشی ارسال شد."
+
+
+# ---------------------------------------------------------------- اعلان عمومی و خلاصه‌ی روزانه
+DIGEST_HOUR, DIGEST_GAP_HOURS = 8, 20
+
+
+def notice(user, title: str, body: str = "", *, url: str = "", label: str = "مشاهده", urgent: bool = False,
+           key: str = "", to: str = ""):
+    """اعلان متنی (دسته‌ی سرویس) با دکمه‌ی اختیاری. اگر کاربر «خلاصه‌ی روزانه» خواسته و فوری نیست، در خلاصه جمع می‌شود.
+
+    برمی‌گرداند True اگر ایمیل یا خلاصه ثبت شد؛ هرگز استثنا نمی‌دهد.
+    """
+    from .models import DigestItem
+
+    try:
+        pref = _pref(user)
+        if user is not None and not to and not urgent and pref is not None and pref.email_digest and can_email(user):
+            DigestItem.objects.create(user=user, title=title[:200], body=body, url=url[:300])
+            return True
+        row = send("notice", user=user, to=to, key=key, urgent=urgent,
+                   context={"title": title, "body": body, "url": url, "label": label})
+        return bool(row is not None and row.status == "queued")
+    except Exception:  # noqa: BLE001
+        log.exception("mail.notice failed")
+        return False
+
+
+def send_digests(now=None) -> int:
+    """ساعت ۸ صبح به بعد، برای هر کاربرِ دارای اعلان منتظر یک ایمیل خلاصه می‌فرستد (حداکثر یکی در ۲۰ ساعت)."""
+    from collections import defaultdict
+
+    from .models import DigestItem, OutgoingEmail
+
+    now = now or timezone.now()
+    if timezone.localtime(now).hour < DIGEST_HOUR:
+        return 0
+    groups = defaultdict(list)
+    for it in DigestItem.objects.select_related("user").order_by("id")[:500]:
+        groups[it.user_id].append(it)
+    sent = 0
+    for items in groups.values():
+        user = items[0].user
+        if OutgoingEmail.objects.filter(user=user, template="digest",
+                                        created_at__gte=now - datetime.timedelta(hours=DIGEST_GAP_HOURS)).exists():
+            continue
+        row = send("digest", user=user, context={"items": [{"title": i.title, "body": i.body, "url": i.url} for i in items]})
+        if row is not None:
+            DigestItem.objects.filter(pk__in=[i.pk for i in items]).delete()
+            sent += row.status == "queued"
+    return sent

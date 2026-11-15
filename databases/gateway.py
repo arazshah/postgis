@@ -94,10 +94,10 @@ class TeamProvider(workspace.Provider):
 
         services.logevent(action, message, user=user, database=database, success=success)
 
-    def notify_user(self, user, subject, body):
+    def notify_user(self, user, subject, body, *, urgent=False, url=""):
         from . import services
 
-        services._notify(user, subject, body)
+        services._notify(user, subject, body, urgent=urgent, url=url)
 
     def plan_default(self, name, default=None):
         from .defaults import FREE_PLAN

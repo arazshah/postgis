@@ -1,0 +1,11 @@
+{% extends "mail/_base.html" %}{% block body %}
+<h1 style="font-size:18px;margin:0 0 12px">خلاصه‌ی اعلان‌های شما</h1>
+{% for i in items %}
+<div style="padding:12px 0;{% if not forloop.last %}border-bottom:1px solid #DDE5DA{% endif %}">
+  <b>{{ i.title }}</b>
+  {% if i.body %}<div style="white-space:pre-line;color:#4B6269;font-size:14px">{{ i.body }}</div>{% endif %}
+  {% if i.url %}<div><a href="{{ i.url }}" style="color:#0F5C59">مشاهده</a></div>{% endif %}
+</div>
+{% endfor %}
+{% endblock %}
+{% block footer %}این خلاصه روزی یک‌بار می‌آید. از «پروفایل ← کانال‌های هشدار» می‌توانید ایمیل جدا برای هر اعلان را برگردانید.{% endblock %}
