@@ -4,7 +4,9 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
+from django.urls import reverse
 from django.utils import timezone
 
 from kernel import events
@@ -251,20 +253,38 @@ def check_quotas() -> dict:
     return stats
 
 
+def reminder_stages(warning_days: int) -> list[int]:
+    """مرحله‌های یادآوری پایان اعتبار (روز مانده، صعودی): ۱ و ۳ و ۷ و مقدار تنظیم‌شده‌ی مدیر، تا سقف همان مقدار."""
+    top = max(int(warning_days or 7), 1)
+    return sorted({s for s in (1, 3, 7, top) if s <= top})
+
+
+def reminder_stage(remaining: timedelta, stages: list[int]) -> int | None:
+    """کوچک‌ترین مرحله‌ای که زمان باقی‌مانده در آن می‌گنجد (۶ روز مانده ⇒ مرحله‌ی ۷)؛ None اگر هنوز زود است."""
+    days = remaining.total_seconds() / 86400
+    return next((s for s in stages if days <= s), None)
+
+
 def process_expiry() -> dict:
     """هشدار پیش از انقضا، تعلیق پس از انقضا، و حذف پس از مهلت."""
     now = timezone.now()
     c = conf()
     stats = {"warned": 0, "expired": 0, "deleted": 0, "errors": 0}
 
+    stages = reminder_stages(c.expiry_warning_days)
     for db in UserDatabase.objects.filter(status__in=UserDatabase.LIVE_STATUSES, expires_at__isnull=False,
-                                          expiry_warned_at__isnull=True,
                                           expires_at__lte=now + timedelta(days=c.expiry_warning_days),
                                           expires_at__gt=now).select_related("owner"):
+        stage = reminder_stage(db.expires_at - now, stages)
+        if stage is None or (db.expiry_stage is not None and stage >= db.expiry_stage):
+            continue  # این مرحله (یا نزدیک‌تر) قبلاً رفته؛ هر مرحله یک بار
+        left = "کمتر از یک روز" if stage == 1 else f"حدود {stage} روز"
         _notify(db.owner, "اعتبار پایگاه داده رو به پایان است",
-                f"اعتبار {db.label} تا {db.days_left} روز دیگر تمام می‌شود. از داشبورد آن را رایگان تمدید کنید.")
-        db.expiry_warned_at = now
-        db.save(update_fields=["expiry_warned_at"])
+                f"اعتبار {db.label} تا {left} دیگر تمام می‌شود. از داشبورد آن را رایگان تمدید کنید.",
+                urgent=stage == 1,  # آخرین یادآوری: پیامک هم (بقیه فقط ایمیل تأییدشده، و بدون آن پیامک)
+                url=settings.CANONICAL_URL.rstrip("/") + reverse("databases:renew", args=[db.pk]))
+        db.expiry_warned_at, db.expiry_stage = now, stage
+        db.save(update_fields=["expiry_warned_at", "expiry_stage"])
         stats["warned"] += 1
 
     for db in UserDatabase.objects.filter(status__in=UserDatabase.LIVE_STATUSES, expires_at__lte=now).select_related(

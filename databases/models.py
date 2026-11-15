@@ -302,6 +302,7 @@ class UserDatabase(models.Model):
     created_at = models.DateTimeField("تاریخ ساخت", auto_now_add=True)
     expires_at = models.DateTimeField("تاریخ انقضا", null=True, blank=True)
     expiry_warned_at = models.DateTimeField(null=True, blank=True, editable=False)
+    expiry_stage = models.PositiveSmallIntegerField(null=True, blank=True, editable=False)  # کوچک‌ترین مرحله‌ی یادآوری فرستاده‌شده (روز)
     quota_warned_at = models.DateTimeField(null=True, blank=True, editable=False)
     deleted_at = models.DateTimeField("تاریخ حذف", null=True, blank=True)
 
@@ -364,6 +365,7 @@ class UserDatabase(models.Model):
         base = max(self.expires_at or timezone.now(), timezone.now())
         self.expires_at = base + timedelta(days=days or self.plan.duration_days)
         self.expiry_warned_at = None
+        self.expiry_stage = None
 
     # ---- اطلاعات اتصال ----
     @property

@@ -154,6 +154,60 @@ class QuotaExpiryTests(BaseCase):
 
 @override_settings(STORAGES={"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
                              "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}})
+class ExpiryReminderTests(BaseCase):
+    """یادآوری چندمرحله‌ای پایان اعتبار: ۷ و ۳ و ۱ روز، هر مرحله یک بار، تمدید از نو؛ آخرین مرحله فوری (پیامک هم)."""
+
+    def setUp(self):
+        super().setUp()
+        self.db = services.create_database(self.user, "rem_db", "Abcdefgh123", [])
+        p = mock.patch.object(services, "_notify")
+        self.notify = p.start()
+        self.addCleanup(p.stop)
+
+    def at(self, days):
+        UserDatabase.objects.filter(pk=self.db.pk).update(expires_at=timezone.now() + timedelta(days=days, minutes=-5))
+        self.notify.reset_mock()
+        return services.process_expiry()
+
+    def test_stage_boundaries(self):
+        st = services.reminder_stages(7)
+        self.assertEqual(st, [1, 3, 7])
+        for days, want in ((8, None), (6.5, 7), (3.0, 3), (2.5, 3), (0.9, 1)):
+            self.assertEqual(services.reminder_stage(timedelta(days=days), st), want, days)
+        self.assertEqual(services.reminder_stages(14), [1, 3, 7, 14])
+        self.assertEqual(services.reminder_stages(2), [1, 2])
+
+    def test_each_stage_once_in_order(self):
+        self.assertEqual(self.at(8)["warned"], 0)
+        self.assertEqual(self.at(6.5)["warned"], 1)
+        self.assertEqual(self.at(6.4)["warned"], 0)  # همان مرحله دوباره نه
+        self.assertEqual(self.at(2.9)["warned"], 1)
+        self.assertEqual(self.at(2.8)["warned"], 0)
+        self.assertEqual(self.at(0.9)["warned"], 1)
+        self.db.refresh_from_db()
+        self.assertEqual(self.db.expiry_stage, 1)
+
+    def test_last_stage_is_urgent_others_not_and_link_is_renew(self):
+        self.at(6.5)
+        self.assertFalse(self.notify.call_args.kwargs["urgent"])
+        self.assertIn(f"/{self.db.pk}/", self.notify.call_args.kwargs["url"])
+        self.at(0.9)
+        self.assertTrue(self.notify.call_args.kwargs["urgent"])
+        self.assertIn("کمتر از یک روز", self.notify.call_args.args[2])
+
+    def test_late_start_sends_only_the_current_stage(self):
+        self.at(0.9)  # اولین بار نزدیک انقضا: فقط مرحله‌ی ۱، نه سه پیام پشت‌سرهم
+        self.assertEqual(self.notify.call_count, 1)
+
+    def test_renew_restarts_reminders(self):
+        self.at(0.9)
+        self.db.refresh_from_db()
+        self.db.extend(30)  # همان مسیر تمدید (دستی/هدیه/پرداخت) که مرحله را پاک می‌کند
+        self.db.save()
+        self.assertIsNone(self.db.expiry_stage)
+        self.assertEqual(self.at(6.5)["warned"], 1)
+
+
 class ViewTests(BaseCase):
     def test_public_pages(self):
         for url in ["/", "/docs/", "/docs/qgis/", "/docs/srid/", "/terms/", "/accounts/login/"]:
@@ -217,3 +271,4 @@ class ViewTests(BaseCase):
         self.assertEqual(self.client.get(f"/manage/databases/databaseserver/{self.server.pk}/change/").status_code, 200)
         page = self.client.get(f"/manage/databases/databaseserver/{self.server.pk}/change/").content.decode()
         self.assertNotIn("secret", page)  # رمز ادمین هرگز نمایش داده نمی‌شود
+
