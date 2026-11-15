@@ -12,7 +12,7 @@ from billing import services as billing
 from billing.models import Invoice
 from core.models import SiteSettings
 from databases.models import Plan
-from kernel import pricing
+from kernel import conf, pricing
 from winback import routes, services
 from winback.models import Batch, Coupon, Message, Route
 from winback.tests.test_winback import NOW, Base, mk_user
@@ -187,3 +187,62 @@ class DefTests(TestCase):
             if d.variant_b:
                 used = set(re.findall(r"#([A-Z_]+)#", d.variant_b))
                 self.assertTrue(used <= set(d.params) and {"LINK", "STOP"} <= used, d.key)
+
+
+class SendNowTests(Base):
+    def _scheduled(self):
+        mk_user(1)
+        batch = services.plan_batches(NOW)[0]
+        services.approve(batch, User.objects.create_user("09129999999"), NOW)
+        return batch
+
+    def test_sends_future_message_now_inside_window(self):
+        batch = self._scheduled()
+        m = batch.messages.get()
+        self.assertGreater(m.send_at, NOW)
+        with mock.patch.object(sms, "send_template") as send:
+            r = services.send_now(Message.objects.filter(batch=batch), NOW)
+        send.assert_called_once()
+        self.assertEqual((r["picked"], r["sent"], r["deferred"], r["stuck"]), (1, 1, 0, 0))
+        m.refresh_from_db()
+        self.assertEqual(m.status, "sent")
+
+    def test_outside_window_is_deferred_not_sent(self):
+        batch = self._scheduled()
+        night = datetime.datetime(2026, 11, 14, 22, 0, tzinfo=datetime.UTC)  # ۰۱:۳۰ بامداد تهران
+        with mock.patch.object(sms, "send_template") as send:
+            r = services.send_now(Message.objects.filter(batch=batch), night)
+        send.assert_not_called()
+        self.assertEqual((r["sent"], r["deferred"]), (0, 1))
+        m = batch.messages.get()
+        self.assertEqual(m.status, "scheduled")
+        self.assertTrue(services.timing.in_window(m.send_at))
+
+    def test_opted_out_user_still_skipped(self):
+        batch = self._scheduled()
+        m = batch.messages.get()
+        Message.objects.filter(pk=m.pk).update(status="scheduled")
+        from winback.models import Preference
+
+        Preference.objects.create(user=m.user, marketing=False)
+        with mock.patch.object(sms, "send_template") as send:
+            r = services.send_now(Message.objects.filter(batch=batch), NOW)
+        send.assert_not_called()
+        self.assertEqual(r["skipped"], 1)
+
+    def test_admin_action_needs_switch_and_stepup(self):
+        from django.urls import reverse as rev
+
+        batch = self._scheduled()
+        staff = User.objects.create_superuser(username="adm", password="x")
+        self.client.force_login(staff)
+        url = rev("admin:winback_batch_changelist")
+        data = {"action": "send_now_batches", "_selected_action": [batch.pk]}
+        r = self.client.post(url, data, follow=True)
+        self.assertContains(r, "خاموش")  # سوئیچ کلی خاموش
+        conf.set_value("winback", "enabled", True)
+        self.addCleanup(conf.clear, "winback", "enabled")
+        with mock.patch("winback.admin.stepup.ok", return_value=False), mock.patch("winback.admin.stepup.url", return_value="/su/"):
+            r = self.client.post(url, data)
+        self.assertEqual((r.status_code, r["Location"]), (302, "/su/"))
+        self.assertEqual(batch.messages.get().status, "scheduled")

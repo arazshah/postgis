@@ -120,11 +120,11 @@ class RouteAdmin(admin.ModelAdmin):
 
 @admin.register(Batch)
 class BatchAdmin(admin.ModelAdmin):
-    list_display = ["route", "created_at", "status", "count", "control", "segments_cost"]
+    list_display = ["route", "created_at", "status", "count", "control", "segments_cost", "schedule", "progress"]
     list_filter = ["status", "route"]
     readonly_fields = ["route", "status", "approved_by", "approved_at", "preview"]
     fields = readonly_fields
-    actions = ["approve_batches", "cancel_batches"]
+    actions = ["approve_batches", "send_now_batches", "cancel_batches"]
     change_list_template = "admin/winback/batch_changelist.html"
 
     def get_urls(self):
@@ -191,6 +191,23 @@ class BatchAdmin(admin.ModelAdmin):
         first = obj.messages.exclude(status=Message.Status.CONTROL).first()
         return self.count(obj) * routes.segments(services.preview(first)) if first else 0
 
+    @admin.display(description="بازه‌ی ارسال")
+    def schedule(self, obj):
+        from django.db.models import Max, Min
+
+        from .timing import TZ
+
+        r = obj.messages.filter(send_at__isnull=False).exclude(status=Message.Status.CONTROL).aggregate(a=Min("send_at"), b=Max("send_at"))
+        if not r["a"]:
+            return "—"
+        a, b = r["a"].astimezone(TZ), r["b"].astimezone(TZ)
+        return f"{a:%Y-%m-%d %H:%M} تا {b:%Y-%m-%d %H:%M}"
+
+    @admin.display(description="ارسال‌شده / منتظر")
+    def progress(self, obj):
+        m = obj.messages
+        return f"{m.filter(status=Message.Status.SENT).count()} / {m.filter(status=Message.Status.SCHEDULED).count()}"
+
     @admin.display(description="نمونه‌ی پیام‌ها")
     def preview(self, obj):
         rows = [format_html("<li><b>{}</b>: {}</li>", m.phone or m.email, services.preview(m)) for m in obj.messages.exclude(status=Message.Status.CONTROL)[:8]]
@@ -203,18 +220,59 @@ class BatchAdmin(admin.ModelAdmin):
         total = sum(services.approve(b, request.user) for b in queryset.filter(status=Batch.Status.PENDING))
         self.message_user(request, f"{total} پیام زمان‌بندی شد؛ هر کدام در بهترین ساعت کاربرش می‌رود.", messages.SUCCESS)
 
+    @admin.action(description="ارسال همین حالا (بدون انتظار برای ساعت بهینه)")
+    def send_now_batches(self, request, queryset):
+        return _send_now(self, request, Message.objects.filter(batch__in=queryset))
+
     @admin.action(description="لغو دسته")
     def cancel_batches(self, request, queryset):
         for b in queryset:
             services.cancel(b)
 
 
+def _send_now(admin_obj, request, qs):
+    """اقدام مشترک «ارسال همین حالا»: سوئیچ کلی روشن و تأیید تازه لازم است؛ نتیجه را شفاف می‌گوید."""
+    if not services.switch_on():
+        admin_obj.message_user(request, "سوئیچ کلی «ساخت فهرست و ارسال» خاموش است؛ از «پلاگین‌ها ← پلاگین‌های سیستمی ← بازگشت کاربران ← تنظیمات» روشنش کنید.", messages.ERROR)
+        return None
+    if not stepup.ok(request):
+        return redirect(stepup.url(request))
+    r = services.send_now(qs)
+    if not r["picked"]:
+        admin_obj.message_user(request, "پیام زمان‌بندی‌شده‌ی تأییدشده‌ای در انتخاب نبود.", messages.WARNING)
+        return None
+    parts = [f"ارسال‌شده: {r['sent']}"]
+    if r["skipped"]:
+        parts.append(f"رد‌شده (لغو، برگشته یا سقف دفعات): {r['skipped']}")
+    if r["failed"]:
+        parts.append(f"ناموفق: {r['failed']} (دلیل در ستون «دلیل»)")
+    if r["deferred"]:
+        parts.append(f"{r['deferred']} پیام الان خارج از ساعت مجاز (۱۰ تا ۲۰، نه جمعه) است و به اولین ساعت مجاز رفت")
+    if r["stuck"]:
+        parts.append(f"{r['stuck']} پیام نرفت (اعتبار پنل پیامک کم است یا سقف روزانه‌ی ایمیل پر شده)؛ بعداً خودکار تلاش می‌شود")
+    admin_obj.message_user(request, "؛ ".join(parts), messages.WARNING if r["stuck"] or r["failed"] else messages.SUCCESS)
+    return None
+
+
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):
-    list_display = ["route_key", "phone", "email", "channel", "via", "status", "send_at", "sent_at", "clicked_at", "returned_at",
-                    "paid_toman"]
-    list_filter = ["route_key", "status", "channel"]
+    list_display = ["route_key", "phone", "email", "channel", "via", "status", "planned", "sent_time", "clicked_at", "returned_at",
+                    "paid_toman", "reason"]
+    list_filter = ["route_key", "status", "channel", "batch"]
     search_fields = ["phone", "email"]
+    actions = ["send_now_messages"]
+
+    @admin.display(description="زمان برنامه‌ریزی‌شده", ordering="send_at")
+    def planned(self, obj):
+        return obj.send_at
+
+    @admin.display(description="زمان ارسال واقعی", ordering="sent_at")
+    def sent_time(self, obj):
+        return obj.sent_at
+
+    @admin.action(description="ارسال همین حالا (فقط پیام‌های زمان‌بندی‌شده)")
+    def send_now_messages(self, request, queryset):
+        return _send_now(self, request, queryset)
 
     def has_add_permission(self, request):
         return False
