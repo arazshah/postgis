@@ -825,7 +825,8 @@ class MailConfigForm(forms.ModelForm):
 
     class Meta:
         model = MailConfig
-        fields = ("enabled", "host", "port", "security", "username", "from_name", "from_email", "reply_to", "daily_limit")
+        fields = ("enabled", "host", "port", "security", "username", "from_name", "from_email", "reply_to", "daily_limit",
+                  "dkim_selector")
 
 
 @admin.register(MailConfig)
@@ -834,7 +835,22 @@ class MailConfigAdmin(admin.ModelAdmin):
 
     form = MailConfigForm
     list_display = ("host", "username", "enabled", "last_ok", "last_error")
-    actions = ["test_connection", "send_test"]
+    actions = ["test_connection", "send_test", "check_dns"]
+    readonly_fields = ("dns_view",)
+
+    def get_fields(self, request, obj=None):
+        return [*self.form.Meta.fields, "dns_view"]
+
+    @admin.display(description="وضعیت DNS دامنه (آخرین بررسی)")
+    def dns_view(self, obj):
+        if obj is None or not obj.dns_checked_at:
+            return "هنوز بررسی نشده؛ در فهرست، اقدام «بررسی DNS» را بزنید."
+        icon = {"ok": "✔", "warn": "!", "bad": "✘"}
+        rows = format_html_join("", "<li><b>{} {}</b>: {}{}</li>",
+                                ((icon.get(c["status"], "?"), c["title"], c["detail"],
+                                  format_html("<br><small dir='rtl'>{}</small>", c["fix"]) if c["fix"] else "")
+                                 for c in obj.dns_report))
+        return format_html("<ul dir='rtl'>{}</ul><small>{}</small>", rows, timezone.localtime(obj.dns_checked_at).strftime("%Y-%m-%d %H:%M"))
 
     def has_module_permission(self, request):
         return request.user.is_superuser or request.user.has_perm("kernel.change_mailconfig")
@@ -871,6 +887,18 @@ class MailConfigAdmin(admin.ModelAdmin):
     def test_connection(self, request, queryset):
         ok, detail = mail.test_connection()
         (messages.success if ok else messages.error)(request, detail)
+
+    @admin.action(description="بررسی DNS دامنه (SPF، DKIM، DMARC، MX)")
+    def check_dns(self, request, queryset):
+        from . import maildns
+
+        cfg = queryset.first()
+        if not maildns.domain_for(cfg):
+            messages.error(request, "نشانی فرستنده معتبر نیست؛ دامنه‌ای برای بررسی پیدا نشد.")
+            return
+        for c in maildns.refresh(cfg):
+            level = {"ok": messages.SUCCESS, "warn": messages.WARNING, "bad": messages.ERROR}[c["status"]]
+            messages.add_message(request, level, f"{c['title']}: {c['detail']} {c['fix']}".strip())
 
     @admin.action(description="ارسال ایمیل آزمایشی به ایمیل من")
     def send_test(self, request, queryset):
