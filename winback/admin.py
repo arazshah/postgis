@@ -3,6 +3,7 @@ from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
 from kernel import stepup
 from kernel.plugins import registry
@@ -16,16 +17,21 @@ class RouteForm(forms.ModelForm):
 
     class Meta:
         model = Route
-        fields = ("enabled", "template_id", "template_id_b", "gift_kind", "gift_plugin", "gift_days", "gift_percent")
+        fields = ("enabled", "channel", "email_subject", "email_subject_b", "template_id", "template_id_b", "gift_kind",
+                  "gift_plugin", "gift_days", "gift_percent")
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
+        d = routes.DEFS.get(self.instance.key) if self.instance and self.instance.key else None
+        if d is not None:  # فقط کانال‌های مجاز این مسیر (مثلاً گزارش ماهانه فقط ایمیل)
+            self.fields["channel"].choices = [c for c in Route.Channel.choices if c[0] in d.channels]
         self.fields["gift_plugin"].choices = [("", "—")] + [(p.id, p.name) for p in registry.plugins.values() if p.kind != "system"]
 
     def clean(self):
         data = super().clean()
-        if data.get("enabled") and not (data.get("template_id") or "").strip().isdigit():
-            raise forms.ValidationError("برای روشن‌کردن مسیر، شناسه‌ی عددی قالب تأییدشده‌ی sms.ir را بگذارید.")
+        sms_involved = (data.get("channel") or "sms") != "email"
+        if data.get("enabled") and sms_involved and not (data.get("template_id") or "").strip().isdigit():
+            raise forms.ValidationError("برای روشن‌کردن مسیرِ دارای پیامک، شناسه‌ی عددی قالب تأییدشده‌ی sms.ir را بگذارید (یا کانال را «ایمیل» کنید).")
         if (data.get("template_id_b") or "").strip() and not data["template_id_b"].strip().isdigit():
             raise forms.ValidationError("شناسه‌ی قالب B باید عدد باشد.")
         if (data.get("template_id_b") or "").strip() and not (data.get("template_id") or "").strip():
@@ -38,10 +44,10 @@ class RouteForm(forms.ModelForm):
 @admin.register(Route)
 class RouteAdmin(admin.ModelAdmin):
     form = RouteForm
-    list_display = ["title", "enabled", "template_id", "gift_kind", "sent", "uplift", "ab"]
-    readonly_fields = ["goal", "template_text", "template_text_b", "params_help"]
-    fields = ["goal", "enabled", "template_id", "template_text", "template_id_b", "template_text_b", "params_help",
-              "gift_kind", "gift_plugin", "gift_days", "gift_percent"]
+    list_display = ["title", "enabled", "channel", "template_id", "gift_kind", "sent", "uplift", "ab"]
+    readonly_fields = ["goal", "template_text", "template_text_b", "params_help", "email_preview"]
+    fields = ["goal", "enabled", "channel", "email_subject", "email_subject_b", "email_preview", "template_id", "template_text",
+              "template_id_b", "template_text_b", "params_help", "gift_kind", "gift_plugin", "gift_days", "gift_percent"]
 
     def has_add_permission(self, request):
         return False
@@ -76,6 +82,16 @@ class RouteAdmin(admin.ModelAdmin):
         if not d.variant_b:
             return "—"
         return format_html("<pre dir='rtl' style='white-space:pre-wrap'>{}</pre>", d.text("B"))
+
+    @admin.display(description="متن ایمیل (پیش‌فرض)")
+    def email_preview(self, obj):
+        d = routes.DEFS[obj.key]
+        demo = {"NAME": "علی", "DB": "پایگاه من", "DAYS": "45", "AMOUNT": "490,000", "FEATURE": "نقشه‌ی حرارتی", "SIZE": "12.4 مگابایت",
+                "PCT": "35", "PLAN": "رایگان", "TIP": "…"}
+        body = "<br>".join(str(format_html("{}", routes.render(line, demo))) for line in d.email_body.splitlines())
+        return format_html("<b>موضوع A:</b> {}<br><b>موضوع B:</b> {}<br><div dir='rtl'>{}</div><small>دکمه: {}</small>",
+                           routes.render(d.email_subject, demo), routes.render(d.email_subject_b, demo) or "—",
+                           format_html("{}", mark_safe(body)), d.email_cta)
 
     @admin.display(description="آزمون A/B")
     def ab(self, obj):
@@ -144,8 +160,8 @@ class BatchAdmin(admin.ModelAdmin):
                            "extra": fixed.get(d.extra_input, "") if d else ""}
             if route is None or d is None:
                 pass
-            elif not route.template_id or not route.enabled:
-                messages.error(request, "این مسیر باید قالب داشته باشد و روشن باشد.")
+            elif not services.ready(route) or not route.enabled:
+                messages.error(request, "این مسیر باید آماده (قالب پیامک یا کانال ایمیل) و روشن باشد.")
             elif request.POST.get("do") == "send":
                 if not stepup.ok(request):
                     return redirect(stepup.url(request))
@@ -177,7 +193,7 @@ class BatchAdmin(admin.ModelAdmin):
 
     @admin.display(description="نمونه‌ی پیام‌ها")
     def preview(self, obj):
-        rows = [format_html("<li><b>{}</b>: {}</li>", m.phone, services.preview(m)) for m in obj.messages.exclude(status=Message.Status.CONTROL)[:8]]
+        rows = [format_html("<li><b>{}</b>: {}</li>", m.phone or m.email, services.preview(m)) for m in obj.messages.exclude(status=Message.Status.CONTROL)[:8]]
         return format_html("<ul dir='rtl'>{}</ul>", format_html("".join(str(r) for r in rows)))
 
     @admin.action(description="تأیید و زمان‌بندی ارسال (در بهترین ساعت هر کاربر)")
@@ -195,9 +211,10 @@ class BatchAdmin(admin.ModelAdmin):
 
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):
-    list_display = ["route_key", "phone", "status", "send_at", "sent_at", "clicked_at", "returned_at", "paid_toman"]
-    list_filter = ["route_key", "status"]
-    search_fields = ["phone"]
+    list_display = ["route_key", "phone", "email", "channel", "via", "status", "send_at", "sent_at", "clicked_at", "returned_at",
+                    "paid_toman"]
+    list_filter = ["route_key", "status", "channel"]
+    search_fields = ["phone", "email"]
 
     def has_add_permission(self, request):
         return False

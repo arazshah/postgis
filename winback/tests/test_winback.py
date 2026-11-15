@@ -221,10 +221,23 @@ class MeasureTests(Base):
 
 class RouteDefTests(TestCase):
     def test_templates_use_only_declared_params_and_stop_link(self):
+        import re
+
         for d in routes.DEFS.values():
-            used = set(__import__("re").findall(r"#([A-Z_]+)#", d.template))
+            if not d.template:  # مسیر فقط‌ایمیلی (گزارش ماهانه) قالب پیامک ندارد
+                self.assertEqual(d.channels, ("email",), d.key)
+                continue
+            used = set(re.findall(r"#([A-Z_]+)#", d.template))
             self.assertEqual(used, set(d.params), d.key)
             self.assertIn("#STOP#", d.template)
+
+    def test_email_texts_use_only_declared_params(self):
+        import re
+
+        for d in routes.DEFS.values():
+            self.assertTrue(d.email_subject and d.email_body, d.key)
+            for text in (d.email_subject, d.email_subject_b, d.email_body):
+                self.assertLessEqual(set(re.findall(r"#([A-Z_]+)#", text)), set(d.params), d.key)
 
 
 class SettingsReachableTests(TestCase):

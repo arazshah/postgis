@@ -54,9 +54,11 @@ class MailTests(TestCase):
     def test_marketing_needs_consent(self):
         mail.register("t_mk", plugin="kernel", category=mail.MARKETING, subject="s", template="mail/test.html")
         self.verified()
+        prev = mail._consent  # پلاگین winback ارائه‌دهنده‌ی واقعی را ثبت کرده؛ این آزمون هسته را جدا می‌سنجد
+        mail.set_consent_provider(None)
+        self.addCleanup(mail.set_consent_provider, prev)
         self.assertEqual(mail.send("t_mk", user=self.user).error, "no-consent")
         mail.set_consent_provider(lambda u: True)
-        self.addCleanup(mail.set_consent_provider, None)
         row = mail.send("t_mk", user=self.user)
         self.assertEqual(row.status, S.QUEUED)
         self.assertEqual(row.headers["Precedence"], "bulk")

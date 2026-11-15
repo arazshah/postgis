@@ -15,6 +15,12 @@ def new_code() -> str:
 class Route(models.Model):
     """تنظیم یک مسیر بازگشت (تعریف مسیر در `winback.routes` است): روشن‌بودن، شناسه‌ی قالب sms.ir و هدیه."""
 
+    class Channel(models.TextChoices):
+        SMS = "sms", "پیامک"
+        EMAIL = "email", "ایمیل"
+        BOTH = "both", "پیامک و ایمیل (هر دو)"
+        EMAIL_SMS = "email_sms", "اول ایمیل؛ اگر تا ۳ روز کلیک یا بازگشتی نشد پیامک"
+
     class Gift(models.TextChoices):
         NONE = "none", "بدون هدیه"
         TRIAL = "trial", "آزمایش رایگان یک پلاگین"
@@ -26,6 +32,12 @@ class Route(models.Model):
                                   help_text="روشن‌بودن یعنی هر شب فهرست پیشنهادی ساخته شود؛ ارسال همیشه بعد از تأیید مدیر است.")
     template_id = models.CharField("شناسه‌ی قالب sms.ir", max_length=12, blank=True,
                                    help_text="متن قالب را از ردیف همین مسیر کپی و در sms.ir بسازید؛ بعد از تأیید، شناسه را اینجا بگذارید.")
+    channel = models.CharField("کانال ارسال", max_length=10, choices=Channel.choices, default=Channel.SMS,
+                               help_text="ایمیل فقط به ایمیل تأییدشده می‌رود؛ رضایت، سقف دفعات و کنترل بین دو کانال مشترک است.")
+    email_subject = models.CharField("موضوع ایمیل (اختیاری)", max_length=150, blank=True,
+                                     help_text="خالی = موضوع پیش‌فرض مسیر. می‌توانید #NAME# و پارامترهای مسیر را بگذارید.")
+    email_subject_b = models.CharField("موضوع ایمیل نسخه‌ی B (آزمون A/B)", max_length=150, blank=True,
+                                       help_text="اگر پر شود، گیرنده‌ها نصف‌نصف بین موضوع A و B تقسیم می‌شوند.")
     gift_kind = models.CharField("هدیه‌ی بازگشت", max_length=10, choices=Gift.choices, default=Gift.NONE)
     gift_plugin = models.CharField("پلاگین هدیه", max_length=60, blank=True)
     gift_days = models.PositiveSmallIntegerField("روزِ هدیه", default=7)
@@ -92,7 +104,11 @@ class Message(models.Model):
     batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name="messages")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="winback_messages")
     route_key = models.CharField(max_length=30, db_index=True)
-    phone = models.CharField(max_length=11)
+    phone = models.CharField(max_length=11, blank=True)
+    email = models.EmailField(blank=True)
+    channel = models.CharField("برنامه‌ی کانال", max_length=10, default="sms")
+    via = models.CharField("کانال ارسال‌شده", max_length=12, blank=True)
+    sms_fallback_at = models.DateTimeField(null=True, blank=True)
     params = models.JSONField(default=dict)
     dest = models.CharField("مقصد", max_length=200, default="/")
     code = models.CharField(max_length=12, unique=True, default=new_code)
@@ -114,7 +130,7 @@ class Message(models.Model):
         indexes = [models.Index(fields=["user", "status", "sent_at"])]
 
     def __str__(self):
-        return f"{self.route_key} → {self.phone}"
+        return f"{self.route_key} → {self.phone or self.email}"
 
 
 class Coupon(models.Model):

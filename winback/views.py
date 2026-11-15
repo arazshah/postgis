@@ -1,10 +1,11 @@
 """لینک کوتاه پیامک `/r/<code>/` (ردیابی و ورود امن) و لغو یک‌ضربه‌ای `/r/<code>/stop/`."""
 from urllib.parse import urlencode
 
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from . import referrals, services
@@ -29,11 +30,13 @@ def go(request, code):
         m.save(update_fields=["clicked_at"])
     if request.method == "GET":
         services.grant_gift(m)
-    utm = {"utm_source": "sms", "utm_medium": "winback", "utm_campaign": m.route_key}
+    utm = {"utm_source": "email" if request.GET.get("c") == "e" else "sms", "utm_medium": "winback", "utm_campaign": m.route_key}
     if request.user.is_authenticated:
         return redirect(f"{m.dest}?{urlencode(utm)}")
-    request.session[SESSION_PHONE] = m.phone
-    return redirect(f"{reverse('accounts:login')}?{urlencode({'next': m.dest, **utm})}")
+    if m.phone:
+        request.session[SESSION_PHONE] = m.phone
+        return redirect(f"{reverse('accounts:login')}?{urlencode({'next': m.dest, **utm})}")
+    return redirect(f"{reverse('accounts:login_password')}?{urlencode({'next': m.dest, **utm})}")  # حساب ایمیلی: شماره ندارد
 
 
 @require_http_methods(["GET", "POST"])
@@ -57,3 +60,17 @@ def invite(request, code):
         return redirect("databases:dashboard")
     utm = {"utm_source": "referral", "utm_medium": "invite", "utm_campaign": "friend", "cta": "invite"}
     return redirect(f"{reverse('accounts:login')}?{urlencode(utm)}")
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def oneclick(request, code):
+    """لغو یک‌کلیکی RFC 8058 (سرآیند List-Unsubscribe-Post): سرویس‌دهنده‌ی ایمیل خودش POST می‌کند.
+
+    فقط POST لغو می‌کند (پیش‌نمایش/اسکنر لینک با GET کسی را لغو نکند)؛ GET به صفحه‌ی تأیید می‌رود. مقدار حساسی برنمی‌گرداند.
+    """
+    m = _msg(code)
+    if request.method == "GET":
+        return redirect("winback:stop", code=code)
+    services.set_pref(m.user, False)
+    return HttpResponse("OK", content_type="text/plain")

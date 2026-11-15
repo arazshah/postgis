@@ -1,4 +1,5 @@
 """فاز ۳ ایمیل: سیاست کانال (ایمیل اول، پیامک فقط فوری/بی‌ایمیل)، ترجیحات، خلاصه‌ی روزانه و خطای کار."""
+import datetime
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -88,7 +89,7 @@ class DigestTests(TestCase):
         self.assertEqual(mail.send_digests(self.at(6)), 0)  # قبل از ۸ صبح
         self.assertEqual(mail.send_digests(self.at(9)), 1)
         self.assertEqual(DigestItem.objects.count(), 0)
-        mail.tick(self.at(9))
+        mail.tick(timezone.now() + datetime.timedelta(minutes=5))  # next_try ردیف = اکنون واقعی؛ آزمون به ساعت روز وابسته نباشد
         self.assertEqual(len(djmail.outbox), 1)
         body = djmail.outbox[0].body
         self.assertIn("یک", body)
