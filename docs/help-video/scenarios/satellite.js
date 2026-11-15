@@ -12,8 +12,8 @@ module.exports = {
     await page.waitForSelector('[data-layer] option:nth-child(2)', { state: "attached", timeout: 20000 });
     await pick("[data-layer]", "parcels"); await beat(1800);
     await glide("[data-next]"); await beat(900);
-    await step("ماهواره (Sentinel-2) و بازه را انتخاب کنید؛ اگر ابر کم می‌خواهید، سقف ابر را پایین بیاورید");
-    await show(".sat-prods", 1800);
+    await step("هدفتان را بزنید تا منبع مناسب بالا بیاید؛ بازه و سقف ابر همان کنار است");
+    await show(".sat-src-main", 1800);
     await glide('label:has([name="period"][value="365"])'); await beat(800);
     await glide('label:has([name="cloud"][value="20"])'); await beat(900);
     await glide("[data-next]"); await beat(1200);

@@ -380,7 +380,7 @@ def missions(db: UserDatabase | None = None, force: bool = False) -> list[dict]:
         ok = bool(st.get("ok")) if isinstance(st, dict) else known
         out.append({"key": m.key, "title": m.title, "agency": m.agency, "res": m.res_m, "revisit": m.revisit,
                     "since": m.since, "hint": m.hint, "kind": m.kind, "group": m.group, "cost": sources.weight(m.key),
-                    "mask": m.has_mask, "license": m.license, "available": ok,
+                    "mask": m.has_mask, "license": m.license, "available": ok, "max_km2": sources.max_km2(m.key),
                     "allowed": sources.plan_allows(plan, m.key) if plan is not None else True,
                     "providers": [{"key": s.provider, "title": spec.PROVIDERS[s.provider].title,
                                    "ok": bool(((st or {}).get("sources") or {}).get(s.provider, {}).get("ok"))}

@@ -21,7 +21,7 @@ from kernel import tenantdb, workspace
 from kernel.tenantdb import TenantError
 from satgate import protocol, spec
 
-from . import client, monitor_service, router, services, zonal_service
+from . import catalog, client, monitor_service, router, services, zonal_service
 from .models import SatAnalysis, SatMonitor, SatRequest
 
 NAME_RE = re.compile(r"^[A-Za-z0-9_\-]{1,100}$")
@@ -149,7 +149,8 @@ def extent(request, pk):
 def missions(request, pk):
     """ماهواره‌هایی که الان می‌شود از آن‌ها تصویر گرفت (دروازه وضعیتشان را می‌سنجد)."""
     db = workspace.get(request, pk, "viewer")
-    return _json({"ok": True, "missions": services.missions(db, force=request.GET.get("refresh") == "1" and request.user.is_staff)})
+    return _json({"ok": True, "catalog": catalog.public(),
+                  "missions": services.missions(db, force=request.GET.get("refresh") == "1" and request.user.is_staff)})
 
 
 def _analyses(db):

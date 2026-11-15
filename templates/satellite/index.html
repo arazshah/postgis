@@ -80,7 +80,7 @@
 <dialog class="dlg sat-dlg" id="sat-dlg" aria-labelledby="sat-t">
   <div class="dlg-h"><span class="dlg-i">{% icon "satellite" 22 %}</span><h2 id="sat-t">دریافت تصویر ماهواره‌ای</h2><button class="ib" type="button" data-dialog-close aria-label="بستن">{% icon "close" 20 %}</button></div>
   <ol class="sat-steps" aria-label="مراحل">
-    <li data-s="1"><b>۱</b><span>محدوده</span></li><li data-s="2"><b>۲</b><span>زمان و ابر</span></li>
+    <li data-s="1"><b>۱</b><span>محدوده</span></li><li data-s="2"><b>۲</b><span>منبع داده</span></li>
     <li data-s="3"><b>۳</b><span>تصویر</span></li><li data-s="4"><b>۴</b><span>محصول</span></li>
   </ol>
   <div class="dlg-b sat-b">
@@ -93,28 +93,51 @@
       <div class="sat-mapwrap"><div id="sat-map" role="application" aria-label="نقشه برای انتخاب محدوده"></div><div class="sat-hint" data-hint hidden></div></div>
       <div class="sat-area" data-area><span class="muted small">هنوز محدوده‌ای انتخاب نشده؛ «کشیدن مستطیل» یا «محدوده‌ی دید نقشه» را بزنید.</span></div>
     </section>
-    <section data-step="2" hidden>
-      <div class="field"><label>ماهواره</label>
-        <div class="sat-prods" data-missions role="radiogroup" aria-label="ماهواره"></div>
-        <p class="help small muted" data-mission-hint></p></div>
-      <div class="field" data-when="scene"><label>بازه‌ی زمانی</label>
-        <div class="chips" data-group="period">
-          <label class="pick-chip"><input type="radio" name="period" value="7"><span>۷ روز اخیر</span></label>
-          <label class="pick-chip"><input type="radio" name="period" value="30" checked><span>۳۰ روز</span></label>
-          <label class="pick-chip"><input type="radio" name="period" value="90"><span>۳ ماه</span></label>
-          <label class="pick-chip"><input type="radio" name="period" value="365"><span>یک سال</span></label>
-          <label class="pick-chip"><input type="radio" name="period" value="custom"><span>بازه‌ی دلخواه</span></label>
+    <section data-step="2" class="sat-src" hidden>
+      <div class="sat-src-main">
+        <div class="sat-goals">
+          <span class="sat-lab">برای چه کاری؟ <small class="muted">(اختیاری؛ بهترین منبع‌ها را بالا می‌آورد)</small></span>
+          <div class="chips" data-goals role="group" aria-label="هدف شما"></div>
         </div>
-        <div class="sat-dates" data-dates hidden><label>از <input type="date" data-from></label><label>تا <input type="date" data-to></label></div>
+        <div class="sat-tabs" data-tabs role="tablist" aria-label="دسته‌ی منبع"></div>
+        <div class="sat-list" data-missions role="radiogroup" aria-label="منبع داده"></div>
+        <p class="help small muted" data-mission-hint></p>
       </div>
-      <div class="field" data-when="optical"><label>حداکثر ابر</label>
-        <div class="chips" data-group="cloud">
-          <label class="pick-chip"><input type="radio" name="cloud" value="10"><span>تا ۱۰٪ <small>خیلی صاف</small></span></label>
-          <label class="pick-chip"><input type="radio" name="cloud" value="20" checked><span>تا ۲۰٪</span></label>
-          <label class="pick-chip"><input type="radio" name="cloud" value="40"><span>تا ۴۰٪</span></label>
-          <label class="pick-chip"><input type="radio" name="cloud" value="100"><span>هر مقدار</span></label>
+      <aside class="sat-src-side" data-side aria-label="شرایط دریافت">
+        <button class="sat-side-bar" type="button" data-sidetoggle aria-expanded="false">
+          <span data-sidesum></span>{% icon "chev" 16 %}
+        </button>
+        <div class="sat-side-body">
+          <div class="sat-sel" data-sel></div>
+          <div class="field" data-when="scene"><label>بازه‌ی زمانی</label>
+            <div class="chips" data-group="period">
+              <label class="pick-chip"><input type="radio" name="period" value="7"><span>۷ روز</span></label>
+              <label class="pick-chip"><input type="radio" name="period" value="30" checked><span>۳۰ روز</span></label>
+              <label class="pick-chip"><input type="radio" name="period" value="90"><span>۳ ماه</span></label>
+              <label class="pick-chip"><input type="radio" name="period" value="365"><span>یک سال</span></label>
+              <label class="pick-chip"><input type="radio" name="period" value="custom"><span>دلخواه</span></label>
+            </div>
+            <div class="sat-dates" data-dates hidden><label>از <input type="date" data-from></label><label>تا <input type="date" data-to></label></div>
+          </div>
+          <div class="field" data-when="optical"><label>حداکثر ابر</label>
+            <div class="chips" data-group="cloud">
+              <label class="pick-chip"><input type="radio" name="cloud" value="10"><span>۱۰٪ <small>صاف</small></span></label>
+              <label class="pick-chip"><input type="radio" name="cloud" value="20" checked><span>۲۰٪</span></label>
+              <label class="pick-chip"><input type="radio" name="cloud" value="40"><span>۴۰٪</span></label>
+              <label class="pick-chip"><input type="radio" name="cloud" value="100"><span>هر مقدار</span></label>
+            </div>
+            <p class="help small muted" data-season></p>
+          </div>
+          <div class="sat-sidenote" data-sidenote></div>
+          <div class="sat-warn" data-areawarn hidden></div>
         </div>
-        <p class="help small muted">هر ماهواره هر چند روز یک‌بار از هر نقطه می‌گذرد. در زمستان و بهار ابر بیشتر است؛ اگر چیزی پیدا نشد بازه یا ابر را بیشتر کنید.</p>
+      </aside>
+      <div class="sat-cat" data-cat hidden role="region" aria-label="کاتالوگ منبع">
+        <div class="sat-cat-h">
+          <button class="btn ghost sm" type="button" data-cat-close>{% icon "back" 16 %}بازگشت به فهرست</button>
+        </div>
+        <div class="sat-cat-b" data-cat-body></div>
+        <div class="sat-cat-f"><button class="btn" type="button" data-cat-pick>{% icon "check" 16 %}انتخاب این منبع</button></div>
       </div>
     </section>
     <section data-step="3" hidden>

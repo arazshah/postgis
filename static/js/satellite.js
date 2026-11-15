@@ -148,6 +148,7 @@
     S.scenes = null; S.scene = null; S.quote = null;
     show(S.bbox);
     renderArea();
+    if (S.missions) renderStep2();
     renderNav();
   }
   function renderArea() {
@@ -190,6 +191,7 @@
   const prevStep = () => (S.step === 4 && isLayer() ? 2 : Math.max(S.step - 1, 1));
   function go(n) {
     S.step = n;
+    closeCat(false);
     dlg.querySelectorAll("[data-step]").forEach((s) => { s.hidden = +s.dataset.step !== n; });
     dlg.querySelectorAll(".sat-steps li").forEach((li) => {
       li.classList.toggle("on", +li.dataset.s === n); li.classList.toggle("done", +li.dataset.s < n);
@@ -228,54 +230,221 @@
   $("[data-next]").addEventListener("click", () => go(nextStep()));
   $("[data-back]").addEventListener("click", () => go(prevStep()));
 
-  // -- مرحله ۲: انتخاب ماهواره (فقط آن‌هایی که الان در دسترس‌اند)
+  // -- مرحله ۲: منبع داده (هدف ← دسته ← فهرست فشرده + پنل شرایط + کاتالوگ هر منبع)
+  const pref = {
+    get(k, d) { try { return localStorage.getItem("sat." + k) || d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem("sat." + k, v); } catch (e) { /* ذخیره‌ی ترجیح اختیاری است */ } },
+  };
+  const GROUPS = [["optical", "چندطیفی"], ["radar", "رادار"], ["elevation", "ارتفاع"], ["thematic", "لایه‌ی آماده"]];
+  const faYear = (y) => Number(y).toLocaleString("fa-IR", {useGrouping: false});
+  const toInt = (s) => Number(String(s).replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
+  const cat = () => S.catalog || {bands: [], goals: [], missions: {}};
+  const info = (k) => cat().missions[k] || null;
+  const goalPick = () => { const g = cat().goals.find((x) => x.key === S.goal); return g ? g.pick : []; };
+  const rank = (k) => goalPick().indexOf(k);
+  const usable = (m) => m.available && m.allowed;
+  let catKey = "", catTrigger = null;
+
   async function loadMissions() {
     if (S.missions) return;
-    let list = [];
-    try { list = (await (await fetch(cfg.urls.missions)).json()).missions || []; } catch (e) { /* فقط Sentinel-2 */ }
+    let j = {};
+    try { j = await (await fetch(cfg.urls.missions)).json(); } catch (e) { /* فقط Sentinel-2 */ }
+    const list = j.missions || [];
+    S.catalog = j.catalog || null;
     S.missions = list.length ? list : [{key: "sentinel2", title: "Sentinel-2", agency: "ESA / Copernicus", res: 10, revisit: "هر ۵ روز", since: "۲۰۱۷", hint: "", available: true, allowed: true, kind: "optical", group: "optical", cost: 1, mask: true}];
-    renderMissions();
+    const saved = pref.get("mission", "");
+    if (saved && S.missions.some((m) => m.key === saved && usable(m))) S.mission = saved;
+    if (!S.missions.some((m) => m.key === S.mission && usable(m))) { const f = S.missions.find(usable); if (f) S.mission = f.key; }
+    [["period", "period"], ["cloud", "cloud"]].forEach(([k, name]) => {
+      const r = dlg.querySelector(`[name="${name}"][value="${pref.get(k, "")}"]`);
+      if (r && r.value !== "custom") r.checked = true;
+    });
+    S.tab = curMission().group || "optical";
+    renderGoals(); renderMissions();
   }
-  const GROUPS = [["optical", "چندطیفی"], ["radar", "راداری (از ابر عبور می‌کند)"], ["elevation", "ارتفاع"], ["thematic", "لایه‌ی موضوعی آماده"]];
-  function renderMissions() {
-    const wrap = $("[data-missions]"), shown = S.missions.filter((m) => m.available && m.allowed), off = S.missions.filter((m) => !m.available);
-    if (shown.length && !shown.some((m) => m.key === S.mission)) S.mission = shown[0].key;
+
+  function renderGoals() {
+    const wrap = $("[data-goals]");
     wrap.innerHTML = "";
-    GROUPS.forEach(([g, title]) => {
-      const list = S.missions.filter((m) => (m.group || "optical") === g && m.available);
-      if (!list.length) return;
-      wrap.append(el(`<div class="sat-grp">${esc(title)}</div>`));
-      list.forEach((m) => {
-        const lock = !m.allowed;
-        const meta = m.kind === "layer" ? `وضوح ${faN(m.res, {maximumFractionDigits: 0})} متر، ${esc(m.revisit)}` :
-          `وضوح ${faN(m.res, {maximumFractionDigits: 0})} متر، ${esc(m.revisit)}، از ${esc(m.since)}`;
-        const l = el(`<label class="sat-prod${lock ? " off" : ""}"><input type="radio" name="mission" value="${esc(m.key)}" ${m.key === S.mission ? "checked" : ""} ${lock ? "disabled" : ""}>
-          <b>${esc(m.title)} <small>${esc(m.agency)}</small>${m.cost > 1 ? `<span class="cost">${faN(m.cost, {maximumFractionDigits: 0})} واحد</span>` : ""}</b>
-          <small>${esc(m.hint)}</small><small>${meta}</small>${lock ? "<small>در پلن فعلی شما نیست.</small>" : ""}</label>`);
-        l.querySelector("input").addEventListener("change", () => {
-          if (S.mission === m.key) return;
-          S.mission = m.key; S.scenes = null; S.scene = null; S.quote = null; S.product = null; S.key = "";
-          dlg.querySelectorAll('[name="prod"]').forEach((r) => { r.checked = false; });
-          renderProds(); renderStep2(); renderNav();
-        });
-        wrap.append(l);
+    cat().goals.forEach((g) => {
+      const l = el(`<label class="pick-chip"><input type="checkbox" name="goal" value="${esc(g.key)}" ${S.goal === g.key ? "checked" : ""}><span>${icon(g.icon, 16)}${esc(g.title)}</span></label>`);
+      l.querySelector("input").addEventListener("change", (e) => {
+        S.goal = e.target.checked ? g.key : "";
+        wrap.querySelectorAll("input").forEach((i) => { i.checked = i.value === S.goal; });
+        if (S.goal) {
+          const top = g.pick.map((k) => S.missions.find((m) => m.key === k)).find((m) => m && usable(m));
+          if (top) { S.tab = top.group || "optical"; selectMission(top.key, true); return; }
+        }
+        renderMissions();
       });
+      wrap.append(l);
+    });
+    wrap.parentElement.hidden = !cat().goals.length;
+  }
+
+  function resBars(res) { const n = res <= 15 ? 3 : res <= 60 ? 2 : 1; return `<span class="sat-res" data-n="${n}" aria-hidden="true"><i></i><i></i><i></i></span>`; }
+
+  function renderMissions() {
+    const wrap = $("[data-missions]"), tabs = $("[data-tabs]");
+    const listed = S.missions.filter((m) => m.available), off = S.missions.filter((m) => !m.available);
+    const groups = GROUPS.filter(([g]) => listed.some((m) => (m.group || "optical") === g));
+    if (!groups.some(([g]) => g === S.tab) && groups.length) S.tab = groups[0][0];
+    tabs.innerHTML = "";
+    groups.forEach(([g, title]) => {
+      const n = listed.filter((m) => (m.group || "optical") === g).length;
+      const star = S.goal && listed.some((m) => (m.group || "optical") === g && usable(m) && rank(m.key) >= 0);
+      const b = el(`<button type="button" role="tab" class="sat-tab" aria-selected="${g === S.tab}" data-g="${g}">${esc(title)}<small>${faN(n, {maximumFractionDigits: 0})}</small>${star ? `<i class="sat-dot" title="شامل منبع پیشنهادی"></i>` : ""}</button>`);
+      b.addEventListener("click", () => { S.tab = g; renderMissions(); });
+      tabs.append(b);
+    });
+    let rows = listed.filter((m) => (m.group || "optical") === S.tab);
+    if (S.goal) rows = rows.map((m, i) => [m, i]).sort(([a, i], [b, j]) => {
+      const ra = rank(a.key), rb = rank(b.key);
+      return (ra < 0 ? 99 : ra) - (rb < 0 ? 99 : rb) || i - j;
+    }).map(([m]) => m);
+    wrap.innerHTML = "";
+    rows.forEach((m) => {
+      const lock = !m.allowed, r = S.goal ? rank(m.key) : -1, c = info(m.key);
+      const badge = r === 0 ? `<em class="sat-badge rec">${icon("star", 12)}پیشنهاد</em>` : r > 0 ? `<em class="sat-badge ok">مناسب</em>` : "";
+      const row = el(`<div class="sat-ms${lock ? " off" : ""}${m.key === S.mission ? " on" : ""}" data-k="${esc(m.key)}">
+        <label class="sat-ms-main"><input type="radio" name="mission" value="${esc(m.key)}" ${m.key === S.mission ? "checked" : ""} ${lock ? "disabled" : ""}>
+          <span class="sat-ms-t"><b>${esc(m.title)}</b>${badge}${m.cost > 1 ? `<em class="sat-tag cost">${faN(m.cost, {maximumFractionDigits: 0})} واحد</em>` : ""}</span>
+          <span class="sat-ms-s"><span>${esc(m.agency)}</span>${c ? `<span class="tg">${esc(c.tag)}</span>` : ""}${lock ? `<span class="lk">در پلن فعلی شما نیست</span>` : ""}</span></label>
+        <span class="sat-specs">${resBars(m.res)}<span><b>${faN(m.res, {maximumFractionDigits: 0})}</b> متر</span><span>${icon("clock", 14)}${esc(m.revisit)}</span><span class="since">از ${esc(m.since)}</span></span>
+        <button class="ib" type="button" data-info aria-label="جزئیات ${esc(m.title)}">${icon("info", 18)}</button></div>`);
+      row.querySelector("input").addEventListener("change", () => selectMission(m.key));
+      row.querySelector("[data-info]").addEventListener("click", (e) => openCat(m.key, e.currentTarget));
+      wrap.append(row);
     });
     $("[data-mission-hint]").textContent = off.length ? `${off.map((m) => m.title).join("، ")} فعلاً در دسترس نیست.` : "";
     renderStep2(); renderProds();
   }
-  // زمان و ابر فقط برای ماهواره‌ای معنا دارند که صحنه دارد؛ رادار ابر ندارد و لایه‌ی آماده هیچ‌کدام
+
+  function selectMission(key, rerender) {
+    if (S.mission === key) { if (rerender) renderMissions(); return; }
+    S.mission = key; S.scenes = null; S.scene = null; S.quote = null; S.product = null; S.key = "";
+    pref.set("mission", key);
+    dlg.querySelectorAll('[name="prod"]').forEach((r) => { r.checked = false; });
+    if (rerender) renderMissions();
+    else {
+      dlg.querySelectorAll(".sat-ms").forEach((r) => { r.classList.toggle("on", r.dataset.k === key); });
+      renderProds(); renderStep2();
+    }
+    renderNav();
+  }
+
+  // پنل شرایط: فقط چیزهایی که برای این نوع منبع معنا دارند؛ همیشه کنار فهرست است (بدون اسکرول)
   function renderStep2() {
-    const m = curMission();
+    const m = curMission(), c = info(m.key);
     dlg.querySelectorAll("[data-when]").forEach((f) => {
       f.hidden = f.dataset.when === "scene" ? m.kind === "layer" : f.dataset.when === "optical" ? m.kind !== "optical" : false;
     });
+    $("[data-sel]").innerHTML = `<span class="sat-sel-i">${icon("satellite", 20)}</span><div><b>${esc(m.title || "")}</b><small>${c ? esc(c.tag) + " · " : ""}${faN(m.res || 0, {maximumFractionDigits: 0})} متر</small></div><button class="ib" type="button" data-info aria-label="جزئیات منبع">${icon("info", 18)}</button>`;
+    $("[data-sel] [data-info]").addEventListener("click", (e) => openCat(m.key, e.currentTarget));
+    const notes = [];
+    if (m.kind === "sar") notes.push("رادار ابر ندارد؛ فقط بازه‌ی زمانی را انتخاب کنید.");
+    if (m.kind === "layer") notes.push("لایه‌ی آماده است؛ بازه و ابر ندارد و مستقیم به انتخاب محصول می‌روید.");
+    notes.push(`هزینه: ${faN(m.cost || 1, {maximumFractionDigits: 0})} واحد از اعتبار ماهانه.`);
+    $("[data-sidenote]").innerHTML = notes.map((t) => `<p>${esc(t)}</p>`).join("");
+    const mo = new Date().getMonth();
+    $("[data-season]").textContent = [11, 0, 1, 2, 3].includes(mo) ? "زمستان و بهار ابر بیشتر است؛ اگر چیزی پیدا نشد ابر را بیشتر کنید." : "";
+    const w = $("[data-areawarn]");
+    if (S.bbox && m.res) {
+      const km = areaKm2(S.bbox), px = km * 1e6 / (m.res * m.res);
+      if (m.max_km2 && km > m.max_km2) w.textContent = `سقف مساحت این منبع ${faN(m.max_km2, {maximumFractionDigits: 0})} کیلومتر مربع است و محدوده‌ی شما ${faN(km, {maximumFractionDigits: 0})} است.`;
+      else if (px > 3e7 && m.res < 30) w.textContent = `محدوده برای وضوح ${faN(m.res, {maximumFractionDigits: 0})} متر بزرگ است (حدود ${faN(px / 1e6, {maximumFractionDigits: 0})} میلیون پیکسل)؛ منبع ۳۰ متری مثل Landsat فایل سبک‌تری می‌دهد.`;
+      else w.textContent = "";
+      w.hidden = !w.textContent;
+    } else w.hidden = true;
+    const pv = dlg.querySelector('[name="period"]:checked'), cv = dlg.querySelector('[name="cloud"]:checked');
+    const pl = pv ? ({"7": "۷ روز", "30": "۳۰ روز", "90": "۳ ماه", "365": "یک سال", custom: "بازه‌ی دلخواه"}[pv.value]) : "";
+    const parts = [m.title || ""];
+    if (m.kind !== "layer") parts.push(pl);
+    if (m.kind === "optical" && cv) parts.push("ابر تا " + (cv.value === "100" ? "هر مقدار" : faN(cv.value, {maximumFractionDigits: 0}) + "٪"));
+    $("[data-sidesum]").innerHTML = parts.map((t) => `<span>${esc(t)}</span>`).join("");
   }
+  $("[data-sidetoggle]").addEventListener("click", (e) => {
+    const side = $("[data-side]"), open = side.dataset.open !== "1";
+    side.dataset.open = open ? "1" : "0"; e.currentTarget.setAttribute("aria-expanded", open);
+  });
+
+  // -- کاتالوگ منبع (پنل کشویی درون همین مودال؛ بستنش انتخاب را از بین نمی‌برد)
+  const catEl = $("[data-cat]");
+  function resSvg(res) {
+    const W = 120, H = 80, cells = [];
+    if (res <= 40) {
+      for (let x = res; x < W; x += res) cells.push(`<line x1="${x}" y1="0" x2="${x}" y2="${H}"/>`);
+      for (let y = res; y < H; y += res) cells.push(`<line x1="0" y1="${y}" x2="${W}" y2="${y}"/>`);
+    } else cells.push(`<rect class="px" x="0" y="0" width="${Math.min(res, W)}" height="${Math.min(res, H)}"/>`);
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="مقایسه‌ی اندازه‌ی پیکسل با زمین فوتبال"><rect class="bg" width="${W}" height="${H}"/>
+      <g class="pitch"><rect x="7.5" y="6" width="105" height="68" rx="1"/><line x1="60" y1="6" x2="60" y2="74"/><circle cx="60" cy="40" r="9"/></g><g class="grid">${cells.join("")}</g></svg>`;
+  }
+  function timeSvg(a, b) {
+    const y0 = 1980, y1 = new Date().getFullYear(), W = 240, x = (y) => 8 + (Math.min(Math.max(y, y0), y1) - y0) / (y1 - y0) * (W - 16);
+    const ticks = [1980, 2000, 2020].map((y) => `<g><line x1="${x(y)}" y1="22" x2="${x(y)}" y2="27"/><text x="${x(y)}" y="38" text-anchor="middle">${y}</text></g>`).join("");
+    const w = Math.max(x(b) - x(a), 4);
+    return `<svg viewBox="0 0 ${W} 42" role="img" aria-label="بازه‌ی داده از ${faYear(a)} تا ${faYear(b)}"><line class="ax" x1="8" y1="24" x2="${W - 8}" y2="24"/>${ticks}<rect class="span" x="${x(a)}" y="14" width="${w}" height="10" rx="3"/></svg>`;
+  }
+  function openCat(key, trigger) {
+    const m = S.missions.find((x) => x.key === key), c = info(key);
+    if (!m) return;
+    catKey = key; catTrigger = trigger || null;
+    const prods = cfg.products.filter((p) => p.mission === key);
+    const badges = [];
+    if (m.kind === "sar" || m.group === "radar") badges.push([ "cloud", "از ابر و شب عبور می‌کند"]);
+    if (m.mask) badges.push(["check", "ماسک ابر و سایه دارد"]);
+    if (m.kind === "layer") badges.push(["layers", "بدون انتخاب تصویر؛ آماده"]);
+    if (m.cost > 1) badges.push(["bolt", `${faN(m.cost, {maximumFractionDigits: 0})} واحد اعتبار`]);
+    const sinceY = toInt(m.since), now = new Date().getFullYear();
+    const span = c && c.span ? c.span : [sinceY, now];
+    const bandKeys = c ? c.bands : [];
+    const strip = bandKeys.length ? `<div class="sat-band">${cat().bands.map(([k, t]) => `<span class="${bandKeys.includes(k) ? "on" : ""}">${esc(t)}</span>`).join("")}</div>` :
+      `<p class="sat-derived">${icon("layers", 16)}${esc(c && c.derived || "لایه‌ی آماده")}</p>`;
+    const body = $("[data-cat-body]");
+    body.innerHTML = `<div class="sat-cat-hd"><span class="sat-sel-i">${icon("satellite", 22)}</span><div><h3>${esc(m.title)}</h3><p class="muted small">${esc(m.agency)}${m.license ? " · " + esc(m.license) : ""}</p></div></div>
+      ${c ? `<p class="sat-cat-one">${esc(c.one)}</p>` : `<p class="sat-cat-one">${esc(m.hint)}</p>`}
+      ${badges.length ? `<div class="sat-badges">${badges.map(([i, t]) => `<span>${icon(i, 14)}${esc(t)}</span>`).join("")}</div>` : ""}
+      ${c ? `<h4>به چه دردی می‌خورد؟</h4><ul class="sat-uses">${c.uses.map(([i, t]) => `<li>${icon(i, 18)}<span>${esc(t)}</span></li>`).join("")}</ul>
+      <h4>مناسب نیست برای</h4><ul class="sat-avoid">${c.avoid.map((t) => `<li>${icon("warn", 16)}<span>${esc(t)}</span></li>`).join("")}</ul>` : ""}
+      <h4>یک نگاه تصویری</h4>
+      <div class="sat-viz">
+        <figure><div class="sat-vz sat-vz-res">${resSvg(m.res)}</div><figcaption><b>وضوح ${faN(m.res, {maximumFractionDigits: 0})} متر</b>هر خانه یک پیکسل است و زمین فوتبال را مقایسه‌ی اندازه می‌گذاریم${m.res > 90 ? "؛ این پیکسل بزرگ‌تر از کل زمین است" : ""}.</figcaption></figure>
+        <figure><div class="sat-vz">${strip}</div><figcaption><b>${bandKeys.length ? "چه چیزی را می‌بیند" : "نوع داده"}</b>${bandKeys.includes("mw") ? "امواج رادار؛ شب و ابر مانع نیست." : bandKeys.length ? "نور مرئی و فروسرخ؛ شب و ابر دید را می‌بندد." : "خروجی طبقه‌بندی یا ارتفاع آماده است."}</figcaption></figure>
+        <figure><div class="sat-vz sat-vz-time">${timeSvg(span[0], span[1])}</div><figcaption><b>${c && c.span ? (span[0] === span[1] ? "سال داده: " + faYear(span[0]) : faYear(span[0]) + " تا " + faYear(span[1])) : "از " + esc(m.since) + " تا امروز"}</b>${esc(m.revisit)}</figcaption></figure>
+      </div>
+      ${prods.length ? `<h4>محصول‌هایی که از این منبع می‌گیرید</h4><div class="chips">${prods.map((p) => `<span class="sat-chip">${esc(p.title)}</span>`).join("")}</div>` : ""}
+      ${c && c.compare.length ? `<h4>در چه حالتی منبع دیگری بهتر است؟</h4><ul class="sat-cmp">${c.compare.map(([k, why]) => { const o = S.missions.find((x) => x.key === k); return o && o.available ? `<li><span>اگر ${esc(why)}</span><button class="btn ghost sm" type="button" data-cmp="${esc(k)}">${esc(o.title)}${icon("next", 14)}</button></li>` : ""; }).join("")}</ul>` : ""}`;
+    body.querySelectorAll("[data-cmp]").forEach((b) => b.addEventListener("click", () => openCat(b.dataset.cmp, catTrigger)));
+    body.scrollTop = 0;
+    const pick = $("[data-cat-pick]");
+    pick.disabled = !m.allowed;
+    pick.lastChild.nodeValue = !m.allowed ? "در پلن فعلی شما نیست" : S.mission === key ? "این منبع انتخاب شده است" : "انتخاب این منبع";
+    catEl.hidden = false;
+    $("[data-cat-close]").focus();
+  }
+  function closeCat(focusBack) {
+    if (catEl.hidden) return;
+    catEl.hidden = true;
+    if (focusBack !== false && catTrigger && catTrigger.isConnected) catTrigger.focus();
+    catTrigger = null;
+  }
+  $("[data-cat-close]").addEventListener("click", () => closeCat());
+  $("[data-cat-pick]").addEventListener("click", () => {
+    const m = S.missions.find((x) => x.key === catKey);
+    if (m) { S.tab = m.group || "optical"; selectMission(catKey, true); }
+    closeCat(false);
+    const r = dlg.querySelector(`.sat-ms[data-k="${catKey}"] input`);
+    if (r) r.focus();
+  });
+  dlg.addEventListener("cancel", (e) => { if (!catEl.hidden) { e.preventDefault(); closeCat(); } });
 
   // -- مرحله ۲ (زمان و ابر)
   dlg.querySelectorAll('[name="period"]').forEach((r) => r.addEventListener("change", () => {
     $("[data-dates]").hidden = r.value !== "custom" || !r.checked;
+    if (r.checked && r.value !== "custom") pref.set("period", r.value);
+    renderStep2();
   }));
+  dlg.querySelectorAll('[name="cloud"]').forEach((r) => r.addEventListener("change", () => { if (r.checked) pref.set("cloud", r.value); renderStep2(); }));
   function params() {
     const iso = (d) => d.toISOString().slice(0, 10);
     const pv = dlg.querySelector('[name="period"]:checked').value, end = new Date();
