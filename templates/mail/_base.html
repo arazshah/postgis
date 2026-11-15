@@ -1,0 +1,17 @@
+{% comment %}قاب ایمیل: راست‌به‌چپ، فقط CSS درون‌خطی (کلاینت‌های ایمیل متغیر CSS نمی‌شناسند؛ رنگ‌ها همان توکن‌های ds.css).{% endcomment %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ subject }}</title></head>
+<body style="margin:0;padding:0;background:#EEF2EC;font-family:Tahoma,'Segoe UI',Arial,sans-serif;color:#12313A;direction:rtl;text-align:right">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EEF2EC"><tr><td align="center" style="padding:24px 12px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #C5D2C2;border-radius:14px">
+    <tr><td style="padding:18px 24px;background:#0F5C59;border-radius:14px 14px 0 0;color:#ffffff;font-size:18px;font-weight:bold">{{ SITE_NAME }}</td></tr>
+    <tr><td style="padding:24px;font-size:15px;line-height:1.9">
+      {% block body %}{% endblock %}
+    </td></tr>
+    <tr><td style="padding:14px 24px 20px;border-top:1px solid #DDE5DA;font-size:12px;line-height:1.8;color:#4B6269">
+      {% block footer %}این ایمیل خودکار است و به آن پاسخ داده نمی‌شود. برای ارتباط با ما به <a href="{{ BASE_URL }}/" style="color:#0F5C59">{{ SITE_NAME }}</a> مراجعه کنید.{% endblock %}
+      {% if unsubscribe_url %}<br><a href="{{ unsubscribe_url }}" style="color:#4B6269">لغو دریافت پیشنهادها</a>{% endif %}
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>

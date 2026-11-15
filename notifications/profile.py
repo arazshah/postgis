@@ -46,6 +46,8 @@ def handle(request, action: str, next_url: str):
             v = post.get(name, "")
             return int(v) if v.isdigit() and 0 <= int(v) <= 23 else None
         NotifyPref.objects.update_or_create(user=request.user, defaults={
-            "quiet_from": hour("quiet_from"), "quiet_to": hour("quiet_to"), "fallback": post.get("fallback") == "1"})
+            "quiet_from": hour("quiet_from"), "quiet_to": hour("quiet_to"), "fallback": post.get("fallback") == "1",
+            "email_service": post.get("email_service") == "1", "email_product": post.get("email_product") == "1",
+            "email_digest": post.get("email_digest") == "1"})
         messages.success(request, "تنظیم ذخیره شد.")
     return redirect(tab)

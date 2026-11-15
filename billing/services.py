@@ -19,6 +19,10 @@ from .models import Invoice, PlanVoucher, PluginAddon
 log = logging.getLogger(__name__)
 
 
+def _abs(path: str) -> str:
+    return settings.CANONICAL_URL.rstrip("/") + path
+
+
 class BillingError(Exception):
     pass
 
@@ -206,7 +210,8 @@ def reject(inv: Invoice, actor, reason: str = ""):
         inv.note = (inv.note + "\n" + reason).strip()
     inv.save(update_fields=["status", "reviewed_by", "note"])
     workspace.notify_user(inv.user, "رسید پرداخت تأیید نشد",
-                        f"رسید فاکتور {inv.number} تأیید نشد. {reason} برای پیگیری با پشتیبانی تماس بگیرید.")
+                        f"رسید فاکتور {inv.number} تأیید نشد. {reason} برای پیگیری با پشتیبانی تماس بگیرید.",
+                          urgent=True, url=_abs(reverse("billing:invoice", args=[inv.number])))
 
 
 # ---------------------------------------------------------------------- تأیید و اعمال
@@ -279,7 +284,7 @@ def apply_invoice(inv: Invoice):
         body = f"پرداخت فاکتور {inv.number} تأیید شد و پلن {plan.name} برای {db.label} فعال شد."
     inv.applied_at = timezone.now()
     inv.save(update_fields=["applied_at"])
-    workspace.notify_user(inv.user, "پرداخت تأیید شد", body)
+    workspace.notify_user(inv.user, "پرداخت تأیید شد", body, url=_abs(reverse("billing:invoice", args=[inv.number])))
 
 
 # ---------------------------------------------------------------------- نگهداری

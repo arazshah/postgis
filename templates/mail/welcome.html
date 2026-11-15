@@ -1,0 +1,6 @@
+{% extends "mail/_base.html" %}{% block body %}
+<h1 style="font-size:18px;margin:0 0 12px">خوش آمدید{% if name %}، {{ name }}{% endif %}</h1>
+<p>ایمیل شما تأیید شد. برای شروع سه قدم کافی است:</p>
+<ol style="padding-right:20px;margin:0 0 8px"><li>یک پایگاه PostGIS رایگان بسازید.</li><li>فایل CSV یا شیپ‌فایل‌تان را وارد کنید.</li><li>اولین نقشه‌تان را بسازید و منتشر کنید.</li></ol>
+{% include "mail/_button.html" with url=start_url label="ساخت اولین پایگاه" %}
+{% endblock %}

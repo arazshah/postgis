@@ -15,7 +15,7 @@ from analytics.models import Event
 from core.models import SiteSettings
 from kernel.jobs import load
 
-from . import otp
+from . import emailverify, otp
 from .decorators import site_user_required
 from .forms import EmailSignupForm, PasswordLoginForm, PhoneForm, ProfileForm, VerifyForm
 from .models import User, normalize_mobile
@@ -122,7 +122,7 @@ def login_password(request):
 
 @require_http_methods(["GET", "POST"])
 def signup_email(request):
-    """ثبت‌نام با ایمیل و رمز عبور؛ فعلاً ایمیل تأیید نمی‌شود."""
+    """ثبت‌نام با ایمیل و رمز عبور؛ پیوند تأیید ایمیل می‌رود و کار کاربر تا تأیید قفل نمی‌شود (سیاست نرم)."""
     if request.user.is_authenticated:
         return redirect("databases:dashboard")
     nxt = _safe_next(request, request.GET.get("next") or request.POST.get("next"))
@@ -143,7 +143,8 @@ def signup_email(request):
             organization=d.get("organization", ""))
         login(request, user, backend="django.contrib.auth.backends.ModelBackend")
         analytics.attach_user(request, user, new_user=True)
-        messages.success(request, "حساب شما ساخته شد. حالا اولین پایگاه داده مکانی خود را بسازید.")
+        emailverify.send_verification(user, force=True)
+        messages.success(request, "حساب شما ساخته شد و پیوند تأیید به ایمیل‌تان رفت. حالا اولین پایگاه داده مکانی خود را بسازید.")
         return redirect("databases:create")
     return render(request, "accounts/signup_email.html", ctx)
 
@@ -223,13 +224,17 @@ def profile(request):
     pw_form = pw_cls(request.user, request.POST if action == "password" else None)
     if request.method == "POST":
         if action == "profile" and form.is_valid():
-            form.save()
-            messages.success(request, "اطلاعات حساب ذخیره شد.")
+            old_email = User.objects.filter(pk=request.user.pk).values_list("email", flat=True).first()
+            user = form.save()
+            if (user.email or None) != (old_email or None):
+                emailverify.email_changed(old_email, user)
+            messages.success(request, "اطلاعات حساب ذخیره شد." + (" پیوند تأیید به ایمیل تازه رفت." if user.email and not user.email_verified_at else ""))
             return redirect("accounts:profile")
         if action == "password":
             if pw_form.is_valid():
                 pw_form.save()
                 update_session_auth_hash(request, request.user)
+                emailverify.password_changed(request.user)
                 messages.success(request, "رمز عبور ذخیره شد.")
                 return redirect(f"{reverse('accounts:profile')}#account")
             messages.error(request, "رمز عبور ذخیره نشد؛ خطاها را در بخش «حساب و امنیت» ببینید.")
@@ -241,3 +246,65 @@ def profile(request):
     return render(request, "accounts/profile.html", {
         "form": form, "pw_form": pw_form, "profile_sections": profile_sections.build(request),
         "next": nxt or "", "open_tab": "account" if action == "password" else ""})
+
+
+def email_confirm(request, token):
+    """پیوند تأیید ایمیل (از ایمیل)؛ بدون نیاز به ورود، چون پیوند امضاشده است."""
+    user = emailverify.confirm(token)
+    if user is None:
+        messages.error(request, "پیوند تأیید نامعتبر یا منقضی است. از پروفایل دوباره بخواهید.")
+    else:
+        messages.success(request, "ایمیل شما تأیید شد.")
+    return redirect("databases:dashboard" if request.user.is_authenticated else "accounts:login")
+
+
+@site_user_required
+@require_POST
+def email_resend(request):
+    if request.user.email_verified_at or not request.user.email:
+        return redirect("accounts:profile")
+    if emailverify.send_verification(request.user):
+        messages.success(request, "پیوند تأیید دوباره به ایمیل‌تان رفت.")
+    else:
+        messages.info(request, "چند لحظه بعد دوباره امتحان کنید.")
+    return redirect("accounts:profile")
+
+
+FORGOT_MAX_PER_IP = 5
+
+
+@require_http_methods(["GET", "POST"])
+def password_forgot(request):
+    """درخواست پیوند بازنشانی رمز با ایمیل؛ پاسخ همیشه یکسان است (بدون افشای وجود حساب)."""
+    from .forms import ForgotForm
+
+    if request.user.is_authenticated:
+        return redirect("accounts:profile")
+    form = ForgotForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        key = f"forgot:ip:{otp.client_ip(request) or 'na'}"
+        email = form.cleaned_data["email"]
+        mkey = f"forgot:mail:{email}"
+        if cache.get(key, 0) < FORGOT_MAX_PER_IP and not cache.get(mkey):
+            _bump(key, SIGNUP_WINDOW)
+            cache.set(mkey, 1, 60)
+            emailverify.send_reset(email)
+        return render(request, "accounts/password_forgot.html", {"form": ForgotForm(), "sent": True})
+    return render(request, "accounts/password_forgot.html", {"form": form, "sent": False})
+
+
+@require_http_methods(["GET", "POST"])
+def password_reset(request, uidb64, token):
+    user = emailverify.user_from_uid(uidb64, token)
+    if user is None:
+        return render(request, "accounts/password_reset.html", {"invalid": True}, status=400)
+    form = SetPasswordForm(user, request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        if user.email and not user.email_verified_at:
+            user.email_verified_at = timezone.now()  # رسیدن به پیوند یعنی صاحب صندوق است
+            user.save(update_fields=["email_verified_at"])
+        emailverify.password_changed(user)
+        messages.success(request, "رمز تازه ذخیره شد. حالا وارد شوید.")
+        return redirect("accounts:login_password")
+    return render(request, "accounts/password_reset.html", {"form": form, "invalid": False})

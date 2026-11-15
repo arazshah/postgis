@@ -4,6 +4,8 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
+from django.conf import settings
+from django.urls import reverse
 from django.utils import timezone
 
 from .models import Ticket, TicketMessage
@@ -58,7 +60,8 @@ def staff_reply(ticket: Ticket, staff, body: str, attachment=None, close: bool =
     from kernel import workspace
 
     workspace.notify_user(ticket.user, f"پاسخ تیکت {ticket.number}",
-            f"به تیکت {ticket.number} («{ticket.subject[:40]}») پاسخ داده شد. برای دیدن پاسخ وارد حساب خود شوید.")
+            f"به تیکت {ticket.number} («{ticket.subject[:40]}») پاسخ داده شد. برای دیدن پاسخ وارد حساب خود شوید.",
+            url=settings.CANONICAL_URL.rstrip("/") + reverse("support:detail", args=[ticket.number]))
     return m
 
 

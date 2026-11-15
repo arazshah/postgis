@@ -21,6 +21,14 @@ class KernelConfig(AppConfig):
 
         jobs.register_tick("plugin_alerts", "kernel.alerts.tick", plugin="kernel", order=90)
         jobs.register_tick("notify_poll", "kernel.notify.tick", plugin="kernel", order=92)
+        jobs.register_tick("mail_queue", "kernel.mail.tick", plugin="kernel", order=91)
+        from . import mail
+
+        mail.register("mail_test", plugin="kernel", category=mail.SERVICE, subject="ایمیل آزمایشی {{ SITE_NAME }}",
+                      template="mail/test.html")
+        mail.register("notice", plugin="kernel", category=mail.SERVICE, subject="{{ title }}", template="mail/notice.html")
+        mail.register("digest", plugin="kernel", category=mail.SERVICE, subject="خلاصه‌ی امروز {{ SITE_NAME }}",
+                      template="mail/digest.html")
         jobs.register_tick("sources_fetch", "kernel.sources.tick", plugin="kernel", order=93)
         jobs.register_tick("plugin_breaker", "kernel.health.tick", plugin="kernel", order=95)
         from . import dash

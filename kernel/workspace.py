@@ -65,8 +65,9 @@ class Provider:
     def log_event(self, action: str, message: str = "", *, user=None, database=None, success: bool = True) -> None:
         raise NotImplementedError
 
-    def notify_user(self, user, subject: str, body: str) -> None:
-        """اطلاع‌رسانی به کاربر با پیامک و ایمیل (هر کدام که در دسترس باشد)."""
+    def notify_user(self, user, subject: str, body: str, *, urgent: bool = False, url: str = "") -> None:
+        """اطلاع‌رسانی به کاربر. سیاست: اعلان عادی اول با ایمیل تأییدشده می‌رود (ارزان‌تر) و پیامک فقط وقتی ایمیل
+        ممکن نیست؛ `urgent` (قطع سرویس، حجم پر، رسید ردشده) هر دو کانال را می‌گیرد."""
         raise NotImplementedError
 
     def plan_default(self, name: str, default=None):
@@ -128,8 +129,8 @@ def log_event(action: str, message: str = "", *, user=None, database=None, succe
     provider().log_event(action, message, user=user, database=database, success=success)
 
 
-def notify_user(user, subject: str, body: str) -> None:
-    provider().notify_user(user, subject, body)
+def notify_user(user, subject: str, body: str, *, urgent: bool = False, url: str = "") -> None:
+    provider().notify_user(user, subject, body, urgent=urgent, url=url)
 
 
 def plan_default(name: str, default=None):

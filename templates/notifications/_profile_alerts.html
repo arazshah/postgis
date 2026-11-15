@@ -31,6 +31,12 @@
         <select name="quiet_to" aria-label="تا ساعت"><option value="">—</option>{% for h in ps.hours %}<option value="{{ h }}" {% if ps.pref.quiet_to == h %}selected{% endif %}>{{ h }}</option>{% endfor %}</select>
       </div></div>
     <label class="check"><input type="checkbox" name="fallback" value="1" {% if not ps.pref or ps.pref.fallback %}checked{% endif %}> اگر پیام‌رسان نرسید، پیامک/ایمیل بفرست</label>
+    <h3 class="prof-h" style="font-size:15px">ایمیل</h3>
+    {% if not user.email %}<p class="small muted">برای دریافت اعلان با ایمیل، در «مشخصات» ایمیل بگذارید.</p>
+    {% elif not user.email_verified_at %}<p class="small muted">ایمیل شما هنوز تأیید نشده است؛ اعلان‌ها فقط به ایمیل تأییدشده می‌رسد (پیوند تأیید را در «حساب و امنیت» دوباره بگیرید).</p>{% endif %}
+    <label class="check"><input type="checkbox" name="email_service" value="1" {% if not ps.pref or ps.pref.email_service %}checked{% endif %}> هشدار و رسید (حجم، انقضا، پرداخت، پاسخ تیکت، خطای کار)</label>
+    <label class="check"><input type="checkbox" name="email_product" value="1" {% if not ps.pref or ps.pref.email_product %}checked{% endif %}> خبر محصول و قابلیت‌های تازه</label>
+    <label class="check"><input type="checkbox" name="email_digest" value="1" {% if ps.pref and ps.pref.email_digest %}checked{% endif %}> اعلان‌های غیرفوری را روزی یک‌بار در «خلاصه» بفرست (قطع سرویس و هشدارهای فوری همیشه فوری می‌رسند)</label>
     <div class="prof-acts"><button class="btn" type="submit">{% icon "check" 18 %}ذخیره</button></div>
   </form>
 </div>
