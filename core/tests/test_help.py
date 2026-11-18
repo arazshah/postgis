@@ -83,7 +83,7 @@ class HelpCenterTests(TestCase):
     def test_nav_footer_sitemap_and_home_video(self):
         html = self.client.get("/").content.decode()
         self.assertIn('href="/help/"', html)
-        self.assertIn('id="intro"', html)
+        self.assertIn('id="hp-vid"', html)
         self.assertIn("/static/help/video/intro.mp4", html)
         sitemap = self.client.get("/sitemap.xml").content.decode()
         self.assertIn("https://postgis.ir/help/", sitemap)

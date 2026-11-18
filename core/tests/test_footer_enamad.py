@@ -88,7 +88,7 @@ class FooterAndHomeRenderTests(TestCase):
 
     def test_home_new_sections_and_assets(self):
         html = self.client.get("/").content.decode()
-        for marker in ('id="demo-map"', 'id="features"', 'id="plans"', 'id="faq"', 'id="intro"',
+        for marker in ('id="hp-stack"', 'id="who"', 'id="how"', 'id="plans"', 'id="faq"', 'id="hp-vid"',
                        "css/home.css", "js/home.js", "data-sticky-cta"):
             self.assertIn(marker, html)
         # h1 یکی و فقط یکی
@@ -99,7 +99,7 @@ class FooterAndHomeRenderTests(TestCase):
         self.client.force_login(user)
         html = self.client.get("/").content.decode()
         self.assertIn("ساخت پایگاه داده", html)
-        self.assertNotIn("ساخت حساب رایگان", html.split('class="actions"')[1].split("</div>")[0])
+        self.assertNotIn("ساخت حساب رایگان", html.split('data-hero-cta')[1].split("</div>")[0])
 
     def test_admin_settings_page_shows_new_sections(self):
         User.objects.create_admin("admin", "Str0ng-Admin-Pass")

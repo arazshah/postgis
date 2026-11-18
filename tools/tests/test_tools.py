@@ -54,10 +54,12 @@ class CatalogTests(BaseCase):
 
     def test_home_page_advertises_the_toolbox_from_registry(self):
         r = self.client.get(reverse("core:home"))
-        self.assertContains(r, 'id="toolbox"')
-        self.assertContains(r, "۵۰ ابزار تخصصی")
-        for c in catalog.category_groups():
-            self.assertContains(r, c["title"])
+        from core.templatetags.fa import fanum
+        from kernel import toolbox
+
+        n = toolbox.pitch()["count"]
+        self.assertEqual(n, len(catalog.INFO))
+        self.assertContains(r, f"<b>{fanum(n)}</b><span>ابزار تحلیل مکانی")
 
     def test_groups_cover_all_tools_once(self):
         keys = [i.key for g in catalog.category_groups() for i in g["tools"]]
