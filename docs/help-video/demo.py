@@ -245,7 +245,7 @@ def serve():
     def fake_create(user, label, password, exts, plan=None, ignore_limit=False, **kw):
         return fake_db(user, label)
 
-    cs.db_services.create_database = fake_create
+    getattr(cs, "workspace", None) and setattr(cs.workspace, "create_database", fake_create)
     cs.seed = lambda *a, **k: None
     call_command("runserver", os.environ.get("PORT", "8765"), "--noreload")
 
