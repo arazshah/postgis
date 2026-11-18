@@ -2,7 +2,7 @@
 title: سرویس {{site_name}} چیست و چه کاری برای من انجام می‌دهد؟
 summary: {{site_name}} یک پایگاه داده مکانی PostGIS آماده است. بدون نصب سرور، با شماره موبایل ثبت‌نام می‌کنید، یک پایگاه داده می‌سازید و اطلاعات اتصال را در QGIS، GeoServer، ArcGIS Pro یا کد خود می‌گذارید.
 kind: concept
-keywords: معرفی, ژئوپایگاه, postgis.ir, saas, سرویس, پایگاه داده مکانی آنلاین
+keywords: معرفی, postgis.ir, saas, سرویس, پایگاه داده مکانی آنلاین
 related: what-is-spatial-database, create-database, supported-software, use-cases
 featured: yes
 order: 10

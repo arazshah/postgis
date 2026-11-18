@@ -674,4 +674,4 @@ def report_logo(request, pk, plugin, page, key):
 def workspace_site_name() -> str:
     from django.conf import settings
 
-    return getattr(settings, "SITE_NAME", "") or "ژئوپایگاه"
+    return getattr(settings, "SITE_NAME", "") or "postgis.ir"

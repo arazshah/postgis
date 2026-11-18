@@ -52,7 +52,7 @@ def verify(secret: str, code: str, last_step: int = 0, now: float | None = None)
     return hit if hit is not None and hit > last_step else None
 
 
-def otpauth_uri(account: str, secret: str, issuer: str = "ژئوپایگاه") -> str:
+def otpauth_uri(account: str, secret: str, issuer: str = "postgis.ir") -> str:
     label = quote(f"{issuer}:{account}")
     return f"otpauth://totp/{label}?secret={secret}&issuer={quote(issuer)}&digits={DIGITS}&period={STEP}&algorithm=SHA1"
 

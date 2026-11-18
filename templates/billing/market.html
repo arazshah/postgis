@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% load fa humanize static ws %}
 {% block title %}{% if audience %}{{ audience.title }}{% else %}بازارچه پلاگین{% endif %} — {{ SITE_NAME }}{% endblock %}
-{% block description %}{% if audience %}{{ audience.pitch }}{% else %}بازارچه پلاگین ژئوپایگاه: ورود فایل، تحلیل مکانی، نقشه چندلایه، برداشت میدانی، تصویر ماهواره‌ای، REST API و کلاس درس؛ قابلیت تازه برای پایگاه داده PostGIS شما، با دوره‌ی آزمایشی.{% endif %}{% endblock %}
+{% block description %}{% if audience %}{{ audience.pitch }}{% else %}بازارچه پلاگین postgis.ir: ورود فایل، تحلیل مکانی، نقشه چندلایه، برداشت میدانی، تصویر ماهواره‌ای، REST API و کلاس درس؛ قابلیت تازه برای پایگاه داده PostGIS شما، با دوره‌ی آزمایشی.{% endif %}{% endblock %}
 {% block og_title %}{% if audience %}{{ audience.title }}{% else %}بازارچه پلاگین{% endif %} — {{ SITE_NAME }}{% endblock %}
 {% block og_description %}قابلیت‌های آماده برای پایگاه داده مکانی PostGIS: از ورود فایل تا نقشه، ماهواره و برداشت میدانی.{% endblock %}
 {% block canonical %}{{ BASE_URL }}{% if audience %}{% url 'plugin_audience' audience.key %}{% else %}{% url 'plugins' %}{% endif %}{% endblock %}

@@ -13,7 +13,7 @@ class SiteSettings(models.Model):
     LEVELS = [("info", "اطلاع"), ("warning", "هشدار"), ("success", "خبر خوب")]
 
     # --- سایت ---
-    site_name = models.CharField("نام سایت", max_length=100, default="ژئوپایگاه")
+    site_name = models.CharField("نام سایت", max_length=100, default="postgis.ir")
     tagline = models.CharField("شعار کوتاه", max_length=200, blank=True,
                                default="پایگاه داده مکانی PostGIS آماده برای WebGIS")
     logo_data = models.BinaryField(editable=False, null=True, blank=True)
