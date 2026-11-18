@@ -206,7 +206,19 @@ def init_main():
     from iranmap import osm as _osm
     from iranmap.models import Area
 
-    _osm.source_file().touch()
+    # فایل OSM «شهر نمونه» (iranmap/tests/fake_osm.py) تا «دریافت داده» واقعاً اجرا شود و پیشرفت و شمارش لایه‌ها در ویدیو دیده شود
+    import shutil
+    import subprocess
+    import tempfile
+
+    dst = _osm.source_file()
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if shutil.which("osmium"):
+        xml = Path(tempfile.mkdtemp()) / "sample.osm"
+        subprocess.run([sys.executable, str(Path(__file__).resolve().parents[2] / "iranmap" / "tests" / "fake_osm.py"), str(xml)], check=True, capture_output=True)
+        subprocess.run(["osmium", "cat", "--overwrite", "-o", str(dst), str(xml)], check=True, capture_output=True)
+    else:
+        dst.touch()
     for name, level, prov, bb in (("تهران", "province", "", [50.3, 34.1, 53.0, 36.3]), ("تهران", "county", "تهران", [51.0, 35.5, 51.7, 35.9]),
                                   ("کرج", "county", "البرز", [50.8, 35.7, 51.1, 35.95]), ("اصفهان", "county", "اصفهان", [51.5, 32.5, 51.9, 32.8])):
         poly = {"type": "Polygon", "coordinates": [[[bb[0], bb[1]], [bb[2], bb[1]], [bb[2], bb[3]], [bb[0], bb[3]], [bb[0], bb[1]]]]}
