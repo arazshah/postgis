@@ -1,10 +1,10 @@
-// معرفی ژئوپایگاه در یک و نیم دقیقه
+// معرفی postgis.ir در یک و نیم دقیقه
 const path = require("path");
 module.exports = {
-  profile: "main", user: "fresh", first: "/", total: 8,
+  profile: "main", user: "fresh", first: "/", total: 9,
   async run(h) {
     const { page, step, show, beat, glide, nav, type, goto, scroll, rail } = h;
-    await step("ژئوپایگاه یک پایگاه داده مکانی PostGIS آماده است؛ بدون نصب و بدون درگیری با سرور");
+    await step("postgis.ir یک پایگاه داده مکانی PostGIS آماده است؛ بدون نصب و بدون درگیری با سرور");
     await beat(4000); await scroll(500, 1000); await beat(3200); await scroll(0, 700);
     await step("با شماره موبایل وارد شوید و یک پایگاه داده بسازید: نام، رمز و افزونه‌ها");
     await goto("/dashboard/new/"); await type("#id_label", "city_gis", 90);
@@ -19,6 +19,9 @@ module.exports = {
     await rail("/dashboard/2/maps/"); await show("main", 4400);
     await step("لایه را به‌صورت کاشی برداری، OGC API یا WMS/WFS منتشر کنید");
     await rail("/dashboard/2/publish/"); await show("main", 4400);
+    await step("پنجاه ابزار تحلیل مکانی بدون نوشتن SQL و بازارچه‌ی پلاگین برای امکان‌های تازه");
+    await rail("/dashboard/2/tools/"); await show("main", 3200);
+    await goto("/plugins/"); await show(".mk-hero", 3200);
     await step("همه‌ی این کارها در راهنمای تصویری مرحله‌به‌مرحله توضیح داده شده است");
     await goto("/help/"); await beat(3000);
   },

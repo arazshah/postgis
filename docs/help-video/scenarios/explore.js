@@ -16,7 +16,7 @@ module.exports = {
     await step("از «خروجی» GeoJSON، CSV، GeoPackage، Shapefile، KML، DXF یا اکسل بگیرید");
     await glide('button:has-text("خروجی")'); await beat(2800);
     await step("برای جابه‌جایی بین جدول‌ها از فهرست کنار صفحه استفاده کنید؛ «سنجاق» جدول را بالای فهرست نگه می‌دارد");
-    await show('a[href="/dashboard/1/explore/t/public/parks/"]', 2400);
+    await show('a[href^="/dashboard/1/explore/t/public/"]', 2400);
     await step("ویرایش داده و شکل با «ویرایش جدول» و پیش‌نویس انجام می‌شود؛ راهنمای بعدی را ببینید");
     await show("#edit-enter", 2600);
   },

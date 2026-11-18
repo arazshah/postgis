@@ -89,7 +89,7 @@ def _article_jsonld(art, summary_text, url):
     else:
         graph.append({"@type": "TechArticle", "headline": art.title, "description": summary_text, "inLanguage": "fa-IR",
                       "dateModified": art.updated_at.date().isoformat(), "mainEntityOfPage": url,
-                      "author": {"@type": "Organization", "name": "ژئوپایگاه", "url": f"{base}/"}})
+                      "author": {"@type": "Organization", "name": "postgis.ir", "url": f"{base}/"}})
     return _jsonld({"@context": "https://schema.org", "@graph": graph})
 
 

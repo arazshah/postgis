@@ -1,5 +1,5 @@
 """
-تنظیمات پروژه ژئوپایگاه.
+تنظیمات پروژه postgis.ir.
 همه مقادیر حساس از متغیرهای محیطی خوانده می‌شوند (مناسب Coolify).
 """
 import os
@@ -64,7 +64,7 @@ for _host in _coolify_domains():
         if _origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_origin)
 
-SITE_NAME = os.environ.get("SITE_NAME", "ژئوپایگاه")
+SITE_NAME = os.environ.get("SITE_NAME", "postgis.ir")
 SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
 # دامنه اصلی برای سئو: لینک canonical، نقشه سایت و تصویر اشتراک‌گذاری
 CANONICAL_URL = os.environ.get("CANONICAL_URL", "https://postgis.ir").rstrip("/")

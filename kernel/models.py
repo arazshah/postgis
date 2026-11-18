@@ -572,7 +572,7 @@ class MailConfig(models.Model):
     username = models.CharField("نام کاربری", max_length=200, blank=True, default="no-reply@postgis.ir")
     password_enc = models.TextField(blank=True, editable=False)
     password_hint = models.CharField(max_length=12, blank=True, editable=False)
-    from_name = models.CharField("نام فرستنده", max_length=100, blank=True, default="ژئوپایگاه")
+    from_name = models.CharField("نام فرستنده", max_length=100, blank=True, default="postgis.ir")
     from_email = models.EmailField("نشانی فرستنده", blank=True, default="no-reply@postgis.ir")
     reply_to = models.EmailField("نشانی پاسخ (Reply-To)", blank=True,
                                  help_text="پاسخ کاربران به این نشانی می‌رود؛ مثلاً ایمیل پشتیبانی.")

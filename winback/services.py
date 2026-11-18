@@ -253,7 +253,7 @@ def send_email(msg: Message, d: routes.RouteDef, route: Route) -> str:
         "paragraphs": [routes.render(line, params) for line in d.email_body.splitlines() if line.strip()],
         "url": f"{base}/r/{msg.code}/?c=e", "label": d.email_cta,
         "unsubscribe_url": f"{base}/r/{msg.code}/stop/",
-        "reason": "این ایمیل را چون در ژئوپایگاه حساب دارید دریافت کرده‌اید.",
+        "reason": "این ایمیل را چون در postgis.ir حساب دارید دریافت کرده‌اید.",
     }
     row = mail.send("winback", user=msg.user, to=msg.email, context=ctx, key=f"wb:{msg.code}", headers=_email_headers(msg))
     if row is None:

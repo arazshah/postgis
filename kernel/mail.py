@@ -160,9 +160,9 @@ def _site_name() -> str:
     try:  # نام سایت را مدیر در پنل می‌دهد؛ هسته core را import نمی‌کند، پس دیر و با نام مدل
         from django.apps import apps
 
-        return apps.get_model("core", "SiteSettings").get().site_name or "ژئوپایگاه"
+        return apps.get_model("core", "SiteSettings").get().site_name or "postgis.ir"
     except Exception:  # noqa: BLE001
-        return getattr(settings, "SITE_NAME", "") or "ژئوپایگاه"
+        return getattr(settings, "SITE_NAME", "") or "postgis.ir"
 
 
 def base_url() -> str:

@@ -62,7 +62,9 @@ module.exports = {
     await step("فقط شرط مکانی روی لایه‌ای دیگر اعتبار مصرف می‌کند؛ مانده‌ی آن زیر فرم است");
     await show("#fq-credit", 3000);
 
-    await step("نتیجه فقط نمایش است و داده تغییر نمی‌کند؛ «پاک کردن» همه‌ی شرط‌ها را برمی‌دارد");
-    await show("#fq-reset", 2600);
+    await step("«ذخیره به‌صورت لایه» نتیجه را جدول ثابت یا نمای زنده می‌کند؛ بدون آن، یافتن فقط نمایش است و داده تغییر نمی‌کند");
+    await glide('[data-fs="open"]'); await beat(3600);
+    await page.keyboard.press("Escape"); await beat(700);
+    await show("#fq-reset", 1800);
   },
 };

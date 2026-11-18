@@ -6,8 +6,9 @@ module.exports = {
     await step("در بالای سایت «ورود / ثبت‌نام» را بزنید؛ ورود و ثبت‌نام یک صفحه است");
     await goto("/"); await show('a[href="/accounts/login/"]', 1800);
     await nav(() => glide('a[href="/accounts/login/"]'));
-    await step("شماره موبایل را بنویسید: ۰۹۱۲۱۲۳۴۵۶۷");
+    await step("شماره موبایل را بنویسید: ۰۹۱۲۱۲۳۴۵۶۷؛ اگر پیامک برایتان نمی‌رسد، با ایمیل و رمز عبور ثبت‌نام کنید");
     await type("#id_phone", "09121234567", 110);
+    await show('a[href*="email"]', 2200).catch(() => beat(1200));
     await step("«دریافت کد تأیید» را بزنید؛ کد ۵ رقمی پیامک می‌شود");
     await nav(() => glide('main form button[type=submit]'));
     // کد حالت توسعه را بخوان و پیام توسعه را از تصویر بردار
