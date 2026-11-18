@@ -113,6 +113,10 @@ def home(request):
     bundled = showcase.bundled_with_plan([p.slug for p in plans])
     for p in plans:
         p.bundled = bundled[p.slug]
+    for p in plans:  # پلن پیشنهادی: اولین پلن پولی
+        if not p.is_free:
+            p.hot = True
+            break
     from kb.faq import faq_jsonld, home_faqs
 
     from .help import GUIDES

@@ -13,238 +13,184 @@
 
 {% block content %}
 {% url 'databases:create' as create_url %}{% url 'accounts:login' as login_url %}
+{% if user.is_authenticated %}{% url 'databases:create' as cta_url %}{% else %}{% url 'accounts:login' as cta_url %}{% endif %}
 
-{# ───────────── قهرمان: پیشنهاد ارزش + نمونه زنده ───────────── #}
-<section class="home-hero" aria-labelledby="hero-h">
+{# ───────────── ۱. قهرمان: یک پیام، یک دکمه، تصویر سه‌لایه ───────────── #}
+<section class="hp-hero" aria-labelledby="hero-h">
   <div class="wrap">
-    <div class="hero-copy">
-      <p class="eyebrow"><span class="dot" aria-hidden="true"></span>PostGIS به‌صورت سرویس</p>
-      <h1 id="hero-h">پایگاه داده مکانی PostGIS شما، <span class="hl">سه دقیقه</span> دیگر آماده است</h1>
-      <p class="lead">بدون نصب و نگهداری سرور. پایگاه داده را بسازید، فایل‌هایتان را وارد کنید و از QGIS، GeoServer یا کد خودتان وصل شوید.</p>
-      <div class="actions" data-hero-cta>
+    <div class="hp-copy">
+      <p class="eyebrow"><span class="dot" aria-hidden="true"></span>پایگاه داده مکانی ابری، بر پایه‌ی PostGIS</p>
+      <h1 id="hero-h">از داده‌ی مکانی<br>تا <span class="hl">تصمیم</span>، در یک جا</h1>
+      <p class="lead">داده را بیاورید، بی‌کدنویسی تحلیل کنید، نقشه و داشبورد بسازید و منتشر کنید؛ بدون نصب و نگهداری سرور.</p>
+      <div class="hp-acts" data-hero-cta>
         {% if user.is_authenticated %}
           <a class="btn lg" href="{{ create_url }}">ساخت پایگاه داده</a>
-          <a class="btn ghost lg" href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a>
+          <a class="hp-play" href="{% url 'databases:dashboard' %}">پایگاه‌های داده من</a>
         {% else %}
-          <a class="btn lg" href="{{ login_url }}">ساخت حساب رایگان</a>
-          <a class="btn ghost lg" href="#plugins">بازارچه پلاگین</a>
-          <a class="btn ghost lg" href="#intro"><svg class="hicon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>ببینید چطور کار می‌کند</a>
+          <a class="btn lg" href="{{ login_url }}">شروع رایگان</a>
+          <button type="button" class="hp-play" data-vid-open><span class="pl">{% icon "play" 18 %}</span>ببینید در ۶۰ ثانیه</button>
         {% endif %}
       </div>
       <ul class="assure" aria-label="چرا شروع آسان است">
         <li>ورود فقط با شماره موبایل</li>
-        <li>شروع رایگان برای دانشجوها و تازه‌کارها</li>
+        <li>شروع رایگان</li>
         <li>اتصال SSL و بکاپ شبانه</li>
       </ul>
     </div>
 
-    <figure class="demo" aria-labelledby="demo-cap">
-      <div class="demo-bar">
-        <span class="dot" aria-hidden="true"></span>
-        <b id="demo-cap">یک کوئری مکانی را امتحان کنید</b>
-        <span class="demo-tag">نمونه نمایشی</span>
-      </div>
-      <div class="demo-tabs" role="group" aria-label="نمونه‌های تحلیل مکانی">
-        <button type="button" aria-pressed="true" data-demo="buffer">بافر ۵۰۰ متری</button>
-        <button type="button" aria-pressed="false" data-demo="near">۳ نزدیک‌ترین</button>
-        <button type="button" aria-pressed="false" data-demo="zone">داخل محدوده</button>
-      </div>
-      <svg id="demo-map" class="demo-map" viewBox="0 0 480 330" data-mode="buffer" role="img" aria-label="نقشه نمایشی با ۲۶ نقطه؛ نتیجه کوئری انتخاب‌شده با رنگ زرد مشخص می‌شود">
-        <g class="c-grp" aria-hidden="true">
-          <path class="c" d="M-10 262 C60 214 118 270 196 240 S338 170 402 210 S470 268 494 248"/>
-          <path class="c" d="M-10 300 C70 262 140 312 220 286 S356 224 420 262 S474 310 494 296"/>
-          <path class="c" d="M-10 214 C50 170 116 226 190 196 S318 128 392 168 S462 214 494 196"/>
-          <path class="c" d="M-10 80 C60 40 130 96 214 70 S340 14 414 50 S470 96 494 74"/>
-          <path class="c" d="M-10 130 C54 96 124 150 200 124 S330 74 408 108 S462 150 494 130"/>
-          <path class="river" d="M-6 150 C86 184 150 118 236 146 S384 196 486 128"/>
-          <path class="road" d="M30 318 C110 250 150 226 215 165 S330 90 452 22"/>
-        </g>
-        <polygon class="zone" points="330,70 430,60 455,150 410,215 325,195 305,125"/>
-        <circle class="buf" cx="215" cy="165" r="88"/>
-        <text class="buf-l" x="215" y="70" text-anchor="middle">۵۰۰ متر</text>
-        <g class="lines" aria-hidden="true"></g>
-        <g class="pts">
-          <circle class="pt" cx="48" cy="52" r="5"/><circle class="pt" cx="95" cy="110" r="5"/>
-          <circle class="pt" cx="140" cy="60" r="5"/><circle class="pt" cx="190" cy="38" r="5"/>
-          <circle class="pt" cx="262" cy="52" r="5"/><circle class="pt" cx="318" cy="40" r="5"/>
-          <circle class="pt" cx="372" cy="98" r="5"/><circle class="pt" cx="418" cy="115" r="5"/>
-          <circle class="pt" cx="446" cy="52" r="5"/><circle class="pt" cx="350" cy="150" r="5"/>
-          <circle class="pt" cx="392" cy="178" r="5"/><circle class="pt" cx="345" cy="185" r="5"/>
-          <circle class="pt" cx="180" cy="130" r="5"/><circle class="pt" cx="268" cy="150" r="5"/>
-          <circle class="pt" cx="250" cy="205" r="5"/><circle class="pt" cx="160" cy="205" r="5"/>
-          <circle class="pt" cx="215" cy="95" r="5"/><circle class="pt" cx="140" cy="168" r="5"/>
-          <circle class="pt" cx="60" cy="180" r="5"/><circle class="pt" cx="95" cy="265" r="5"/>
-          <circle class="pt" cx="150" cy="300" r="5"/><circle class="pt" cx="215" cy="290" r="5"/>
-          <circle class="pt" cx="300" cy="290" r="5"/><circle class="pt" cx="390" cy="270" r="5"/>
-          <circle class="pt" cx="445" cy="230" r="5"/><circle class="pt" cx="455" cy="300" r="5"/>
-        </g>
-        <g class="ctr" transform="translate(215 165)" aria-hidden="true">
-          <circle class="ctr-ring" r="15"/><circle class="ctr-dot" r="6"/><text y="-22" text-anchor="middle">مرکز</text>
-        </g>
-      </svg>
-      <pre class="demo-sql" dir="ltr"><code id="demo-sql">SELECT * FROM poi
-WHERE ST_DWithin(
-  geom::geography,
-  ST_SetSRID(ST_MakePoint(51.389, 35.689), 4326)::geography,
-  500);</code></pre>
-      <p class="demo-out" id="demo-out" aria-live="polite"><span>نتیجه</span><b>—</b></p>
-    </figure>
-  </div>
-</section>
-
-{# ───────────── در سه قدم + ویدیو ───────────── #}
-<section class="section" id="intro" aria-labelledby="intro-h">
-  <div class="wrap start-grid">
-    <div>
-      <div class="section-head">
-        <p class="kicker">چطور کار می‌کند</p>
-        <h2 id="intro-h">در سه قدم، از صفر تا نقشه</h2>
-      </div>
-      <ol class="help-steps">
-        <li><h3>پایگاه داده را بسازید</h3><p>با شماره موبایل وارد شوید، یک نام بدهید؛ PostGIS در کمتر از یک دقیقه آماده است.</p></li>
-        <li><h3>داده‌تان را بیاورید</h3><p>Shapefile، GeoPackage، GeoJSON، KML یا CSV را آپلود کنید؛ هندسه و نمایه‌ی مکانی خودکار درست می‌شود.</p></li>
-        <li><h3>تحلیل کنید و منتشر کنید</h3><p>از QGIS وصل شوید، فارسی بپرسید، نقشه بسازید و با لینک یا WMS/WFS به اشتراک بگذارید.</p></li>
-      </ol>
-      <a class="btn" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">{% if user.is_authenticated %}ساخت پایگاه داده{% else %}شروع رایگان{% endif %}</a>
-    </div>
-    <figure class="vplayer intro-video">
-      <video controls playsinline preload="none" poster="{% static 'help/video/intro.jpg' %}" aria-label="ویدیوی معرفی {{ SITE_NAME }} در حدود یک دقیقه">
-        <source src="{% static 'help/video/intro.mp4' %}" type="video/mp4">
-      </video>
-      <figcaption class="small muted">معرفی در حدود یک دقیقه · <a href="{% url 'core:help' %}">همه‌ی {{ guides_count|fanum }} ویدیوی راهنما</a></figcaption>
-    </figure>
-  </div>
-</section>
-
-{# ───────────── جعبه‌ابزار تحلیل ───────────── #}
-{% if toolbox %}<section class="section alt cv" id="toolbox" aria-labelledby="toolbox-h">
-  <div class="wrap">
-    <div class="section-head">
-      <p class="kicker">جعبه‌ابزار تحلیل مکانی</p>
-      <h2 id="toolbox-h">{{ toolbox.count|fanum }} ابزار تخصصی برای هر نیاز مکانی</h2>
-      <p class="muted">از اندازه‌گیری و حریم‌سازی تا ترکیب لایه‌ها، آمار مکانی، پاک‌سازی داده و تحلیل شبکه‌ی معابر؛ هر ابزار با یک فرم ساده اجرا می‌شود و نتیجه‌اش جدولی مکانی در پایگاه داده‌ی خود شماست. چه تازه‌کار باشید و چه متخصص تحلیل مکانی، ابزار مناسب را در دسته‌بندی منظم جعبه‌ابزار می‌یابید، بی‌آن‌که نیازی به نوشتن SQL باشد.</p>
-    </div>
-    <ul class="tbx-cats" aria-label="دسته‌های جعبه‌ابزار">
-      {% for c in toolbox.categories %}<li class="tbx-cat">
-        <span class="tbx-ico">{% icon c.icon 22 %}</span>
-        <div><h3>{{ c.title }}</h3><p>{{ c.hint }}</p></div>
-        <b class="tbx-n">{{ c.count|fanum }} ابزار</b>
-      </li>{% endfor %}
-    </ul>
-    {% if toolbox.examples %}<ul class="who-links" aria-label="نمونه‌ای از ابزارهای پرکاربرد">
-      {% for t in toolbox.examples %}<li><span class="tbx-ex">{{ t }}</span></li>{% endfor %}
-    </ul>{% endif %}
-    <ul class="tbx-facts">
-      <li><b>بدون کدنویسی</b><span>فرم ساده، اجرا در پس‌زمینه و اعلام پایان کار</span></li>
-      <li><b>نتیجه‌ی قابل‌اتکا</b><span>SQL هر ابزار با آزمون خودکار قفل شده و نتیجه‌ی آن تکرارپذیر است</span></li>
-      <li><b>از مبتدی تا متخصص</b><span>ابزارهای مقدماتی، متوسط و پیشرفته با فیلتر سطح</span></li>
-    </ul>
-  </div>
-</section>{% endif %}
-
-{# ───────────── بازارچه پلاگین ───────────── #}
-{% if market_picks %}<section class="section cv" id="plugins" aria-labelledby="plugins-h">
-  <div class="wrap">
-    <div class="section-head">
-      <p class="kicker">سامانه‌ی شما، پلاگین به پلاگین</p>
-      <h2 id="plugins-h">بازارچه پلاگین: فقط آنچه لازم دارید روشن کنید</h2>
-      <p class="muted">{{ market_count|fanum }} پلاگین آماده از ورود فایل و تحلیل فارسی تا نقشه، برداشت میدانی و تصویر ماهواره‌ای؛ با دوره‌ی آزمایشی و بدون قفل‌شدن داده‌ها.</p>
-    </div>
-    <ul class="mk-home" aria-label="پلاگین‌های برگزیده">
-      {% for it in market_picks %}<li class="mk-home-card">
-        {% if it.image %}<img src="{{ it.image }}" alt="" loading="lazy" decoding="async" width="640" height="360">{% endif %}
-        <div class="mk-home-b"><span class="chip">{{ it.category }}</span><h3><a href="{% url 'plugin_detail' it.id %}">{{ it.name }}</a></h3><p class="muted">{{ it.tagline }}</p></div>
-      </li>{% endfor %}
-    </ul>
-    <ul class="who-links" aria-label="پلاگین مناسب شما">
-      {% for key, label in market_audiences %}<li><a href="{% url 'plugin_audience' key %}">{{ label }}</a></li>{% endfor %}
-    </ul>
-    <p class="mk-home-go"><a class="btn lg" href="{% url 'plugins' %}">دیدن همه‌ی پلاگین‌ها در بازارچه</a></p>
-  </div>
-</section>{% endif %}
-
-{# ───────────── امکانات ───────────── #}
-<section class="section alt cv" id="features" aria-labelledby="features-h">
-  <div class="wrap">
-    <div class="section-head">
-      <p class="kicker">همه‌چیز در یک جا</p>
-      <h2 id="features-h">پایگاه داده فقط شروع کار است</h2>
-    </div>
-    <div class="bento">
-      <a class="tile hot" href="{% url 'core:help_page' 'import' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="upload" %}</span>
-        <h3>ورود فایل و سلامت داده</h3>
-        <p>پیش‌نمایش، ورود و اصلاح هندسه‌ی نامعتبر با یک کلیک.</p>
-        <span class="fmt" dir="ltr"><span>Shapefile</span><span>GeoPackage</span><span>GeoJSON</span><span>CSV</span></span>
-      </a>
-      <a class="tile" href="{% url 'core:help_page' 'analysis' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="spark" %}</span>
-        <h3>تحلیل بدون SQL و پرسش فارسی</h3>
-        <p>بافر، نزدیک‌ترین و شمارش با چند کلیک؛ یا سؤالتان را فارسی بنویسید.</p>
-      </a>
-      <a class="tile" href="{% url 'core:help_page' 'maps' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="brush" %}</span>
-        <h3>نقشه، ارائه و اشتراک</h3>
-        <p>نقشه‌ی چندلایه با نمودار و اسلاید؛ لینک عمومی، iframe یا PDF.</p>
-      </a>
-      <a class="tile" href="{% url 'core:help_page' 'publish' %}">
-        <span class="tile-ico">{% include "help/_icon.html" with name="layers" %}</span>
-        <h3>انتشار برای برنامه‌ها</h3>
-        <p>کاشی برداری، OGC API Features، WMS/WFS و REST API با کلید.</p>
-      </a>
-    </div>
-    <ul class="who-links" aria-label="ویژه‌ی">
-      <li><a href="{% url 'core:doc' 'start' %}">دانشجو و پایان‌نامه</a></li>
-      <li><a href="{% url 'core:doc' 'code' %}">توسعه‌دهنده WebGIS</a></li>
-      <li><a href="{% url 'core:help_page' 'enterprise' %}">شرکت و سازمان</a></li>
-      <li><a href="{% url 'classroom:landing' %}">استاد و دانشگاه</a></li>
-    </ul>
-  </div>
-</section>
-
-{# ───────────── پلن‌ها ───────────── #}
-<section class="section cv" id="plans" aria-labelledby="plans-h">
-  <div class="wrap">
-    <div class="section-head">
-      <h2 id="plans-h">پلن‌ها</h2>
-      <p class="muted">با پلن رایگان شروع کنید؛ محدودیت‌ها از اول روشن‌اند.</p>
-      {% include "core/_loc_line.html" %}
-    </div>
-    <div class="plans">
-    {% for p in plans %}
-    <div class="legend" aria-label="مشخصات پلن {{ p.name }}">
-      <div class="legend-title"><h3>{{ p.name }}</h3><span class="price">{% if p.is_free %}رایگان{% else %}{{ p.price_toman|money }} <small>تومان</small>{% endif %}</span></div>
-      {% if p.description %}<p class="small muted">{{ p.description }}</p>{% endif %}
-      <ul>
-        <li><span class="sym fill"></span><span>حجم پایگاه داده</span><strong>{{ p.quota_display|fanum }}</strong></li>
-        <li><span class="sym line"></span><span>اتصال همزمان</span><strong>{{ p.max_connections|fanum }}</strong></li>
-        <li><span class="sym dash"></span><span>مدت اعتبار{% if p.is_renewable and p.is_free %}، قابل تمدید رایگان{% endif %}</span><strong>{{ p.duration_days|fanum }} روز</strong></li>
-        <li><span class="sym pt"></span><span>حداکثر زمان هر کوئری</span><strong>{{ p.statement_timeout_s|fanum }} ثانیه</strong></li>
-        <li><span class="sym hatch"></span><span>نگهداری بکاپ روزانه</span><strong>{{ p.backup_retention_days|fanum }} روز</strong></li>
-        <li><span class="sym ring"></span><span>اتصال رمزنگاری‌شده SSL</span><strong>دارد</strong></li>
-      </ul>
-      {% if p.bundled %}<p class="small"><b>پلاگین‌های همراه:</b> {% for x in p.bundled %}{% if x.public %}<a href="{% url 'plugin_detail' x.id %}">{{ x.name }}</a>{% else %}{{ x.name }}{% endif %}{% if not forloop.last %}، {% endif %}{% endfor %}</p>{% endif %}
-      <div style="margin-top:16px">
-      {% if p.is_free %}
-        <a class="btn" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">شروع رایگان</a>
-      {% else %}
-        {% if SITE.pay_enabled %}<a class="btn" href="{% url 'billing:plans' %}?plan={{ p.slug }}">خرید</a>
-        {% else %}<a class="btn ghost" href="{% if user.is_authenticated %}{% url 'support:new' %}?plan={{ p.slug }}{% else %}{{ login_url }}?next={% url 'support:new' %}%3Fplan%3D{{ p.slug }}{% endif %}">درخواست از پشتیبانی</a>{% endif %}
-      {% endif %}
-      </div>
-    </div>
-    {% endfor %}
+    <div class="hp-stack" id="hp-stack" role="img" aria-label="سه لایه‌ی کار: داده‌ی شما، تحلیل بی‌کد، نقشه و انتشار">
+      <div class="ly l1" data-i="2"><svg viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="400" height="250" fill="#F9FBF8"/>
+        <path d="M40 60 L120 30 L210 55 L300 35 L370 80 L355 170 L280 215 L170 205 L80 190 L30 130Z" fill="#D3E5DF" stroke="#0F5C59" stroke-width="2"/>
+        <path d="M120 30 L150 120 L80 190M210 55 L190 140 L170 205M300 35 L260 130 L280 215M150 120 L190 140 L260 130 L355 170" fill="none" stroke="#0F5C59" stroke-opacity=".45" stroke-width="1.5"/>
+        <path d="M190 140 L260 130 L280 215 L170 205Z" fill="#E0A526" fill-opacity=".55"/>
+        <g fill="#E0A526" stroke="#12313A" stroke-width="2"><circle cx="110" cy="95" r="6"/><circle cx="230" cy="100" r="6"/><circle cx="320" cy="140" r="6"/><circle cx="160" cy="165" r="6"/><circle cx="240" cy="180" r="7"/></g></svg></div>
+      <div class="ly l2" data-i="1"><svg viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><radialGradient id="hpg1"><stop offset="0" stop-color="#E0A526" stop-opacity=".95"/><stop offset="1" stop-color="#E0A526" stop-opacity="0"/></radialGradient><radialGradient id="hpg2"><stop offset="0" stop-color="#0F5C59" stop-opacity=".8"/><stop offset="1" stop-color="#0F5C59" stop-opacity="0"/></radialGradient></defs><rect width="400" height="250" fill="#12313A"/>
+        <circle cx="240" cy="160" r="110" fill="url(#hpg1)"/><circle cx="110" cy="90" r="90" fill="url(#hpg2)"/><circle cx="330" cy="70" r="60" fill="url(#hpg1)" opacity=".6"/>
+        <circle cx="240" cy="160" r="56" fill="none" stroke="#fff" stroke-dasharray="5 5" stroke-width="1.5"/></svg></div>
+      <div class="ly l3" data-i="0"><svg viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="400" height="250" fill="#E3EAE1"/>
+        <g fill="none" stroke="#0F5C59" stroke-opacity=".5" stroke-width="1.3"><path d="M-10 60C60 20 130 90 210 50S330 10 410 40"/><path d="M-10 110C60 70 130 140 210 100S330 60 410 90"/><path d="M-10 160C60 120 130 190 210 150S330 110 410 140"/><path d="M-10 210C60 170 130 240 210 200S330 160 410 190"/></g></svg></div>
+      <div class="tag t1" data-i="2"><i class="n">۳</i><div><b>نقشه و انتشار</b><span>داشبورد، لینک عمومی، WMS/WFS</span></div></div>
+      <div class="tag t2" data-i="1"><i class="n">۲</i><div><b>تحلیل بی‌کد</b><span>ابزار آماده و پرسش فارسی</span></div></div>
+      <div class="tag t3" data-i="0"><i class="n">۱</i><div><b>داده‌ی شما</b><span dir="ltr">Shapefile · GeoPackage · CSV</span></div></div>
     </div>
   </div>
 </section>
 
-{# ───────────── اعتماد: داده‌ی شما مال شماست (پویا: تنظیمات سایت ← زبانه‌ی «صفحه‌ی اول») ───────────── #}
+{# ───────────── ۲. نوار عددها (فقط عدد واقعی) ───────────── #}
+<section class="hp-proof" aria-label="در یک نگاه"><div class="wrap"><ul>
+  <li><b>۳ دقیقه</b><span>از ثبت‌نام تا پایگاه داده‌ی آماده</span></li>
+  {% if toolbox %}<li><b>{{ toolbox.count|fanum }}</b><span>ابزار تحلیل مکانی بدون SQL</span></li>{% endif %}
+  {% if market_count %}<li><b>{{ market_count|fanum }}</b><span>پلاگین آماده در بازارچه</span></li>{% endif %}
+  <li><b dir="ltr">QGIS</b><span>و GeoServer و کد خودتان؛ اتصال مستقیم</span></li>
+</ul></div></section>
+
+{# ───────────── ۳. شما کدام هستید؟ ───────────── #}
+<section class="section" id="who" aria-labelledby="who-h">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">ساخته‌شده برای کار شما</p>
+      <h2 id="who-h">شما کدام هستید؟</h2>
+    </div>
+    <div class="hp-seg" role="tablist" aria-label="مخاطب">
+      <button type="button" role="tab" id="t-org" aria-controls="p-org" aria-selected="true" data-p="org">{% include "help/_icon.html" with name="building" %}سازمان و مدیر</button>
+      <button type="button" role="tab" id="t-gis" aria-controls="p-gis" aria-selected="false" tabindex="-1" data-p="gis">{% include "help/_icon.html" with name="map" %}کارشناس GIS</button>
+      <button type="button" role="tab" id="t-edu" aria-controls="p-edu" aria-selected="false" tabindex="-1" data-p="edu">{% include "help/_icon.html" with name="school" %}دانشجو و استاد</button>
+      <button type="button" role="tab" id="t-dev" aria-controls="p-dev" aria-selected="false" tabindex="-1" data-p="dev">{% include "help/_icon.html" with name="code" %}توسعه‌دهنده</button>
+    </div>
+
+    <div class="hp-pane" id="p-org" role="tabpanel" aria-labelledby="t-org">
+      <div>
+        <h3>یک پایگاه داده‌ی مکانی یکپارچه برای همه‌ی واحدها</h3>
+        <p>داده‌ی پراکنده‌ی واحدها را یک‌جا جمع کنید و تصمیم را روی نقشه بگیرید.</p>
+        <ul class="ok">
+          <li><i>{% icon "lock" 18 %}</i><div><b>دسترسی امن و تفکیک‌شده</b><span>هر کاربر فقط آنچه باید ببیند؛ اتصال رمزنگاری‌شده، بدون جابه‌جایی فایل</span></div></li>
+          <li><i>{% icon "chart" 18 %}</i><div><b>داشبورد و شاخص روی نقشه</b><span>نقشه‌ی چندلایه با نمودار، آماده‌ی ارائه در جلسه</span></div></li>
+          <li><i>{% icon "db" 18 %}</i><div><b>داده مال سازمان است</b><span>خروجی کامل هر لحظه؛ بدون قفل‌شدن روی سرویس</span></div></li>
+        </ul>
+        <a class="more" href="{% url 'core:help_page' 'enterprise' %}">راهکار سازمانی {% icon "next" 16 %}</a>
+      </div>
+      <div class="viz" aria-hidden="true"><span class="sample">نمونه</span><div class="dash">
+        <div class="kpi"><small>عارضه‌ها</small><b>۱۲٬۴۸۰</b></div>
+        <div class="kpi"><small>لایه‌ها</small><b>۳۴</b></div>
+        <div class="kpi"><small>واحدها</small><b>۹</b></div>
+        <div class="map"><svg viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice" width="100%" height="100%"><rect width="300" height="200" fill="#F9FBF8"/><path d="M30 50L100 20 190 40 270 30 285 110 230 175 120 180 40 150Z" fill="#D3E5DF" stroke="#0F5C59" stroke-width="1.5"/><path d="M100 20L120 100 40 150M190 40L170 110 120 180M120 100L170 110 230 175M170 110L285 110" stroke="#0F5C59" stroke-opacity=".4" fill="none"/><path d="M170 110L285 110 230 175 120 180Z" fill="#E0A526" fill-opacity=".6"/><path d="M120 100L170 110 120 180 40 150Z" fill="#0F5C59" fill-opacity=".35"/></svg></div>
+        <div class="bars"><i style="width:90%"></i><i class="o" style="width:70%"></i><i style="width:55%"></i><i style="width:38%"></i><i class="o" style="width:24%"></i></div>
+      </div></div>
+    </div>
+
+    <div class="hp-pane" id="p-gis" role="tabpanel" aria-labelledby="t-gis" hidden>
+      <div>
+        <h3>PostGIS واقعی، بدون دردسر سرور</h3>
+        <p>همان ابزارهایی که می‌شناسید، روی پایگاه داده‌ای که همیشه روشن است.</p>
+        <ul class="ok">
+          <li><i>{% include "help/_icon.html" with name="map" %}</i><div><b>اتصال مستقیم QGIS و GeoServer</b><span>ویرایش هم‌زمان تیمی روی یک داده</span></div></li>
+          <li><i>{% include "help/_icon.html" with name="spark" %}</i><div><b>{% if toolbox %}{{ toolbox.count|fanum }} ابزار تحلیل{% else %}ابزار تحلیل آماده{% endif %}</b><span>حریم، هم‌پوشانی، آمار مکانی و شبکه‌ی معابر با یک فرم</span></div></li>
+          <li><i>{% icon "share" 18 %}</i><div><b>انتشار استاندارد</b><span>WMS/WFS، OGC API و کاشی برداری</span></div></li>
+        </ul>
+        <a class="more" href="{% url 'core:help_page' 'analysis' %}">تحلیل مکانی بدون SQL {% icon "next" 16 %}</a>
+      </div>
+      <div class="viz" aria-hidden="true"><span class="sample">نمونه</span><div class="conn">
+        <b>اتصال از QGIS</b>
+        <div class="row"><span>میزبان</span><code>db.example.ir</code></div>
+        <div class="row"><span>درگاه</span><code>5432</code></div>
+        <div class="row"><span>پایگاه داده</span><code>urban_plan</code></div>
+        <div class="row"><span>SSL</span><code>require</code></div>
+        <div class="row"><span>وضعیت</span><b class="okc">متصل · ۲۴ لایه</b></div>
+      </div></div>
+    </div>
+
+    <div class="hp-pane" id="p-edu" role="tabpanel" aria-labelledby="t-edu" hidden>
+      <div>
+        <h3>از کلاس تا پایان‌نامه</h3>
+        <p>شروع رایگان، آموزش فارسی و کلاس آماده برای استاد.</p>
+        <ul class="ok">
+          <li><i>{% include "help/_icon.html" with name="school" %}</i><div><b>کلاس درس</b><span>برای هر دانشجو پایگاه داده‌ی جدا، با یک لینک دعوت</span></div></li>
+          <li><i>{% include "help/_icon.html" with name="chat" %}</i><div><b>پرسش فارسی از داده</b><span>سؤال را بنویسید، SQL و نتیجه را ببینید و یاد بگیرید</span></div></li>
+          <li><i>{% icon "play" 18 %}</i><div><b>ویدیو و راهنمای گام‌به‌گام</b><span>از «PostGIS چیست؟» تا تحلیل پیشرفته</span></div></li>
+        </ul>
+        <a class="more" href="{% url 'classroom:landing' %}">ویژه‌ی استادان و دانشگاه‌ها {% icon "next" 16 %}</a>
+      </div>
+      <div class="viz" aria-hidden="true"><span class="sample">نمونه</span><div class="cls">
+        <b>کلاس سامانه‌های اطلاعات مکانی</b>
+        <div class="st"><span class="av">الف</span>تمرین ۳: تحلیل حریم<span class="pr"><i style="width:100%"></i></span></div>
+        <div class="st"><span class="av">ب</span>تمرین ۳: تحلیل حریم<span class="pr"><i style="width:72%"></i></span></div>
+        <div class="st"><span class="av">پ</span>تمرین ۳: تحلیل حریم<span class="pr"><i style="width:45%"></i></span></div>
+        <div class="st"><span class="av">ت</span>تمرین ۳: تحلیل حریم<span class="pr"><i style="width:88%"></i></span></div>
+      </div></div>
+    </div>
+
+    <div class="hp-pane" id="p-dev" role="tabpanel" aria-labelledby="t-dev" hidden>
+      <div>
+        <h3>پایگاه داده‌ی مکانی برای برنامه‌ی شما</h3>
+        <p>PostgreSQL با PostGIS، REST API با کلید و کاشی برداری؛ آماده برای WebGIS.</p>
+        <ul class="ok">
+          <li><i>{% include "help/_icon.html" with name="code" %}</i><div><b>اتصال استاندارد</b><span>هر زبان و ORM؛ SSL و رشته‌ی اتصال آماده</span></div></li>
+          <li><i>{% include "help/_icon.html" with name="plug" %}</i><div><b>REST و OGC API</b><span>بدون نوشتن بک‌اند، داده را به نقشه‌ی وب برسانید</span></div></li>
+          <li><i>{% include "help/_icon.html" with name="backup" %}</i><div><b>بکاپ و پایش</b><span>بکاپ شبانه، سلامت جدول‌ها و مصرف</span></div></li>
+        </ul>
+        <a class="more" href="{% url 'core:doc' 'code' %}">مستندات توسعه‌دهندگان {% icon "next" 16 %}</a>
+      </div>
+      <div class="viz" aria-hidden="true"><span class="sample">نمونه</span><pre class="code" dir="ltr"><span class="c">-- schools within 500 m of a point</span>
+<span class="k">SELECT</span> name,
+  <span class="f">ST_Distance</span>(geom::geography, p) <span class="k">AS</span> m
+<span class="k">FROM</span> schools,
+  <span class="f">ST_MakePoint</span>(45.07, 37.55)::geography p
+<span class="k">WHERE</span> <span class="f">ST_DWithin</span>(geom::geography, p, 500)
+<span class="k">ORDER BY</span> m;
+
+<span class="c">-- 6 rows · 4 ms</span></pre></div>
+    </div>
+  </div>
+</section>
+
+{# ───────────── ۴. مسیر چهار ایستگاه ───────────── #}
+<section class="section alt" id="how" aria-labelledby="how-h">
+  <div class="wrap">
+    <div class="section-head center">
+      <p class="kicker">یک جریان، چهار ایستگاه</p>
+      <h2 id="how-h">از فایل روی میز تا نقشه در جلسه</h2>
+    </div>
+    <ol class="hp-route">
+      <li><span class="pin">{% include "help/_icon.html" with name="upload" %}</span><h3>بیاورید</h3><p>فایل را بکشید و رها کنید؛ هندسه و نمایه‌ی مکانی خودکار ساخته می‌شود.</p><div class="chips" dir="ltr"><span>SHP</span><span>GPKG</span><span>GeoJSON</span><span>CSV</span></div></li>
+      <li><span class="pin">{% include "help/_icon.html" with name="spark" %}</span><h3>تحلیل کنید</h3><p>{% if toolbox %}{{ toolbox.count|fanum }} ابزار{% else %}ابزارهای آماده{% endif %} با یک فرم، یا سؤالتان را فارسی بپرسید.</p><div class="chips"><span>حریم</span><span>هم‌پوشانی</span><span>نزدیک‌ترین</span></div></li>
+      <li><span class="pin">{% include "help/_icon.html" with name="map" %}</span><h3>ببینید</h3><p>نقشه‌ی چندلایه با نمودار و اسلاید برای ارائه.</p><div class="chips"><span>داشبورد</span><span dir="ltr">PDF</span></div></li>
+      <li><span class="pin">{% icon "share" 22 %}</span><h3>منتشر کنید</h3><p>لینک عمومی، iframe یا سرویس برای برنامه‌ها.</p><div class="chips" dir="ltr"><span>WMS</span><span>WFS</span><span>API</span></div></li>
+    </ol>
+    {% if market_picks %}<div class="hp-mk">
+      <span class="imgs" aria-hidden="true">{% for it in market_picks|slice:":3" %}{% if it.image %}<img src="{{ it.image }}" alt="" loading="lazy" decoding="async" width="40" height="40">{% endif %}{% endfor %}</span>
+      <p><b>بازارچه‌ی پلاگین:</b> {{ market_count|fanum }} افزونه‌ی آماده مثل {% for it in market_picks|slice:":3" %}<a href="{% url 'plugin_detail' it.id %}">{{ it.name }}</a>{% if not forloop.last %}، {% endif %}{% endfor %}؛ فقط آنچه لازم دارید روشن کنید.</p>
+      <a class="more" href="{% url 'plugins' %}">دیدن همه‌ی پلاگین‌ها {% icon "next" 16 %}</a>
+    </div>{% endif %}
+  </div>
+</section>
+
+{# ───────────── ۵. اعتماد (پویا: تنظیمات سایت ← زبانه‌ی «صفحه‌ی اول») ───────────── #}
 {% if trust_cards or trust_buttons %}
-<section class="section cv" id="trust" aria-labelledby="trust-h">
+<section class="section hp-trust cv" id="trust" aria-labelledby="trust-h">
   <div class="wrap">
     <div class="section-head">
       <h2 id="trust-h">{{ trust_conf.home_trust_title|default:"داده‌ی شما مال شماست" }}</h2>
-      {% if trust_conf.home_trust_subtitle %}<p class="muted">{{ trust_conf.home_trust_subtitle }}</p>{% endif %}
+      {% if trust_conf.home_trust_subtitle %}<p>{{ trust_conf.home_trust_subtitle }}</p>{% endif %}
     </div>
     {% if trust_cards %}<div class="tr-own">
       {% for card, body in trust_cards %}<div class="tr-card"><span class="tr-ico">{% icon card.icon 22 %}</span><h3>{{ card.title }}</h3><p>{{ body|linebreaksbr }}</p></div>
@@ -255,34 +201,68 @@ WHERE ST_DWithin(
 </section>
 {% endif %}
 
-{# ───────────── آموزش و پرسش‌های متداول ───────────── #}
-<section class="section alt cv" id="faq" aria-labelledby="faq-h">
-  <div class="wrap learn one">
-    <div>
-      <div class="section-head">
-        <h2 id="faq-h">پرسش‌های متداول</h2>
-        <p class="muted">تازه با پایگاه داده مکانی آشنا شده‌اید؟ از <a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی و PostGIS چیست؟</a> شروع کنید؛ بقیه آموزش‌ها در <a href="{% url 'core:docs' %}">بخش آموزش</a> و پاسخ همه پرسش‌ها در <a href="{% url 'kb:index' %}">پایگاه دانش</a> است.</p>
-      </div>
-      <div class="faq">
-        {% for f in faqs|slice:":6" %}<details><summary>{{ f.title }}</summary><p>{{ f.summary }}{% if f.url %} <a href="{{ f.url }}">ادامه مطلب</a>{% endif %}</p></details>
-        {% endfor %}
-      </div>
-      <p class="muted" style="margin-top:var(--s4)"><a href="{% url 'kb:index' %}">همه پرسش‌ها و راهنماها در پایگاه دانش ←</a></p>
+{# ───────────── ۶. پلن‌ها ───────────── #}
+<section class="section cv" id="plans" aria-labelledby="plans-h">
+  <div class="wrap">
+    <div class="section-head center">
+      <p class="kicker">قیمت‌ها</p>
+      <h2 id="plans-h">رایگان شروع کنید، با رشد کارتان بزرگ شوید</h2>
+      {% include "core/_loc_line.html" %}
+    </div>
+    <div class="hp-plans">
+    {% for p in plans %}
+    <div class="hp-plan{% if p.hot %} hot{% endif %}" aria-label="مشخصات پلن {{ p.name }}">
+      <h3>{{ p.name }}</h3>
+      <p class="pr">{% if p.is_free %}رایگان{% else %}{{ p.price_toman|money }} <small>تومان</small>{% endif %}</p>
+      {% if p.description %}<p class="small muted">{{ p.description }}</p>{% endif %}
+      <ul>
+        <li>{% icon "check" 16 %}<span>حجم پایگاه داده <strong>{{ p.quota_display|fanum }}</strong></span></li>
+        <li>{% icon "check" 16 %}<span>اتصال همزمان <strong>{{ p.max_connections|fanum }}</strong></span></li>
+        <li>{% icon "check" 16 %}<span>مدت اعتبار <strong>{{ p.duration_days|fanum }} روز</strong>{% if p.is_renewable and p.is_free %}، تمدید رایگان{% endif %}</span></li>
+        <li>{% icon "check" 16 %}<span>بکاپ روزانه <strong>{{ p.backup_retention_days|fanum }} روز</strong>، SSL</span></li>
+      </ul>
+      {% if p.bundled %}<p class="small"><b>پلاگین‌های همراه:</b> {% for x in p.bundled %}{% if x.public %}<a href="{% url 'plugin_detail' x.id %}">{{ x.name }}</a>{% else %}{{ x.name }}{% endif %}{% if not forloop.last %}، {% endif %}{% endfor %}</p>{% endif %}
+      {% if p.is_free %}
+        <a class="btn ghost" href="{{ cta_url }}">شروع رایگان</a>
+      {% else %}
+        {% if SITE.pay_enabled %}<a class="btn{% if not p.hot %} ghost{% endif %}" href="{% url 'billing:plans' %}?plan={{ p.slug }}">خرید</a>
+        {% else %}<a class="btn{% if not p.hot %} ghost{% endif %}" href="{% if user.is_authenticated %}{% url 'support:new' %}?plan={{ p.slug }}{% else %}{{ login_url }}?next={% url 'support:new' %}%3Fplan%3D{{ p.slug }}{% endif %}">درخواست از پشتیبانی</a>{% endif %}
+      {% endif %}
+    </div>
+    {% endfor %}
     </div>
   </div>
 </section>
 
-{# ───────────── دعوت نهایی ───────────── #}
-<section class="cta-band" id="go" aria-labelledby="go-h">
-  <div class="wrap">
-    <h2 id="go-h">اولین لایه مکانی‌تان را امروز روی نقشه بیاورید</h2>
-    <p>ثبت‌نام با شماره موبایل، ساخت پایگاه داده در چند دقیقه.</p>
-    <a class="btn lg" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">{% if user.is_authenticated %}ساخت پایگاه داده{% else %}ساخت حساب رایگان{% endif %}</a>
+{# ───────────── ۷. پرسش‌ها + دعوت پایانی ───────────── #}
+<section class="section alt cv" id="faq" aria-labelledby="faq-h">
+  <div class="wrap hp-end">
+    <div>
+      <h2 id="faq-h" class="docs-h">پرسش‌های متداول</h2>
+      <p class="muted">تازه آشنا شده‌اید؟ از <a href="{% url 'core:doc' 'what-is-postgis' %}">پایگاه داده مکانی و PostGIS چیست؟</a> شروع کنید.</p>
+      <div class="faq">
+        {% for f in faqs|slice:":4" %}<details><summary>{{ f.title }}</summary><p>{{ f.summary }}{% if f.url %} <a href="{{ f.url }}">ادامه مطلب</a>{% endif %}</p></details>
+        {% endfor %}
+      </div>
+      <p class="muted" style="margin-top:var(--s4)"><a href="{% url 'kb:index' %}">همه‌ی پرسش‌ها و راهنماها در پایگاه دانش {% icon "next" 14 %}</a></p>
+    </div>
+    <div class="hp-go" id="go">
+      <h2>اولین لایه‌ی مکانی‌تان را امروز روی نقشه بیاورید</h2>
+      <p>ثبت‌نام با شماره موبایل؛ پایگاه داده در چند دقیقه آماده است.</p>
+      <a class="btn lg" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">{% if user.is_authenticated %}ساخت پایگاه داده{% else %}شروع رایگان{% endif %}</a>
+    </div>
   </div>
 </section>
 
+{# ویدیوی معرفی در مودال؛ منبع فقط هنگام باز شدن بارگذاری می‌شود #}
+<dialog class="hp-vid" id="hp-vid" aria-label="ویدیوی معرفی {{ SITE_NAME }}">
+  <button type="button" class="ib" data-vid-close aria-label="بستن">{% icon "close" 18 %}</button>
+  <video controls playsinline preload="none" data-src="{% static 'help/video/intro.mp4' %}" poster="{% static 'help/video/intro.jpg' %}"></video>
+  <p class="small muted">معرفی در حدود یک دقیقه · <a href="{% url 'core:help' %}">همه‌ی {{ guides_count|fanum }} ویدیوی راهنما</a></p>
+</dialog>
+
 <div class="sticky-cta" data-sticky-cta>
-  <a class="btn lg" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">{% if user.is_authenticated %}ساخت پایگاه داده{% else %}ساخت حساب رایگان{% endif %}</a>
+  <a class="btn lg" href="{% if user.is_authenticated %}{{ create_url }}{% else %}{{ login_url }}{% endif %}">{% if user.is_authenticated %}ساخت پایگاه داده{% else %}شروع رایگان{% endif %}</a>
 </div>
 {% endblock %}
 
