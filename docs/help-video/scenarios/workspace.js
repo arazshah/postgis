@@ -10,7 +10,7 @@ module.exports = {
     await step("«جمع کردن منو» فضای بیشتری به صفحه می‌دهد؛ دوباره بزنید تا باز شود");
     await glide('button:has-text("جمع کردن منو")'); await beat(1600); await glide('button[aria-label*="باز"], button:has-text("جمع کردن منو")'); await beat(1200);
     await step("با Ctrl+K (یا کادر جستجوی بالا) به هر بخش و هر پایگاه داده بپرید: مثلاً «sql» را بنویسید");
-    await glide('header input[name=q], input[name=q]'); await beat(700);
+    await glide('header input[type=search], input[placeholder*="جست"]'); await beat(700);
     await page.keyboard.press("Escape"); await page.keyboard.press("Control+k"); await beat(700);
     await page.keyboard.type("sql", { delay: 170 }); await beat(2800);
     await page.keyboard.press("Escape"); await beat(500);

@@ -10,7 +10,7 @@ module.exports = {
     await glide('dialog[open] label:has-text("عمومی")'); await beat(1200);
     await nav(() => glide('button:has-text("منتشر کن")')); await beat(2000);
     await step("برای هر لایه سه آدرس آماده است: TileJSON برای MapLibre، کاشی برداری XYZ و OGC API Features");
-    await scroll(420, 900); await show("text=TileJSON (MapLibre)", 3200);
+    await glide('button:has-text("آدرس‌ها") >> nth=0'); await beat(900); await show("text=TileJSON (MapLibre)", 3200);
     await step("«تنظیمات و آدرس‌ها»: عنوان، ستون‌های قابل نمایش و عمومی یا خصوصی بودن لایه را تعیین کنید");
     await scroll(0, 700); await glide(':text("تنظیمات و آدرس‌ها")'); await beat(3200);
     await page.keyboard.press("Escape"); await beat(600);

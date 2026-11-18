@@ -7,7 +7,7 @@ module.exports = {
     await show(".gpa-fab", 1800); await glide(".gpa-fab"); await beat(1800);
     await step("یکی از سؤال‌های پیشنهادی را بزنید؛ دستیار می‌داند در کدام بخش هستید (اینجا: بکاپ)");
     await show(".gpa-panel", 2200);
-    await glide('.gpa-panel button:has-text("چطور بکاپ کار می")'); await beat(5500);
+    await glide('.gpa-panel button:has-text("؟")'); await beat(5500);
     await step("یا سؤال خودتان را بنویسید (حداکثر ۵۰۰ نویسه) و «ارسال» را بزنید");
     await type(".gpa-panel textarea", "بکاپ دستی چند روز نگه داشته می‌شود؟", 70);
     await page.keyboard.press("Enter"); await beat(5500);

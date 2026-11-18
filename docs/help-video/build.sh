@@ -15,9 +15,9 @@ os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings"
 import django; django.setup()
 from core.help import GUIDES
 if sys.argv[1] == "intro":
-    print(json.dumps({"title": "معرفی ژئوپایگاه در یک و نیم دقیقه", "badge": "معرفی سرویس", "next": GUIDES[0].title,
-                      "summary": "پایگاه داده مکانی PostGIS آنلاین: ساخت، اتصال QGIS، ورود فایل، SQL مکانی، نقشه قابل اشتراک و WMS/WFS.",
-                      "steps": ["ساخت پایگاه", "ورود داده", "SQL مکانی", "نقشه", "انتشار"]}, ensure_ascii=False)); raise SystemExit
+    print(json.dumps({"title": "معرفی postgis.ir در یک و نیم دقیقه", "badge": "معرفی سرویس", "next": GUIDES[0].title,
+                      "summary": "پایگاه داده مکانی PostGIS آنلاین: ساخت، اتصال QGIS، ورود فایل، SQL مکانی، نقشه قابل اشتراک، WMS/WFS، پنجاه ابزار تحلیل و بازارچه‌ی پلاگین.",
+                      "steps": ["ساخت پایگاه", "ورود داده", "SQL مکانی", "نقشه و انتشار", "ابزار و پلاگین"]}, ensure_ascii=False)); raise SystemExit
 i = next(k for k, g in enumerate(GUIDES) if g.slug == sys.argv[1])
 g = GUIDES[i]
 print(json.dumps({"title": g.title, "summary": g.summary, "no": i + 1, "of": len(GUIDES),

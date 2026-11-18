@@ -4,7 +4,7 @@ module.exports = {
   async run(h) {
     const { page, step, show, beat, glide, nav, goto, scroll, type } = h;
     await step("از صفحه‌ی پایگاه داده روی «پلن رایگان» یا «ارتقا» بزنید؛ پلن‌ها در یک صفحه مقایسه می‌شوند");
-    await show('a:has-text("پلن رایگان"), .badge', 1500); await nav(() => glide('a[href="/billing/plans/"]')).catch(() => goto("/billing/plans/")); await beat(1200);
+    await show('a:has-text("پلن رایگان"), .badge', 1500); await nav(() => glide('a[href^="/billing/plans/"]')).catch(() => goto("/billing/plans/")); await beat(1200);
     if (!page.url().includes("/billing/plans")) await goto("/billing/plans/");
     await step("پلن مناسب را انتخاب کنید: حجم، اتصال همزمان، نگهداری بکاپ و تعداد لایه و نقشه در هر پلن فرق دارد");
     await show("main", 2600); await scroll(250, 800); await beat(2600); await scroll(0, 500);

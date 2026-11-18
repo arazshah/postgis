@@ -22,7 +22,7 @@ MAP = {
     "gnss": "survey-external-receiver", "surface": "survey-surface-contours", "team": "team-roles",
     "usage": "usage-and-performance", "enterprise": "enterprise-overview", "billing": "plans-overview",
     "support": "support-ticket", "limits": "free-plan-limits", "workspace": "notifications-center",
-    "classroom": "classroom-overview", "satellite": "satellite-imagery", "assistant": "ask-in-persian", "find": "find-features",
+    "plugins": "plugin-market", "classroom": "classroom-overview", "satellite": "satellite-imagery", "assistant": "ask-in-persian", "find": "find-features",
 }
 
 

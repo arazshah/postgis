@@ -2,13 +2,16 @@
 module.exports = {
   profile: "main", first: "/dashboard/1/", total: 6,
   async run(h) {
-    const { page, step, show, beat, glide, nav, rail, type, scroll } = h;
+    const { page, step, show, beat, glide, nav, rail, type, scroll, goto } = h;
     await rail("/dashboard/1/publish/", "ابتدا لایه را در «نقشه و API» منتشر کنید");
     await glide('button:has-text("انتشار") >> nth=0'); await beat(1200);
     await glide('dialog[open] label:has-text("عمومی")'); await beat(900);
     await nav(() => glide('button:has-text("منتشر کن")')); await beat(1800);
     await step("زیر هر لایه‌ی منتشرشده «طراحی و اشتراک نقشه» را بزنید");
-    await scroll(420, 900); await nav(() => glide('a:has-text("طراحی و اشتراک نقشه")')); await beat(2500);
+    await glide('button:has-text("آدرس‌ها") >> nth=0'); await beat(900);
+    await nav(() => glide('a[href*="/map/"]:has-text("طراحی و اشتراک نقشه")'));
+    if (!page.url().includes("/map/")) await goto("/dashboard/1/publish/layer/1/map/");
+    await beat(2500);
     await step("عنوان و توضیح کوتاه نقشه را بنویسید؛ روی صفحه‌ی نقشه نمایش داده می‌شود");
     await show("main input[type=text], main input:not([type])", 2400);
     await step("رنگ‌آمیزی: یک رنگ، طبقه‌بندی عددی یا بر اساس دسته؛ پیش‌نمایش همان لحظه عوض می‌شود");
