@@ -14,7 +14,7 @@ root_packages = [
     "kernel", "accounts", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases",
     "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam", "ext",
     "enterprise", "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate",
-    "support", "survey", "tools", "winback",
+    "support", "survey", "tools", "winback", "live",
 ]
 include_external_packages = false
 
@@ -26,7 +26,7 @@ forbidden_modules = [
     "accounts", "analysis", "analytics", "assistant", "billing", "classroom", "core", "databases", "enterprise",
     "iranmap", "jobs", "kb", "maps", "notifications", "publish", "restapi", "satellite", "satgate", "support",
     "survey", "tools", "dbtables", "dbsql", "dbfind", "dbimport", "dbhealth", "dbbackup", "dbusage", "dbteam", "ext",
-    "winback",
+    "winback", "live",
 ]
 ignore_imports = ["kernel.tests.** -> **"]
 unmatched_ignore_imports_alerting = "none"

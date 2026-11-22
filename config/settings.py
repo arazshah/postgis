@@ -112,6 +112,7 @@ INSTALLED_APPS = [
     "kb",
     "assistant",
     "winback",
+    "live",
 ]
 
 # پلاگین‌های سطح ۳ (ext/<id>/، فقط محتوای ایمیج؛ docs/adr/0007). PLUGINS_SAFE_MODE=1 = راه نجات: هیچ‌کدام بار نمی‌شود.
