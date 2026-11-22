@@ -1,5 +1,6 @@
 from dataclasses import asdict
 
+from django.conf import settings
 from django.contrib import messages
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -15,6 +16,13 @@ from maps.models import WebMap
 from maps.views import map_config
 from tools import sdk
 from tools.api import enqueue
+
+from .sso import main_url
+
+
+def _navigation():
+    return {"main_dashboard": main_url() if settings.LIVE_SSO_ENABLED else reverse("databases:dashboard"),
+            "live_sso": settings.LIVE_SSO_ENABLED}
 
 
 def _allowed(request, db, plugin):
@@ -33,7 +41,7 @@ def _workspace(request, pk, need="viewer", plugin="maps"):
 def index(request):
     owned = request.user.databases.exclude(status=UserDatabase.Status.DELETED)
     dbs = {db.pk: db for db in [*owned, *workspace.shared_with(request.user)]}
-    return render(request, "live/index.html", {"databases": [db for db in dbs.values()
+    return render(request, "live/index.html", {**_navigation(), "databases": [db for db in dbs.values()
                    if db.is_live and _allowed(request, db, "live") and _allowed(request, db, "maps")]})
 
 
@@ -51,7 +59,7 @@ def projects(request, pk):
             messages.error(request, str(exc))
         else:
             return redirect("live:studio", pk=pk, map_id=project.pk)
-    return render(request, "live/index.html", {"db": db, "projects": WebMap.objects.filter(database=db)})
+    return render(request, "live/index.html", {**_navigation(), "db": db, "projects": WebMap.objects.filter(database=db)})
 
 
 @site_user_required
@@ -90,7 +98,7 @@ def studio(request, pk, map_id):
         saved = saved_layers.get(layer["id"])
         if saved:
             layer.update(schema=saved.schema, table_name=saved.table)
-    return render(request, "live/studio.html", {"db": db, "project": project, "editable": editable,
+    return render(request, "live/studio.html", {**_navigation(), "db": db, "project": project, "editable": editable,
                   "config": cfg, "tables": tables, "tools": tools, "links": links})
 
 

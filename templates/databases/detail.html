@@ -4,6 +4,7 @@
 {% firstof once_password "YOUR_PASSWORD" as pw %}
 <div class="wrap page">
   <div class="page-head"><div><h1>{% icon "home" 22 %} نمای کلی و اتصال</h1><p class="muted page-sub">اطلاعات اتصال، مصرف حجم و اعتبار پایگاه.</p></div></div>
+  {% if db.is_live %}{% route_on "maps:index" db as live_maps_on %}{% if live_maps_on %}<form method="post" action="{% url 'live:launch' db.pk %}">{% csrf_token %}<button class="btn" type="submit">{% icon "layers" 18 %} ورود به محیط GIS Live</button></form>{% endif %}{% endif %}
 
   {% if db.status == 'readonly' %}<div class="msg warning">حجم این پایگاه داده پر شده و فعلاً فقط‌خواندنی است. خواندن داده‌ها و اتصال QGIS و GeoServer کار می‌کند. برای آزاد کردن فضا <a href="{% url 'support:new' %}?db={{ db.pk }}">ثبت تیکت</a> کنید و بگویید کدام جدول‌ها حذف شوند؛ وقتی حجم به زیر ۹۵٪ برسد، خودکار دوباره قابل نوشتن می‌شود.</div>{% endif %}
   {% if db.status == 'expired' %}<div class="msg error">اعتبار این پایگاه داده تمام شده و اتصال غیرفعال است. با تمدید رایگان، دوباره فعال می‌شود.</div>{% endif %}

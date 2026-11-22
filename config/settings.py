@@ -70,6 +70,10 @@ SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
 CANONICAL_URL = os.environ.get("CANONICAL_URL", "https://postgis.ir").rstrip("/")
 # دامنه‌های دیگر با 301 به دامنه اصلی می‌روند تا گوگل محتوای تکراری نبیند (خالی = خاموش)
 CANONICAL_REDIRECT_HOSTS = env_list("CANONICAL_REDIRECT_HOSTS", "www.postgis.ir")
+LIVE_SSO_ENABLED = env_bool("LIVE_SSO_ENABLED", not (DEBUG or os.environ.get("DJANGO_TESTING")))
+# مبدأهای ثابت و مورد اعتماد؛ هرگز از Host یا پارامتر مقصد کاربر ساخته نمی‌شوند.
+LIVE_MAIN_ORIGIN = "https://postgis.ir"
+LIVE_ORIGIN = "https://live.postgis.ir"
 SUPPORT_TELEGRAM = os.environ.get("SUPPORT_TELEGRAM", "")
 SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "")
 
@@ -134,6 +138,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "live.sso.LiveSessionMiddleware",
     "analytics.middleware.AnalyticsMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
