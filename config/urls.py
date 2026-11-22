@@ -42,6 +42,7 @@ def _index_with_stats(request, extra_context=None):
 admin.site.index = _index_with_stats
 
 urlpatterns = [
+    path("live/", include("live.urls")),
     path("manage/2fa/", admin_2fa, name="admin_2fa"),
     path("manage/plugins/", kernel_hub.hub, name="plugin_hub"),
     path("manage/plugins/sample/", kernel_hub.install_sample, name="plugin_sample"),
