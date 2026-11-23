@@ -1,0 +1,3 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const {LayerDraft}=require('../../../static/live/properties.js');
+test('preview is independent and cancel restores applied snapshot',()=>{const layer={title:'راه',style:{color:'#123456',opacity:.7}};const draft=new LayerDraft(layer);draft.style.opacity=.2;assert.equal(layer.style.opacity,.7);draft.cancel();assert.equal(draft.style.opacity,.7);});
+test('apply clones style and subsequent canceled edits do not undo applied changes',()=>{const layer={title:'راه',style:{color:'#123456'}};const draft=new LayerDraft(layer);draft.style.color='#abcdef';draft.apply();draft.style.color='#ffffff';draft.cancel();assert.equal(layer.style.color,'#abcdef');assert.equal(draft.style.color,'#abcdef');});

@@ -358,7 +358,7 @@ class Editor:
                           for col, _, _ in gexprs]}
 
     # ------------------------------------------------------------------
-    def row(self, table: TableRef, pk: dict) -> dict:
+    def row(self, table: TableRef, pk: dict, *, include_geometry=False) -> dict:
         """مقدار کامل (بدون کوتاه‌سازی) و نسخه‌ی یک سطر برای فرم ویرایش."""
         cols = self.ex.columns(table)
         cap = edit_capability(table, cols)
@@ -370,13 +370,26 @@ class Editor:
         data_cols = [c for c in cols if not c["spatial"]]
         where, wparams = self._where(pk_cols, {k: _text(v, k) for k, v in pk.items()})
         select = sql.SQL(", ").join(sql.SQL("t.{}::text").format(sql.Identifier(c["name"])) for c in data_cols)
-        select = (select + sql.SQL(", ")) if data_cols else select
+        geometry = [g for g in table.geometry if g.get("srid")] if include_geometry else []
+        if geometry:
+            spatial = sql.SQL(", ").join(
+                sql.SQL("ST_AsText(t.{}::geometry)").format(sql.Identifier(g["column"])) for g in geometry
+            )
+            select = select + sql.SQL(", ") + spatial if data_cols else spatial
+        if data_cols or geometry:
+            select += sql.SQL(", ")
         with self.ex.connect() as conn:
             row = conn.execute(sql.SQL("SELECT {}md5(t::text) FROM {} AS t WHERE {}").format(
                 select, sql.Identifier(table.schema, table.name), where), wparams).fetchone()
         if row is None:
             raise EditError("این سطر دیگر وجود ندارد.")
-        return {"values": {c["name"]: row[n] for n, c in enumerate(data_cols)}, "v": row[-1]}
+        result = {"values": {c["name"]: row[n] for n, c in enumerate(data_cols)}, "v": row[-1]}
+        if include_geometry:
+            result["geometry"] = {
+                g["column"]: {"wkt": row[len(data_cols) + n], "srid": g["srid"]}
+                for n, g in enumerate(geometry)
+            }
+        return result
 
 
 class _Conflict(Exception):

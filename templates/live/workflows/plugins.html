@@ -1,0 +1,22 @@
+{% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+{% if invoice %}
+<p role="status">فاکتور آماده است. پرداخت پس از باز کردن فاکتور انجام می‌شود.</p>
+<a data-live-invoice target="_blank" rel="noopener" href="{% url 'billing:invoice' invoice.number %}">مشاهده و پرداخت فاکتور</a>
+{% endif %}
+<ul class="live-plugin-list">
+{% for item in items %}
+  <li>
+    <strong>{{ item.name }}</strong>
+    {% if item.available %}<span>در دسترس در این فضای کار</span>{% else %}<span>نیازمند دسترسی</span>{% endif %}
+    {% if item.summary %}<p>{{ item.summary }}</p>{% endif %}
+    {% if item.addon and owns_workspace or item.addon.scope == 'user' %}
+      {% if item.can_trial and not item.available %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="addon" value="{{ item.addon.pk }}"><input type="hidden" name="action" value="trial"><button type="submit">فعال‌سازی دورهٔ آزمایشی</button></form>
+      {% endif %}
+      {% if can_buy %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="addon" value="{{ item.addon.pk }}"><input type="hidden" name="action" value="invoice"><button type="submit">ایجاد فاکتور {{ item.price_toman }} تومان</button></form>
+      {% endif %}
+    {% endif %}
+  </li>
+{% empty %}<li>افزونه‌ای در بازارچه موجود نیست.</li>{% endfor %}
+</ul>

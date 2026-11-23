@@ -1,0 +1,2 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const {workflowURL}=require('../../../static/live/workflows.js');
+test('workflow redirects stay inside the active workspace workflow',()=>{const base='https://live.postgis.ir';assert.equal(workflowURL('/live/68/workflow/import/3/',base,68),base+'/live/68/workflow/import/3/');for(const url of ['/live/69/workflow/import/','https://evil.test/live/68/workflow/import/','/dashboard/68/import/'])assert.throws(()=>workflowURL(url,base,68));});

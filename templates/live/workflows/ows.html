@@ -1,0 +1,13 @@
+{% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <label>پروژه QGIS<input type="file" name="file" accept=".qgs,.qgz" required></label>
+  <label>عنوان<input name="title" maxlength="120"></label>
+  <label><input type="checkbox" name="public"> دسترسی عمومی</label>
+  <button type="submit">انتشار WMS / WFS</button>
+</form>
+<ul>
+{% for project in projects %}
+  <li>{{ project.title }} <input aria-label="نشانی سرویس {{ project.title }}" dir="ltr" readonly value="{{ request.scheme }}://{{ request.get_host }}{% url 'publish:ows_service' project.slug %}"></li>
+{% empty %}<li>هنوز پروژه‌ای منتشر نشده است.</li>{% endfor %}
+</ul>

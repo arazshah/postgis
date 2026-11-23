@@ -1,9 +1,13 @@
-from django.urls import path
+from django.urls import include, path
 
-from . import sso, views
+from . import auth, sso, views
 
 app_name = "live"
 urlpatterns = [
+    path("", include("live.workflow_urls")),
+    path("auth/password/reset/<str:uidb64>/<str:token>/", auth.flow, {"step": "reset"}, name="auth_password_reset"),
+    path("auth/email/confirm/<str:token>/", auth.flow, {"step": "confirm"}, name="auth_email_confirm"),
+    path("auth/<str:step>/", auth.flow, name="auth"),
     path("launch/<int:pk>/", sso.launch, name="launch"),
     path("exchange/", sso.exchange, name="exchange"),
     path("leave/", sso.leave, name="leave"),

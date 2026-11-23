@@ -4,7 +4,8 @@ from django.contrib import messages
 from django.contrib.auth import login, update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
 from django.core.cache import cache
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect
+from django.shortcuts import render as django_render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -19,6 +20,15 @@ from . import emailverify, otp
 from .decorators import site_user_required
 from .forms import EmailSignupForm, PasswordLoginForm, PhoneForm, ProfileForm, VerifyForm
 from .models import User, normalize_mobile
+
+
+def render(request, template, context=None, **kwargs):
+    # Set only by the server-side Live auth adapter, never from request input.
+    if getattr(request, "live_auth_flow", None):
+        context = {**(context or {}), "auth_step": request.live_auth_flow}
+        template = "live/auth.html"
+    return django_render(request, template, context, **kwargs)
+
 
 SESSION_PHONE = "otp_phone"
 SESSION_NEXT = "otp_next"
@@ -143,7 +153,7 @@ def signup_email(request):
             organization=d.get("organization", ""))
         login(request, user, backend="django.contrib.auth.backends.ModelBackend")
         analytics.attach_user(request, user, new_user=True)
-        emailverify.send_verification(user, force=True)
+        emailverify.send_verification(user, force=True, live=bool(getattr(request, "live_auth_flow", None)))
         messages.success(request, "حساب شما ساخته شد و پیوند تأیید به ایمیل‌تان رفت. حالا اولین پایگاه داده مکانی خود را بسازید.")
         return redirect("databases:create")
     return render(request, "accounts/signup_email.html", ctx)
@@ -288,7 +298,7 @@ def password_forgot(request):
         if cache.get(key, 0) < FORGOT_MAX_PER_IP and not cache.get(mkey):
             _bump(key, SIGNUP_WINDOW)
             cache.set(mkey, 1, 60)
-            emailverify.send_reset(email)
+            emailverify.send_reset(email, live=bool(getattr(request, "live_auth_flow", None)))
         return render(request, "accounts/password_forgot.html", {"form": ForgotForm(), "sent": True})
     return render(request, "accounts/password_forgot.html", {"form": form, "sent": False})
 

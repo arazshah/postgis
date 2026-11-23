@@ -1,0 +1,3 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const {filterTables,reorderLayers}=require('../../../static/live/layers.js');
+test('filter matches Persian names and schema without changing identity',()=>{const rows=[{key:'public.roads',title:'راه‌ها',geom_type:'LINESTRING'},{key:'other.roads',title:'راه فرعی',geom_type:'POINT'}];assert.equal(filterTables(rows,'other','point')[0].key,'other.roads');assert.equal(filterTables(rows,'راه','line').length,1);});
+test('reorder uses identities and preserves source array',()=>{const rows=[{id:1},{id:2}];assert.deepEqual(reorderLayers(rows,2,-1).map(l=>l.id),[2,1]);assert.equal(rows[0].id,1);assert.deepEqual(reorderLayers(rows,1,-1),rows);});

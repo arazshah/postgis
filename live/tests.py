@@ -74,7 +74,7 @@ class LiveSSOTests(BaseCase):
 
     def test_direct_live_and_login_require_main(self):
         for path in ("/", "/live/", reverse("accounts:login"), "/dashboard/"):
-            self.assertEqual(self.live.get(path, secure=True).url, "https://postgis.ir/dashboard/")
+            self.assertIn("/live/auth/login/", self.live.get(path, secure=True).url)
         self.assertEqual(self.client.get("/live/", secure=True, HTTP_HOST="postgis.ir").url,
                          "https://postgis.ir/dashboard/")
 
@@ -88,7 +88,7 @@ class LiveSSOTests(BaseCase):
         self.assertEqual(second.post(reverse("live:exchange"), {"ticket": ticket}, secure=True,
                                      HTTP_ORIGIN="https://postgis.ir").url, "https://postgis.ir/dashboard/")
         self.client.logout()
-        self.assertEqual(self.live.get(response.url, secure=True).url, "https://postgis.ir/dashboard/")
+        self.assertIn("/live/auth/login/", self.live.get(response.url, secure=True).url)
 
     def test_wrong_origin_and_expired_ticket(self):
         ticket = self.issue()
@@ -98,8 +98,8 @@ class LiveSSOTests(BaseCase):
 
     def test_leave_does_not_end_parent_session(self):
         self.exchange(self.issue())
-        self.assertEqual(self.live.post(reverse("live:leave"), secure=True).url, "https://postgis.ir/dashboard/")
-        self.assertEqual(self.live.get("/live/", secure=True).url, "https://postgis.ir/dashboard/")
+        self.assertEqual(self.live.post(reverse("live:leave"), secure=True).url, reverse("live:auth", args=["login"]))
+        self.assertIn("/live/auth/login/", self.live.get("/live/", secure=True).url)
         self.assertEqual(self.client.get("/dashboard/", secure=True, HTTP_HOST="postgis.ir").status_code, 200)
 
     def test_launch_checks_workspace_and_csrf(self):

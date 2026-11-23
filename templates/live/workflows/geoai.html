@@ -1,0 +1,13 @@
+<form method="post">
+  {% csrf_token %}
+  <label>پرسش مکانی<textarea name="question" rows="4" maxlength="2000" required></textarea></label>
+  <fieldset>
+    <legend>لایه‌های ورودی (اختیاری)</legend>
+    {% for table in tables %}
+    <label><input type="checkbox" name="layers" value="{{ table.qualified }}"> <bdi>{{ table.qualified }}</bdi></label>
+    {% empty %}<p>برای تحلیل، ابتدا یک جدول مکانی وارد کنید.</p>{% endfor %}
+  </fieldset>
+  <label>نام جدول خروجی (اختیاری)<input name="output" dir="ltr" maxlength="63"></label>
+  <label><input type="checkbox" name="share_values"> اجازهٔ ارسال نمونهٔ مقادیر به مدل زبانی</label>
+  <button type="submit" {% if not tables %}disabled{% endif %}>ارسال پرسش</button>
+</form>

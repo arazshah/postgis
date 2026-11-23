@@ -17,6 +17,15 @@ def _project(db, project_id) -> OwsProject:
                              service__database=db)
 
 
+def upload_project(db, uploaded, fields):
+    if not uploaded or not uploaded.name.lower().endswith(ALLOWED_EXT):
+        raise qgis.ProjectError("فایل پروژه QGIS با پسوند .qgz یا .qgs انتخاب کنید.")
+    if uploaded.size > qgis.MAX_PROJECT_BYTES:
+        raise qgis.ProjectError("حجم پروژه بیشتر از ۲۰ مگابایت است.")
+    return ows.create_project(db, uploaded.read(), uploaded.name, title=fields.get("title", ""),
+                              is_public=fields.get("public") == "on")
+
+
 @site_user_required
 def index(request, pk):
     db = _db(request, pk)
@@ -24,20 +33,13 @@ def index(request, pk):
         messages.error(request, "انتشار فقط برای پایگاه داده فعال در دسترس است.")
         return redirect("databases:detail", pk=db.pk)
     if request.method == "POST":
-        f = request.FILES.get("file")
-        if not f or not f.name.lower().endswith(ALLOWED_EXT):
-            messages.error(request, "فایل پروژه QGIS با پسوند .qgz یا .qgs انتخاب کنید.")
-        elif f.size > qgis.MAX_PROJECT_BYTES:
-            messages.error(request, "حجم پروژه بیشتر از ۲۰ مگابایت است.")
+        try:
+            p = upload_project(db, request.FILES.get("file"), request.POST)
+        except (qgis.ProjectError, ows.OwsError) as exc:
+            messages.error(request, str(exc))
         else:
-            try:
-                p = ows.create_project(db, f.read(), f.name, title=request.POST.get("title", ""),
-                                       is_public=request.POST.get("public") == "on")
-            except (qgis.ProjectError, ows.OwsError) as exc:
-                messages.error(request, str(exc))
-            else:
-                messages.success(request, f"پروژه «{p.title}» منتشر شد.")
-                return redirect("publish:ows_detail", pk=db.pk, project_id=p.pk)
+            messages.success(request, f"پروژه «{p.title}» منتشر شد.")
+            return redirect("publish:ows_detail", pk=db.pk, project_id=p.pk)
         return redirect("publish:ows", pk=db.pk)
     service = Service.objects.filter(database=db).first()
     projects = list(service.ows_projects.all()) if service else []

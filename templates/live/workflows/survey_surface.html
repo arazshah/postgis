@@ -1,0 +1,17 @@
+<h3>سطح و منحنی تراز — {{ project.name }}</h3>
+{% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+{% if stats %}
+<dl>
+  <dt>تعداد نقاط</dt><dd>{{ stats.points }}</dd>
+  <dt>ارتفاع کمینه</dt><dd>{{ stats.z_min }}</dd>
+  <dt>ارتفاع بیشینه</dt><dd>{{ stats.z_max }}</dd>
+  <dt>فاصلهٔ منحنی‌ها</dt><dd>{{ stats.interval }}</dd>
+</dl>
+{% endif %}
+<form method="post">
+  {% csrf_token %}
+  <label>فاصلهٔ منحنی‌ها (متر)<input type="number" min="0" step="any" name="interval"></label>
+  <label>حداکثر طول لبه (متر)<input type="number" min="0" step="any" name="max_edge"></label>
+  {% if can_save %}<label><input type="checkbox" name="save"> ذخیرهٔ منحنی‌ها در پایگاه داده</label>{% endif %}
+  <button type="submit">محاسبهٔ سطح</button>
+</form>

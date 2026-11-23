@@ -33,7 +33,7 @@ def make_token(user) -> str:
     return signing.dumps({"u": user.pk, "e": (user.email or "").lower()}, salt=SALT)
 
 
-def send_verification(user, *, force: bool = False) -> bool:
+def send_verification(user, *, force: bool = False, live: bool = False) -> bool:
     """لینک تأیید را می‌فرستد. False اگر ایمیل ندارد/تأییدشده/خیلی زود دوباره خواسته شده."""
     if not user.email or user.email_verified_at:
         return False
@@ -41,7 +41,8 @@ def send_verification(user, *, force: bool = False) -> bool:
     if not force and cache.get(gate):
         return False
     cache.set(gate, 1, RESEND_SECONDS)
-    url = _abs(reverse("accounts:email_confirm", args=[make_token(user)]))
+    url = ((settings.LIVE_ORIGIN + reverse("live:auth_email_confirm", args=[make_token(user)]))
+           if live else _abs(reverse("accounts:email_confirm", args=[make_token(user)])))
     mail.send("verify_email", user=user, context={"url": url, "name": _name(user)}, urgent=True)
     return True
 
@@ -63,13 +64,15 @@ def confirm(token: str):
     return user
 
 
-def send_reset(email: str) -> None:
+def send_reset(email: str, *, live: bool = False) -> None:
     """اگر حساب سایت (نه مدیر) با این ایمیل هست، پیوند بازنشانی می‌فرستد؛ در غیر این صورت هیچ."""
     user = User.objects.filter(email__iexact=email.strip(), is_active=True, is_staff=False).first()
     if user is None or not user.email:
         return
     uid = urlsafe_base64_encode(force_bytes(user.pk))
-    url = _abs(reverse("accounts:password_reset", args=[uid, default_token_generator.make_token(user)]))
+    args = [uid, default_token_generator.make_token(user)]
+    url = ((settings.LIVE_ORIGIN + reverse("live:auth_password_reset", args=args))
+           if live else _abs(reverse("accounts:password_reset", args=args)))
     mail.send("password_reset", user=user, context={"url": url, "name": _name(user)}, urgent=True)
 
 

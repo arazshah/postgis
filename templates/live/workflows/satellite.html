@@ -1,0 +1,33 @@
+{% load l10n %}
+<form method="post">
+  {% csrf_token %}
+  <fieldset>
+    <legend>محدودهٔ تصویر (مختصات جغرافیایی)</legend>
+    <label>غرب<input name="west" type="number" min="-180" max="180" step="any" required></label>
+    <label>جنوب<input name="south" type="number" min="-90" max="90" step="any" required></label>
+    <label>شرق<input name="east" type="number" min="-180" max="180" step="any" required></label>
+    <label>شمال<input name="north" type="number" min="-90" max="90" step="any" required></label>
+  </fieldset>
+  <label>از تاریخ<input name="start" type="date" required></label>
+  <label>تا تاریخ<input name="end" type="date" required></label>
+  <button type="submit">جستجوی تصویر</button>
+</form>
+{% if searched %}
+<h3>نتیجهٔ جستجو</h3>
+<p>هزینهٔ هر دریافت: {{ quote.cost }} واحد اعتبار. حجم تقریبی: {{ quote.est_text }}</p>
+{% for blocker in quote.blockers %}<p>{{ blocker.message }}</p>{% endfor %}
+{% for scene in scenes %}
+<form method="post">
+  {% csrf_token %}
+  <bdi>{{ scene.id }}</bdi>
+  <input name="action" value="order" type="hidden">
+  <input name="scene" value="{{ scene.id }}" type="hidden">
+  <input name="source" value="{{ scene.source|default:'' }}" type="hidden">
+  <input name="west" value="{{ bbox.0|unlocalize }}" type="hidden">
+  <input name="south" value="{{ bbox.1|unlocalize }}" type="hidden">
+  <input name="east" value="{{ bbox.2|unlocalize }}" type="hidden">
+  <input name="north" value="{{ bbox.3|unlocalize }}" type="hidden">
+  <button type="submit" {% if not quote.ok %}disabled{% endif %}>درخواست تصویر با {{ quote.cost }} واحد اعتبار</button>
+</form>
+{% empty %}<p>تصویری در این بازه پیدا نشد.</p>{% endfor %}
+{% endif %}

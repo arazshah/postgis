@@ -2,7 +2,8 @@
 
 from django.conf import settings
 from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import render as django_render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
@@ -13,6 +14,27 @@ from databases.models import UserDatabase
 from kernel import tenantdb, workspace
 
 from . import importinto
+
+
+def render(request, template, context):
+    if getattr(request, "live_import_flow", False):
+        from django.http import JsonResponse
+        from django.template.loader import render_to_string
+        context = {**context, "live_base": "live/workflows/base.html"}
+        from django.urls import reverse
+        db = context["db"]
+        html = render_to_string(template, context, request=request)
+        for job in [*context.get("recent", []), *([context["job"]] if context.get("job") else [])]:
+            html = html.replace(reverse("databases:import_review", args=[db.pk, job.pk]),
+                                reverse("live:workflow_import_review", args=[db.pk, job.pk]))
+        html = html.replace(reverse("databases:import", args=[db.pk]),
+                            reverse("live:workflow_import", args=[db.pk]))
+        changed = bool(context.get("job") and context["job"].status == "done")
+        job = context.get("job")
+        return JsonResponse({"html": html, "catalogChanged": changed,
+                             "pending": bool(job and job.status in ("queued", "running"))})
+    return django_render(request, template, context)
+
 
 # ---------------------------------------------------------------------- ورود CSV: ستون‌های مکانی
 CSV_MODES = [
