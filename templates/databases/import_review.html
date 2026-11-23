@@ -1,4 +1,4 @@
-{% extends "databases/_explore_base.html" %}{% load fa ws %}
+{% extends live_base|default:"databases/_explore_base.html" %}{% load fa ws %}
 {% block head %}{% if job.active %}<meta http-equiv="refresh" content="4">{% endif %}{% endblock %}
 {% block ex %}
 <a class="back-link" href="{% url 'databases:import' db.pk %}">{% icon "back" 16 %}ورود فایل</a>

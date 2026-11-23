@@ -421,7 +421,7 @@ def explore_edit_row(request, pk, schema, table):
         key = json.loads(request.GET.get("pk", ""))
     except ValueError as exc:
         raise EditError("کلید سطر نامعتبر است.") from exc
-    return JsonResponse({"ok": True, **Editor(ex).row(t, key)})
+    return JsonResponse({"ok": True, **Editor(ex).row(t, key, include_geometry=request.GET.get("geometry") == "1")})
 
 
 @_edit_json

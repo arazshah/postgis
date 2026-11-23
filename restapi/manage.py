@@ -1,6 +1,8 @@
 """مدیریت REST API و فرم‌های میدانی یک پایگاه داده (مالک و ویرایشگرها)."""
 from django.contrib import messages
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.views.decorators.http import require_http_methods
 
 from accounts.decorators import site_user_required
@@ -21,7 +23,8 @@ def manage(request, pk):
         messages.error(request, "پایگاه داده فعال نیست.")
         return redirect("databases:detail", pk=db.pk)
     service, _ = Service.objects.get_or_create(database=db)
-    here = redirect("restapi:manage", pk=db.pk)
+    in_live = getattr(request, "live_rest_flow", False)
+    here = redirect("live:workflow_rest" if in_live else "restapi:manage", pk=db.pk)
     if request.method == "POST":
         action = request.POST.get("action", "")
         if action == "save_table":
@@ -90,9 +93,12 @@ def manage(request, pk):
             form_cols[a.pk] = []
             pk_of[a.pk] = "id"
     base = request.build_absolute_uri("/")[:-1]
-    return render(request, "restapi/manage.html", {
+    context = {
         "db": db, "service": service, "rows": rows, "apis": list(api.values()), "form_cols": form_cols,
         "pk_of": pk_of, "n_active": len(api), "used": access.usage_today(db), "cap": db.plan.publish_daily_requests,
         "base": base, "sample": next(iter(api.values()), None), "forms": FieldForm.objects.filter(
             api_table__service=service).select_related("api_table"),
-    })
+     }
+    if in_live:
+        return JsonResponse({"html": render_to_string("live/workflows/rest.html", context, request=request)})
+    return render(request, "restapi/manage.html", context)

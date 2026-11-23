@@ -1,0 +1,15 @@
+{% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+{% if can_create %}
+<form method="post">
+  {% csrf_token %}
+  <label>نام پروژهٔ برداشت<input name="name" maxlength="120" required></label>
+  <label>شناسه دستگاه مختصات (EPSG)<input type="number" min="1" name="srid" dir="ltr" value="4326" required></label>
+  <label>قالب پروژه<select name="template">{% for key, name in templates %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
+  <button type="submit">ساخت پروژه</button>
+</form>
+{% endif %}
+<ul>
+{% for project in projects %}
+  <li>{{ project.name }} · <a href="{% url 'live:workflow_survey_surface' project.database_id project.pk %}">سطح و منحنی تراز</a></li>
+{% empty %}<li>هنوز پروژهٔ برداشت ندارید.</li>{% endfor %}
+</ul>

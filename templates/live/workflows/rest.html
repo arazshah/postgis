@@ -1,0 +1,18 @@
+{% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}
+<p>REST API جدول‌ها</p>
+{% for row in rows %}
+<details>
+  <summary><bdi>{{ row.t.qualified }}</bdi></summary>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="save_table">
+    <input type="hidden" name="table" value="{{ row.t.qualified }}">
+    <label><input type="checkbox" name="enabled" {% if row.api %}checked{% endif %}> فعال</label>
+    <label><input type="checkbox" name="public_read" {% if row.api.public_read %}checked{% endif %}> خواندن عمومی</label>
+    <label><input type="checkbox" name="can_insert" {% if row.api.can_insert %}checked{% endif %}> ثبت</label>
+    <label><input type="checkbox" name="can_update" {% if row.api.can_update %}checked{% endif %} {% if not row.has_pk %}disabled{% endif %}> ویرایش</label>
+    <label><input type="checkbox" name="can_delete" {% if row.api.can_delete %}checked{% endif %} {% if not row.has_pk %}disabled{% endif %}> حذف</label>
+    <button type="submit">ذخیره تنظیمات</button>
+  </form>
+</details>
+{% empty %}<p>جدول قابل انتشار پیدا نشد.</p>{% endfor %}

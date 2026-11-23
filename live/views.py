@@ -20,6 +20,12 @@ from tools.api import enqueue
 from .sso import main_url
 
 
+def tool_metadata(tool):
+    return {"key": tool.key, "title": tool.title, "category": tool.category,
+            "description": tool.description, "icon": tool.icon,
+            "params": [asdict(param) for param in tool.params]}
+
+
 def _navigation():
     return {"main_dashboard": main_url() if settings.LIVE_SSO_ENABLED else reverse("databases:dashboard"),
             "live_sso": settings.LIVE_SSO_ENABLED}
@@ -75,10 +81,13 @@ def studio(request, pk, map_id):
         messages.error(request, "کاتالوگ داده در دسترس نیست.")
     tools = []
     if editable and _allowed(request, db, "tools") and _allowed(request, db, "analysis"):
-        tools = [{"key": t.key, "title": t.title, "category": t.category, "description": t.description,
-                  "params": [asdict(p) for p in t.params]} for t in sdk.all_tools()
+        tools = [tool_metadata(t) for t in sdk.all_tools()
                  if _allowed(request, db, t.plugin)]
-    links = {}
+    links = {"workflow_import": reverse("live:workflow_import", args=[pk]),
+             "publish_api": reverse("live:api_publish", args=[pk]),
+             "history": reverse("live:api_history", args=[pk]),
+             "projects": reverse("live:api_projects", args=[pk]),
+             "source": reverse("live:api_source", args=[pk, map_id, 0])}
     for key, plugin, route in (
         ("import", "dbimport", "databases:import"), ("data", "dbtables", "databases:explore"),
         ("ai", "analysis", "analysis:page"), ("satellite", "satellite", "satellite:index"),
@@ -87,6 +96,17 @@ def studio(request, pk, map_id):
     ):
         if _allowed(request, db, plugin):
             links[key] = reverse(route, args=[pk])
+    links["workflow_plugins"] = reverse("live:workflow_plugins", args=[pk])
+    if editable and "satellite" in links:
+        links["workflow_satellite"] = reverse("live:workflow_satellite", args=[pk])
+    if "survey" in links:
+        links["workflow_survey"] = reverse("live:workflow_survey", args=[pk])
+    if editable and "ows" in links:
+        links["workflow_ows"] = reverse("live:workflow_ows", args=[pk])
+    if editable and "rest" in links:
+        links["workflow_rest"] = reverse("live:workflow_rest", args=[pk])
+    if editable and "ai" in links:
+        links["workflow_ai"] = reverse("live:workflow_ai", args=[pk])
     if editable:
         links.update(save=reverse("maps:composer", args=[pk, map_id]),
                      add=reverse("maps:layer_add", args=[pk, map_id]),
@@ -113,7 +133,16 @@ def table(request, pk):
         if t is None:
             raise Http404
         page = max(1, min(10000, int(request.GET.get("page", 1))))
-        return JsonResponse(catalog.rows(t, page=page))
+        can_edit = db.can_edit and db.status == UserDatabase.Status.ACTIVE
+        data = catalog.rows(t, page=page, with_keys=can_edit)
+        if can_edit:
+            from dbtables.views import _edit_config
+
+            try:
+                data["edit"] = _edit_config(request, db, catalog, t)
+            except tenantdb.TenantError:
+                data["edit"] = {"capable": False}
+        return JsonResponse(data)
     except (ValueError, tenantdb.TenantError):
         return JsonResponse({"error": "خواندن جدول ممکن نشد."}, status=400)
 

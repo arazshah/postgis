@@ -20,6 +20,7 @@ from django.views.decorators.http import require_POST
 from accounts.decorators import site_user_required
 from kernel import entitlements, workspace
 
+from .auth import DIRECT_SESSION, required
 from .models import LiveTicket
 
 PARENT_SESSION = "live_parent_session"
@@ -110,7 +111,7 @@ def leave(request):
     if not _host(request, settings.LIVE_ORIGIN):
         raise Http404
     logout(request)
-    return redirect(main_url())
+    return redirect("live:auth", step="login")
 
 
 class LiveSessionMiddleware:
@@ -122,13 +123,15 @@ class LiveSessionMiddleware:
             return self.get_response(request)
         path = request.path_info
         if _host(request, settings.LIVE_ORIGIN):
-            if path == reverse("live:exchange"):
+            if path == reverse("live:exchange") or path.startswith("/live/auth/"):
                 return self.get_response(request)
             parent = _parent_user(request.session.get(PARENT_SESSION))
-            if parent is None or not request.user.is_authenticated or parent.pk != request.user.pk:
+            direct = request.session.get(DIRECT_SESSION) is True
+            valid_user = request.user.is_authenticated and request.user.is_active and not request.user.is_staff
+            if not valid_user or (not direct and (parent is None or parent.pk != request.user.pk)):
                 if request.session.session_key:
                     logout(request)
-                return redirect(main_url())
+                return required(request)
             if path == reverse("accounts:logout") and request.method == "POST":
                 return self.get_response(request)
             if path.startswith(("/accounts/", "/admin/", "/manage/")):

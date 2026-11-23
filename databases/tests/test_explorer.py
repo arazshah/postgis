@@ -54,6 +54,45 @@ class ExplorerIntegrationTests(TestCase):
         cols = {c["name"]: c for c in self.ex.columns(t)}
         self.assertTrue(cols["id"]["pk"] and cols["geom"]["spatial"])
 
+    def test_live_reads_and_edits_spatial_table(self):
+        self.client.force_login(self.user)
+        table_url = reverse("live:table", args=[self.db.pk])
+        query = {"schema": "public", "table": "parcels"}
+        response = self.client.get(table_url, query)
+        self.assertEqual(response.status_code, 200)
+        page = response.json()
+        self.assertEqual(page["total"], 75)
+        self.assertTrue(page["edit"]["capable"])
+        key = page["keys"][0]
+        urls = page["edit"]["urls"]
+        self.assertEqual(self.client.post(urls["mode"], {"on": True}, content_type="application/json").status_code, 200)
+        row = self.client.get(urls["row"], {"pk": json.dumps(key["pk"]), "geometry": "1"}).json()
+        self.assertEqual(row["values"]["name"], "قطعه 1")
+        self.assertTrue(row["geometry"]["geom"]["wkt"].startswith("POLYGON"))
+        self.assertEqual(row["geometry"]["geom"]["srid"], 32639)
+        payload = {"changes": [{"op": "update", "pk": key["pk"], "v": row["v"], "values": {"name": "قطعه آزمایشی"}}]}
+        result = self.client.post(urls["apply"], payload, content_type="application/json").json()
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(self.client.get(table_url, query).json()["rows"][0][1], "قطعه آزمایشی")
+        stale = self.client.post(urls["apply"], payload, content_type="application/json").json()
+        self.assertFalse(stale["ok"], stale)
+        fresh = self.client.get(urls["row"], {"pk": json.dumps(key["pk"])}).json()
+        wkt = "POLYGON((535000 3950000,535010 3950000,535010 3950010,535000 3950000))"
+        geometry = {"column": "geom", "wkt": wkt, "srid": 32639}
+        update = {"changes": [{"op": "update", "pk": key["pk"], "v": fresh["v"], "geom": geometry}]}
+        result = self.client.post(urls["apply"], update, content_type="application/json").json()
+        self.assertTrue(result["ok"], result)
+        saved = self.client.get(urls["row"], {"pk": json.dumps(key["pk"]), "geometry": "1"}).json()
+        self.assertEqual(saved["geometry"]["geom"], {"wkt": wkt, "srid": 32639})
+        geom = {"column": "geom", "wkt": "POLYGON((51.4 35.7,51.41 35.7,51.41 35.71,51.4 35.7))", "srid": 4326}
+        update = {"changes": [{"op": "update", "pk": key["pk"], "v": saved["v"], "geom": geom}]}
+        result = self.client.post(urls["apply"], update, content_type="application/json").json()
+        self.assertTrue(result["ok"], result)
+        feature = json.loads(self.ex.geojson(self.ex.find("public", "parcels")))["features"]
+        parcel = next(f for f in feature if f["properties"]["name"] == "قطعه آزمایشی")
+        self.assertEqual(parcel["geometry"]["coordinates"][0][0], [51.4, 35.7])
+
+
     def test_geojson_reprojected(self):
         data = json.loads(self.ex.geojson(self.ex.find("public", "parcels")))
         self.assertEqual(len(data["features"]), 75)
